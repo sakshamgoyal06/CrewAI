@@ -12,13 +12,19 @@ magnus.start();
 
 async function main(): Promise<void> {
   await startHealthServer();
-  await startBot(async (text, reply, telegramUserId, updateId) => {
+  await startBot(async (text, reply, telegramUserId, updateId, sendTyping) => {
     try {
-      const out = await handleMessage(text, telegramUserId, updateId);
-      reply(out);
+      const messages = await handleMessage(text, telegramUserId, {
+        updateId,
+        sendProgress: (html) => reply(html, { parse_mode: "HTML" }),
+        sendTyping,
+      });
+      for (const chunk of messages) {
+        await reply(chunk, { parse_mode: "HTML" });
+      }
     } catch (err) {
       logger.error({ err: loggableError(err) }, "handleMessage failed");
-      reply("Something went wrong. Check server logs.");
+      await reply("Something went wrong. Check server logs.");
     }
   });
 }

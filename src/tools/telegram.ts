@@ -6,7 +6,28 @@ import {
   recordMagnusChatMessage,
   resolveTelegramUserProfile,
 } from "./chatLog.js";
+import { redis } from "./clients.js";
 import { checkMessageRateLimit } from "./rateLimit.js";
+
+const TELEGRAM_UPDATE_DEDUP_TTL_SEC = 86_400;
+
+/** Returns false when this `update_id` was already processed (webhook retry). */
+async function claimTelegramUpdate(updateId: number): Promise<boolean> {
+  const key = `magnus:telegram_update:${updateId}`;
+  try {
+    const res = await redis.set(key, "1", {
+      nx: true,
+      ex: TELEGRAM_UPDATE_DEDUP_TTL_SEC,
+    });
+    return res !== null;
+  } catch (e) {
+    logger.error(
+      { err: loggableError(e), updateId },
+      "telegram update dedup redis error; allowing message",
+    );
+    return true;
+  }
+}
 
 function getToken(): string {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
@@ -96,29 +117,91 @@ export async function sendMarkdown(
   await logOutgoingAssistant(text, "markdown_v2_source", logAsTelegramUserId);
 }
 
+/** Use HTML for assistant Markdown-ish content (see `markdownishToTelegramHtml`). */
+export type ReplyOptions = {
+  parse_mode?: "HTML";
+};
+
 export type TelegramTextHandler = (
   text: string,
-  reply: (r: string) => void,
+  reply: (r: string, opts?: ReplyOptions) => Promise<void>,
   telegramUserId: string,
   updateId?: number,
+  sendTyping?: () => void | Promise<void>,
 ) => Promise<void>;
+
+function isMorningBriefTrigger(text: string): boolean {
+  const t = text.trim();
+  if (/^\/morningbrief(@\S+)?\b/i.test(t)) {
+    return true;
+  }
+  return /^morning\s+brief\.?$/i.test(t);
+}
 
 export function startBot(onMessage: TelegramTextHandler): Promise<void> {
   const b = getBot();
 
   b.on("text", async (ctx) => {
+    const updateId = ctx.update.update_id;
+    if (!(await claimTelegramUpdate(updateId))) {
+      logger.debug({ updateId }, "duplicate telegram update ignored");
+      return;
+    }
+
     const telegramUserId = String(ctx.from?.id ?? ctx.chat.id);
-    const reply = (r: string): void => {
-      void ctx.reply(r);
+    const chatId = ctx.chat?.id;
+    const reply = async (r: string, opts?: ReplyOptions): Promise<void> => {
+      if (opts?.parse_mode === "HTML") {
+        await ctx.reply(r, { parse_mode: "HTML" });
+      } else {
+        await ctx.reply(r);
+      }
     };
+
+    const sendTyping =
+      chatId !== undefined
+        ? () => {
+            void ctx.telegram.sendChatAction(chatId, "typing");
+          }
+        : undefined;
+
+    const rawText = ctx.message.text;
+    if (isMorningBriefTrigger(rawText)) {
+      const rate = await checkMessageRateLimit(telegramUserId);
+      if (!rate.ok) {
+        await reply(
+          `You're sending messages too quickly. Try again in about ${rate.retryAfterSec} seconds.`,
+        );
+        return;
+      }
+      try {
+        const { runMorningBriefForTelegramUser } = await import(
+          "../jobs/morningBriefManual.js"
+        );
+        const out = await runMorningBriefForTelegramUser(telegramUserId, new Date());
+        if (out.ok) {
+          await reply(out.ack);
+        } else {
+          await reply(out.reply);
+        }
+      } catch (e) {
+        logger.error(
+          { err: loggableError(e), telegramUserId: maskTelegramUserId(telegramUserId) },
+          "morning brief command failed",
+        );
+        await reply("Something went wrong. Check server logs.");
+      }
+      return;
+    }
+
     const rate = await checkMessageRateLimit(telegramUserId);
     if (!rate.ok) {
-      reply(
+      await reply(
         `You're sending messages too quickly. Try again in about ${rate.retryAfterSec} seconds.`,
       );
       return;
     }
-    await onMessage(ctx.message.text, reply, telegramUserId, ctx.update.update_id);
+    await onMessage(ctx.message.text, reply, telegramUserId, updateId, sendTyping);
   });
 
   process.once("SIGINT", () => b.stop("SIGINT"));

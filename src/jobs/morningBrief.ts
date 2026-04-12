@@ -1,0 +1,145 @@
+/**
+ * Morning Brief job — LifeOS ritual (read, not task dump).
+ */
+import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { MORNING_BRIEF_SYSTEM } from "./morningBriefPrompt.js";
+import {
+  buildMorningBriefUserMessage,
+  fetchMorningBriefContext,
+} from "./morningBriefContext.js";
+import { morningBriefFeatureEnabled } from "./morningBriefEnv.js";
+import { createMorningBriefNotionPage } from "../tools/notionMorningBrief.js";
+import { logger } from "../logger.js";
+
+const MODEL = "claude-sonnet-4-6";
+
+function textFromMessage(msg: Message): string {
+  for (const block of msg.content) {
+    if (block.type === "text") {
+      return block.text;
+    }
+  }
+  return "";
+}
+
+export type MorningBriefReason = "scheduled" | "manual" | "http";
+
+export type RunMorningBriefInput = {
+  userProfileId: string;
+  telegramUserId: string;
+  /** Telegram chat id for outbound send (defaults to telegramUserId). */
+  chatId?: string;
+  now: Date;
+  reason: MorningBriefReason;
+};
+
+export type MorningBriefDeps = {
+  supabase: SupabaseClient;
+  invokeClaude: (system: string, user: string) => Promise<string>;
+  sendTelegram?: (
+    text: string,
+    opts: { chatId: string; telegramUserIdForLog: string },
+  ) => Promise<void>;
+  createNotionPage?: (input: { title: string; body: string }) => Promise<string | null>;
+  /** When false, skip work. */
+  featureEnabled?: () => boolean;
+};
+
+export type MorningBriefResult = {
+  text: string;
+  notionPageId: string | null;
+  skipped: boolean;
+};
+
+function defaultFeatureEnabled(): boolean {
+  return morningBriefFeatureEnabled();
+}
+
+async function defaultInvokeClaude(system: string, user: string): Promise<string> {
+  const { anthropic } = await import("../tools/clients.js");
+  const msg = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 2048,
+    system,
+    messages: [{ role: "user", content: user }],
+  });
+  return textFromMessage(msg).trim() || "…";
+}
+
+/**
+ * Splits long text for Telegram's message limit (~4096); keeps chunks safe for plain send.
+ */
+export function splitTelegramMessage(text: string, maxLen = 4000): string[] {
+  if (text.length <= maxLen) {
+    return [text];
+  }
+  const chunks: string[] = [];
+  let rest = text;
+  while (rest.length > maxLen) {
+    const slice = rest.slice(0, maxLen);
+    const lastBreak = Math.max(slice.lastIndexOf("\n\n"), slice.lastIndexOf("\n"));
+    const cut = lastBreak > Math.floor(maxLen * 0.5) ? lastBreak : maxLen;
+    chunks.push(rest.slice(0, cut).trimEnd());
+    rest = rest.slice(cut).trimStart();
+  }
+  if (rest.length) {
+    chunks.push(rest);
+  }
+  return chunks.length ? chunks : [""];
+}
+
+export async function runMorningBrief(
+  input: RunMorningBriefInput,
+  deps?: Partial<MorningBriefDeps>,
+): Promise<MorningBriefResult> {
+  const supabase = deps?.supabase ?? (await import("../tools/clients.js")).supabase;
+  const invokeClaude = deps?.invokeClaude ?? defaultInvokeClaude;
+  const sendTelegram = deps?.sendTelegram;
+  const createNotionPage = deps?.createNotionPage ?? createMorningBriefNotionPage;
+  const featureEnabled = deps?.featureEnabled ?? defaultFeatureEnabled;
+
+  if (!featureEnabled()) {
+    logger.info({ reason: input.reason }, "morning brief skipped (feature flag)");
+    return { text: "", notionPageId: null, skipped: true };
+  }
+
+  const bundle = await fetchMorningBriefContext(supabase, input.userProfileId, input.now, {});
+  const userMsg = buildMorningBriefUserMessage(bundle);
+
+  let briefText: string;
+  try {
+    briefText = await invokeClaude(MORNING_BRIEF_SYSTEM, userMsg);
+  } catch (err) {
+    logger.error({ err: String(err) }, "morning brief Claude call failed");
+    return {
+      text: "Morning brief could not be generated right now. Try again later.",
+      notionPageId: null,
+      skipped: false,
+    };
+  }
+
+  const titleDate = input.now.toISOString().slice(0, 10);
+  const notionTitle = `Morning Brief — ${titleDate}`;
+
+  let notionPageId: string | null = null;
+  try {
+    notionPageId = await createNotionPage({ title: notionTitle, body: briefText });
+  } catch (err) {
+    logger.warn({ err: String(err) }, "morning brief Notion write failed (non-fatal)");
+  }
+
+  if (sendTelegram) {
+    const chatId = input.chatId?.trim() || input.telegramUserId;
+    const parts = splitTelegramMessage(briefText);
+    for (const part of parts) {
+      await sendTelegram(part, {
+        chatId,
+        telegramUserIdForLog: input.telegramUserId,
+      });
+    }
+  }
+
+  return { text: briefText, notionPageId, skipped: false };
+}

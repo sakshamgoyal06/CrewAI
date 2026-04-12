@@ -1,25 +1,24 @@
 /**
  * MAGNUS — orchestrator agent: wires agents, tools, memory, and scheduler.
  */
-import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
-
-import { parseIntent, type Intent } from "./intent.js";
+import { scheduleMorningBriefCron } from "./jobs/morningBriefCron.js";
+import { runOrchestratorReply } from "./agents/magnusOrchestrator.js";
+import { isDelegationNoticeEnabled } from "./config/projectSettings.js";
+import { formatDelegationNotice } from "./magnus/delegationNotice.js";
+import {
+  getDisambiguationReply,
+  resolveDisambiguationFollowUp,
+} from "./magnus/intentDisambiguation.js";
+import { splitPlainForTelegram } from "./magnus/telegramChunk.js";
+import { markdownishToTelegramHtml } from "./magnus/telegramFormat.js";
 import { logger, maskTelegramUserId } from "./logger.js";
 import { loggableError } from "./util/loggableError.js";
-import { anthropic } from "./tools/clients.js";
+import { isMealCommand } from "./meals/parseMealLogCommand.js";
+import { tryProcessMealLog } from "./meals/mealLogCommand.js";
 import {
   recordMagnusChatMessage,
   resolveTelegramUserProfile,
 } from "./tools/chatLog.js";
-
-const MODEL = "claude-sonnet-4-6";
-
-const CLASSIFY_SYSTEM = `You are MAGNUS, a personal AI chief of staff. Classify the intent of the user message into exactly one category:
-HEALTH | WEALTH | BUILD | PLANNING | RELATIONSHIPS | LEARNING | HAPPINESS | GENERAL
-Reply with only the category name, nothing else.`;
-
-const GENERAL_SYSTEM =
-  "You are MAGNUS, a warm and direct personal AI chief of staff for Saksham. Keep replies under 100 words.";
 
 const NOT_ALLOWLISTED_REPLY =
   "You're not allowlisted to use Magnus yet. Ask an admin to enable your account.";
@@ -27,44 +26,20 @@ const NOT_ALLOWLISTED_REPLY =
 const TIER_NO_CHAT_REPLY =
   "Your access tier doesn't include chat right now. We'll expand this soon.";
 
-function textFromMessage(msg: Message): string {
-  for (const block of msg.content) {
-    if (block.type === "text") {
-      return block.text;
-    }
-  }
-  return "";
-}
-
-function routingPlaceholder(intent: Exclude<Intent, "GENERAL">): string {
-  return `🧠 MAGNUS routing to ${intent} department... (agents coming soon)`;
-}
-
-async function classifyIntent(userMessage: string): Promise<Intent> {
-  const msg = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 64,
-    system: CLASSIFY_SYSTEM,
-    messages: [{ role: "user", content: userMessage }],
-  });
-  return parseIntent(textFromMessage(msg));
-}
-
-async function answerGeneral(userMessage: string): Promise<string> {
-  const msg = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 512,
-    system: GENERAL_SYSTEM,
-    messages: [{ role: "user", content: userMessage }],
-  });
-  return textFromMessage(msg).trim() || "…";
-}
-
 function chatAllowed(accessFlags: Record<string, unknown>): boolean {
   if (accessFlags.chat === false) {
     return false;
   }
   return true;
+}
+
+function toTelegramHtml(text: string): string {
+  return markdownishToTelegramHtml(text);
+}
+
+/** Split long plain assistant text, then convert each chunk to Telegram HTML. */
+function plainChunksToTelegramHtml(plain: string): string[] {
+  return splitPlainForTelegram(plain).map((p) => markdownishToTelegramHtml(p));
 }
 
 export type MagnusRuntime = {
@@ -74,16 +49,35 @@ export type MagnusRuntime = {
 export function createMagnus(): MagnusRuntime {
   return {
     start() {
-      // TODO: boot orchestration (agents, webhooks, cron, etc.)
+      scheduleMorningBriefCron();
     },
   };
 }
 
+export type HandleMessageOptions = {
+  updateId?: number;
+  /**
+   * When set, delegation progress is sent here as soon as Magnus hands off to a specialist
+   * (before memory load and before the specialist reply). Usually `reply` from Telegraf.
+   */
+  sendProgress?: (text: string) => void | Promise<void>;
+  /** Telegram “typing…” indicator; refreshed while the orchestrator runs. */
+  sendTyping?: () => void | Promise<void>;
+};
+
+/**
+ * Outbound Telegram payloads in send order (HTML via `markdownishToTelegramHtml`).
+ * Long replies are split into multiple chunks under Telegram’s size limit.
+ */
+export type HandleMessageResult = string[];
+
 export async function handleMessage(
   userMessage: string,
   telegramUserId: string,
-  updateId?: number,
-): Promise<string> {
+  options?: HandleMessageOptions,
+): Promise<HandleMessageResult> {
+  const { updateId, sendProgress, sendTyping } = options ?? {};
+
   const log = logger.child({
     module: "magnus",
     updateId: updateId ?? null,
@@ -93,11 +87,11 @@ export async function handleMessage(
   const user = await resolveTelegramUserProfile(telegramUserId);
 
   if (!user.allowlisted) {
-    return NOT_ALLOWLISTED_REPLY;
+    return [toTelegramHtml(NOT_ALLOWLISTED_REPLY)];
   }
 
   if (!chatAllowed(user.accessFlags)) {
-    return TIER_NO_CHAT_REPLY;
+    return [toTelegramHtml(TIER_NO_CHAT_REPLY)];
   }
 
   const metaBase = {
@@ -118,12 +112,148 @@ export async function handleMessage(
     log.warn({ err: userLog.error }, "user message not persisted to chat log");
   }
 
+  // `/meal`, `meal:`, `log meal:` — practical APIs only by default; skips classifier + orchestrator (no Anthropic classify/delegate).
+  if (isMealCommand(userMessage)) {
+    const mealLog = await tryProcessMealLog({
+      userMessage,
+      userProfileId: user.profileId,
+    });
+    if (mealLog.handled) {
+      const asstLog = await recordMagnusChatMessage({
+        user_profile_id: user.profileId,
+        telegram_user_id: user.telegramUserId,
+        role: "assistant",
+        content: mealLog.reply,
+        source: "telegram",
+        intent: "meal_log",
+        metadata: {
+          ...metaBase,
+          meal_log: true,
+          bypass_orchestrator: true,
+        },
+      });
+      if (!asstLog.ok) {
+        log.warn({ err: asstLog.error }, "meal log reply not persisted to chat log");
+      }
+      return plainChunksToTelegramHtml(mealLog.reply);
+    }
+  }
+
   try {
-    const intent = await classifyIntent(userMessage);
-    const replyText =
-      intent === "GENERAL"
-        ? await answerGeneral(userMessage)
-        : routingPlaceholder(intent);
+    const followUp = await resolveDisambiguationFollowUp(user.profileId, userMessage);
+    const orchestratorMessage = followUp?.originalUserMessage ?? userMessage;
+    const disambiguationChoice = followUp?.choice;
+
+    if (!followUp) {
+      const clarify = getDisambiguationReply(userMessage);
+      if (clarify) {
+        const clarifyLog = await recordMagnusChatMessage({
+          user_profile_id: user.profileId,
+          telegram_user_id: user.telegramUserId,
+          role: "assistant",
+          content: clarify,
+          source: "telegram",
+          intent: "GENERAL",
+          metadata: {
+            ...metaBase,
+            disambiguation: true,
+            original_user_message: userMessage,
+          },
+        });
+        if (!clarifyLog.ok) {
+          log.warn(
+            { err: clarifyLog.error },
+            "disambiguation reply not persisted to chat log",
+          );
+        }
+        return [toTelegramHtml(clarify)];
+      }
+    }
+
+    let progressNoticeSent = false;
+
+    let typingInterval: ReturnType<typeof setInterval> | undefined;
+    if (sendTyping) {
+      void Promise.resolve(sendTyping()).catch(() => {});
+      typingInterval = setInterval(() => {
+        void Promise.resolve(sendTyping()).catch(() => {});
+      }, 4500);
+    }
+
+    let orchestrated: Awaited<ReturnType<typeof runOrchestratorReply>>;
+    try {
+      orchestrated = await runOrchestratorReply({
+        userMessage: orchestratorMessage,
+        userProfileId: user.profileId,
+        telegramUserId: user.telegramUserId,
+        timezone: user.timezone,
+        northStarGoal: user.northStarGoal,
+        disambiguationChoice,
+        onBeforeDelegation:
+          isDelegationNoticeEnabled() && sendProgress
+            ? async ({ intent, delegatedAgent }) => {
+                const notice = formatDelegationNotice(delegatedAgent, intent);
+                const noticeLog = await recordMagnusChatMessage({
+                  user_profile_id: user.profileId,
+                  telegram_user_id: user.telegramUserId,
+                  role: "assistant",
+                  content: notice,
+                  source: "telegram",
+                  intent,
+                  metadata: {
+                    ...metaBase,
+                    delegation_notice: true,
+                    delegated_agent: delegatedAgent,
+                  },
+                });
+                if (!noticeLog.ok) {
+                  log.warn(
+                    { err: noticeLog.error },
+                    "delegation notice not persisted to chat log",
+                  );
+                }
+                await sendProgress(toTelegramHtml(notice));
+                progressNoticeSent = true;
+              }
+            : isDelegationNoticeEnabled()
+              ? async ({ intent, delegatedAgent }) => {
+                  const notice = formatDelegationNotice(delegatedAgent, intent);
+                  await recordMagnusChatMessage({
+                    user_profile_id: user.profileId,
+                    telegram_user_id: user.telegramUserId,
+                    role: "assistant",
+                    content: notice,
+                    source: "telegram",
+                    intent,
+                    metadata: {
+                      ...metaBase,
+                      delegation_notice: true,
+                      delegated_agent: delegatedAgent,
+                    },
+                  });
+                }
+              : undefined,
+      });
+    } finally {
+      if (typingInterval) {
+        clearInterval(typingInterval);
+      }
+    }
+
+    const { replyText, intent } = orchestrated;
+
+    const assistantMetadata = {
+      ...metaBase,
+      ...(followUp ? { disambiguation_followup: true } : {}),
+      ...(orchestrated.delegatedAgent !== undefined
+        ? {
+            delegated_agent: orchestrated.delegatedAgent,
+            ...(orchestrated.agentMetadata !== undefined
+              ? { agent_metadata: orchestrated.agentMetadata }
+              : {}),
+          }
+        : {}),
+    };
 
     const asstLog = await recordMagnusChatMessage({
       user_profile_id: user.profileId,
@@ -132,13 +262,25 @@ export async function handleMessage(
       content: replyText,
       source: "telegram",
       intent,
-      metadata: metaBase,
+      metadata: assistantMetadata,
     });
     if (!asstLog.ok) {
       log.warn({ err: asstLog.error }, "assistant reply not persisted to chat log");
     }
 
-    return replyText;
+    const replyHtmlChunks = plainChunksToTelegramHtml(replyText);
+
+    if (
+      isDelegationNoticeEnabled() &&
+      orchestrated.delegatedAgent &&
+      !progressNoticeSent
+    ) {
+      return [
+        toTelegramHtml(formatDelegationNotice(orchestrated.delegatedAgent, intent)),
+        ...replyHtmlChunks,
+      ];
+    }
+    return replyHtmlChunks;
   } catch (err) {
     log.error({ err: loggableError(err) }, "handleMessage failed");
     const fallback = "Something went wrong. Check server logs.";
@@ -154,6 +296,6 @@ export async function handleMessage(
     if (!errLog.ok) {
       log.warn({ err: errLog.error }, "error fallback not persisted to chat log");
     }
-    return fallback;
+    return [toTelegramHtml(fallback)];
   }
 }

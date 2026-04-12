@@ -1,0 +1,56 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildMorningBriefUserMessage > matches snapshot (fixed now, no wall-clock flake) 1`] = `
+"Context JSON (stored facts only; gaps are OK):
+{
+  "now": "2026-04-12T02:30:00.000Z",
+  "timeZone": "Asia/Kolkata",
+  "northStarGoal": "Build with intention",
+  "activeGoals": [
+    {
+      "pillar": "health",
+      "title": "Morning mobility"
+    }
+  ],
+  "pillarStatus": [
+    {
+      "pillar": "joy",
+      "status": "on_track"
+    }
+  ],
+  "happinessReserve": {
+    "tank_band": "nourished",
+    "streak_type": "neutral"
+  },
+  "recentKpiReadings7d": [
+    {
+      "recorded_at": "2026-04-11T00:00:00.000Z",
+      "status": "green"
+    }
+  ],
+  "recentInsights": [
+    {
+      "summary": "Energy stable mid-week"
+    }
+  ],
+  "recentDailyPlans": [
+    {
+      "created_at": "2026-04-11T18:00:00.000Z"
+    }
+  ],
+  "recentMagnusDailyLogs": [
+    {
+      "body": "Ship feature",
+      "log_date": "2026-04-11",
+      "source": "notion"
+    }
+  ],
+  "patternsEmergingPlus": [
+    {
+      "status": "emerging",
+      "name": "Late caffeine",
+      "hit_count": 3
+    }
+  ]
+}"
+`;

@@ -24,6 +24,10 @@ export type TelegramUserProfile = {
   allowlisted: boolean;
   userTier: string;
   accessFlags: Record<string, unknown>;
+  /** From `user_profile.timezone` when selected. */
+  timezone?: string;
+  /** From `user_profile.north_star_goal` when present. */
+  northStarGoal?: string;
 };
 
 function normalizeTelegramUserId(telegramUserId: string): string {
@@ -62,6 +66,8 @@ function rowToProfile(
     allowlisted: boolean;
     user_tier: string;
     access_flags: unknown;
+    timezone?: string | null;
+    north_star_goal?: string | null;
   },
   telegramUserId: string,
 ): TelegramUserProfile {
@@ -77,6 +83,8 @@ function rowToProfile(
     allowlisted: row.allowlisted,
     userTier: row.user_tier,
     accessFlags: flags,
+    timezone: row.timezone ?? undefined,
+    northStarGoal: row.north_star_goal?.trim() || undefined,
   };
 }
 
@@ -91,7 +99,7 @@ export async function resolveTelegramUserProfile(
 
   const { data: existing, error: selErr } = await supabase
     .from("user_profile")
-    .select("id, allowlisted, user_tier, access_flags")
+    .select("id, allowlisted, user_tier, access_flags, timezone, north_star_goal")
     .eq("telegram_chat_id", tid)
     .maybeSingle();
 
@@ -105,6 +113,8 @@ export async function resolveTelegramUserProfile(
         allowlisted: existing.allowlisted,
         user_tier: existing.user_tier,
         access_flags: existing.access_flags,
+        timezone: existing.timezone as string | null | undefined,
+        north_star_goal: existing.north_star_goal as string | null | undefined,
       },
       tid,
     );
@@ -122,7 +132,7 @@ export async function resolveTelegramUserProfile(
   if (orphanCount === 1) {
     const { data: orphan, error: orphanSelErr } = await supabase
       .from("user_profile")
-      .select("id, allowlisted, user_tier, access_flags")
+      .select("id, allowlisted, user_tier, access_flags, timezone, north_star_goal")
       .is("telegram_chat_id", null)
       .single();
 
@@ -134,7 +144,7 @@ export async function resolveTelegramUserProfile(
       .from("user_profile")
       .update({ telegram_chat_id: tid })
       .eq("id", orphan.id)
-      .select("id, allowlisted, user_tier, access_flags")
+      .select("id, allowlisted, user_tier, access_flags, timezone, north_star_goal")
       .single();
 
     if (upErr) {
@@ -153,14 +163,14 @@ export async function resolveTelegramUserProfile(
       user_tier: seed.userTier,
       access_flags: seed.accessFlags,
     })
-    .select("id, allowlisted, user_tier, access_flags")
+    .select("id, allowlisted, user_tier, access_flags, timezone, north_star_goal")
     .single();
 
   if (insErr) {
     if (insErr.code === "23505") {
       const { data: row, error: again } = await supabase
         .from("user_profile")
-        .select("id, allowlisted, user_tier, access_flags")
+        .select("id, allowlisted, user_tier, access_flags, timezone, north_star_goal")
         .eq("telegram_chat_id", tid)
         .single();
       if (again || !row) {
@@ -180,6 +190,55 @@ export async function ensureUserProfileIdForTelegramUser(
 ): Promise<string> {
   const p = await resolveTelegramUserProfile(telegramUserId);
   return p.profileId;
+}
+
+export type DisambiguationAssistantRow = {
+  originalUserMessage: string;
+  createdAt: string;
+};
+
+/**
+ * Most recent assistant row from a planning/research disambiguation prompt (follow-up "1"/"2").
+ */
+export async function fetchLastDisambiguationAssistant(
+  userProfileId: string,
+): Promise<DisambiguationAssistantRow | null> {
+  const { data, error } = await supabase
+    .from("magnus_chat_messages")
+    .select("metadata, created_at")
+    .eq("user_profile_id", userProfileId)
+    .eq("role", "assistant")
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    logger.error(
+      { err: loggableError(error), userProfileId },
+      "fetchLastDisambiguationAssistant failed",
+    );
+    return null;
+  }
+
+  const row = data?.[0];
+  if (!row) {
+    return null;
+  }
+  const meta = row.metadata;
+  if (
+    meta &&
+    typeof meta === "object" &&
+    !Array.isArray(meta) &&
+    (meta as Record<string, unknown>).disambiguation === true
+  ) {
+    const original = (meta as Record<string, unknown>).original_user_message;
+    if (typeof original === "string" && original.trim().length > 0) {
+      return {
+        originalUserMessage: original.trim(),
+        createdAt: row.created_at as string,
+      };
+    }
+  }
+  return null;
 }
 
 export async function recordMagnusChatMessage(input: {
