@@ -1,0 +1,25 @@
+---
+description: Read and maintain magnus.md (project tracker) at session boundaries
+alwaysApply: true
+---
+
+# Magnus project tracker (`magnus.md`)
+
+## At the start of substantive work in this workspace
+
+1. **Open and skim `magnus.md`** at the repository root (or rely on `sessionStart` hook injected context if present). Use it for stack, env vars, DB identity model, and what is intentionally not built yet.
+2. Do not contradict `magnus.md` without updating it in the same change.
+
+## When finishing work or before the user ends the session
+
+If you changed **code behavior**, **dependencies**, **environment variables**, **Supabase schema/migrations**, or **operational runbooks**, **update `magnus.md`** in the same session:
+
+- Adjust **Quick start**, **Source layout**, **Behaviour**, **Database**, **Not built yet**, or **Scripts** as needed.
+- Bump **Last updated** to today’s date (authoritative year from user environment).
+
+If the change is trivial (typos only, no behavior change), a doc update is optional.
+
+## Session hooks
+
+- **`sessionStart`** injects the tracker (or a truncated copy) into context automatically.
+- **`sessionEnd`** cannot force the model to edit files; it appends a line to `.cursor/magnus-maintenance-log.txt` as a reminder. The agent should still follow the “when finishing work” rule above.

@@ -1,0 +1,19 @@
+# Example: wire health checks for a containerized Magnus.
+# Copy to docker-compose.yml; set env_file to a path with real secrets (not committed).
+
+services:
+  magnus:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s

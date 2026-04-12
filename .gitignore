@@ -1,4 +1,9 @@
 node_modules/
 dist/
 .env
+.env.local
+.env.production
 .env*.log
+
+# Session-end reminder log (optional)
+.cursor/magnus-maintenance-log.txt
