@@ -6,6 +6,24 @@ For **philosophy, product intent, and target architecture** (LifeOS ↔ Magnus),
 
 For **agent roster, prompts, scope, and bot actions** (review hub), see **`docs/AGENT_ROSTER.md`**.
 
+For **pillar → department → specialist** target routing (Health, Wealth, Wisdom, Joy), see **`docs/AGENT_ARCHITECTURE.md`**.
+
+For **Cursor-ready prompts** to implement new agents and routing (copy-paste blocks), see **`docs/CURSOR_AGENT_PROMPTS.md`**.
+
+---
+
+## Daily agent hardening (rolling)
+
+**Plan:** Tackle **one specialist per day** until the roster feels production-grade: prompts, tool boundaries, error handling, tests, and real Telegram UX (no duplicate boilerplate, no wrong routing, no repeated bad answers).
+
+| Day (first focus) | Agent | Code |
+|-------------------|--------|------|
+| **2026-04-13** | **Culture** (books / film / poetry) | `src/agents/joy/cultureRecommenderAgent.ts` |
+
+**Next days:** Continue down Joy → Health → Wealth → Wisdom → Intelligence as needed; update this table when the order changes.
+
+**Culture — known gaps from live chat (2026-04-12):** Recommending the **same titles** across follow-up asks for “fresh” lists; **platform/region availability** stated confidently without live catalog tools. Tomorrow’s pass should tighten anti-repetition instructions, humility on streaming availability, and optional regression tests on the system prompt.
+
 ---
 
 ## Current status (2026-04-12)
@@ -14,11 +32,14 @@ For **agent roster, prompts, scope, and bot actions** (review hub), see **`docs/
 
 **Latest build (what shipped recently):**
 
+- **Routing & orchestrator** — Slash commands (`src/agents/routing/slashCommands.ts`), pillar routing (`intentToPillarRoute`, `resolvePillarRoute`), natural-language intent in `orchestratorIntent.ts`, `magnusOrchestrator` cycle (slash vs classify → memory → dispatch). Wealth composite + Joy agents registered; specialist prompts include **`SPECIALIST_USER_IDENTITY`** (`promptIdentity.ts`) so models do not address the user as “Magnus”.
+- **Telegram** — `setMyCommands` via **`getTelegramBotCommandsForRegistration()`**; default **`MAGNUS_TELEGRAM_COMMANDS_MODE`** is **minimal** (`/menu` + `/meal`) so the native menu does not auto-send dozens of empty `/commands`. **`/menu`** sends an **inline keyboard**; picks set **pending slash** in Redis and merge the **next plain-text message** into `/<cmd> <text>` (`pendingSlashSelection.ts`). **`MAGNUS_TELEGRAM_COMMANDS_MODE=full`** restores the long command list.
 - **Meal logging pipeline** — Session-based `meal_logs` with multi-component rows, per-day rollups, optional daily macro targets (`mealLogPipeline`, `recordMealLog`, `mealDaySummary`, `formatMealLogReply`). CalorieNinjas/USDA scaling and picks (`calorieNinjasScale`, `calorieNinjaPick`), optional web-research estimate path, consolidated Telegram replies.
-- **Health / Nutrition** — `nutritionOrchestrated` coordinates parsing (`mealParserAgent`, `jsonExtract`), API estimates, and meal-log completion; `healthRouter` and nutrition stack aligned with the new meal path.
-- **Orchestrator & Telegram** — Intent/memory wiring updates (`magnusOrchestrator`), chunking/formatting (`telegramFormat`).
+- **Health / Nutrition** — `nutritionOrchestrated` coordinates parsing (`mealParserAgent`, `jsonExtract`), API estimates, and meal-log completion; `healthRouter` and nutrition stack aligned with the new meal path; additional Health specialists (meal planner, alternates, long-term planning, workouts coach) where wired.
+- **Orchestrator & Telegram** — Chunking/formatting (`telegramFormat`), delegation notice (`delegationNotice.ts`).
+- **Morning Brief** — Prompt includes specialist identity line (`morningBriefPrompt.ts`).
 - **Supabase migrations** — `20260412190000_meal_logs_align_magnus.sql`, `20260412210000_meal_session_and_daily_targets.sql`, `20260412220000_meal_logs_estimate_source_web_research.sql` (apply in Dashboard or `supabase db push` if not already).
-- **Tests** — Broadened coverage for meals, health JSON extract, orchestrator paths; `npm run build` + `npm test` green.
+- **Tests** — Broadened coverage for meals, health JSON extract, orchestrator paths, slash commands, pending merge; `npm run build` + `npm test` green.
 
 **Database:** On **2026-04-12**, all **`public`** tables on project `xdrpjfdhduskhzryevze` were **`TRUNCATE … RESTART IDENTITY CASCADE`** (profiles, chat history, meal logs, and domain tables are **empty**). New Telegram users get fresh `user_profile` rows as they chat; re-seed anything you need for demos.
 
@@ -27,7 +48,7 @@ For **agent roster, prompts, scope, and bot actions** (review hub), see **`docs/
 | **Runtime** | Telegram bot + health HTTP + typed TS + `npm run build` / `npm test` / CI workflow |
 | **Database** | Schema + FKs to `user_profile`, RLS + `service_role_only` on public tables; **currently empty** after truncate — **seed or create rows** as you build features |
 | **App ↔ DB** | **Wired today:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `meal_logs` (+ related meal migrations), `user_health_profile`. **Lightly / not wired in app logic yet:** most other domain tables (goals, KPIs, tasks, …) — **next phase** |
-| **Agents** | `src/agents/` — orchestrator registry, **Notion** (`NOTION`), **Memory** (`memory/`, semantic recall still **stub**), Health composite (Fitness → Nutrition → Energy + onboarding + **nutrition-orchestrated** meal path), **Planner** (`PLANNING`), **Research** (`LEARNING` + GENERAL research sub-route); see **Agents** below |
+| **Agents** | `src/agents/` — orchestrator registry, **Notion**, Health composite, **Planner**, **Learning** (tracker / plan), **Build & Ship**, **Research** (GENERAL research sub-route only); **Memory** (semantic recall **stub**); see **Agents** below |
 
 ### Your checklist before the next phase (nothing blocking in code)
 
@@ -44,7 +65,7 @@ For **agent roster, prompts, scope, and bot actions** (review hub), see **`docs/
 
 ## Next steps when resuming
 
-1. **Refine and complete each agent** — Bring every specialist to **production quality**: clear prompts, tool boundaries, error handling, tests, and observability. Priority order aligns with dispatch: **Notion** (env + DB writes), **Health stack** (Fitness, Nutrition with orchestrated meal path, Energy, onboarding), **Planner**, **Research**, **Memory** (replace `semanticRecall` stub with real embeddings when ready). Close gaps called out in `memory` context (`gaps`) rather than silent failures.
+1. **Refine and complete each agent** — Follow the **Daily agent hardening** table above (Culture first on **2026-04-13**). Bring every specialist to **production quality**: clear prompts, tool boundaries, error handling, tests, and observability. Broader backlog: **Notion** (env + DB writes), **Health stack** (onboarding slot accuracy, gates vs slash intent), **Planner**, **Research**, **Memory** (replace `semanticRecall` stub with real embeddings when ready). Close gaps called out in `memory` context (`gaps`) rather than silent failures.
 
 2. **Subagents and routing** — Keep new specialists behind `src/agents/`, register in `registry.ts`, and extend `handleMessage` / `createMagnus().start()` only when interfaces are stable.
 
@@ -139,7 +160,7 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 | File | Role |
 |------|------|
 | `src/agents/types.ts` | `AgentContext`, `AgentResult`, `DepartmentAgent` |
-| `src/agents/registry.ts` | `dispatchToAgent` — **priority order**: `Notion` → `HealthComposite` → `Planner` → `Research` |
+| `src/agents/registry.ts` | `dispatchToAgent` — **priority order**: `Notion` → `HealthComposite` → `Planner` → `LearningTracker` / `LearningPlan` → `BuildShip` |
 | `src/agents/magnusOrchestrator.ts` | Keyword override → **NOTION** (`isNotionIntentOverride`); classify intent; memory context; **GENERAL** research sub-route (`isResearchSubIntent`); `answerGeneral`; delegate specialists; `routingPlaceholder` |
 | `src/agents/intelligence/researchAgent.ts` | `RESEARCH_SYSTEM`, `runResearchAgent` — structured Markdown (Executive answer, Key points, Sources, Open questions); uses gathered URLs / search / pasted text |
 | `src/agents/health/healthRouter.ts` | `healthCompositeAgent` (`HEALTH`): sequential first-accept Fitness → Nutrition → Energy, then generic ack |
@@ -153,13 +174,15 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 
 **Health onboarding:** Apply migration `supabase/migrations/20260412140000_user_health_profile.sql` so `user_health_profile` exists. If a row exists and `onboarding_completed_at` is null, **every** message is handled by Health onboarding (no intent classification) until the user finishes the four questions or types `skip`. The first time the classifier returns **HEALTH** and there is no row, Magnus inserts the profile and sends the intro. No new environment variables.
 
-**Dispatch order:** After keyword/LLM intent and memory load, `NOTION` → Notion specialist; `HEALTH` → Health composite; `PLANNING` → Planner; `LEARNING` → Research. Strong **Notion** phrases (e.g. *log this to notion*, *daily check-in*, *morning brief*) set intent to `NOTION` without calling the classifier. If intent is `GENERAL` and the message matches the **research** sub-route (keywords like *research* / *compare* / *summarise*, or any `http(s)://` URL), the **Research** agent runs instead of the short general reply. Any other non-`GENERAL` intent with no registered handler falls back to the routing placeholder. Plain `GENERAL` (non-research) still uses the short Claude chief-of-staff reply.
+**Routing model:** Free text goes **Magnus → classify → `resolvePillarRoute` on `AgentContext` → memory (when applicable) → `dispatchToAgent`**. **Telegram `/commands`** (see `src/agents/routing/slashCommands.ts` — also **setMyCommands** on bot launch) **skip classification**, set **intent + `DepartmentId`**, and pass **body-after-command** (or a default prompt) to the department agent; **`/research`** forces the Research path. **Wealth** uses **`wealthCompositeAgent`** (`src/agents/wealth/wealthRouter.ts`) to pick Trading / Investment / … from `ctx.department`. **Health** still uses **`healthCompositeAgent`** (meal → planner → … → fitness → nutrition → energy). **Joy** specialists are registered again (`RELATIONSHIPS`, `HAPPINESS`, `CULTURE`). For natural-language turns, **Notion** / **meal:** coercions apply when the classifier returns `GENERAL`. Then: same registry order as code. Plain `GENERAL` (non-research) uses the short Claude reply.
+
+**Slash aliases:** `/relationship` is an alias of `/relationships` (same intent, department, and default prompt; see `COMMAND_ALIASES` in `slashCommands.ts`).
 
 **Memory context (orchestrator):** Each turn calls `loadMemoryContext({ userProfileId, telegramUserId, purpose })` (`purpose` from `intentToMemoryPurpose`). A compact string from `formatMemoryBlockForSystem` is appended to the user message for **GENERAL** / **Research** (`augmentUserWithMemory`) and passed as **`memoryBlock`** on `AgentContext` for specialists (Health stack, Planner). Missing optional tables surface as **`gaps`** inside that block — not silent failure. Structured logs at **debug** (`memoryAgent`, `magnusOrchestrator`): purpose, gap count, turn counts, shortened profile id — **not** raw message bodies. A separate `get_memory` tool is **not** implemented; memory is always loaded once per turn for the orchestrator path.
 
 ### Meal logging (Telegram)
 
-**Orchestrator bypass:** Messages matching `/meal …`, `meal: …`, or `log meal: …` are handled **before** `runOrchestratorReply` — **no** Anthropic intent classification, memory load, or specialist delegation for that turn (metadata `bypass_orchestrator: true`, `intent: meal_log`).
+**`/meal` only** skips intent classification (direct invoke). **`meal:`** / **`log meal:`** go through **`runOrchestratorReply`** (classify → if `GENERAL`, coerce to `HEALTH` so the meal pipeline still runs). All paths still use the Health composite / meal orchestration inside the orchestrator (not a separate `handleMessage` bypass).
 
 **Practical APIs (default):** Order is **CalorieNinjas → USDA FDC** — HTTP-only, no LLM tokens. Set **`CALORIENINJAS_API_KEY`** and/or **`USDA_FDC_API_KEY`** in `.env`.
 
@@ -177,7 +200,7 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 2. **Profile resolution** — `resolveTelegramUserProfile`: find by `telegram_chat_id`; else adopt a single orphan row with null Telegram id; else insert defaults + access fields.
 3. **Access (dummy)** — `allowlisted`, `user_tier`, `access_flags` on `user_profile`. Env: **`MAGNUS_AUTO_ALLOWLIST_NEW_USERS`** must be **`true`** for new profiles to get `allowlisted: true` (default **false** for safer production), `MAGNUS_DEFAULT_USER_TIER` (`standard` \| `premium` \| `internal`). If not allowlisted or `access_flags.chat === false`, return a fixed refusal string (no user/assistant chat rows for the blocked path).
 4. **Rate limit** — Inbound text messages: Redis-backed fixed 60s window per Telegram user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, default 30/min; `0` disables).
-5. **Intent classification** — Categories: `HEALTH`, `WEALTH`, `BUILD`, `PLANNING`, `RELATIONSHIPS`, `LEARNING`, `HAPPINESS`, `NOTION`, `GENERAL`. Non-`GENERAL` → delegate when a specialist is registered (`NOTION` → Notion, `HEALTH` → Health composite, `PLANNING` → Planner, `LEARNING` → Research); otherwise the **routing placeholder**. `GENERAL` → either **Research** (research sub-route) or the short chief-of-staff Claude reply.
+5. **Intent classification** — Categories include `NOTION`, `HEALTH`, … `/meal` forces `HEALTH` without classify. Otherwise classify → pillar/department on context → delegate when a specialist is registered (`NOTION` → Notion, `HEALTH` → Health composite, `PLANNING` → Planner, `LEARNING` → learning specialists, `BUILD` → Build & Ship); otherwise **routing placeholder**. `GENERAL` → **Research** (research sub-route) or short Claude reply.
 6. **Chat persistence** — Table `magnus_chat_messages`: each successful turn logs **user** then **assistant** with `user_profile_id`, `telegram_user_id`, optional `intent`, `metadata` (tier, flags, `telegram_user_id`). When **`MAGNUS_DELEGATION_NOTICE`** is on and Magnus delegates to a specialist (`delegated_agent` set), an extra **assistant** row is written first for the short delegation notice (`metadata.delegation_notice: true`), then the specialist reply. Proactive `sendMessage` / `sendMarkdown` logs an extra **assistant** row with `metadata.outbound`.
 7. **Telegraf** — `startBot` returns a Promise resolved in the launch callback so startup logging works without awaiting the infinite polling loop.
 
@@ -299,4 +322,4 @@ If hooks do not run, check **Cursor Settings → Hooks** and restart Cursor afte
 4. After DB or credential changes, run `npm run test:supabase` if you touch Supabase clients or chat logging.
 5. Before ending a session with substantive changes, **update this file** and bump **Last updated** below.
 
-**Last updated:** 2026-04-12 (Removed dead `mealLogCommand` wrapper, `plannerStub`, unused `nutritionDepartmentAgent`; tests point at `mealLogPipeline`)
+**Last updated:** 2026-04-12 (Added `docs/CURSOR_AGENT_PROMPTS.md` — detailed Cursor instructions per agent batch; linked from `magnus.md`)

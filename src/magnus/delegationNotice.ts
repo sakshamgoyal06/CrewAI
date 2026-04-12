@@ -4,8 +4,13 @@ import type { Intent } from "../intent.js";
 const AGENT_DISPLAY: Record<string, string> = {
   HealthComposite: "Health",
   Planner: "Planner",
+  LearningPlan: "Learning Plan",
   Research: "Research",
+  LearningTracker: "Learning Tracker",
   Notion: "Notion",
+  TripDesigner: "Trip Designer",
+  CultureRecommender: "Culture",
+  BuildShip: "Build & Ship",
 };
 
 function intentPhrase(intent: Intent): string {
@@ -17,6 +22,7 @@ function intentPhrase(intent: Intent): string {
     RELATIONSHIPS: "relationships",
     LEARNING: "learning",
     HAPPINESS: "happiness",
+    CULTURE: "culture",
     NOTION: "Notion",
     GENERAL: "general",
   };

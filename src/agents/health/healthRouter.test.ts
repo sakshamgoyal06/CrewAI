@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ENERGY_SYSTEM } from "./energyAgent.js";
 import { routeHealthMessage } from "./healthRouter.js";
+import { ALTERNATES_RECOMMENDER_SYSTEM } from "./alternatesRecommenderAgent.js";
+import { LONG_TERM_HEALTH_PLANNING_SYSTEM } from "./longTermHealthPlanningAgent.js";
+import { MEAL_PLANNER_SYSTEM } from "./mealPlannerAgent.js";
 import { NUTRITION_SYSTEM } from "./nutritionPrompt.js";
 import { FITNESS_SYSTEM } from "./fitnessAgent.js";
 
@@ -42,6 +45,53 @@ describe("routeHealthMessage", () => {
     createMock.mockReset();
     createMock.mockResolvedValue({
       content: [{ type: "text", text: "mock reply" }],
+    });
+  });
+
+  it("routes meal planning asks to MealPlanner before Fitness", async () => {
+    const out = await routeHealthMessage(
+      ctx("Plan my meals for the week — vegan, nut allergy, moderate protein."),
+    );
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(createMock.mock.calls[0][0]).toMatchObject({
+      system: MEAL_PLANNER_SYSTEM,
+    });
+    expect(out.metadata).toMatchObject({
+      health_order: "meal_plan",
+      specialist: "MealPlanner",
+    });
+  });
+
+  it("routes food swap asks to Alternates after Fitness declines", async () => {
+    const out = await routeHealthMessage(
+      ctx("What's a good vegan alternative to butter for baking?"),
+    );
+    expect(createMock).toHaveBeenCalledTimes(2);
+    expect(createMock.mock.calls[0]![0]).toMatchObject({
+      system: expect.not.stringContaining("Alternates Recommender"),
+    });
+    expect(createMock.mock.calls[1]![0]).toMatchObject({
+      system: ALTERNATES_RECOMMENDER_SYSTEM,
+    });
+    expect(out.metadata).toMatchObject({
+      health_order: "nutrition",
+      specialist: "AlternatesRecommender",
+    });
+  });
+
+  it("routes long-horizon training planning before Fitness", async () => {
+    const out = await routeHealthMessage(
+      ctx("16-week base phase before my spring half — how to sequence volume?"),
+    );
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(createMock.mock.calls[0][0]).toMatchObject({
+      system: LONG_TERM_HEALTH_PLANNING_SYSTEM,
+    });
+    expect(out.metadata).toMatchObject({
+      health_order: "long_term_health_planning",
+      specialist: "LongTermHealthPlanning",
+      department: "long_term_health_planning",
+      pillar: "health",
     });
   });
 

@@ -1,11 +1,11 @@
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
-import { parseIntent, type Intent } from "../intent.js";
+import type { Intent } from "../intent.js";
 import { logger } from "../logger.js";
 import { anthropic } from "../tools/clients.js";
 import { runResearchAgent } from "./intelligence/researchAgent.js";
 import { isResearchSubIntent } from "./intelligence/researchRouting.js";
-import { isNotionIntentOverride } from "./knowledge/notionIntent.js";
+import { resolveIntentNaturalLanguage } from "./orchestratorIntent.js";
 import {
   augmentUserWithMemory,
   formatMemoryBlockForSystem,
@@ -19,15 +19,16 @@ import {
 } from "./health/healthOnboarding.js";
 import { isMealCommand } from "../meals/parseMealLogCommand.js";
 import { dispatchToAgent, findAgentForIntent } from "./registry.js";
+import { intentToPillarRoute, resolvePillarRoute } from "./routing/intentToPillarRoute.js";
+import {
+  effectiveSlashUserMessage,
+  parseSlashCommand,
+  type SlashDirectRoute,
+} from "./routing/slashCommands.js";
+import type { DepartmentId } from "./routing/pillarTypes.js";
 import type { AgentContext } from "./types.js";
 
 const MODEL = "claude-sonnet-4-6";
-
-const CLASSIFY_SYSTEM = `You are MAGNUS, a personal AI chief of staff. Classify the intent of the user message into exactly one category:
-HEALTH | WEALTH | BUILD | PLANNING | RELATIONSHIPS | LEARNING | HAPPINESS | NOTION | GENERAL
-Use NOTION when the user wants to log, create, or query something in Notion (pages, Goals DB, check-ins, patterns, briefs).
-Use GENERAL when the user asks to research, compare, summarize, or look up external information (even if the topic touches planning or wealth).
-Reply with only the category name, nothing else.`;
 
 const GENERAL_SYSTEM =
   "You are MAGNUS, a warm and direct personal AI chief of staff for Saksham. Keep replies under 100 words.";
@@ -39,7 +40,7 @@ export type OrchestratorReply = {
   agentMetadata?: Record<string, unknown>;
 };
 
-/** Fired as soon as Magnus commits to a specialist — before memory load and before any specialist LLM work. */
+/** Fired when Magnus commits to a specialist — before memory load and specialist LLM. */
 export type BeforeDelegationInfo = {
   intent: Intent;
   delegatedAgent: string;
@@ -58,16 +59,6 @@ export function routingPlaceholder(intent: Exclude<Intent, "GENERAL">): string {
   return `🧠 MAGNUS routing to ${intent} department... (agents coming soon)`;
 }
 
-async function classifyIntent(userMessage: string): Promise<Intent> {
-  const msg = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 64,
-    system: CLASSIFY_SYSTEM,
-    messages: [{ role: "user", content: userMessage }],
-  });
-  return parseIntent(textFromMessage(msg));
-}
-
 async function answerGeneral(
   userMessage: string,
   memoryBlock?: string,
@@ -83,8 +74,13 @@ async function answerGeneral(
   return textFromMessage(msg).trim() || "…";
 }
 
+function slashMetadata(slash: SlashDirectRoute | null): Record<string, unknown> {
+  return slash ? { slash_command: slash.commandKey } : {};
+}
+
 /**
- * Classify → (optional progress callback) → memory → delegate or general reply.
+ * Single entry for chat: health onboarding gates → intent (slash **or** natural-language cycle) →
+ * pillar/department → memory → specialist / Research / general.
  */
 export async function runOrchestratorReply(input: {
   userMessage: string;
@@ -92,12 +88,12 @@ export async function runOrchestratorReply(input: {
   telegramUserId: string;
   timezone?: string;
   northStarGoal?: string;
-  /** Answer to planning-vs-research disambiguation ("1" = Planner, "2" = Research). Skips classify. */
+  /** "1" = Planner, "2" = Research — skips classify. */
   disambiguationChoice?: "1" | "2";
-  /** Called once a specialist is chosen, before memory load and before that specialist runs. */
   onBeforeDelegation?: (info: BeforeDelegationInfo) => void | Promise<void>;
 }): Promise<OrchestratorReply> {
   const healthProfile = await fetchUserHealthProfile(input.userProfileId);
+
   if (
     healthProfile &&
     !healthProfile.onboarding_completed_at &&
@@ -115,36 +111,39 @@ export async function runOrchestratorReply(input: {
       },
       healthProfile,
     );
+    const healthRoute = intentToPillarRoute("HEALTH");
     return {
       replyText: ob.text,
       intent: "HEALTH",
       delegatedAgent: "HealthOnboarding",
-      agentMetadata: ob.metadata,
+      agentMetadata: {
+        ...ob.metadata,
+        pillar: healthRoute.pillar,
+        department: healthRoute.department,
+      },
     };
   }
 
   let intent: Intent;
+  let userMessageForAgent = input.userMessage;
+  let slashRoute: SlashDirectRoute | null = null;
 
   if (input.disambiguationChoice === "1") {
     intent = "PLANNING";
   } else if (input.disambiguationChoice === "2") {
     intent = "GENERAL";
   } else {
-    intent = isNotionIntentOverride(input.userMessage)
-      ? "NOTION"
-      : isMealCommand(input.userMessage)
-        ? "HEALTH"
-        : await classifyIntent(input.userMessage);
-
-    /** Classifier often picks PLANNING for "research X" queries; route those to Research instead of Planner. */
-    if (
-      intent !== "NOTION" &&
-      intent !== "HEALTH" &&
-      isResearchSubIntent(input.userMessage)
-    ) {
-      intent = "GENERAL";
+    slashRoute = parseSlashCommand(input.userMessage);
+    if (slashRoute) {
+      intent = slashRoute.intent;
+      userMessageForAgent = effectiveSlashUserMessage(slashRoute);
+    } else {
+      intent = await resolveIntentNaturalLanguage(input.userMessage);
     }
   }
+
+  const slashDept: DepartmentId | undefined =
+    slashRoute && !slashRoute.forceResearch ? slashRoute.department : undefined;
 
   if (intent === "HEALTH" && !healthProfile && !isMealCommand(input.userMessage)) {
     await input.onBeforeDelegation?.({
@@ -156,20 +155,38 @@ export async function runOrchestratorReply(input: {
       userProfileId: input.userProfileId,
       telegramUserId: input.telegramUserId,
     });
+    const healthRoute = intentToPillarRoute("HEALTH");
     return {
       replyText: started.text,
       intent: "HEALTH",
       delegatedAgent: "HealthOnboarding",
-      agentMetadata: started.metadata,
+      agentMetadata: {
+        ...started.metadata,
+        pillar: healthRoute.pillar,
+        department: healthRoute.department,
+      },
     };
   }
 
   const willResearch =
     intent === "GENERAL" &&
     (input.disambiguationChoice === "2" ||
-      isResearchSubIntent(input.userMessage));
+      slashRoute?.forceResearch === true ||
+      isResearchSubIntent(userMessageForAgent));
+
+  const pillarRoute = resolvePillarRoute(intent, slashDept);
+  const routingCtx: AgentContext = {
+    userProfileId: input.userProfileId,
+    telegramUserId: input.telegramUserId,
+    timezone: input.timezone,
+    northStarGoal: input.northStarGoal,
+    rawMessage: userMessageForAgent,
+    intent,
+    pillar: pillarRoute.pillar,
+    department: pillarRoute.department,
+  };
   const specialistForIntent =
-    intent === "GENERAL" ? null : findAgentForIntent(intent);
+    intent === "GENERAL" ? null : findAgentForIntent(intent, routingCtx);
 
   if (willResearch) {
     await input.onBeforeDelegation?.({
@@ -197,6 +214,8 @@ export async function runOrchestratorReply(input: {
       {
         module: "magnusOrchestrator",
         intent,
+        pillar: pillarRoute.pillar,
+        department: pillarRoute.department,
         memoryPurpose: memory.purpose,
         memoryGapCount: memory.gaps.length,
         memoryRecentTurns: memory.recentSignals.recentChatTurns.length,
@@ -212,19 +231,24 @@ export async function runOrchestratorReply(input: {
         telegramUserId: input.telegramUserId,
         timezone: input.timezone,
         northStarGoal: input.northStarGoal,
-        rawMessage: input.userMessage,
+        rawMessage: userMessageForAgent,
         intent: "GENERAL",
         memoryBlock,
+        pillar: pillarRoute.pillar,
+        department: pillarRoute.department,
       });
       return {
         replyText: research.text,
         intent,
         delegatedAgent: "Research",
-        agentMetadata: research.metadata,
+        agentMetadata: {
+          ...research.metadata,
+          ...slashMetadata(slashRoute),
+        },
       };
     }
     return {
-      replyText: await answerGeneral(input.userMessage, memoryBlock),
+      replyText: await answerGeneral(userMessageForAgent, memoryBlock),
       intent,
     };
   }
@@ -234,9 +258,11 @@ export async function runOrchestratorReply(input: {
     telegramUserId: input.telegramUserId,
     timezone: input.timezone,
     northStarGoal: input.northStarGoal,
-    rawMessage: input.userMessage,
+    rawMessage: userMessageForAgent,
     intent,
     memoryBlock,
+    pillar: pillarRoute.pillar,
+    department: pillarRoute.department,
   };
 
   const delegated = await dispatchToAgent(ctx, intent);
@@ -245,12 +271,21 @@ export async function runOrchestratorReply(input: {
       replyText: delegated.result.text,
       intent,
       delegatedAgent: delegated.agentName,
-      agentMetadata: delegated.result.metadata,
+      agentMetadata: {
+        ...delegated.result.metadata,
+        ...slashMetadata(slashRoute),
+      },
     };
   }
 
   return {
     replyText: routingPlaceholder(intent),
     intent,
+    agentMetadata: {
+      pillar: pillarRoute.pillar,
+      department: pillarRoute.department,
+      routing_placeholder: true,
+      ...slashMetadata(slashRoute),
+    },
   };
 }

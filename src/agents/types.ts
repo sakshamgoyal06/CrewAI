@@ -2,6 +2,7 @@
  * Shared types for department specialists (orchestrator delegates here).
  */
 import type { Intent } from "../intent.js";
+import type { Pillar } from "./routing/pillarTypes.js";
 
 export type HealthSubIntent = "FITNESS" | "NUTRITION" | "ENERGY" | "OTHER";
 
@@ -21,6 +22,12 @@ export type AgentContext = {
    * Onboarding-completed health preferences (from `user_health_profile`), appended to specialist prompts.
    */
   healthPreferences?: string;
+  /** Pillar when routing has classified it (optional until classifier wiring is complete). */
+  pillar?: Pillar;
+  /** Department id (e.g. snake_case from routing) when known. */
+  department?: string;
+  /** Specialist id or label when a primary specialist is selected. */
+  specialist?: string;
 };
 
 export type AgentResult = {
@@ -35,6 +42,7 @@ export type AgentResult = {
 export type DepartmentAgent = {
   name: string;
   departmentId?: Intent;
-  handles?: (intent: Intent) => boolean;
+  /** When set, `ctx` is the same shape as specialist `run` receives (may omit memory before orchestrator load). */
+  handles?: (intent: Intent, ctx?: AgentContext) => boolean;
   run: (ctx: AgentContext) => Promise<AgentResult>;
 };

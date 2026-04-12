@@ -2,6 +2,7 @@ import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { anthropic } from "../../tools/clients.js";
 import { augmentUserWithMemory } from "../memory/memoryAgent.js";
+import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
 
 const MODEL = "claude-sonnet-4-6";
@@ -11,6 +12,8 @@ const MODEL = "claude-sonnet-4-6";
  * @see docs/AGENT_ROSTER.md §6.2, MAGNUS_CORE_CONTEXT.md (locked day, morning brief as read).
  */
 export const PLANNER_SYSTEM = `You are the Planner specialist for Magnus within LifeOS.
+
+${SPECIALIST_USER_IDENTITY}
 
 Scope: Help with daily and weekly prioritisation, high-level time blocking (not full calendar integration in v1), and "what matters today." You are a text-only planning coach — practical, calm, specific.
 

@@ -1,4 +1,4 @@
-import { Telegraf } from "telegraf";
+import { Markup, Telegraf } from "telegraf";
 
 import { logger, maskTelegramUserId } from "../logger.js";
 import { loggableError } from "../util/loggableError.js";
@@ -8,6 +8,16 @@ import {
 } from "./chatLog.js";
 import { redis } from "./clients.js";
 import { checkMessageRateLimit } from "./rateLimit.js";
+import {
+  getTelegramBotCommandsForRegistration,
+  inlineKeyboardCommands,
+  isSlashCommandKey,
+} from "../agents/routing/slashCommands.js";
+import {
+  clearPendingSlashCommand,
+  mergePendingSlashIntoMessage,
+  setPendingSlashCommand,
+} from "./pendingSlashSelection.js";
 
 const TELEGRAM_UPDATE_DEDUP_TTL_SEC = 86_400;
 
@@ -138,8 +148,100 @@ function isMorningBriefTrigger(text: string): boolean {
   return /^morning\s+brief\.?$/i.test(t);
 }
 
+function buildDepartmentInlineKeyboard() {
+  const items = inlineKeyboardCommands();
+  const rows: ReturnType<typeof Markup.button.callback>[][] = [];
+  for (let i = 0; i < items.length; i += 2) {
+    const a = items[i];
+    const b = items[i + 1];
+    const row = [Markup.button.callback(a.label, `magnus_cmd:${a.command}`)];
+    if (b) {
+      row.push(Markup.button.callback(b.label, `magnus_cmd:${b.command}`));
+    }
+    rows.push(row);
+  }
+  return Markup.inlineKeyboard(rows);
+}
+
+async function runMorningBriefForCtx(
+  telegramUserId: string,
+  replyPlain: (r: string) => Promise<unknown>,
+): Promise<void> {
+  try {
+    const { runMorningBriefForTelegramUser } = await import(
+      "../jobs/morningBriefManual.js"
+    );
+    const out = await runMorningBriefForTelegramUser(telegramUserId, new Date());
+    if (out.ok) {
+      await replyPlain(out.ack);
+    } else {
+      await replyPlain(out.reply);
+    }
+  } catch (e) {
+    logger.error(
+      { err: loggableError(e), telegramUserId: maskTelegramUserId(telegramUserId) },
+      "morning brief command failed",
+    );
+    await replyPlain("Something went wrong. Check server logs.");
+  }
+}
+
 export function startBot(onMessage: TelegramTextHandler): Promise<void> {
   const b = getBot();
+
+  b.on("callback_query", async (ctx) => {
+    const updateId = ctx.update.update_id;
+    if (!(await claimTelegramUpdate(updateId))) {
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    const cq = ctx.callbackQuery;
+    const data =
+      cq && "data" in cq && typeof cq.data === "string" ? cq.data : undefined;
+    if (!data?.startsWith("magnus_cmd:")) {
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    const key = data.slice("magnus_cmd:".length);
+    const telegramUserId = String(ctx.from?.id ?? "");
+    if (!telegramUserId) {
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    const rate = await checkMessageRateLimit(telegramUserId);
+    if (!rate.ok) {
+      await ctx.answerCbQuery(`Slow down — try in ~${rate.retryAfterSec}s`);
+      return;
+    }
+
+    try {
+      if (key === "morningbrief") {
+        await ctx.answerCbQuery();
+        await runMorningBriefForCtx(telegramUserId, (r) => ctx.reply(r));
+        return;
+      }
+
+      if (!isSlashCommandKey(key)) {
+        await ctx.answerCbQuery("Unknown command");
+        return;
+      }
+
+      await setPendingSlashCommand(telegramUserId, key);
+      await ctx.answerCbQuery("Now type your message");
+      await ctx.reply(
+        "Lane selected. Send your next message as plain text (no slash). It will be routed as that department. Sending any /command cancels this pick.",
+      );
+    } catch (e) {
+      logger.error(
+        { err: loggableError(e), telegramUserId: maskTelegramUserId(telegramUserId) },
+        "callback_query handler failed",
+      );
+      await ctx.answerCbQuery("Error — try again");
+    }
+  });
 
   b.on("text", async (ctx) => {
     const updateId = ctx.update.update_id;
@@ -165,7 +267,17 @@ export function startBot(onMessage: TelegramTextHandler): Promise<void> {
           }
         : undefined;
 
-    const rawText = ctx.message.text;
+    const rawText = await mergePendingSlashIntoMessage(telegramUserId, ctx.message.text);
+
+    if (/^\/menu(?:@\S+)?\s*$/i.test(rawText.trim())) {
+      await clearPendingSlashCommand(telegramUserId);
+      await ctx.reply(
+        "Pick a lane below — then type your message and send. Your text is combined with that department (no empty slash-only turn).",
+        buildDepartmentInlineKeyboard(),
+      );
+      return;
+    }
+
     if (isMorningBriefTrigger(rawText)) {
       const rate = await checkMessageRateLimit(telegramUserId);
       if (!rate.ok) {
@@ -174,23 +286,7 @@ export function startBot(onMessage: TelegramTextHandler): Promise<void> {
         );
         return;
       }
-      try {
-        const { runMorningBriefForTelegramUser } = await import(
-          "../jobs/morningBriefManual.js"
-        );
-        const out = await runMorningBriefForTelegramUser(telegramUserId, new Date());
-        if (out.ok) {
-          await reply(out.ack);
-        } else {
-          await reply(out.reply);
-        }
-      } catch (e) {
-        logger.error(
-          { err: loggableError(e), telegramUserId: maskTelegramUserId(telegramUserId) },
-          "morning brief command failed",
-        );
-        await reply("Something went wrong. Check server logs.");
-      }
+      await runMorningBriefForCtx(telegramUserId, (r) => reply(r));
       return;
     }
 
@@ -201,7 +297,7 @@ export function startBot(onMessage: TelegramTextHandler): Promise<void> {
       );
       return;
     }
-    await onMessage(ctx.message.text, reply, telegramUserId, updateId, sendTyping);
+    await onMessage(rawText, reply, telegramUserId, updateId, sendTyping);
   });
 
   process.once("SIGINT", () => b.stop("SIGINT"));
@@ -209,7 +305,14 @@ export function startBot(onMessage: TelegramTextHandler): Promise<void> {
 
   return new Promise((resolve, reject) => {
     void b
-      .launch({}, () => {
+      .launch({}, async () => {
+        try {
+          await b.telegram.setMyCommands([
+            ...getTelegramBotCommandsForRegistration(),
+          ]);
+        } catch (e) {
+          logger.warn({ err: loggableError(e) }, "setMyCommands failed (non-fatal)");
+        }
         resolve();
       })
       .catch(reject);

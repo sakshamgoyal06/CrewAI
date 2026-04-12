@@ -2,11 +2,15 @@
 
 **Purpose:** Single review surface for every bot persona: **Magnus** (orchestrator), **LifeOS ritual agents**, and **department specialists**. Update this when prompts, scope, or tooling change.
 
-| Doc | Role |
-|-----|------|
-| This file | Who each agent is, what it may do, and the words it runs on |
-| `magnus.md` | Runtime, env, DB, deployment |
-| `MAGNUS_CORE_CONTEXT.md` | Philosophy and target architecture |
+
+| Doc                      | Role                                                                     |
+| ------------------------ | ------------------------------------------------------------------------ |
+| This file                | Who each agent is, what it may do, and the words it runs on              |
+| `magnus.md`              | Runtime, env, DB, deployment                                             |
+| `MAGNUS_CORE_CONTEXT.md` | Philosophy and target architecture                                       |
+| `AGENT_ARCHITECTURE.md`  | Pillar → department → specialist structure (Health, Wealth, Wisdom, Joy) |
+| `CURSOR_AGENT_PROMPTS.md` | Copy-paste Cursor prompts to implement agents and routing (batched)       |
+
 
 **Convention**
 
@@ -18,11 +22,13 @@
 
 ## Status snapshot
 
-| Area | In code today |
-|------|----------------|
-| Orchestrator classify + general reply | `src/magnus.ts`, `src/agents/magnusOrchestrator.ts` |
-| Intent set | `src/intent.ts` (`HEALTH` … `NOTION`, `GENERAL`) |
-| Specialist agents | `src/agents/` — **Notion** (`knowledge/notionAgent.ts`) for `NOTION`; **Memory** (`memory/`); **Health** composite (`health/healthRouter.ts` → Fitness → Nutrition → Energy); **Planner** (`planning/plannerAgent.ts`) for `PLANNING`; **Research** (`intelligence/researchAgent.ts`) for `LEARNING` + GENERAL research sub-route |
+
+| Area                                  | In code today                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Orchestrator classify + general reply | `src/magnus.ts`, `src/agents/magnusOrchestrator.ts`                                                                                                                                                                                                                                                                               |
+| Intent set                            | `src/intent.ts` (`HEALTH` … `NOTION`, `GENERAL`)                                                                                                                                                                                                                                                                                  |
+| Specialist agents                     | `src/agents/` — **Notion** (`knowledge/notionAgent.ts`) for `NOTION`; **Memory** (`memory/`); **Health** composite (`health/healthRouter.ts` → Fitness → Nutrition → Energy); **Planner** (`planning/plannerAgent.ts`) for `PLANNING`; **Research** (`intelligence/researchAgent.ts`) for `LEARNING` + GENERAL research sub-route |
+
 
 **Current build:** **Memory**, **Notion**, **Morning Brief** (`src/jobs/` — cron + `/morningbrief` + `POST /internal/jobs/morning-brief`); **Research** shipped (gather + optional SerpAPI); **Health** includes **nutrition-orchestrated** meal parsing + logging (`src/agents/health/nutritionOrchestrated.ts`, `mealParserAgent.ts`).  
 **Deferred:** **Trading** (Wealth / broker) — not in this phase.
@@ -46,12 +52,14 @@
 
 **Fixed strings (not LLM)**
 
-| Key | Text |
-|-----|------|
-| Not allowlisted | `You're not allowlisted to use Magnus yet. Ask an admin to enable your account.` |
-| Tier / no chat | `Your access tier doesn't include chat right now. We'll expand this soon.` |
-| Error fallback | `Something went wrong. Check server logs.` |
-| Non-GENERAL route (placeholder) | `🧠 MAGNUS routing to {INTENT} department... (agents coming soon)` |
+
+| Key                             | Text                                                                             |
+| ------------------------------- | -------------------------------------------------------------------------------- |
+| Not allowlisted                 | `You're not allowlisted to use Magnus yet. Ask an admin to enable your account.` |
+| Tier / no chat                  | `Your access tier doesn't include chat right now. We'll expand this soon.`       |
+| Error fallback                  | `Something went wrong. Check server logs.`                                       |
+| Non-GENERAL route (placeholder) | `🧠 MAGNUS routing to {INTENT} department... (agents coming soon)`               |
+
 
 ---
 
@@ -91,7 +99,7 @@ You are MAGNUS, a warm and direct personal AI chief of staff for Saksham. Keep r
 
 **Actions**
 
-- `isNotionIntentOverride(userMessage)` → if true, intent **`NOTION`** (skip classifier).
+- `isNotionIntentOverride(userMessage)` → if true, intent `**NOTION`** (skip classifier).
 - Else `classifyIntent(userMessage)` → `Intent`; `loadMemoryContext` + `formatMemoryBlockForSystem` for the turn.
 - If `GENERAL` and research sub-route (`isResearchSubIntent`) → `runResearchAgent` (structured Markdown + Sources).
 - Else if `GENERAL` → `answerGeneral(userMessage, memoryBlock)`.
@@ -105,17 +113,19 @@ You are MAGNUS, a warm and direct personal AI chief of staff for Saksham. Keep r
 
 ## 3. Intent → department routing
 
-| Intent | Primary department(s) | Notes |
-|--------|------------------------|--------|
-| `HEALTH` | Health | Fitness, nutrition, energy |
-| `WEALTH` | Wealth | Trading, portfolio, expense |
-| `BUILD` | Build | Product, UI, backend, QA |
-| `PLANNING` | Life planning | Planner, reminders, goals |
-| `RELATIONSHIPS` | Relationships | Social CRM, occasions |
-| `LEARNING` | Intelligence + Lifestyle | Research/data/ideation + learning digest |
-| `HAPPINESS` | Joy / happiness layer | Tank, lifestyle joy repos — align with meta-KPI |
-| `NOTION` | Knowledge | Notion API agent (`notionAgent`); keyword override for common phrases |
-| `GENERAL` | Orchestrator only | No delegation to departments (Claude `GENERAL_SYSTEM` or Research sub-route) |
+
+| Intent          | Primary department(s)    | Notes                                                                        |
+| --------------- | ------------------------ | ---------------------------------------------------------------------------- |
+| `HEALTH`        | Health                   | Fitness, nutrition, energy                                                   |
+| `WEALTH`        | Wealth                   | Trading, portfolio, expense                                                  |
+| `BUILD`         | Build                    | Product, UI, backend, QA                                                     |
+| `PLANNING`      | Life planning            | Planner, reminders, goals                                                    |
+| `RELATIONSHIPS` | Relationships            | Social CRM, occasions                                                        |
+| `LEARNING`      | Intelligence + Lifestyle | Research/data/ideation + learning digest                                     |
+| `HAPPINESS`     | Joy / happiness layer    | Tank, lifestyle joy repos — align with meta-KPI                              |
+| `NOTION`        | Knowledge                | Notion API agent (`notionAgent`); keyword override for common phrases        |
+| `GENERAL`       | Orchestrator only        | No delegation to departments (Claude `GENERAL_SYSTEM` or Research sub-route) |
+
 
 Fine-grained routing inside a department is a **second step** (keyword/regex fast path or sub-classifier).
 
@@ -129,12 +139,14 @@ These implement LifeOS philosophy; Magnus may invoke them on schedule or by trig
 
 **Status:** Draft.
 
-| Agent | Scope | Actions |
-|-------|--------|--------|
-| **Health pillar** | One active health “one thing”, milestone, non-judgmental coaching | Read/write health KPIs; nudges; link Fitness/Nutrition/Energy specialists |
-| **Wealth pillar** | Career/finance focus, one thing, progress vs goal | Summarise wealth KPIs; route to Wealth dept |
-| **Wisdom pillar** | Learning/skills one thing | Summarise learning goals; route to Intelligence/Lifestyle learning |
-| **Joy pillar** | Joy **tank** (0–100%), bands (e.g. Nourished → Depleted), repositories | **Never** optimise Joy as a score chase; warn when tank neglected |
+
+| Agent             | Scope                                                                  | Actions                                                                   |
+| ----------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **Health pillar** | One active health “one thing”, milestone, non-judgmental coaching      | Read/write health KPIs; nudges; link Fitness/Nutrition/Energy specialists |
+| **Wealth pillar** | Career/finance focus, one thing, progress vs goal                      | Summarise wealth KPIs; route to Wealth dept                               |
+| **Wisdom pillar** | Learning/skills one thing                                              | Summarise learning goals; route to Intelligence/Lifestyle learning        |
+| **Joy pillar**    | Joy **tank** (0–100%), bands (e.g. Nourished → Depleted), repositories | **Never** optimise Joy as a score chase; warn when tank neglected         |
+
 
 **Draft system prompt — pillar agent (template)**
 
@@ -148,7 +160,7 @@ You are a LifeOS pillar specialist for {PILLAR_NAME}. You enforce: one focus at 
 
 **Scope:** Assemble tiered context for other agents (short recent + summaries); query pgvector for similar past states when embeddings exist (`semanticRecall` is **stubbed** until reflection embeddings + RPC are wired).
 
-**Actions:** Read Supabase `user_profile`, `magnus_chat_messages`, optional `memory_summaries`, `daily_scores`, `goals`, `happiness_reserve`, `patterns`; return structured `MemoryContext` with explicit **`gaps`** when a table/query fails or is empty. Orchestrator calls `loadMemoryContext` each turn and **prepends** a formatted memory block to GENERAL and specialist user messages (see `magnus.md` — Memory context).
+**Actions:** Read Supabase `user_profile`, `magnus_chat_messages`, optional `memory_summaries`, `daily_scores`, `goals`, `happiness_reserve`, `patterns`; return structured `MemoryContext` with explicit `**gaps`** when a table/query fails or is empty. Orchestrator calls `loadMemoryContext` each turn and **prepends** a formatted memory block to GENERAL and specialist user messages (see `magnus.md` — Memory context).
 
 **Draft system prompt** (for future LLM-driven memory layer, not used in code today)
 
@@ -235,12 +247,14 @@ You implement Emergency Protocol. Activate MVD mode with a clear end date (e.g. 
 
 ### 5.1 Build department
 
-| Agent | Scope | Actions |
-|-------|--------|---------|
-| **Product** | Ideas → specs, stories, plans | Notion/GitHub issues, PRDs |
-| **UI** | Frontend, design system | Repo files, Storybook (future) |
-| **Backend** | APIs, logic, Supabase | Migrations, RLS review with human, server code |
-| **QA** | Tests, edge cases, review | Run tests, suggest cases |
+
+| Agent       | Scope                         | Actions                                        |
+| ----------- | ----------------------------- | ---------------------------------------------- |
+| **Product** | Ideas → specs, stories, plans | Notion/GitHub issues, PRDs                     |
+| **UI**      | Frontend, design system       | Repo files, Storybook (future)                 |
+| **Backend** | APIs, logic, Supabase         | Migrations, RLS review with human, server code |
+| **QA**      | Tests, edge cases, review     | Run tests, suggest cases                       |
+
 
 #### Product — draft system prompt
 
@@ -268,11 +282,13 @@ You are the QA agent. Challenge assumptions, list edge cases, propose vitest cas
 
 ### 5.2 Intelligence department
 
-| Agent | Scope | Actions |
-|-------|--------|---------|
-| **Research** | Deep dives, comparisons | **Implemented** — `src/agents/intelligence/researchAgent.ts`; tools `src/tools/research/` (fetch + optional SerpAPI search); structured Markdown output with Sources |
-| **Data** | Analysis, dashboards | Query DB, charts (future) |
-| **Ideation** | Options from vague goals | Brainstorm lists, tradeoffs |
+
+| Agent        | Scope                    | Actions                                                                                                                                                              |
+| ------------ | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Research** | Deep dives, comparisons  | **Implemented** — `src/agents/intelligence/researchAgent.ts`; tools `src/tools/research/` (fetch + optional SerpAPI search); structured Markdown output with Sources |
+| **Data**     | Analysis, dashboards     | Query DB, charts (future)                                                                                                                                            |
+| **Ideation** | Options from vague goals | Brainstorm lists, tradeoffs                                                                                                                                          |
+
 
 #### Research — system prompt
 
@@ -297,11 +313,13 @@ You are the Ideation agent. Produce 3–5 distinct options with pros/cons; mark 
 
 ### 5.3 Operations department
 
-| Agent | Scope | Actions |
-|-------|--------|---------|
+
+| Agent               | Scope                   | Actions                  |
+| ------------------- | ----------------------- | ------------------------ |
 | **Project Manager** | Goals → tasks, tracking | Notion databases, status |
-| **Documentation** | READMEs, SOPs | Edit repo docs |
-| **Automation** | n8n / scripts | Webhooks, scheduled jobs |
+| **Documentation**   | READMEs, SOPs           | Edit repo docs           |
+| **Automation**      | n8n / scripts           | Webhooks, scheduled jobs |
+
 
 #### Project Manager — draft system prompt
 
@@ -323,11 +341,13 @@ You are the Automation agent. Prefer idempotent flows; log failures; secrets via
 
 ### 5.4 Communications department
 
-| Agent | Scope | Actions |
-|-------|--------|---------|
-| **Email** | Draft/triage Gmail | Gmail API when wired |
-| **Calendar** | Scheduling, focus blocks | Google Calendar API when wired |
-| **Content** | Posts, changelogs | Twitter/LinkedIn/etc. when wired |
+
+| Agent        | Scope                    | Actions                          |
+| ------------ | ------------------------ | -------------------------------- |
+| **Email**    | Draft/triage Gmail       | Gmail API when wired             |
+| **Calendar** | Scheduling, focus blocks | Google Calendar API when wired   |
+| **Content**  | Posts, changelogs        | Twitter/LinkedIn/etc. when wired |
+
 
 #### Email — draft system prompt
 
@@ -349,15 +369,17 @@ You are the Content agent. Clear, honest, no hype; align with product facts; fla
 
 ### 5.5 Knowledge department
 
-| Agent | Scope | Actions |
-|-------|--------|---------|
-| **Notion** | Pages, DBs, tidy | **Implemented** — `@notionhq/client` (`src/tools/notion.ts`), `notionAgent` (`src/agents/knowledge/notionAgent.ts`); env `NOTION_TOKEN` + optional database/parent UUIDs |
-| **File** | Drive organisation | Drive API when wired |
-| **Memory (profile)** | Master profile for all agents | Supabase + embeddings — **same agent as §4.2** |
+
+| Agent                | Scope                         | Actions                                                                                                                                                                  |
+| -------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Notion**           | Pages, DBs, tidy              | **Implemented** — `@notionhq/client` (`src/tools/notion.ts`), `notionAgent` (`src/agents/knowledge/notionAgent.ts`); env `NOTION_TOKEN` + optional database/parent UUIDs |
+| **File**             | Drive organisation            | Drive API when wired                                                                                                                                                     |
+| **Memory (profile)** | Master profile for all agents | Supabase + embeddings — **same agent as §4.2**                                                                                                                           |
+
 
 #### Notion — system prompt (routing)
 
-Specialist replies are **deterministic** from tool calls (append log, query check-in, create goal row). The orchestrator may still classify **`NOTION`** for Notion-related asks; keyword override covers phrases like *log this to notion* / *daily check-in* / *morning brief* without an extra classify call.
+Specialist replies are **deterministic** from tool calls (append log, query check-in, create goal row). The orchestrator may still classify `**NOTION`** for Notion-related asks; keyword override covers phrases like *log this to notion* / *daily check-in* / *morning brief* without an extra classify call.
 
 ```
 You are the Notion agent. Preserve LifeOS structure; use existing DBs where possible; avoid duplicate sources of truth.
@@ -375,11 +397,13 @@ You are the File agent. Propose folders, names, and dedupe; never delete without
 
 ### 6.1 Wealth department
 
-| Agent | Scope | Actions |
-|-------|--------|---------|
-| **Trading** | Watchlist, signals, orders | Broker API (e.g. Angel One) — **deferred (not in current build)** |
-| **Portfolio** | Net worth, allocation | Snapshots, reports |
-| **Expense** | Budgets, categories | Import transactions when wired |
+
+| Agent         | Scope                      | Actions                                                           |
+| ------------- | -------------------------- | ----------------------------------------------------------------- |
+| **Trading**   | Watchlist, signals, orders | Broker API (e.g. Angel One) — **deferred (not in current build)** |
+| **Portfolio** | Net worth, allocation      | Snapshots, reports                                                |
+| **Expense**   | Budgets, categories        | Import transactions when wired                                    |
+
 
 #### Trading — draft system prompt
 
@@ -401,11 +425,13 @@ You are the Expense agent. Categorise spending; flag overruns without shame; sug
 
 ### 6.2 Life planning department
 
-| Agent | Scope | Actions |
-|-------|--------|---------|
-| **Planner** | Day/week plan, briefings | Calendar + tasks |
-| **Task reminder** | Open loops, follow-ups | Notifications |
-| **Goals** | 1yr / 3mo goals | Weekly goal-task alignment |
+
+| Agent             | Scope                    | Actions                    |
+| ----------------- | ------------------------ | -------------------------- |
+| **Planner**       | Day/week plan, briefings | Calendar + tasks           |
+| **Task reminder** | Open loops, follow-ups   | Notifications              |
+| **Goals**         | 1yr / 3mo goals          | Weekly goal-task alignment |
+
 
 #### Planner — draft system prompt
 
@@ -427,12 +453,14 @@ You are the Goals agent. Check that weekly tasks ladder to stated goals; surface
 
 ### 6.3 Health department
 
-| Agent | Scope | Actions |
-|-------|--------|---------|
-| **Fitness** | Workouts, plans | **Implemented** — `src/agents/health/fitnessAgent.ts` (`FITNESS_SYSTEM`, `tryFitnessAgent`; metadata `agent: "fitness"`). Keyword fast-path plus `src/agents/health/healthSubIntent.ts` sub-classifier (`max_tokens: 64`) when keywords are absent; one HEALTH reply per turn via `healthRouter.ts`. Optional `workouts` Supabase context; metadata `workout_data`: `loaded` \| `empty` \| `not_available`. |
-| **Nutrition** | Meals, macros, diet, calories, protein, fasting, hydration | **Implemented** — `src/agents/health/nutritionAgent.ts` (`NUTRITION_SYSTEM`, `tryNutritionAgent`). Routed after Fitness declines. **Meal logging:** `src/meals/` — Telegram `/meal`, `meal:`, `log meal:` → APIs (`CALORIENINJAS`, `USDA_FDC`, optional `HEALTHIFYME_PROXY_URL`) or LLM estimate → `meal_logs`. Model: `HEALTH_SPECIALIST_MODEL` in `health/model.ts`. |
-| **Energy** | Sleep/HRV/focus | **Implemented** — `src/agents/health/energyAgent.ts` (`ENERGY_SYSTEM`, `tryEnergyAgent`); last in HEALTH stack. Correlations, not medical diagnosis |
-| **Health onboarding** | First-time Health setup | **Implemented** — `src/agents/health/healthOnboarding.ts` + table `user_health_profile` (`supabase/migrations/20260412140000_user_health_profile.sql`). Before normal Health routing: if `onboarding_completed_at` is null, Magnus runs a four-step flow (fitness goals → diet → meal timing → restrictions). Any message continues onboarding until complete or `skip`. First classified **HEALTH** intent with no profile row starts onboarding. Completed fields are appended to Fitness / Nutrition / Energy prompts via `AgentContext.healthPreferences`. |
+
+| Agent                 | Scope                                                      | Actions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Fitness**           | Workouts, plans                                            | **Implemented** — `src/agents/health/fitnessAgent.ts` (`FITNESS_SYSTEM`, `tryFitnessAgent`; metadata `agent: "fitness"`). Keyword fast-path plus `src/agents/health/healthSubIntent.ts` sub-classifier (`max_tokens: 64`) when keywords are absent; one HEALTH reply per turn via `healthRouter.ts`. Optional `workouts` Supabase context; metadata `workout_data`: `loaded` | `empty` | `not_available`.                                                                                                                                                      |
+| **Nutrition**         | Meals, macros, diet, calories, protein, fasting, hydration | **Implemented** — `src/agents/health/nutritionAgent.ts` (`NUTRITION_SYSTEM`, `tryNutritionAgent`). Routed after Fitness declines. **Meal logging:** `src/meals/` — Telegram `/meal`, `meal:`, `log meal:` → APIs (`CALORIENINJAS`, `USDA_FDC`, optional `HEALTHIFYME_PROXY_URL`) or LLM estimate → `meal_logs`. Model: `HEALTH_SPECIALIST_MODEL` in `health/model.ts`.                                                                                                                                                                                         |
+| **Energy**            | Sleep/HRV/focus                                            | **Implemented** — `src/agents/health/energyAgent.ts` (`ENERGY_SYSTEM`, `tryEnergyAgent`); last in HEALTH stack. Correlations, not medical diagnosis                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **Health onboarding** | First-time Health setup                                    | **Implemented** — `src/agents/health/healthOnboarding.ts` + table `user_health_profile` (`supabase/migrations/20260412140000_user_health_profile.sql`). Before normal Health routing: if `onboarding_completed_at` is null, Magnus runs a four-step flow (fitness goals → diet → meal timing → restrictions). Any message continues onboarding until complete or `skip`. First classified **HEALTH** intent with no profile row starts onboarding. Completed fields are appended to Fitness / Nutrition / Energy prompts via `AgentContext.healthPreferences`. |
+
 
 #### Fitness — system prompt (implemented)
 
@@ -458,10 +486,12 @@ You are the Energy agent. Surface correlations and recovery suggestions; not a d
 
 ### 6.4 Relationships department
 
-| Agent | Scope | Actions |
-|-------|--------|---------|
-| **Social CRM** | People, follow-ups | Contact notes, reminders |
-| **Occasions** | Birthdays, gifts, drafts | Calendar + messages |
+
+| Agent          | Scope                    | Actions                  |
+| -------------- | ------------------------ | ------------------------ |
+| **Social CRM** | People, follow-ups       | Contact notes, reminders |
+| **Occasions**  | Birthdays, gifts, drafts | Calendar + messages      |
+
 
 #### Social CRM — draft system prompt
 
@@ -477,11 +507,13 @@ You are the Occasions agent. Proactive drafts early; tone warm; confirm before s
 
 ### 6.5 Lifestyle department
 
-| Agent | Scope | Actions |
-|-------|--------|---------|
-| **Travel** | Trips, itineraries | Search/booking APIs when wired |
-| **Shopping** | Research compare | Search |
-| **Learning** | Curated digests | Links + weekly summary |
+
+| Agent        | Scope              | Actions                        |
+| ------------ | ------------------ | ------------------------------ |
+| **Travel**   | Trips, itineraries | Search/booking APIs when wired |
+| **Shopping** | Research compare   | Search                         |
+| **Learning** | Curated digests    | Links + weekly summary         |
+
 
 #### Travel — draft system prompt
 
@@ -533,19 +565,21 @@ You are the Learning agent. Align with active Wisdom one-thing; avoid infinite n
 
 ## 9. Changelog
 
-| Date | Change |
-|------|--------|
-| 2026-04-12 | Initial roster: orchestrator prompts from code; draft specialist prompts; Telegram actions |
-| 2026-04-12 | §4.4 Morning Brief: implemented (`src/jobs/morningBrief*.ts`, `morningBriefPrompt.ts`, Notion + cron + HTTP) |
-| 2026-04-12 | Research agent implemented; `src/tools/research/`; GENERAL research sub-route + `LEARNING` |
-| 2026-04-12 | Memory agent §4.2 implemented (`src/agents/memory/*`); orchestrator prepends memory block; `semanticRecall` stub |
-| 2026-04-12 | Orchestrator delegation: prompts in `magnusOrchestrator.ts`; registry + Health composite + Planner |
-| 2026-04-12 | Nutrition specialist implemented (`nutritionAgent.ts`); HEALTH stack documented |
-| 2026-04-12 | Planner for `PLANNING` — `planning/plannerAgent.ts` |
-| 2026-04-12 | Energy specialist + `ENERGY_SYSTEM` (`energyAgent.ts`); Health stack order + generic ack (`healthRouter.ts`) |
-| 2026-04-12 | **Fitness** specialist — `fitnessAgent.ts`, `healthSubIntent.ts` (keyword + sub-classifier), wired in HEALTH stack |
-| 2026-04-12 | Build focus: Memory, Notion, Morning Brief, Research; **Trading deferred** |
+
+| Date       | Change                                                                                                                                                                      |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-12 | Initial roster: orchestrator prompts from code; draft specialist prompts; Telegram actions                                                                                  |
+| 2026-04-12 | §4.4 Morning Brief: implemented (`src/jobs/morningBrief*.ts`, `morningBriefPrompt.ts`, Notion + cron + HTTP)                                                                |
+| 2026-04-12 | Research agent implemented; `src/tools/research/`; GENERAL research sub-route + `LEARNING`                                                                                  |
+| 2026-04-12 | Memory agent §4.2 implemented (`src/agents/memory/`*); orchestrator prepends memory block; `semanticRecall` stub                                                            |
+| 2026-04-12 | Orchestrator delegation: prompts in `magnusOrchestrator.ts`; registry + Health composite + Planner                                                                          |
+| 2026-04-12 | Nutrition specialist implemented (`nutritionAgent.ts`); HEALTH stack documented                                                                                             |
+| 2026-04-12 | Planner for `PLANNING` — `planning/plannerAgent.ts`                                                                                                                         |
+| 2026-04-12 | Energy specialist + `ENERGY_SYSTEM` (`energyAgent.ts`); Health stack order + generic ack (`healthRouter.ts`)                                                                |
+| 2026-04-12 | **Fitness** specialist — `fitnessAgent.ts`, `healthSubIntent.ts` (keyword + sub-classifier), wired in HEALTH stack                                                          |
+| 2026-04-12 | Build focus: Memory, Notion, Morning Brief, Research; **Trading deferred**                                                                                                  |
 | 2026-04-12 | **Notion agent** — `NOTION` intent, `src/tools/notion.ts`, `knowledge/notionAgent.ts`, keyword override + classifier; integration test optional (`SKIP_NOTION_INTEGRATION`) |
+
 
 ---
 

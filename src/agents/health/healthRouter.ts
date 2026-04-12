@@ -6,6 +6,9 @@ import {
   fetchUserHealthProfile,
   formatHealthPreferencesForPrompt,
 } from "./healthOnboarding.js";
+import { tryMealPlannerAgent } from "./mealPlannerAgent.js";
+import { tryLongTermHealthPlanningAgent } from "./longTermHealthPlanningAgent.js";
+import { tryAlternatesRecommenderAgent } from "./alternatesRecommenderAgent.js";
 import { tryNutritionAgent } from "./nutritionAgent.js";
 import { runOrchestratedMealLogTurn } from "./nutritionOrchestrated.js";
 
@@ -14,14 +17,16 @@ export const HEALTH_GENERIC_ACK =
   "Noted — health-related. Tell me if you want help with training, meals, or sleep and recovery, and what you’re optimizing for.";
 
 /**
- * **Sequential first-accept (v1):** Fitness → Nutrition → Energy.
+ * **Sequential first-accept (v1):** Meal planner → Long-term health planning (seasons / arcs) →
+ * Fitness → Alternates (food swaps) → Nutrition → Energy.
  * Each specialist returns `null` when it does not own the message. The first non-null reply wins
  * (one response per turn). Fitness uses keyword fast-path plus `classifyHealthSubIntent` when
- * keywords are absent; Nutrition and Energy use keyword patterns.
+ * keywords are absent; Alternates matches "instead of" / "swap" / "alternative to"; Nutrition and
+ * Energy use keyword patterns.
  */
 function withRouterMeta(
   result: AgentResult,
-  order: "fitness" | "nutrition" | "energy",
+  order: "meal_plan" | "long_term_health_planning" | "fitness" | "nutrition" | "energy",
 ): AgentResult {
   return {
     text: result.text,
@@ -48,9 +53,23 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
     return withRouterMeta(r, "nutrition");
   }
 
+  const mealPlan = await tryMealPlannerAgent(ctxWithPrefs);
+  if (mealPlan) {
+    return withRouterMeta(mealPlan, "meal_plan");
+  }
+
+  const longTerm = await tryLongTermHealthPlanningAgent(ctxWithPrefs);
+  if (longTerm) {
+    return withRouterMeta(longTerm, "long_term_health_planning");
+  }
+
   const fitness = await tryFitnessAgent(ctxWithPrefs);
   if (fitness) {
     return withRouterMeta(fitness, "fitness");
+  }
+  const alternates = await tryAlternatesRecommenderAgent(ctxWithPrefs);
+  if (alternates) {
+    return withRouterMeta(alternates, "nutrition");
   }
   const nutrition = await tryNutritionAgent(ctxWithPrefs);
   if (nutrition) {

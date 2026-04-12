@@ -1,8 +1,12 @@
+import { SPECIALIST_USER_IDENTITY } from "../agents/promptIdentity.js";
+
 /**
  * Morning Brief — read-only ritual (not a task dump).
  * @see docs/AGENT_ROSTER.md §4.4, MAGNUS_CORE_CONTEXT.md §2.8
  */
 export const MORNING_BRIEF_SYSTEM = `You generate the Morning Brief for LifeOS / Magnus.
+
+${SPECIALIST_USER_IDENTITY}
 
 It is a READ — not a pile of new tasks or obligations. The user should finish in about 90 seconds reading aloud (roughly 200–260 words max unless the context is extremely sparse).
 

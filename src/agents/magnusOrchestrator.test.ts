@@ -56,7 +56,7 @@ vi.mock("./memory/memoryAgent.js", async (importOriginal) => {
 });
 
 import { loadMemoryContext } from "./memory/memoryAgent.js";
-import { runOrchestratorReply, routingPlaceholder } from "./magnusOrchestrator.js";
+import { runOrchestratorReply } from "./magnusOrchestrator.js";
 
 describe("runOrchestratorReply", () => {
   beforeEach(() => {
@@ -89,10 +89,14 @@ describe("runOrchestratorReply", () => {
     expect(createMock).toHaveBeenCalledTimes(2);
   });
 
-  it("falls back to routing placeholder when intent is non-GENERAL and no agent handles it", async () => {
-    createMock.mockResolvedValueOnce({
-      content: [{ type: "text" as const, text: "WEALTH" }],
-    });
+  it("delegates WEALTH to Wealth composite when classifier returns WEALTH", async () => {
+    createMock
+      .mockResolvedValueOnce({
+        content: [{ type: "text" as const, text: "WEALTH" }],
+      })
+      .mockResolvedValueOnce({
+        content: [{ type: "text" as const, text: "Process coaching reply." }],
+      });
 
     const out = await runOrchestratorReply({
       userMessage: "portfolio rebalance",
@@ -101,9 +105,9 @@ describe("runOrchestratorReply", () => {
     });
 
     expect(out.intent).toBe("WEALTH");
-    expect(out.replyText).toBe(routingPlaceholder("WEALTH"));
-    expect(out.delegatedAgent).toBeUndefined();
-    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(out.delegatedAgent).toBe("WealthComposite");
+    expect(out.replyText).toContain("Process coaching");
+    expect(createMock).toHaveBeenCalledTimes(2);
   });
 
   it("delegates PLANNING to Planner specialist", async () => {
@@ -247,7 +251,7 @@ describe("runOrchestratorReply", () => {
     expect(createMock).toHaveBeenCalledTimes(2);
   });
 
-  it("delegates LEARNING to Research", async () => {
+  it("delegates LEARNING to Learning Plan specialist", async () => {
     createMock
       .mockResolvedValueOnce({
         content: [{ type: "text" as const, text: "LEARNING" }],
@@ -256,7 +260,7 @@ describe("runOrchestratorReply", () => {
         content: [
           {
             type: "text" as const,
-            text: "## Executive answer\nLearn.\n## Key points\n- a\n## Sources\n- **T** — https://x — r.\n## Open questions / risks\n- n",
+            text: "Sketch three milestones: ownership basics, borrowing rules, then lifetimes in APIs. Revisit each thread after a few days.",
           },
         ],
       });
@@ -268,15 +272,20 @@ describe("runOrchestratorReply", () => {
     });
 
     expect(out.intent).toBe("LEARNING");
-    expect(out.delegatedAgent).toBe("Research");
+    expect(out.delegatedAgent).toBe("LearningPlan");
+    expect(out.replyText).toContain("milestones");
     expect(createMock).toHaveBeenCalledTimes(2);
   });
 
-  it("routes Notion keyword messages without classify call and delegates to Notion agent", async () => {
+  it("classifies then coerces Notion keyword phrases to NOTION and delegates to Notion agent", async () => {
     vi.stubEnv("NOTION_TOKEN", "");
     vi.stubEnv("NOTION_API_KEY", "");
     vi.stubEnv("NOTION_INTEGRATION_TOKEN", "");
     try {
+      createMock.mockResolvedValueOnce({
+        content: [{ type: "text" as const, text: "GENERAL" }],
+      });
+
       const out = await runOrchestratorReply({
         userMessage: "log this to notion: reminder about taxes",
         userProfileId: "p1",
@@ -286,7 +295,7 @@ describe("runOrchestratorReply", () => {
       expect(out.intent).toBe("NOTION");
       expect(out.delegatedAgent).toBe("Notion");
       expect(out.replyText).toMatch(/configured|NOTION_DAILY_LOG_PARENT_PAGE_ID/i);
-      expect(createMock).toHaveBeenCalledTimes(0);
+      expect(createMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.unstubAllEnvs();
     }

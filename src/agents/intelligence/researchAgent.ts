@@ -5,12 +5,15 @@ import {
   type ResearchGatherDeps,
 } from "../../tools/research/index.js";
 import { anthropic } from "../../tools/clients.js";
-import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
+import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
+import type { AgentContext, AgentResult } from "../types.js";
 import { wantsResearchDepth } from "./researchRouting.js";
 
 const MODEL = "claude-sonnet-4-6";
 
 export const RESEARCH_SYSTEM = `You are the Research agent for Magnus (Intelligence department).
+
+${SPECIALIST_USER_IDENTITY}
 
 Scope: Deep dives, competitive scans, article or paper summaries. Cite sources; distinguish fact vs inference; end with actionable takeaways and open questions.
 
@@ -103,15 +106,13 @@ export async function runResearchAgent(
     metadata: {
       specialist: "Research",
       department: ctx.intent,
+      ...(ctx.pillar !== undefined ? { pillar: ctx.pillar } : {}),
+      ...(ctx.department !== undefined
+        ? { routing_department: ctx.department }
+        : {}),
       research_sources_count: gather.sources.length,
       research_had_pasted: Boolean(gather.pastedExcerpt),
       research_search_query: gather.searchQuery ?? null,
     },
   };
 }
-
-export const researchAgent: DepartmentAgent = {
-  name: "Research",
-  departmentId: "LEARNING",
-  run: runResearchAgent,
-};

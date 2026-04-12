@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { isMealCommand, parseMealLogCommand } from "./parseMealLogCommand.js";
+import {
+  isMealCommand,
+  isSlashMealCommand,
+  parseMealLogCommand,
+} from "./parseMealLogCommand.js";
 
 describe("parseMealLogCommand", () => {
   it("parses /meal prefix", () => {
@@ -39,5 +43,12 @@ describe("parseMealLogCommand", () => {
     expect(isMealCommand("/meal rice")).toBe(true);
     expect(isMealCommand("meal: oats")).toBe(true);
     expect(isMealCommand("I had rice")).toBe(false);
+  });
+
+  it("isSlashMealCommand matches only /meal (not meal: prefix)", () => {
+    expect(isSlashMealCommand("/meal rice and dal")).toBe(true);
+    expect(isSlashMealCommand("/meal@MyBot egg")).toBe(true);
+    expect(isSlashMealCommand("meal: oats")).toBe(false);
+    expect(isSlashMealCommand("log meal: coffee")).toBe(false);
   });
 });

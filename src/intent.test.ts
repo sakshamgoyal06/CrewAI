@@ -7,6 +7,7 @@ describe("parseIntent", () => {
     expect(parseIntent("focus on HEALTH today")).toBe("HEALTH");
     expect(parseIntent("WEALTH planning")).toBe("WEALTH");
     expect(parseIntent("LOG TO NOTION")).toBe("NOTION");
+    expect(parseIntent("CULTURE picks for tonight")).toBe("CULTURE");
   });
 
   it("defaults to GENERAL when no category token", () => {
