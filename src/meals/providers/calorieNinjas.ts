@@ -1,4 +1,8 @@
+import { logger } from "../../logger.js";
 import type { MealNutritionEstimate } from "../types.js";
+import { normalizeQueryForCalorieNinjas } from "../mealPortionParse.js";
+import { narrowCalorieNinjaLinesToBestMatch } from "./calorieNinjaPick.js";
+import { scaleCalorieNinjaLinesByUserGrams } from "./calorieNinjasScale.js";
 
 type CnItem = {
   name: string;
@@ -6,6 +10,7 @@ type CnItem = {
   protein_g: number;
   carbohydrates_total_g: number;
   fat_total_g: number;
+  serving_size_g?: number;
 };
 
 type CnResponse = { items: CnItem[] };
@@ -13,6 +18,10 @@ type CnResponse = { items: CnItem[] };
 /**
  * CalorieNinjas — natural-language query (good free-text; sign up for API key).
  * https://calorieninjas.com/api
+ *
+ * Notes:
+ * - Default serving is 100g if quantity isn't parsed; macros are for `serving_size_g` per item.
+ * - We normalize `gm`→`g` and scale each line when user grams match phrase count.
  */
 export async function estimateViaCalorieNinjas(
   query: string,
@@ -22,7 +31,7 @@ export async function estimateViaCalorieNinjas(
     return null;
   }
 
-  const q = query.trim();
+  const q = normalizeQueryForCalorieNinjas(query.trim());
   if (q.length > 1500) {
     return null;
   }
@@ -43,21 +52,68 @@ export async function estimateViaCalorieNinjas(
     return null;
   }
 
-  let calories = 0;
-  let protein = 0;
-  let carbs = 0;
-  let fat = 0;
-  const items = data.items.map((it) => {
-    calories += it.calories;
-    protein += it.protein_g;
-    carbs += it.carbohydrates_total_g;
-    fat += it.fat_total_g;
+  const withServing = data.items.map((it) => {
+    const raw = it as CnItem & { food_name?: string };
+    const name =
+      typeof raw.name === "string" && raw.name.trim()
+        ? raw.name.trim()
+        : typeof raw.food_name === "string" && raw.food_name.trim()
+          ? raw.food_name.trim()
+          : "";
+    const serving_size_g =
+      typeof raw.serving_size_g === "number" && raw.serving_size_g > 0
+        ? raw.serving_size_g
+        : null;
     return {
-      name: it.name,
+      name,
       calories: it.calories,
       protein_g: it.protein_g,
       carbs_g: it.carbohydrates_total_g,
       fat_g: it.fat_total_g,
+      serving_size_g,
+    };
+  });
+
+  const narrowed = narrowCalorieNinjaLinesToBestMatch(q, withServing);
+  if (narrowed.length < withServing.length) {
+    logger.debug(
+      {
+        query: q,
+        raw_item_count: withServing.length,
+        picked_name: narrowed[0]?.name,
+      },
+      "calorieninjas kept single best-matching line",
+    );
+  }
+
+  const scaled = scaleCalorieNinjaLinesByUserGrams(q, narrowed);
+
+  logger.debug(
+    {
+      query: q,
+      raw_item_count: data.items.length,
+      after_narrow_count: narrowed.length,
+      scaled_item_count: scaled.length,
+      calories_after_scale: scaled.reduce((s, it) => s + it.calories, 0),
+    },
+    "calorieninjas estimate",
+  );
+
+  let calories = 0;
+  let protein = 0;
+  let carbs = 0;
+  let fat = 0;
+  const items = scaled.map((it) => {
+    calories += it.calories;
+    protein += it.protein_g;
+    carbs += it.carbs_g;
+    fat += it.fat_g;
+    return {
+      name: it.name,
+      calories: it.calories,
+      protein_g: it.protein_g,
+      carbs_g: it.carbs_g,
+      fat_g: it.fat_g,
     };
   });
 

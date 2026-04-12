@@ -17,6 +17,7 @@ import {
   runHealthOnboardingTurn,
   startHealthOnboarding,
 } from "./health/healthOnboarding.js";
+import { isMealCommand } from "../meals/parseMealLogCommand.js";
 import { dispatchToAgent, findAgentForIntent } from "./registry.js";
 import type { AgentContext } from "./types.js";
 
@@ -97,7 +98,11 @@ export async function runOrchestratorReply(input: {
   onBeforeDelegation?: (info: BeforeDelegationInfo) => void | Promise<void>;
 }): Promise<OrchestratorReply> {
   const healthProfile = await fetchUserHealthProfile(input.userProfileId);
-  if (healthProfile && !healthProfile.onboarding_completed_at) {
+  if (
+    healthProfile &&
+    !healthProfile.onboarding_completed_at &&
+    !isMealCommand(input.userMessage)
+  ) {
     await input.onBeforeDelegation?.({
       intent: "HEALTH",
       delegatedAgent: "HealthOnboarding",
@@ -127,7 +132,9 @@ export async function runOrchestratorReply(input: {
   } else {
     intent = isNotionIntentOverride(input.userMessage)
       ? "NOTION"
-      : await classifyIntent(input.userMessage);
+      : isMealCommand(input.userMessage)
+        ? "HEALTH"
+        : await classifyIntent(input.userMessage);
 
     /** Classifier often picks PLANNING for "research X" queries; route those to Research instead of Planner. */
     if (
@@ -139,7 +146,7 @@ export async function runOrchestratorReply(input: {
     }
   }
 
-  if (intent === "HEALTH" && !healthProfile) {
+  if (intent === "HEALTH" && !healthProfile && !isMealCommand(input.userMessage)) {
     await input.onBeforeDelegation?.({
       intent: "HEALTH",
       delegatedAgent: "HealthOnboarding",

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ENERGY_SYSTEM } from "./energyAgent.js";
 import { routeHealthMessage } from "./healthRouter.js";
-import { NUTRITION_SYSTEM } from "./nutritionAgent.js";
+import { NUTRITION_SYSTEM } from "./nutritionPrompt.js";
 import { FITNESS_SYSTEM } from "./fitnessAgent.js";
 
 const createMock = vi.fn();
@@ -59,9 +59,13 @@ describe("routeHealthMessage", () => {
     await routeHealthMessage(
       ctx("How much protein per day on a cut? I'm allergic to dairy."),
     );
-    expect(createMock).toHaveBeenCalledTimes(2);
-    expect(createMock.mock.calls[1][0]).toMatchObject({
-      system: NUTRITION_SYSTEM,
+    expect(createMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+    const nutritionCalls = createMock.mock.calls.filter(
+      (c) => String((c[0] as { system?: string }).system ?? "").includes("Nutrition agent for LifeOS"),
+    );
+    expect(nutritionCalls.length).toBeGreaterThanOrEqual(1);
+    expect(nutritionCalls[0]![0]).toMatchObject({
+      system: expect.stringContaining(NUTRITION_SYSTEM.slice(0, 40)),
     });
   });
 

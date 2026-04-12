@@ -1,3 +1,4 @@
+import { logger } from "../../logger.js";
 import { fetchPageExcerpt } from "./fetch.js";
 import type { GatheredSource } from "./types.js";
 
@@ -34,14 +35,43 @@ export async function searchWebAndFetch(
     const res = await (options.fetchImpl ?? globalThis.fetch)(url.toString(), {
       signal: ac.signal,
     });
-    if (!res.ok) {
+    const rawText = await res.text();
+    let json: {
+      organic_results?: { link?: string; title?: string }[];
+      error?: string;
+    };
+    try {
+      json = JSON.parse(rawText) as typeof json;
+    } catch {
+      logger.warn(
+        { status: res.status, querySnippet: query.trim().slice(0, 100) },
+        "serpapi: non-JSON response",
+      );
       return { sources: [], searchQuery: query.trim() };
     }
-    const json = (await res.json()) as {
-      organic_results?: { link?: string; title?: string }[];
-    };
+    if (!res.ok || json.error) {
+      logger.warn(
+        {
+          status: res.status,
+          serpError: json.error ?? null,
+          querySnippet: query.trim().slice(0, 100),
+        },
+        "serpapi: search failed",
+      );
+      return { sources: [], searchQuery: query.trim() };
+    }
     organic = json.organic_results ?? [];
-  } catch {
+    if (organic.length === 0) {
+      logger.debug(
+        { querySnippet: query.trim().slice(0, 100) },
+        "serpapi: no organic_results",
+      );
+    }
+  } catch (err) {
+    logger.warn(
+      { err: String(err), querySnippet: query.trim().slice(0, 100) },
+      "serpapi: request error",
+    );
     return { sources: [], searchQuery: query.trim() };
   } finally {
     clearTimeout(t);

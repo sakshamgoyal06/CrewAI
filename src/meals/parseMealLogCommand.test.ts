@@ -8,6 +8,13 @@ describe("parseMealLogCommand", () => {
     expect(p).toEqual({ kind: "meal", text: "2 roti, dal, salad" });
   });
 
+  it("strips leading log after /meal (Telegram habit)", () => {
+    expect(parseMealLogCommand("/meal log 3 puri")).toEqual({
+      kind: "meal",
+      text: "3 puri",
+    });
+  });
+
   it("parses /meal@BotName (Telegram)", () => {
     const p = parseMealLogCommand("/meal@MagnusBot egg curry and rice");
     expect(p).toEqual({ kind: "meal", text: "egg curry and rice" });

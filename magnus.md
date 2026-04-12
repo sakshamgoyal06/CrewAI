@@ -10,14 +10,24 @@ For **agent roster, prompts, scope, and bot actions** (review hub), see **`docs/
 
 ## Current status (2026-04-12)
 
-**Verdict:** The **base is ready** to move on to **subagents** and **filling domain tables**, as long as you complete the **owner checklist** below. The stack is **production-oriented** (structured logging, health checks, timeouts, RLS policies, rate limits, CI build+test), but **full product QA** (E2E, load, staging deploy) is still ahead — that is normal before “overall product” testing.
+**Verdict:** The **base is ready** for **agent hardening** and **domain-table writes**, as long as you complete the **owner checklist** below. The stack is **production-oriented** (structured logging, health checks, timeouts, RLS policies, rate limits, CI build+test). **Full product QA** (E2E, load, staging deploy) remains ahead.
+
+**Latest build (what shipped recently):**
+
+- **Meal logging pipeline** — Session-based `meal_logs` with multi-component rows, per-day rollups, optional daily macro targets (`mealLogPipeline`, `recordMealLog`, `mealDaySummary`, `formatMealLogReply`). CalorieNinjas/USDA scaling and picks (`calorieNinjasScale`, `calorieNinjaPick`), optional web-research estimate path, consolidated Telegram replies.
+- **Health / Nutrition** — `nutritionOrchestrated` coordinates parsing (`mealParserAgent`, `jsonExtract`), API estimates, and meal-log completion; `healthRouter` and nutrition stack aligned with the new meal path.
+- **Orchestrator & Telegram** — Intent/memory wiring updates (`magnusOrchestrator`), chunking/formatting (`telegramFormat`).
+- **Supabase migrations** — `20260412190000_meal_logs_align_magnus.sql`, `20260412210000_meal_session_and_daily_targets.sql`, `20260412220000_meal_logs_estimate_source_web_research.sql` (apply in Dashboard or `supabase db push` if not already).
+- **Tests** — Broadened coverage for meals, health JSON extract, orchestrator paths; `npm run build` + `npm test` green.
+
+**Database:** On **2026-04-12**, all **`public`** tables on project `xdrpjfdhduskhzryevze` were **`TRUNCATE … RESTART IDENTITY CASCADE`** (profiles, chat history, meal logs, and domain tables are **empty**). New Telegram users get fresh `user_profile` rows as they chat; re-seed anything you need for demos.
 
 | Area | State |
 |------|--------|
 | **Runtime** | Telegram bot + health HTTP + typed TS + `npm run build` / `npm test` / CI workflow |
-| **Database** | Schema + FKs to `user_profile`, RLS + `service_role_only` on public tables, constraints/indexes per hardening pass; data was truncated during audit — **you seed or create rows** as you build features |
-| **App ↔ DB** | **Wired today:** `user_profile`, `magnus_chat_messages`. **Not wired yet:** goals, KPIs, tasks, agents tables — **next phase** |
-| **Agents** | `src/agents/` — orchestrator registry, **Notion** (`NOTION`), **Memory** (`memory/`), Health composite, **Planner** (`PLANNING`), **Research** (`LEARNING` + GENERAL research sub-route); see **Agents** below |
+| **Database** | Schema + FKs to `user_profile`, RLS + `service_role_only` on public tables; **currently empty** after truncate — **seed or create rows** as you build features |
+| **App ↔ DB** | **Wired today:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `meal_logs` (+ related meal migrations), `user_health_profile`. **Lightly / not wired in app logic yet:** most other domain tables (goals, KPIs, tasks, …) — **next phase** |
+| **Agents** | `src/agents/` — orchestrator registry, **Notion** (`NOTION`), **Memory** (`memory/`, semantic recall still **stub**), Health composite (Fitness → Nutrition → Energy + onboarding + **nutrition-orchestrated** meal path), **Planner** (`PLANNING`), **Research** (`LEARNING` + GENERAL research sub-route); see **Agents** below |
 
 ### Your checklist before the next phase (nothing blocking in code)
 
@@ -34,9 +44,11 @@ For **agent roster, prompts, scope, and bot actions** (review hub), see **`docs/
 
 ## Next steps when resuming
 
-1. **Subagents in parallel** — Add specialist agents (e.g. `src/agents/` or your chosen layout), register them with the orchestrator, and extend routing from `handleMessage` / `createMagnus().start()` as the design solidifies. Prefer **parallel workstreams** (multiple agents at once) once interfaces are clear.
+1. **Refine and complete each agent** — Bring every specialist to **production quality**: clear prompts, tool boundaries, error handling, tests, and observability. Priority order aligns with dispatch: **Notion** (env + DB writes), **Health stack** (Fitness, Nutrition with orchestrated meal path, Energy, onboarding), **Planner**, **Research**, **Memory** (replace `semanticRecall` stub with real embeddings when ready). Close gaps called out in `memory` context (`gaps`) rather than silent failures.
 
-2. **Database usable, then hosted bot** — When roughly the **top 10 agents** are in place, **prove the database end-to-end**: inserts/updates with `user_profile_id`, queries your views, `npm run test:supabase`, and any seed or smoke scripts you add. After that, **deploy to a hosted server** (Docker image + `docker-compose`, Railway, Fly.io, VPS, etc.) so the Telegram bot runs **continuously** and is **not tied to your laptop**. Use **`NODE_ENV=production`**, **`SUPABASE_SERVICE_ROLE_KEY`**, **`/health` / `/ready`** for the platform, and **one** long-poller per bot token.
+2. **Subagents and routing** — Keep new specialists behind `src/agents/`, register in `registry.ts`, and extend `handleMessage` / `createMagnus().start()` only when interfaces are stable.
+
+3. **Database usable, then hosted bot** — **Prove the database end-to-end**: inserts/updates with `user_profile_id`, domain tables you care about, `npm run test:supabase`, and seeds/smokes. Then **deploy** (Docker, Railway, Fly.io, VPS, …) so the bot runs **continuously**. Use **`NODE_ENV=production`**, **`SUPABASE_SERVICE_ROLE_KEY`**, **`/health` / `/ready`**, and **one** long-poller per bot token.
 
 ---
 
@@ -155,7 +167,7 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 
 **LLM estimate:** Only if **`MAGNUS_MEAL_LOG_LLM_FALLBACK=true`** — uses Claude JSON when APIs (and optional proxy) all fail; otherwise the row is still logged with `estimate_source: unavailable` and the reply explains missing keys.
 
-**Commands:** `/meal …`, `meal: …`, `log meal: …`. Rows go to **`meal_logs`** (migration `supabase/migrations/20260412180000_meal_logs.sql`).
+**Commands:** `/meal …`, `meal: …`, `log meal: …`. Rows go to **`meal_logs`** with **session grouping** and **component lines** once migrations through **`20260412210000_meal_session_and_daily_targets.sql`** are applied; align columns with **`20260412190000_meal_logs_align_magnus.sql`**; optional **`estimate_source`** / web research via **`20260412220000_meal_logs_estimate_source_web_research.sql`**.
 
 ---
 
@@ -287,4 +299,4 @@ If hooks do not run, check **Cursor Settings → Hooks** and restart Cursor afte
 4. After DB or credential changes, run `npm run test:supabase` if you touch Supabase clients or chat logging.
 5. Before ending a session with substantive changes, **update this file** and bump **Last updated** below.
 
-**Last updated:** 2026-04-12 (Memory agent + orchestrator memory prepend; `semanticRecall` stub)
+**Last updated:** 2026-04-12 (Meal session pipeline + nutrition-orchestrated path; Supabase `public` truncate; doc refresh)

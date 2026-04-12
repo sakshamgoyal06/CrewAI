@@ -6,6 +6,8 @@ export type ParsedMealCommand = { kind: "meal"; text: string } | { kind: "none" 
  * - `meal: ...`
  * - `log meal: ...`
  */
+import { stripLeadingMealLogVerb } from "./mealPhrases.js";
+
 const MEAL_COMMAND_RE =
   /^(?:\/meal(?:@\S+)?|meal:|log\s*meal:)\s*(.+)$/is;
 
@@ -16,7 +18,11 @@ export function parseMealLogCommand(input: string): ParsedMealCommand {
   if (!rest || rest.length < 2) {
     return { kind: "none" };
   }
-  return { kind: "meal", text: rest };
+  const text = stripLeadingMealLogVerb(rest);
+  if (!text || text.length < 2) {
+    return { kind: "none" };
+  }
+  return { kind: "meal", text };
 }
 
 /** Cheap check before running the meal pipeline — avoids work on unrelated messages. */

@@ -1,14 +1,18 @@
 import type { MealNutritionEstimate } from "./types.js";
-import { mealLogHealthifyProxyConfigured, mealLogLlmFallbackEnabled } from "./mealEnv.js";
+import {
+  mealLogHealthifyProxyConfigured,
+  mealLogLlmFallbackEnabled,
+  mealLogWebResearchEnabled,
+} from "./mealEnv.js";
 import { estimateViaCalorieNinjas } from "./providers/calorieNinjas.js";
 import { estimateViaHealthifyMeProxy } from "./providers/healthifyMeProxy.js";
 import { estimateViaLlm } from "./providers/llmEstimate.js";
 import { estimateViaUsdaFdc } from "./providers/usdaFdc.js";
+import { estimateViaWebResearch } from "./providers/webResearchEstimate.js";
 
 /**
- * Default: **CalorieNinjas → USDA FDC** (practical APIs; no Anthropic tokens).
- * Optional: HealthifyMe-compatible proxy if `HEALTHIFYME_PROXY_URL` is set (after APIs).
- * Optional: LLM JSON estimate only if `MAGNUS_MEAL_LOG_LLM_FALLBACK=true`.
+ * Default order: **Web (Anthropic web_search, then optional SerpAPI + excerpts + Claude) → USDA FDC → Healthify proxy → CalorieNinjas → optional LLM JSON**.
+ * Web runs when `MAGNUS_MEAL_LOG_WEB_FIRST` is not false and Anthropic web search is allowed (default) and/or a SerpAPI key is set. See `mealEnv.mealLogWebResearchEnabled`.
  */
 export async function estimateMealNutrition(
   query: string,
@@ -18,9 +22,11 @@ export async function estimateMealNutrition(
     return unavailable("empty query");
   }
 
-  const cn = await estimateViaCalorieNinjas(q);
-  if (cn && cn.calories !== null) {
-    return cn;
+  if (mealLogWebResearchEnabled()) {
+    const web = await estimateViaWebResearch(q);
+    if (web && web.calories !== null) {
+      return web;
+    }
   }
 
   const usda = await estimateViaUsdaFdc(q);
@@ -33,6 +39,11 @@ export async function estimateMealNutrition(
     if (proxy && proxy.calories !== null) {
       return proxy;
     }
+  }
+
+  const cn = await estimateViaCalorieNinjas(q);
+  if (cn && cn.calories !== null) {
+    return cn;
   }
 
   if (mealLogLlmFallbackEnabled()) {
@@ -54,5 +65,6 @@ function unavailable(reason: string): MealNutritionEstimate {
     items: [],
     source: "unavailable",
     providerRaw: { reason },
+    serving_assumption: null,
   };
 }

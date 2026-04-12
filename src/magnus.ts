@@ -13,8 +13,6 @@ import { splitPlainForTelegram } from "./magnus/telegramChunk.js";
 import { markdownishToTelegramHtml } from "./magnus/telegramFormat.js";
 import { logger, maskTelegramUserId } from "./logger.js";
 import { loggableError } from "./util/loggableError.js";
-import { isMealCommand } from "./meals/parseMealLogCommand.js";
-import { tryProcessMealLog } from "./meals/mealLogCommand.js";
 import {
   recordMagnusChatMessage,
   resolveTelegramUserProfile,
@@ -110,33 +108,6 @@ export async function handleMessage(
   });
   if (!userLog.ok) {
     log.warn({ err: userLog.error }, "user message not persisted to chat log");
-  }
-
-  // `/meal`, `meal:`, `log meal:` — practical APIs only by default; skips classifier + orchestrator (no Anthropic classify/delegate).
-  if (isMealCommand(userMessage)) {
-    const mealLog = await tryProcessMealLog({
-      userMessage,
-      userProfileId: user.profileId,
-    });
-    if (mealLog.handled) {
-      const asstLog = await recordMagnusChatMessage({
-        user_profile_id: user.profileId,
-        telegram_user_id: user.telegramUserId,
-        role: "assistant",
-        content: mealLog.reply,
-        source: "telegram",
-        intent: "meal_log",
-        metadata: {
-          ...metaBase,
-          meal_log: true,
-          bypass_orchestrator: true,
-        },
-      });
-      if (!asstLog.ok) {
-        log.warn({ err: asstLog.error }, "meal log reply not persisted to chat log");
-      }
-      return plainChunksToTelegramHtml(mealLog.reply);
-    }
   }
 
   try {
@@ -241,6 +212,8 @@ export async function handleMessage(
     }
 
     const { replyText, intent } = orchestrated;
+    const intentForLog =
+      orchestrated.agentMetadata?.meal_log === true ? "meal_log" : intent;
 
     const assistantMetadata = {
       ...metaBase,
@@ -261,7 +234,7 @@ export async function handleMessage(
       role: "assistant",
       content: replyText,
       source: "telegram",
-      intent,
+      intent: intentForLog,
       metadata: assistantMetadata,
     });
     if (!asstLog.ok) {

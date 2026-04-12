@@ -24,8 +24,10 @@
 | Intent set | `src/intent.ts` (`HEALTH` … `NOTION`, `GENERAL`) |
 | Specialist agents | `src/agents/` — **Notion** (`knowledge/notionAgent.ts`) for `NOTION`; **Memory** (`memory/`); **Health** composite (`health/healthRouter.ts` → Fitness → Nutrition → Energy); **Planner** (`planning/plannerAgent.ts`) for `PLANNING`; **Research** (`intelligence/researchAgent.ts`) for `LEARNING` + GENERAL research sub-route |
 
-**Current build:** **Memory**, **Notion**, **Morning Brief** (`src/jobs/` — cron + `/morningbrief` + `POST /internal/jobs/morning-brief`); **Research** shipped (gather + optional SerpAPI).  
+**Current build:** **Memory**, **Notion**, **Morning Brief** (`src/jobs/` — cron + `/morningbrief` + `POST /internal/jobs/morning-brief`); **Research** shipped (gather + optional SerpAPI); **Health** includes **nutrition-orchestrated** meal parsing + logging (`src/agents/health/nutritionOrchestrated.ts`, `mealParserAgent.ts`).  
 **Deferred:** **Trading** (Wealth / broker) — not in this phase.
+
+**Next plans:** Refine and complete **each** registered agent end-to-end — prompts, tools, failure modes, tests, and logging — before adding new departments. Treat **Memory** (`semanticRecall` still a stub) and **Notion** (env-heavy) as first-class alongside Health, Planner, and Research.
 
 ---
 

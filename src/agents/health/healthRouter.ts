@@ -1,4 +1,5 @@
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
+import { parseMealLogCommand } from "../../meals/parseMealLogCommand.js";
 import { tryEnergyAgent } from "./energyAgent.js";
 import { tryFitnessAgent } from "./fitnessAgent.js";
 import {
@@ -6,6 +7,7 @@ import {
   formatHealthPreferencesForPrompt,
 } from "./healthOnboarding.js";
 import { tryNutritionAgent } from "./nutritionAgent.js";
+import { runOrchestratedMealLogTurn } from "./nutritionOrchestrated.js";
 
 /** Short generic acknowledgement when no HEALTH sub-specialist matches the message. */
 export const HEALTH_GENERIC_ACK =
@@ -35,6 +37,16 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
   const healthRow = await fetchUserHealthProfile(ctx.userProfileId);
   const healthPreferences = formatHealthPreferencesForPrompt(healthRow);
   const ctxWithPrefs: AgentContext = { ...ctx, healthPreferences };
+
+  const mealParsed = parseMealLogCommand(ctx.rawMessage);
+  if (mealParsed.kind === "meal") {
+    const r = await runOrchestratedMealLogTurn(
+      ctxWithPrefs,
+      mealParsed.text,
+      ctx.rawMessage,
+    );
+    return withRouterMeta(r, "nutrition");
+  }
 
   const fitness = await tryFitnessAgent(ctxWithPrefs);
   if (fitness) {

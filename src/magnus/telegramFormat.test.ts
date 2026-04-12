@@ -17,10 +17,19 @@ describe("formatInline", () => {
 });
 
 describe("markdownishToTelegramHtml", () => {
-  it("wraps plain lines in paragraphs", () => {
+  it("renders plain lines without unsupported tags (no <p> or <br> — Telegram HTML)", () => {
     const h = markdownishToTelegramHtml("Hello world.");
-    expect(h).toContain("<p>");
+    expect(h).not.toContain("<p>");
+    expect(h).not.toMatch(/<br\/?>/i);
     expect(h).toContain("Hello world.");
+  });
+
+  it("joins continued paragraph lines with newlines, not br tags", () => {
+    const h = markdownishToTelegramHtml("Line one\nLine two");
+    expect(h).not.toMatch(/<br/i);
+    expect(h).toContain("Line one");
+    expect(h).toContain("Line two");
+    expect(h).toContain("\n");
   });
 
   it("renders ## headings as bold", () => {

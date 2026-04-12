@@ -1,19 +1,14 @@
-import { estimateMealNutrition } from "./estimateMealNutrition.js";
 import { parseMealLogCommand } from "./parseMealLogCommand.js";
-import { recordMealLog } from "./recordMealLog.js";
+import { completeMealLogFromPipeline, formatMealLogSaveFailure } from "./mealLogPipeline.js";
 
 export type MealLogCommandResult =
   | { handled: false }
-  | { handled: true; reply: string };
+  | { handled: true; reply: string; mealSessionId?: string };
 
-function fmt(n: number | null, unit: string): string {
-  if (n === null || Number.isNaN(n)) {
-    return "—";
-  }
-  return `${Math.round(n * 10) / 10}${unit}`;
-}
+export { formatMealLogSaveFailure };
 
 /**
+ * Legacy direct pipeline (no Nutrition agent). Prefer orchestrated flow via HEALTH router.
  * If the message is a meal-log command, estimate nutrition, persist, return a confirmation.
  * Otherwise returns `handled: false` so normal orchestration runs.
  */
@@ -26,47 +21,19 @@ export async function tryProcessMealLog(input: {
     return { handled: false };
   }
 
-  try {
-    const estimate = await estimateMealNutrition(parsed.text);
-    const saved = await recordMealLog({
-      userProfileId: input.userProfileId,
-      rawText: parsed.text,
-      estimate,
-      sourceChannel: "telegram",
-    });
+  const result = await completeMealLogFromPipeline({
+    userProfileId: input.userProfileId,
+    rawMealText: parsed.text,
+    nutritionQuery: parsed.text,
+  });
 
-    if (!saved.ok) {
-      return {
-        handled: true,
-        reply: `Could not save meal log: ${saved.error}`,
-      };
-    }
-
-    if (estimate.calories === null) {
-      return {
-        handled: true,
-        reply:
-          `Logged meal (id ${saved.id.slice(0, 8)}…) — could not estimate calories. ` +
-          `Set CALORIENINJAS_API_KEY and/or USDA_FDC_API_KEY (see .env.example). ` +
-          `Optional: HEALTHIFYME_PROXY_URL, or MAGNUS_MEAL_LOG_LLM_FALLBACK=true for Claude estimates (uses tokens).`,
-      };
-    }
-
-    const lines = [
-      `Logged meal · ~${fmt(estimate.calories, " kcal")}`,
-      `P ${fmt(estimate.protein_g, "g")} · C ${fmt(estimate.carbs_g, "g")} · F ${fmt(estimate.fat_g, "g")}`,
-      `Source: ${estimate.source}`,
-    ];
-
-    return {
-      handled: true,
-      reply: lines.join("\n"),
-    };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return {
-      handled: true,
-      reply: `Meal log failed: ${msg}`,
-    };
+  if (!result.ok) {
+    return { handled: true, reply: result.reply };
   }
+
+  return {
+    handled: true,
+    mealSessionId: result.mealSessionId,
+    reply: result.reply,
+  };
 }

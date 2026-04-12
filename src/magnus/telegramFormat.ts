@@ -89,8 +89,9 @@ export function markdownishToTelegramHtml(md: string): string {
       para.push(next);
       i++;
     }
-    blocks.push(`<p>${para.map((line) => formatInline(line)).join("<br/>")}</p>`);
+    // Telegram HTML does not support <p> or <br>; use literal newlines for soft breaks.
+    blocks.push(para.map((line) => formatInline(line)).join("\n"));
   }
 
-  return blocks.join("\n");
+  return blocks.join("\n\n");
 }
