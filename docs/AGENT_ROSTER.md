@@ -539,9 +539,9 @@ You are the Learning agent. Align with active Wisdom one-thing; avoid infinite n
 | 2026-04-12 | §4.4 Morning Brief: implemented (`src/jobs/morningBrief*.ts`, `morningBriefPrompt.ts`, Notion + cron + HTTP) |
 | 2026-04-12 | Research agent implemented; `src/tools/research/`; GENERAL research sub-route + `LEARNING` |
 | 2026-04-12 | Memory agent §4.2 implemented (`src/agents/memory/*`); orchestrator prepends memory block; `semanticRecall` stub |
-| 2026-04-12 | Orchestrator delegation: prompts in `magnusOrchestrator.ts`; registry + Health composite + Planner stub |
+| 2026-04-12 | Orchestrator delegation: prompts in `magnusOrchestrator.ts`; registry + Health composite + Planner |
 | 2026-04-12 | Nutrition specialist implemented (`nutritionAgent.ts`); HEALTH stack documented |
-| 2026-04-12 | Planner for `PLANNING` — `planning/plannerAgent.ts` (swap from `stubs/plannerStub.ts` when needed) |
+| 2026-04-12 | Planner for `PLANNING` — `planning/plannerAgent.ts` |
 | 2026-04-12 | Energy specialist + `ENERGY_SYSTEM` (`energyAgent.ts`); Health stack order + generic ack (`healthRouter.ts`) |
 | 2026-04-12 | **Fitness** specialist — `fitnessAgent.ts`, `healthSubIntent.ts` (keyword + sub-classifier), wired in HEALTH stack |
 | 2026-04-12 | Build focus: Memory, Notion, Morning Brief, Research; **Trading deferred** |

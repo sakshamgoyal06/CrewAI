@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatMealLogSaveFailure } from "./mealLogCommand.js";
+import { formatMealLogSaveFailure } from "./mealLogPipeline.js";
 
 describe("formatMealLogSaveFailure", () => {
   it("suggests migration when table missing", () => {

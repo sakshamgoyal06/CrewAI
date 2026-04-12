@@ -5,7 +5,7 @@ import type { MealComponentForRow } from "./mealComponents.js";
 import { recordMealSession } from "./recordMealLog.js";
 import type { MealNutritionEstimate } from "./types.js";
 
-/** @internal Exported from `mealLogCommand.js` for tests */
+/** @internal — covered by `mealLogPipeline.saveFailure.test.ts` */
 export function formatMealLogSaveFailure(message: string): string {
   const lower = message.toLowerCase();
   const hint =

@@ -1,4 +1,4 @@
-import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
+import type { AgentContext, AgentResult } from "../types.js";
 import { runOrchestratedNutritionAdviceTurn } from "./nutritionOrchestrated.js";
 
 export { NUTRITION_SYSTEM } from "./nutritionPrompt.js";
@@ -10,28 +10,10 @@ export function matchesNutritionMessage(rawMessage: string): boolean {
   return NUTRITION_PATTERN.test(rawMessage);
 }
 
+/** Used by `healthRouter` (Fitness → Nutrition → Energy). Not a separate registry agent. */
 export async function tryNutritionAgent(ctx: AgentContext): Promise<AgentResult | null> {
   if (!matchesNutritionMessage(ctx.rawMessage)) {
     return null;
   }
   return runOrchestratedNutritionAdviceTurn(ctx);
 }
-
-/**
- * Nutrition specialist — `name` is `nutrition` per roster. HEALTH routing uses
- * `healthCompositeAgent` in `healthRouter.ts` (Fitness → Nutrition → Energy).
- */
-export const nutritionDepartmentAgent: DepartmentAgent = {
-  name: "nutrition",
-  departmentId: "HEALTH",
-  async run(ctx) {
-    const r = await tryNutritionAgent(ctx);
-    if (r) {
-      return r;
-    }
-    return {
-      text: "Ask about meals, macros, calories, protein, hydration, or dietary constraints for nutrition coaching.",
-      metadata: { specialist: "nutrition", department: "HEALTH", noMatch: true },
-    };
-  },
-};

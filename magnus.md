@@ -299,4 +299,4 @@ If hooks do not run, check **Cursor Settings → Hooks** and restart Cursor afte
 4. After DB or credential changes, run `npm run test:supabase` if you touch Supabase clients or chat logging.
 5. Before ending a session with substantive changes, **update this file** and bump **Last updated** below.
 
-**Last updated:** 2026-04-12 (Meal session pipeline + nutrition-orchestrated path; Supabase `public` truncate; doc refresh)
+**Last updated:** 2026-04-12 (Removed dead `mealLogCommand` wrapper, `plannerStub`, unused `nutritionDepartmentAgent`; tests point at `mealLogPipeline`)
