@@ -184,6 +184,7 @@ export async function runOrchestratorReply(input: {
     intent,
     pillar: pillarRoute.pillar,
     department: pillarRoute.department,
+    slashCommandKey: slashRoute?.commandKey,
   };
   const specialistForIntent =
     intent === "GENERAL" ? null : findAgentForIntent(intent, routingCtx);
@@ -263,6 +264,7 @@ export async function runOrchestratorReply(input: {
     memoryBlock,
     pillar: pillarRoute.pillar,
     department: pillarRoute.department,
+    slashCommandKey: slashRoute?.commandKey,
   };
 
   const delegated = await dispatchToAgent(ctx, intent);

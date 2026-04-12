@@ -10,6 +10,7 @@ import { tryMealPlannerAgent } from "./mealPlannerAgent.js";
 import { tryLongTermHealthPlanningAgent } from "./longTermHealthPlanningAgent.js";
 import { tryAlternatesRecommenderAgent } from "./alternatesRecommenderAgent.js";
 import { tryNutritionAgent } from "./nutritionAgent.js";
+import { tryHevyWriteAgent } from "./hevyWriteAgent.js";
 import { runOrchestratedMealLogTurn } from "./nutritionOrchestrated.js";
 
 /** Short generic acknowledgement when no HEALTH sub-specialist matches the message. */
@@ -26,7 +27,13 @@ export const HEALTH_GENERIC_ACK =
  */
 function withRouterMeta(
   result: AgentResult,
-  order: "meal_plan" | "long_term_health_planning" | "fitness" | "nutrition" | "energy",
+  order:
+    | "meal_plan"
+    | "long_term_health_planning"
+    | "hevy_write"
+    | "fitness"
+    | "nutrition"
+    | "energy",
 ): AgentResult {
   return {
     text: result.text,
@@ -51,6 +58,11 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
       ctx.rawMessage,
     );
     return withRouterMeta(r, "nutrition");
+  }
+
+  const hevyWrite = await tryHevyWriteAgent(ctxWithPrefs);
+  if (hevyWrite) {
+    return withRouterMeta(hevyWrite, "hevy_write");
   }
 
   const mealPlan = await tryMealPlannerAgent(ctxWithPrefs);

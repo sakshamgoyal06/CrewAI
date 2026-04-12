@@ -42,10 +42,23 @@ function ctx(raw: string) {
 
 describe("routeHealthMessage", () => {
   beforeEach(() => {
+    delete process.env.HEVY_API_KEY;
+    delete process.env.MAGNUS_HEVY_API_KEY;
     createMock.mockReset();
     createMock.mockResolvedValue({
       content: [{ type: "text", text: "mock reply" }],
     });
+  });
+
+  it("routes hevy routine: to HevyWrite before Fitness when API key is unset", async () => {
+    const out = await routeHealthMessage(ctx("hevy routine: Push — bench press 3x10"));
+    expect(createMock).not.toHaveBeenCalled();
+    expect(out.metadata).toMatchObject({
+      health_order: "hevy_write",
+      specialist: "HevyWrite",
+      hevy_write: false,
+    });
+    expect(out.text).toMatch(/HEVY_API_KEY/i);
   });
 
   it("routes meal planning asks to MealPlanner before Fitness", async () => {

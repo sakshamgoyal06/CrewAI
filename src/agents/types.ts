@@ -28,6 +28,8 @@ export type AgentContext = {
   department?: string;
   /** Specialist id or label when a primary specialist is selected. */
   specialist?: string;
+  /** Set when the user message came from a Telegram `/command` (payload only in `rawMessage`). */
+  slashCommandKey?: string;
 };
 
 export type AgentResult = {

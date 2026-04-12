@@ -1,5 +1,13 @@
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
+import {
+  fetchHevyRoutinesPage,
+  fetchHevyWorkoutsPage,
+  formatHevyRoutinesForPrompt,
+  formatHevyWorkoutsForPrompt,
+  hevyApiKeyFromEnv,
+} from "../../integrations/hevy/index.js";
+import { logger } from "../../logger.js";
 import { anthropic, supabase } from "../../tools/clients.js";
 import { augmentUserWithMemory } from "../memory/memoryAgent.js";
 import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
@@ -20,6 +28,8 @@ ${SPECIALIST_USER_IDENTITY}
 
 Scope: workouts, training, movement habits, and performance (runs, gym, strength, cardio, steps). Adapt suggestions to the user's stated energy and schedule. Do not diagnose, treat, or make medical claims. If the user mentions injury, sharp pain, or anything that could need clinical care, encourage seeing a qualified professional and keep guidance general and non-alarmist.
 
+Hevy (when the user uses Hevy): Context may include recent Hevy sessions or routines — that is read-only in this chat turn. Writes use **structured prefixes** in a separate message: \`hevy routine: …\` (create), \`hevy routine update: <routine-uuid> — …\` (replace an existing routine; uuid from Hevy or from Magnus after create), or \`hevy workout: …\` (log). Same via \`/hevy …\`. You cannot call those APIs from this reply; give the plan in text and tell them which prefix to use.
+
 LifeOS: supportive tone, no guilt or shame; Joy is a tank to protect, not a score to optimise; offer at most one clear next step unless the user asks for more.
 
 Reply in plain text under 180 words unless the user explicitly asks for detail.`;
@@ -33,7 +43,7 @@ function textFromMessage(msg: Message): string {
   return "";
 }
 
-async function loadWorkoutContext(
+async function loadWorkoutContextFromSupabase(
   userProfileId: string,
 ): Promise<{ summary: string; meta: Record<string, unknown> }> {
   const { data, error } = await supabase
@@ -48,6 +58,7 @@ async function loadWorkoutContext(
       summary: "",
       meta: {
         workout_data: "not_available",
+        workout_source: "supabase",
         workout_error: error.message,
       },
     };
@@ -56,7 +67,7 @@ async function loadWorkoutContext(
   if (!data?.length) {
     return {
       summary: "No recent workout rows found for this profile.",
-      meta: { workout_data: "empty" },
+      meta: { workout_data: "empty", workout_source: "supabase" },
     };
   }
 
@@ -66,8 +77,68 @@ async function loadWorkoutContext(
   );
   return {
     summary: `Recent workouts (newest first):\n${lines.join("\n")}`,
-    meta: { workout_data: "loaded", workout_rows: data.length },
+    meta: {
+      workout_data: "loaded",
+      workout_source: "supabase",
+      workout_rows: data.length,
+    },
   };
+}
+
+async function loadWorkoutContext(
+  userProfileId: string,
+): Promise<{ summary: string; meta: Record<string, unknown> }> {
+  const hevyKey = hevyApiKeyFromEnv();
+  if (hevyKey) {
+    const [wRes, rRes] = await Promise.all([
+      fetchHevyWorkoutsPage(hevyKey, 1, 5),
+      fetchHevyRoutinesPage(hevyKey, 1, 5),
+    ]);
+
+    if (wRes.ok) {
+      const workouts = wRes.data.workouts ?? [];
+      const routines = rRes.ok ? (rRes.data.routines ?? []) : [];
+      const parts: string[] = [];
+      const workoutBlock = formatHevyWorkoutsForPrompt(workouts);
+      if (workoutBlock) {
+        parts.push(workoutBlock);
+      }
+      const routineBlock = formatHevyRoutinesForPrompt(routines);
+      if (routineBlock) {
+        parts.push(routineBlock);
+      }
+      const summary =
+        parts.join("\n\n") ||
+        "Hevy is connected but no workouts or routines were returned yet for this account.";
+
+      return {
+        summary,
+        meta: {
+          workout_data: workouts.length ? "loaded" : "empty",
+          workout_source: "hevy",
+          workout_rows: workouts.length,
+          hevy_routine_rows: routines.length,
+          ...(rRes.ok ? {} : { hevy_routines_error: rRes.error }),
+        },
+      };
+    }
+
+    logger.warn(
+      { err: wRes.error, status: wRes.status },
+      "hevy: workouts fetch failed; falling back to Supabase",
+    );
+    const fallback = await loadWorkoutContextFromSupabase(userProfileId);
+    return {
+      ...fallback,
+      meta: {
+        ...fallback.meta,
+        hevy_error: wRes.error,
+        hevy_status: wRes.status,
+      },
+    };
+  }
+
+  return loadWorkoutContextFromSupabase(userProfileId);
 }
 
 /**

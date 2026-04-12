@@ -39,6 +39,16 @@ describe("parseSlashCommand", () => {
     });
   });
 
+  it("maps /hevy to HEALTH workouts", () => {
+    const r = parseSlashCommand("/hevy routine: Push day");
+    expect(r).toMatchObject({
+      commandKey: "hevy",
+      intent: "HEALTH",
+      department: "workouts",
+      payload: "routine: Push day",
+    });
+  });
+
   it("returns null for unknown /command", () => {
     expect(parseSlashCommand("/foobar hello")).toBeNull();
   });
