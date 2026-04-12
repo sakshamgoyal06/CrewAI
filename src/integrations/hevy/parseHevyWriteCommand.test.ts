@@ -19,7 +19,7 @@ describe("parseHevyWriteCommand", () => {
   });
 
   it("parses hevy routine update: uuid — plan", () => {
-    const id = "8860b421-32bd-4aea-b15f-eb9cb5c7e627";
+    const id = "aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee";
     const p = parseHevyWriteCommand(`hevy routine update: ${id} — bench 5x5`);
     expect(p).toEqual({ kind: "routine_update", routineId: id, text: "bench 5x5" });
   });
