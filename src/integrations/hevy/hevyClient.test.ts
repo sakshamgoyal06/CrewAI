@@ -99,6 +99,22 @@ describe("createHevyRoutine", () => {
       expect(r.routine.id).toBe("rid-2");
     }
   });
+
+  it("accepts routine as one-element array (live Hevy API shape)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          routine: [{ id: "rid-arr", title: "Heavy Push Day", exercises: [] }],
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    const r = await createHevyRoutine("key", minimalBody, { fetchImpl });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.routine.id).toBe("rid-arr");
+    }
+  });
 });
 
 describe("hevyApiBaseUrl", () => {

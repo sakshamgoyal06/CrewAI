@@ -12,7 +12,10 @@ import type {
 
 const DEFAULT_BASE = "https://api.hevyapp.com";
 
-/** Hevy sometimes returns the created entity at the top level; sometimes under `routine` / `workout`. */
+/**
+ * Hevy create responses vary: top-level `id`, `{ routine: { id } }`, or `{ routine: [ { id, ... } ] }`
+ * (live API has returned a one-element array; OpenAPI only documents a single object).
+ */
 function pickHevyRoutineFromCreateResponse(data: unknown): HevyRoutine | null {
   if (!data || typeof data !== "object") {
     return null;
@@ -22,6 +25,12 @@ function pickHevyRoutineFromCreateResponse(data: unknown): HevyRoutine | null {
     return o as HevyRoutine;
   }
   const inner = o.routine;
+  if (Array.isArray(inner) && inner.length > 0) {
+    const first = inner[0];
+    if (first && typeof first === "object" && typeof (first as Record<string, unknown>).id === "string") {
+      return first as HevyRoutine;
+    }
+  }
   if (inner && typeof inner === "object" && typeof (inner as Record<string, unknown>).id === "string") {
     return inner as HevyRoutine;
   }
@@ -37,6 +46,12 @@ function pickHevyWorkoutFromCreateResponse(data: unknown): HevyWorkout | null {
     return o as HevyWorkout;
   }
   const inner = o.workout;
+  if (Array.isArray(inner) && inner.length > 0) {
+    const first = inner[0];
+    if (first && typeof first === "object" && typeof (first as Record<string, unknown>).id === "string") {
+      return first as HevyWorkout;
+    }
+  }
   if (inner && typeof inner === "object" && typeof (inner as Record<string, unknown>).id === "string") {
     return inner as HevyWorkout;
   }
