@@ -28,6 +28,27 @@
 
 ---
 
+## Next steps when resuming
+
+1. **Subagents in parallel** — Add specialist agents (e.g. `src/agents/` or your chosen layout), register them with the orchestrator, and extend routing from `handleMessage` / `createMagnus().start()` as the design solidifies. Prefer **parallel workstreams** (multiple agents at once) once interfaces are clear.
+
+2. **Database usable, then hosted bot** — When roughly the **top 10 agents** are in place, **prove the database end-to-end**: inserts/updates with `user_profile_id`, queries your views, `npm run test:supabase`, and any seed or smoke scripts you add. After that, **deploy to a hosted server** (Docker image + `docker-compose`, Railway, Fly.io, VPS, etc.) so the Telegram bot runs **continuously** and is **not tied to your laptop**. Use **`NODE_ENV=production`**, **`SUPABASE_SERVICE_ROLE_KEY`**, **`/health` / `/ready`** for the platform, and **one** long-poller per bot token.
+
+---
+
+## Git: this project is Magnus (not CrewAI-only)
+
+The product is **Magnus**. If `git remote -v` still points at a repo named **`CrewAI`** or another unrelated name, **rename the repository on GitHub** (Settings → General → Repository name → e.g. `Magnus`) **or** create a new repo `Magnus` and point `origin` at it:
+
+```bash
+git remote set-url origin https://github.com/<your-username>/Magnus.git
+git push -u origin main
+```
+
+Keep **one canonical remote** so collaborators and CI match the real project name.
+
+---
+
 ## Quick facts
 
 | Item | Detail |
@@ -173,9 +194,10 @@ Applied on project `xdrpjfdhduskhzryevze`, including: RLS on public tables; chat
 
 ---
 
-## Not built yet (tracked — next: subagents + domain data)
+## Not built yet (tracked)
 
-- Specialist **subagents** (`src/agents/` or equivalent), orchestration wiring from `createMagnus().start()`.
+See **Next steps when resuming** above for the main roadmap. Additionally:
+
 - **Cron / proactive loops** (scheduled jobs, reminders).
 - **Business logic** writing to domain tables (`goals`, KPIs, tasks, …) with `user_profile_id` — **schema and FKs are ready**; resolve `profileId` via `resolveTelegramUserProfile` (or your job’s user context) on every insert.
 - **End-to-end / integration tests** against live Telegram or Supabase (optional hardening after features exist).
@@ -197,9 +219,10 @@ If hooks do not run, check **Cursor Settings → Hooks** and restart Cursor afte
 
 ## How to resume a session
 
-1. Read **`magnus.md`** (this file); the **sessionStart** hook may inject a copy into context automatically.
-2. Ensure `.env` is complete and run `npm run dev`.
-3. After DB or credential changes, run `npm run test:supabase` if you touch Supabase clients or chat logging.
-4. Before ending a session with substantive changes, **update this file** and bump **Last updated** below.
+1. Read **`magnus.md`** (this file) and **Next steps when resuming**; the **sessionStart** hook may inject a copy into context automatically.
+2. Confirm **`git remote`** matches the **Magnus** repo you intend (see **Git: this project is Magnus**).
+3. Ensure `.env` is complete and run `npm run dev`.
+4. After DB or credential changes, run `npm run test:supabase` if you touch Supabase clients or chat logging.
+5. Before ending a session with substantive changes, **update this file** and bump **Last updated** below.
 
-**Last updated:** 2026-04-12 (current status + checklist; deps/scripts aligned with repo)
+**Last updated:** 2026-04-12 (next steps + Git remote note; Magnus vs CrewAI)
