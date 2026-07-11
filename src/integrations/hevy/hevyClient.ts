@@ -228,7 +228,14 @@ export async function createHevyRoutine(
   body: HevyPostRoutineBody,
   options: { fetchImpl?: typeof fetch; timeoutMs?: number } = {},
 ): Promise<{ ok: true; routine: HevyRoutine } | { ok: false; error: string; status?: number }> {
-  const r = await hevyPostJson("/v1/routines", apiKey, body, options);
+  // Live API rejects omitted folder_id ("Invalid routine folder id: undefined"); null is valid.
+  const postBody: HevyPostRoutineBody = {
+    routine: {
+      ...body.routine,
+      folder_id: body.routine.folder_id ?? null,
+    },
+  };
+  const r = await hevyPostJson("/v1/routines", apiKey, postBody, options);
   if (!r.ok) {
     return r;
   }

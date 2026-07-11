@@ -115,6 +115,21 @@ describe("createHevyRoutine", () => {
       expect(r.routine.id).toBe("rid-arr");
     }
   });
+
+  it("sends folder_id null when omitted (Hevy rejects undefined)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "rid-null-folder", title: "Test" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    await createHevyRoutine("key", minimalBody, { fetchImpl });
+    const [, , , sentBody] = fetchImpl.mock.calls[0] as [string, unknown, unknown, unknown];
+    // fetchImpl is called as fetch(url, init) — body is in init.body
+    const init = fetchImpl.mock.calls[0][1] as RequestInit;
+    const parsed = JSON.parse(init.body as string) as { routine: { folder_id: null } };
+    expect(parsed.routine.folder_id).toBeNull();
+  });
 });
 
 describe("hevyApiBaseUrl", () => {
