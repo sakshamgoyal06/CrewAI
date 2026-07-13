@@ -2,7 +2,7 @@
 
 Maintained by the **Health Cursor agent** (`/health`). Update when the user establishes durable preferences, program changes, or new Hevy IDs.
 
-_Last updated: 2026-07-13_
+_Last updated: 2026-07-13 (EOD journal)_
 
 ## Goals
 
@@ -43,11 +43,14 @@ _Last updated: 2026-07-13_
 
 ## Diet
 
-_(Add: eating style, restrictions, meal timing, macro targets when shared.)_
+- **13 Jul EOD:** Okay until evening; **dinner a bit heavy**. User wants to **fix nutrition slowly** (with steps) — not a crash diet.
+- _(Add: eating style, restrictions, meal timing, macro targets when shared.)_
 
 ## Recovery / energy
 
-_(Add: sleep patterns, fatigue notes, non-clinical recovery preferences.)_
+- **13 Jul:** Short sleep but **woke refreshed**; good energy for full Push A.
+- **Stretching** after training helped feel fine all day — keep as habit.
+- _(Add: typical sleep hours, HRV, patterns over time.)_
 
 ## Long-term
 
@@ -57,4 +60,4 @@ _(Add: race dates, season goals, multi-month arcs.)_
 
 - **Habit:** end of day → `/eod-journal` — review progress, log how you feel.
 - **Files:** `references/journal/YYYY-MM-DD.md`, distilled in `references/program-learnings.md`.
-- **Latest:** see `references/journal/2026-07-13.md` (Push A first strength day).
+- **Latest:** `references/journal/2026-07-13.md` — Push A complete; Pull A tomorrow.
