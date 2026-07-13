@@ -11,8 +11,8 @@ import {
   createHevyRoutine,
   fetchHevyExerciseTemplateCatalog,
   fetchHevyRoutinesPage,
-} from "../src/integrations/hevy/hevyClient.js";
-import { hevyApiKeyFromEnv } from "../src/integrations/hevy/hevyEnv.js";
+} from "../src/pillars/health/workouts/hevy/hevyClient.js";
+import { hevyApiKeyFromEnv } from "../src/pillars/health/workouts/hevy/hevyEnv.js";
 
 const apiKey = hevyApiKeyFromEnv();
 if (!apiKey) {
