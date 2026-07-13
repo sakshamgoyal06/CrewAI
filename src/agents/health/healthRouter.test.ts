@@ -6,7 +6,7 @@ import { ALTERNATES_RECOMMENDER_SYSTEM } from "./alternatesRecommenderAgent.js";
 import { LONG_TERM_HEALTH_PLANNING_SYSTEM } from "./longTermHealthPlanningAgent.js";
 import { MEAL_PLANNER_SYSTEM } from "./mealPlannerAgent.js";
 import { NUTRITION_SYSTEM } from "./nutritionPrompt.js";
-import { FITNESS_SYSTEM } from "./fitnessAgent.js";
+import { FITNESS_SYSTEM } from "../../pillars/health/workouts/agents/fitnessAgent.js";
 
 const createMock = vi.fn();
 

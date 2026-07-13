@@ -154,6 +154,8 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 | `src/tools/chatLog.ts` | `resolveTelegramUserProfile`, `recordMagnusChatMessage` (returns `{ ok }`), legacy `ensureUserProfileIdForTelegramUser`. Documents identity model in file header. |
 | `src/tools/telegram.ts` | Telegraf bot; `/morningbrief` + `morning brief` → Morning Brief; rate limit before handler; `TelegramTextHandler` receives `updateId` for logging. |
 | `scripts/test-supabase.mts` | Connectivity smoke test for Supabase + chat table. |
+| `src/pillars/health/workouts/` | **Health pillar — Workouts department:** Hevy API client, fitness / Hevy-write agents, routine scripts (see below). |
+| `scripts/health/workouts/hevy/` | Operational Hevy scripts (list templates, create/update routines, preflight checks). Run with `npx tsx scripts/health/workouts/hevy/<script>.mts`. |
 
 ### Agents (orchestration)
 
@@ -163,8 +165,11 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 | `src/agents/registry.ts` | `dispatchToAgent` — **priority order**: `Notion` → `HealthComposite` → `Planner` → `LearningTracker` / `LearningPlan` → `BuildShip` |
 | `src/agents/magnusOrchestrator.ts` | Keyword override → **NOTION** (`isNotionIntentOverride`); classify intent; memory context; **GENERAL** research sub-route (`isResearchSubIntent`); `answerGeneral`; delegate specialists; `routingPlaceholder` |
 | `src/agents/intelligence/researchAgent.ts` | `RESEARCH_SYSTEM`, `runResearchAgent` — structured Markdown (Executive answer, Key points, Sources, Open questions); uses gathered URLs / search / pasted text |
-| `src/agents/health/healthRouter.ts` | `healthCompositeAgent` (`HEALTH`): sequential first-accept Fitness → Nutrition → Energy, then generic ack |
-| `src/agents/health/fitnessAgent.ts` | `FITNESS_SYSTEM`, `tryFitnessAgent`, optional `workouts` context; metadata `agent: "fitness"` |
+| `src/agents/health/healthRouter.ts` | `healthCompositeAgent` (`HEALTH`): sequential first-accept meal log → Hevy write → meal planner → long-term planning → Fitness → alternates → Nutrition → Energy, then generic ack |
+| `src/pillars/health/workouts/agents/fitnessAgent.ts` | `FITNESS_SYSTEM`, `tryFitnessAgent`; reads Hevy sessions/routines when `HEVY_API_KEY` set, else Supabase `workouts`; metadata `agent: "fitness"` |
+| `src/pillars/health/workouts/agents/hevyWriteAgent.ts` | `tryHevyWriteAgent` — `hevy routine:` / `hevy workout:` / `/hevy` → Hevy REST create/update |
+| `src/pillars/health/workouts/agents/workoutsCoachAgent.ts` | Thin alias `runWorkoutsCoachAgent` → `tryFitnessAgent` |
+| `src/pillars/health/workouts/hevy/` | Hevy API client (`hevyClient.ts`), env (`hevyEnv.ts`), write-command parser, prompt formatters |
 | `src/agents/health/healthSubIntent.ts` | `hasFitnessKeyword`, `classifyHealthSubIntent` (same model as orchestrator; `max_tokens: 64`; no new env vars) |
 | `src/agents/health/healthOnboarding.ts` | `fetchUserHealthProfile`, `startHealthOnboarding`, `runHealthOnboardingTurn`, `formatHealthPreferencesForPrompt` — gates Health until `user_health_profile.onboarding_completed_at` is set |
 | `src/agents/planning/plannerAgent.ts` | `PLANNER_SYSTEM`, `runPlannerAgent` — text planning coach for `PLANNING` (locked day, optional profile north star / timezone) |
@@ -219,6 +224,7 @@ See **`.env.example`** for the full list. Highlights:
 - **`MAGNUS_DEFAULT_USER_TIER`** — Seeded tier for new profiles.
 - **`LOG_LEVEL`** — e.g. `debug`, `info`, `warn`, `error`.
 - **`CALORIENINJAS_API_KEY`**, **`USDA_FDC_API_KEY`**, **`HEALTHIFYME_PROXY_URL`** / **`HEALTHIFYME_PROXY_TOKEN`** — meal logging (see **Meal logging** above and `.env.example`).
+- **`HEVY_API_KEY`** — Hevy Pro developer key for Workouts department (read recent workouts/routines in Fitness agent; create routines/workouts via `hevy routine:` / `hevy workout:` or `/hevy`). Optional **`MAGNUS_HEVY_API_BASE_URL`**, **`MAGNUS_HEVY_FETCH_TIMEOUT_MS`**.
 - **`MAGNUS_SERPAPI_KEY`** or **`SERPAPI_API_KEY`** — optional; enables Google search via SerpAPI when the user asks for research but provides no URLs (see `.env.example`).
 - **`MAGNUS_RESEARCH_FETCH_TIMEOUT_MS`**, **`MAGNUS_RESEARCH_MAX_RESPONSE_BYTES`** — bounds for research HTTP fetches.
 - **Morning Brief** — `MAGNUS_MORNING_BRIEF_ENABLED` (default **true**; set `false` to disable generation). `MAGNUS_MORNING_BRIEF_CRON_ENABLED` (default **false**; set **true** to start in-process cron). `MAGNUS_MORNING_BRIEF_LOCAL_HOUR` (0–23, default **7**), `MAGNUS_MORNING_BRIEF_WINDOW_MINUTES` (default **14**). `MAGNUS_INTERNAL_JOB_SECRET` — required for `POST /internal/jobs/morning-brief`. `MAGNUS_MORNING_BRIEF_DEFAULT_USER_PROFILE_ID` — optional default profile for HTTP trigger when body omits `userProfileId`. **Notion (optional):** `NOTION_TOKEN`, `NOTION_MORNING_BRIEF_PARENT_PAGE_ID`, optional `NOTION_MORNING_BRIEF_TITLE_PROPERTY` (default `title`).
@@ -322,4 +328,4 @@ If hooks do not run, check **Cursor Settings → Hooks** and restart Cursor afte
 4. After DB or credential changes, run `npm run test:supabase` if you touch Supabase clients or chat logging.
 5. Before ending a session with substantive changes, **update this file** and bump **Last updated** below.
 
-**Last updated:** 2026-04-12 (Added `docs/CURSOR_AGENT_PROMPTS.md` — detailed Cursor instructions per agent batch; linked from `magnus.md`)
+**Last updated:** 2026-07-13 (Health pillar: moved Hevy integration + workout agents to `src/pillars/health/workouts/`; scripts under `scripts/health/workouts/hevy/`)
