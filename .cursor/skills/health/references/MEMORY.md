@@ -7,10 +7,20 @@ The **Health orchestrator** (`.cursor/agents/health.md`, invoke `/health`) loads
 | File | Purpose |
 | ---- | ------- |
 | `.cursor/skills/health/references/user-context.md` | User goals, program, Hevy routine IDs, diet prefs — **update when durable facts change** |
+| `.cursor/skills/health/references/program-learnings.md` | Distilled from EOD journals — **read before routine edits** |
+| `.cursor/skills/health/references/journal/` | Daily EOD entries (`YYYY-MM-DD.md`) |
+| `.cursor/skills/health/references/TODO.md` | Deferred health-pillar work (Telegram bot, etc.) |
 | `magnus.md` | Project tracker: env vars, source paths, behaviour |
 | Current chat | Ephemeral: today's session, one-off clarifications |
 
 ## Per specialist
+
+### `/eod-journal`
+
+- `.cursor/skills/health/eod-journal/SKILL.md`
+- `references/journal/TEMPLATE.md`, latest `references/journal/YYYY-MM-DD.md`
+- `references/program-learnings.md`, `references/user-context.md`
+- Optional: `scripts/health/workouts/hevy/hevy-latest-workout.mts`
 
 ### `/meal-log`
 
@@ -42,6 +52,7 @@ The **Health orchestrator** (`.cursor/agents/health.md`, invoke `/health`) loads
 - `src/pillars/health/workouts/agents/fitnessAgent.ts` (or deprecated shim `src/agents/health/fitnessAgent.ts`)
 - `src/agents/health/healthSubIntent.ts`
 - `user-context.md` → **Training program**, **Hevy** (read-only context)
+- `program-learnings.md` + last 1–3 `journal/*.md` when advising or before program changes
 - Optional Supabase: `workouts` table
 
 ### `/hevy`
@@ -50,6 +61,7 @@ The **Health orchestrator** (`.cursor/agents/health.md`, invoke `/health`) loads
 - `src/pillars/health/workouts/agents/hevyWriteAgent.ts`
 - `scripts/health/workouts/hevy/` (operational scripts)
 - `user-context.md` → **Hevy** section (folder id, routine ids, program rules)
+- `program-learnings.md` + recent `journal/*.md` — **required before routine PUT/create**
 - `.env` → `HEVY_API_KEY` (never commit)
 
 ### `/energy`

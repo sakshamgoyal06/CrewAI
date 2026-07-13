@@ -304,6 +304,7 @@ See **Next steps when resuming** above for the main roadmap. Additionally:
 - **Additional cron / proactive loops** beyond Morning Brief (reviews, pattern jobs, reminders).
 - **Business logic** writing to domain tables (`goals`, KPIs, tasks, …) with `user_profile_id` — **schema and FKs are ready**; resolve `profileId` via `resolveTelegramUserProfile` (or your job’s user context) on every insert.
 - **End-to-end / integration tests** against live Telegram or Supabase (optional hardening after features exist).
+- **Health EOD journal on Telegram** — Cursor journal files are v1; optional DB + `/journal` slash later (see `.cursor/skills/health/references/TODO.md`).
 
 ---
 
@@ -316,10 +317,13 @@ See **Next steps when resuming** above for the main roadmap. Additionally:
 | `.cursor/hooks/magnus-session-start.mjs` | Injects `magnus.md` (truncated if huge) into the agent’s **additional_context** when a new Composer session starts. |
 | `.cursor/hooks/magnus-session-end.mjs` | Appends a one-line reminder to `.cursor/magnus-maintenance-log.txt` (gitignored). Cursor does **not** auto-edit `magnus.md` on session end; the rule + agent still apply. |
 | `.cursor/agents/health.md` | **Health pillar subagent** — invoke **`/health`** in Agent chat. Routes to specialist skills and loads memory from `.cursor/skills/health/references/`. |
-| `.cursor/skills/health/` | Health specialist skills: `/fitness`, `/hevy`, `/workouts`, `/energy`, `/nutrition`, `/meal-log`, `/meal-planner`, `/alternates`, `/long-term-planning`. See `references/MEMORY.md` for per-skill context. |
-| `.cursor/skills/health/references/user-context.md` | **Living health memory** (goals, Hevy IDs, program rules) — updated by the Health agent when durable facts change. |
+| `.cursor/skills/health/` | Health specialist skills: `/fitness`, `/hevy`, `/eod-journal`, `/workouts`, `/energy`, `/nutrition`, `/meal-log`, `/meal-planner`, `/alternates`, `/long-term-planning`. See `references/MEMORY.md`. |
+| `.cursor/skills/health/references/user-context.md` | **Living health memory** (goals, Hevy IDs, program rules) |
+| `.cursor/skills/health/references/program-learnings.md` | Distilled from EOD journals — agents read before routine edits |
+| `.cursor/skills/health/references/journal/` | Daily EOD journal entries (`YYYY-MM-DD.md`) |
+| `.cursor/skills/health/references/TODO.md` | Deferred health work (e.g. Telegram bot env + `npm run dev`) |
 
-**Using the Health agent in Cursor:** start a dedicated chat (this pillar), type **`/health`**, then ask your question. The orchestrator classifies, reads `user-context.md` + `MEMORY.md`, and invokes the matching skill (e.g. `/hevy` for routine writes, `/meal-log` for meals).
+**Using the Health agent in Cursor:** start a dedicated chat (this pillar), type **`/health`**, then ask your question. End of day: **`/eod-journal`** to review the day and update learnings for routine tuning.
 
 If hooks do not run, check **Cursor Settings → Hooks** and restart Cursor after editing `hooks.json`.
 
@@ -333,4 +337,4 @@ If hooks do not run, check **Cursor Settings → Hooks** and restart Cursor afte
 4. After DB or credential changes, run `npm run test:supabase` if you touch Supabase clients or chat logging.
 5. Before ending a session with substantive changes, **update this file** and bump **Last updated** below.
 
-**Last updated:** 2026-07-13 (Cursor Health agent: `/health` subagent + specialist skills under `.cursor/skills/health/`; living memory in `references/user-context.md`)
+**Last updated:** 2026-07-13 (Health EOD journal workflow: `/eod-journal`, `program-learnings.md`, `references/journal/`)

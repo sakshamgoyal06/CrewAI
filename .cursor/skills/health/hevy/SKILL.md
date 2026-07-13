@@ -10,7 +10,9 @@ paths: "src/pillars/health/workouts/hevy/**,src/pillars/health/workouts/agents/h
 ## Load first
 
 1. `.cursor/skills/health/references/user-context.md` — folder id, routine IDs, program rules
-2. `src/pillars/health/workouts/hevy/hevyClient.ts` — GET/POST/PUT
+2. `.cursor/skills/health/references/program-learnings.md` — what's working / not (from EOD journals)
+3. **Recent journals** — `references/journal/` last 1–3 days before any routine edit
+4. `src/pillars/health/workouts/hevy/hevyClient.ts` — GET/POST/PUT
 3. `src/pillars/health/workouts/agents/hevyWriteAgent.ts` — LLM → JSON → API
 4. `scripts/health/workouts/hevy/` — operational scripts
 
@@ -45,4 +47,6 @@ npx tsx scripts/health/workouts/hevy/hevy-list-templates.mts
 npx tsx scripts/health/workouts/hevy/hevy-search.mts "bench"
 ```
 
-After successful creates, update **`user-context.md`** with new routine IDs.
+After successful creates, update **`user-context.md`** with new routine IDs and add a row to **`program-learnings.md`** Routine change log.
+
+After journal-driven edits, note the reason in today's **`journal/YYYY-MM-DD.md`**.

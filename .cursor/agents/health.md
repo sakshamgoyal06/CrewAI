@@ -15,9 +15,11 @@ Runtime parity: `src/agents/health/healthRouter.ts` (Telegram `HEALTH` intent). 
 Before routing, read:
 
 1. **`.cursor/skills/health/references/user-context.md`** — living preferences, program state, Hevy IDs, diet notes (update when the user shares durable facts).
-2. **`.cursor/skills/health/references/MEMORY.md`** — which extra files to load per specialist.
-3. **`magnus.md`** — stack, env vars (`HEVY_API_KEY`, meal APIs), and Health source paths (skim; do not contradict).
-4. **This conversation** — ephemeral context (today's workout, one-off questions).
+2. **`.cursor/skills/health/references/program-learnings.md`** — distilled “working / not working” from EOD journals (read before routine edits).
+3. **`.cursor/skills/health/references/journal/`** — daily EOD entries (`YYYY-MM-DD.md`); read the latest 1–3 when tuning program.
+4. **`.cursor/skills/health/references/MEMORY.md`** — which extra files to load per specialist.
+5. **`magnus.md`** — stack, env vars (`HEVY_API_KEY`, meal APIs), and Health source paths (skim; do not contradict).
+6. **This conversation** — ephemeral context (today's workout, one-off questions).
 
 If `user-context.md` is empty for a topic, ask one short question or proceed with code/docs only.
 
@@ -34,6 +36,7 @@ If `user-context.md` is empty for a topic, ask one short question or proceed wit
 | Workouts department naming / coach alias | `/workouts` | Thin wrapper; same lane as fitness for coaching |
 | Sleep, HRV, fatigue, recovery patterns | `/energy` | Non-clinical; not medical diagnosis |
 | Season plan, race prep, multi-month arcs | `/long-term-planning` | Quarters / seasons |
+| **End-of-day review, journal, reflect on the day** | `/eod-journal` | Writes `journal/YYYY-MM-DD.md`, updates `program-learnings.md` |
 
 **Fast paths (match Telegram slash intent):**
 
@@ -41,6 +44,7 @@ If `user-context.md` is empty for a topic, ask one short question or proceed wit
 - `meal:` / `log meal:` → `/meal-log`
 - Obvious gym/training language → `/fitness`
 - Obvious sleep/tiredness → `/energy`
+- “End of day”, “journal”, “how did today go”, “review my day” → `/eod-journal`
 
 If two departments fit, pick **one** primary skill and mention the other only if needed.
 
@@ -55,6 +59,8 @@ Do **not** blend meal logging with meal planning or Hevy writes with generic fit
 ## Step 4 — After substantive work
 
 - Update **`.cursor/skills/health/references/user-context.md`** when the user establishes durable facts (goals, routine IDs, diet rules, program changes).
+- After **EOD journal** work, ensure **`program-learnings.md`** and today's **`journal/YYYY-MM-DD.md`** are updated.
+- Deferred work: **`.cursor/skills/health/references/TODO.md`** (e.g. Telegram bot live test).
 - If you changed **code**, **deps**, **env**, or **DB**: update **`magnus.md`** per `.cursor/rules/magnus-md-maintenance.mdc`.
 - Run **`npm run build`** and targeted **`npm test`** for touched modules.
 
@@ -78,3 +84,4 @@ Do **not** blend meal logging with meal planning or Hevy writes with generic fit
 | `/hevy` | Workouts |
 | `/energy` | Workouts (recovery) |
 | `/long-term-planning` | Long-term health planning |
+| `/eod-journal` | Cross-cutting — daily review & memory |

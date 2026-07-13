@@ -10,7 +10,8 @@ paths: "src/pillars/health/workouts/**,src/agents/health/healthSubIntent.ts,src/
 ## Load first
 
 1. `.cursor/skills/health/references/user-context.md` (program, goals)
-2. `src/pillars/health/workouts/agents/fitnessAgent.ts` — `FITNESS_SYSTEM`, `tryFitnessAgent`
+2. `.cursor/skills/health/references/program-learnings.md` and recent `references/journal/*.md`
+3. `src/pillars/health/workouts/agents/fitnessAgent.ts` — `FITNESS_SYSTEM`, `tryFitnessAgent`
 3. `src/agents/health/healthSubIntent.ts` — keyword + sub-classifier
 
 ## Scope

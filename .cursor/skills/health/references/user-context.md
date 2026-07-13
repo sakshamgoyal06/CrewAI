@@ -52,3 +52,9 @@ _(Add: sleep patterns, fatigue notes, non-clinical recovery preferences.)_
 ## Long-term
 
 _(Add: race dates, season goals, multi-month arcs.)_
+
+## EOD journal
+
+- **Habit:** end of day → `/eod-journal` — review progress, log how you feel.
+- **Files:** `references/journal/YYYY-MM-DD.md`, distilled in `references/program-learnings.md`.
+- **Latest:** see `references/journal/2026-07-13.md` (Push A first strength day).
