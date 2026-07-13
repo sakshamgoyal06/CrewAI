@@ -1,7 +1,7 @@
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
 import { parseMealLogCommand } from "../../meals/parseMealLogCommand.js";
 import { tryEnergyAgent } from "./energyAgent.js";
-import { tryFitnessAgent } from "./fitnessAgent.js";
+import { tryFitnessAgent } from "../../pillars/health/workouts/agents/fitnessAgent.js";
 import {
   fetchUserHealthProfile,
   formatHealthPreferencesForPrompt,
@@ -10,7 +10,7 @@ import { tryMealPlannerAgent } from "./mealPlannerAgent.js";
 import { tryLongTermHealthPlanningAgent } from "./longTermHealthPlanningAgent.js";
 import { tryAlternatesRecommenderAgent } from "./alternatesRecommenderAgent.js";
 import { tryNutritionAgent } from "./nutritionAgent.js";
-import { tryHevyWriteAgent } from "./hevyWriteAgent.js";
+import { tryHevyWriteAgent } from "../../pillars/health/workouts/agents/hevyWriteAgent.js";
 import { runOrchestratedMealLogTurn } from "./nutritionOrchestrated.js";
 
 /** Short generic acknowledgement when no HEALTH sub-specialist matches the message. */

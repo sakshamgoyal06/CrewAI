@@ -1,4 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../../../../tools/clients.js", () => ({
+  anthropic: { messages: { create: vi.fn() } },
+}));
 
 import { narrowHevyTemplateCatalog } from "./hevyWriteAgent.js";
 

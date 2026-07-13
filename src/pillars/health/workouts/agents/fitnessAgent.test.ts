@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createMock = vi.fn();
 
-vi.mock("../../tools/clients.js", () => ({
+vi.mock("../../../../tools/clients.js", () => ({
   anthropic: {
     messages: {
       create: (...args: unknown[]) => createMock(...args),
@@ -22,7 +22,7 @@ vi.mock("../../tools/clients.js", () => ({
   redis: {},
 }));
 
-import { anthropic } from "../../tools/clients.js";
+import { anthropic } from "../../../../tools/clients.js";
 import { shouldAcceptFitnessTurn } from "./fitnessAgent.js";
 
 describe("shouldAcceptFitnessTurn", () => {
