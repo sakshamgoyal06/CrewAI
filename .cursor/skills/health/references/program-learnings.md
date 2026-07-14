@@ -22,7 +22,7 @@ _Last distilled: 2026-07-14 (EOD user review)_
 
 ## Not working / watch
 
-- **Assisted pull-up machine** — unstable; user hurting themselves → **remove from Pull A**; swap to Close Grip Lat Pulldown (Cable) pending Hevy confirm.
+- **Assisted pull-up machine** — removed from Pull A (14 Jul); replaced with **Close Grip Lat Pulldown (Cable)** `4E5257DE`.
 - **Finisher when late + no content** — 15 min treadmill vs 20 min target; fatigue without podcast/video (14 Jul).
 - **Hevy sync** — completed workout data can flow back into routine templates; verify set counts after edits.
 - **Evening nutrition** — dinner can run heavy; fix nutrition **slowly**, no shame spiral.
@@ -31,7 +31,7 @@ _Last distilled: 2026-07-14 (EOD user review)_
 
 ## Open tweaks
 
-- **Pull A Hevy update** — assisted pull-up → `Lat Pulldown - Close Grip (Cable)` (`4E5257DE`); user to confirm `/hevy` preflight.
+- **Pull A Hevy update** — done 14 Jul (assisted pull-up → close grip lat pulldown).
 - **Finisher habit** — queue one episode/video before leaving for gym when start time is late.
 - **Nutrition + steps** — fix slowly; capture in journal when changes start.
 - Fill **Diet** detail in `user-context.md` when user shares eating style / targets.
@@ -43,5 +43,5 @@ _Last distilled: 2026-07-14 (EOD user review)_
 | 2026-07-13 | Push A abs → 3×12 explicit reps | App showed 2 sets until refresh |
 | 2026-07-13 | Treadmill notes speed/incline band | User machine max incline 20 |
 | 2026-07-13 | No Push A structure change | EOD: full routine worked |
-| 2026-07-14 | **Pending:** Pull A assisted pull-up → close grip lat pulldown | Unstable assist machine; injury risk |
+| 2026-07-14 | Pull A: assisted pull-up → close grip lat pulldown (`4E5257DE`) | Unstable assist machine; injury risk — **applied on Hevy** |
 | 2026-07-14 | No other Pull A changes | New exercises settling in; keep reverse fly machine height note |

@@ -44,13 +44,14 @@ _Last updated: 2026-07-14 (EOD journal)_
 ### Pull A notes (current)
 
 - **Primary:** back width (pulldowns) — **no rows** (rows on Pull B).
-- **Pending swap:** remove **Pull Up (Assisted)** → **Lat Pulldown - Close Grip (Cable)** (`4E5257DE`) — assist machine unstable.
+- **Swap applied (14 Jul):** **Pull Up (Assisted)** removed → **Lat Pulldown - Close Grip (Cable)** (`4E5257DE`).
 - Rear delt reverse fly: machine **base+1 height** (user note).
 - Finisher: queue podcast/video when training late; ~3 min stretch minimum even when tired.
 
 ## Diet
 
-- **13 Jul EOD:** Okay until evening; **dinner a bit heavy**. User wants to **fix nutrition slowly** (with steps) — not a crash diet.
+- **Sleep (14 Jul EOD):** less than ideal — prioritize more sleep.
+- **Nutrition (14 Jul):** okay, not great — improve slowly with steps.
 - _(Add: eating style, restrictions, meal timing, macro targets when shared.)_
 
 ## Recovery / energy
