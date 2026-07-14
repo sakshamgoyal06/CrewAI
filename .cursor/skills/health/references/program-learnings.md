@@ -2,23 +2,28 @@
 
 Updated by **`/eod-journal`** after each end-of-day review. Specialists read this **before** editing routines or coaching advice.
 
-_Last distilled: 2026-07-13 (EOD user review)_
+_Last distilled: 2026-07-14 (EOD user review)_
 
 ## Working
 
 - **Pre-Program Primer** — good onboarding day; user warmed up before treadmill; comfortable substituting cycling for cooldown walk.
 - **Push A (13 Jul)** — full routine on time; first “true workout” feeling after long gap; user **liked the day**.
+- **Pull A (14 Jul)** — second consecutive quality day; full routine ~86 min; set/rep discipline (curl back-off 15→10 kg).
 - **Set/rep science + weight control** — focus on training quality, not ego weight or box-ticking.
-- **Stretching post-session** — helped feel fine through the entire day.
-- **Treadmill finisher on heavy push day** — engaging content (e.g. YouTube / Atomic Habits) makes the burner manageable; learn + explore while finishing cardio.
-- **Push A structure** — Barbell Bench; incline DB first; abs 3×12; treadmill last (20 min, incline 14–16, speed ~3.7–4.0).
+- **Stretching post-session** — even **~3 min** helps; user did **not** skip on Pull A (don’t misread shorter duration as zero).
+- **Treadmill finisher** — engaging content (YouTube / podcast) critical when training **late** or fatigued; Push A Atomic Habits example.
+- **Split design** — Pull A = **width** (pulldowns); Pull B = **thickness** (rows). User understands; rows not missing from Pull A by accident.
+- **New movement patience** — Single Arm Lat Pulldown + Rear Delt Reverse Fly awkward at first, settle in same session; repeat setup before swapping.
+- **Push A structure** — Barbell Bench; incline DB first; abs 3×12; treadmill last (20 min target).
 - **Hevy preflight → confirm → create** — avoids wrong exercise IDs and surprises.
 - **Explicit `reps` on abs** — prefer explicit reps over `rep_range` alone for Hevy display.
 - **Hevy Coach folder `3206984`** — verified before writes.
-- **Short sleep can still work** — slept little but woke refreshed; don’t assume bad day from hours alone.
+- **Short sleep can still work** — slept little but woke refreshed (13 Jul); don’t assume bad day from hours alone.
 
 ## Not working / watch
 
+- **Assisted pull-up machine** — unstable; user hurting themselves → **remove from Pull A**; swap to Close Grip Lat Pulldown (Cable) pending Hevy confirm.
+- **Finisher when late + no content** — 15 min treadmill vs 20 min target; fatigue without podcast/video (14 Jul).
 - **Hevy sync** — completed workout data can flow back into routine templates; verify set counts after edits.
 - **Evening nutrition** — dinner can run heavy; fix nutrition **slowly**, no shame spiral.
 - **Steps** — below target; improve gradually with nutrition lane.
@@ -26,8 +31,9 @@ _Last distilled: 2026-07-13 (EOD user review)_
 
 ## Open tweaks
 
-- **Nutrition + steps** — user wants to fix slowly; capture in journal when changes start.
-- **Pull A next** — 14 Jul target session after successful Push A.
+- **Pull A Hevy update** — assisted pull-up → `Lat Pulldown - Close Grip (Cable)` (`4E5257DE`); user to confirm `/hevy` preflight.
+- **Finisher habit** — queue one episode/video before leaving for gym when start time is late.
+- **Nutrition + steps** — fix slowly; capture in journal when changes start.
 - Fill **Diet** detail in `user-context.md` when user shares eating style / targets.
 
 ## Routine change log
@@ -36,4 +42,6 @@ _Last distilled: 2026-07-13 (EOD user review)_
 | ---- | ------ | ---------------- |
 | 2026-07-13 | Push A abs → 3×12 explicit reps | App showed 2 sets until refresh |
 | 2026-07-13 | Treadmill notes speed/incline band | User machine max incline 20 |
-| 2026-07-13 | No Push A structure change | EOD: full routine worked; mindset + pacing + stretch + treadmill strategy all positive |
+| 2026-07-13 | No Push A structure change | EOD: full routine worked |
+| 2026-07-14 | **Pending:** Pull A assisted pull-up → close grip lat pulldown | Unstable assist machine; injury risk |
+| 2026-07-14 | No other Pull A changes | New exercises settling in; keep reverse fly machine height note |

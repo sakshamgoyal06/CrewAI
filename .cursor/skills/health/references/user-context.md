@@ -2,7 +2,7 @@
 
 Maintained by the **Health Cursor agent** (`/health`). Update when the user establishes durable preferences, program changes, or new Hevy IDs.
 
-_Last updated: 2026-07-13 (EOD journal)_
+_Last updated: 2026-07-14 (EOD journal)_
 
 ## Goals
 
@@ -41,6 +41,13 @@ _Last updated: 2026-07-13 (EOD journal)_
 - Abs: **3×12** (Cable Crunch, Hanging Knee Raise).
 - Treadmill last; 20 min with incline/speed in exercise notes.
 
+### Pull A notes (current)
+
+- **Primary:** back width (pulldowns) — **no rows** (rows on Pull B).
+- **Pending swap:** remove **Pull Up (Assisted)** → **Lat Pulldown - Close Grip (Cable)** (`4E5257DE`) — assist machine unstable.
+- Rear delt reverse fly: machine **base+1 height** (user note).
+- Finisher: queue podcast/video when training late; ~3 min stretch minimum even when tired.
+
 ## Diet
 
 - **13 Jul EOD:** Okay until evening; **dinner a bit heavy**. User wants to **fix nutrition slowly** (with steps) — not a crash diet.
@@ -60,4 +67,4 @@ _(Add: race dates, season goals, multi-month arcs.)_
 
 - **Habit:** end of day → `/eod-journal` — review progress, log how you feel.
 - **Files:** `references/journal/YYYY-MM-DD.md`, distilled in `references/program-learnings.md`.
-- **Latest:** `references/journal/2026-07-13.md` — Push A complete; Pull A tomorrow.
+- **Latest:** `references/journal/2026-07-14.md` — Pull A complete; Cardio+Abs or rest next.
