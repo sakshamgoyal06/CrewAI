@@ -2,7 +2,7 @@
 
 Updated by **`/eod-journal`** after each end-of-day review. Specialists read this **before** editing routines or coaching advice.
 
-_Last distilled: 2026-07-14 (EOD user review)_
+_Last distilled: 2026-07-15 (EOD user review)_
 
 ## Working
 
@@ -19,11 +19,16 @@ _Last distilled: 2026-07-14 (EOD user review)_
 - **Explicit `reps` on abs** — prefer explicit reps over `rep_range` alone for Hevy display.
 - **Hevy Coach folder `3206984`** — verified before writes.
 - **Short sleep can still work** — slept little but woke refreshed (13 Jul); don’t assume bad day from hours alone.
+- **Cardio + Abs day (15 Jul)** — showed up on day 3 of rotation; abs and step-ups fine even when tired.
+- **Lunch recovery** — post-workout low energy improved after eating (15 Jul).
 
 ## Not working / watch
 
 - **Assisted pull-up machine** — removed from Pull A (14 Jul); replaced with **Close Grip Lat Pulldown (Cable)** `4E5257DE`.
 - **Finisher when late + no content** — 15 min treadmill vs 20 min target; fatigue without podcast/video (14 Jul).
+- **Cumulative fatigue on Cardio day (15 Jul)** — low post-workout energy, more body ache after Push A + Pull A; treadmill **low incline**, 15 min again.
+- **Jumping jacks when gassed** — 5×30 felt **really pressing** on tired cardio day (15 Jul).
+- **Plank when fatigued** — could not hold (13 s logged); may need knee plank or shorter holds — don’t treat as motivation failure.
 - **Hevy sync** — completed workout data can flow back into routine templates; verify set counts after edits.
 - **Evening nutrition** — dinner can run heavy; fix nutrition **slowly**, no shame spiral.
 - **Steps** — below target; improve gradually with nutrition lane.
@@ -35,6 +40,8 @@ _Last distilled: 2026-07-14 (EOD user review)_
 - **Finisher habit** — queue one episode/video before leaving for gym when start time is late.
 - **Nutrition + steps** — fix slowly; capture in journal when changes start.
 - Fill **Diet** detail in `user-context.md` when user shares eating style / targets.
+- **Cardio day plank** — consider regression (knee plank / 20–30 s target) when cumulative fatigue is high; confirm before Hevy edit.
+- **Push B vs rest** — listen to body after 3 consecutive days; sleep and food before next strength session.
 
 ## Routine change log
 

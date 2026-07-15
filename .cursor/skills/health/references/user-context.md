@@ -2,7 +2,7 @@
 
 Maintained by the **Health Cursor agent** (`/health`). Update when the user establishes durable preferences, program changes, or new Hevy IDs.
 
-_Last updated: 2026-07-14 (EOD journal)_
+_Last updated: 2026-07-15 (EOD journal)_
 
 ## Goals
 
@@ -57,7 +57,9 @@ _Last updated: 2026-07-14 (EOD journal)_
 ## Recovery / energy
 
 - **13 Jul:** Short sleep but **woke refreshed**; good energy for full Push A.
+- **15 Jul:** **Low energy after Cardio + Abs**; more body ache (carryover from Pull A); **felt better after lunch**.
 - **Stretching** after training helped feel fine all day — keep as habit.
+- **Cardio day fatigue** — jumping jacks and plank hardest when cumulative tiredness is high; treadmill incline/duration drop is expected, not failure.
 - _(Add: typical sleep hours, HRV, patterns over time.)_
 
 ## Long-term
@@ -68,4 +70,4 @@ _(Add: race dates, season goals, multi-month arcs.)_
 
 - **Habit:** end of day → `/eod-journal` — review progress, log how you feel.
 - **Files:** `references/journal/YYYY-MM-DD.md`, distilled in `references/program-learnings.md`.
-- **Latest:** `references/journal/2026-07-14.md` — Pull A complete; Cardio+Abs or rest next.
+- **Latest:** `references/journal/2026-07-15.md` — Cardio + Abs complete; Push B or rest next.
