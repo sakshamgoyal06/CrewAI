@@ -2,7 +2,7 @@
 
 Updated by **`/eod-journal`** after each end-of-day review. Specialists read this **before** editing routines or coaching advice.
 
-_Last distilled: 2026-07-15 (EOD user review)_
+_Last distilled: 2026-07-16 (Push B routine edit)_
 
 ## Working
 
@@ -14,7 +14,8 @@ _Last distilled: 2026-07-15 (EOD user review)_
 - **Treadmill finisher** — engaging content (YouTube / podcast) critical when training **late** or fatigued; Push A Atomic Habits example.
 - **Split design** — Pull A = **width** (pulldowns); Pull B = **thickness** (rows). User understands; rows not missing from Pull A by accident.
 - **New movement patience** — Single Arm Lat Pulldown + Rear Delt Reverse Fly awkward at first, settle in same session; repeat setup before swapping.
-- **Push A structure** — Barbell Bench; incline DB first; abs 3×12; treadmill last (20 min target).
+- **Push A structure** — Incline DB + flat barbell; cable fly; seated OHP; cable lateral; dips + overhead ext; abs 3×12; treadmill last.
+- **Push B differentiated (16 Jul)** — flat barbell + incline barbell + pec deck + Arnold press + front raise + skullcrushers + rope pushdown; no duplicate templates vs Push A (except flat bench anchor).
 - **Hevy preflight → confirm → create** — avoids wrong exercise IDs and surprises.
 - **Explicit `reps` on abs** — prefer explicit reps over `rep_range` alone for Hevy display.
 - **Hevy Coach folder `3206984`** — verified before writes.
@@ -52,3 +53,4 @@ _Last distilled: 2026-07-15 (EOD user review)_
 | 2026-07-13 | No Push A structure change | EOD: full routine worked |
 | 2026-07-14 | Pull A: assisted pull-up → close grip lat pulldown (`4E5257DE`) | Unstable assist machine; injury risk — **applied on Hevy** |
 | 2026-07-14 | No other Pull A changes | New exercises settling in; keep reverse fly machine height note |
+| 2026-07-16 | Push B full swap vs Push A duplicates | User: remove chest press machine; add incline chest; new shoulder/triceps variants — **applied on Hevy** |

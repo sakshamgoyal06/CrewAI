@@ -2,7 +2,7 @@
 
 Maintained by the **Health Cursor agent** (`/health`). Update when the user establishes durable preferences, program changes, or new Hevy IDs.
 
-_Last updated: 2026-07-15 (EOD journal)_
+_Last updated: 2026-07-16 (Push B differentiation)_
 
 ## Goals
 
@@ -37,9 +37,18 @@ _Last updated: 2026-07-15 (EOD journal)_
 
 ### Push A notes (current)
 
-- Order includes **Barbell Bench** (not chest press machine).
+- Order: **Incline Dumbbell Bench** first, then **Barbell Bench** flat.
+- Accessories: Cable fly crossovers; seated dumbbell OHP; single-arm cable lateral raise.
+- Triceps: assisted dip; overhead cable extension.
 - Abs: **3×12** (Cable Crunch, Hanging Knee Raise).
 - Treadmill last; 20 min with incline/speed in exercise notes.
+
+### Push B notes (current)
+
+- **Differentiated from Push A** (16 Jul) — no duplicate movement templates except shared flat barbell bench.
+- Order: **Barbell Bench** flat → **Incline Barbell Bench** → **Pec Deck** → **Arnold Press** → **Front Raise** → **Skullcrusher** → **Rope Pushdown**.
+- Abs: Crunch + Reverse Crunch (not cable crunch / hanging knee raise).
+- Treadmill last; 20 min target; queue content if training late.
 
 ### Pull A notes (current)
 
@@ -70,4 +79,4 @@ _(Add: race dates, season goals, multi-month arcs.)_
 
 - **Habit:** end of day → `/eod-journal` — review progress, log how you feel.
 - **Files:** `references/journal/YYYY-MM-DD.md`, distilled in `references/program-learnings.md`.
-- **Latest:** `references/journal/2026-07-15.md` — Cardio + Abs complete; Push B or rest next.
+- **Latest:** `references/journal/2026-07-15.md` — Cardio + Abs complete; **Push B** next (updated 16 Jul).
