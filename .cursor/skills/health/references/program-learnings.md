@@ -2,7 +2,7 @@
 
 Updated by **`/eod-journal`** after each end-of-day review. Specialists read this **before** editing routines or coaching advice.
 
-_Last distilled: 2026-07-16 (Push B routine edit)_
+_Last distilled: 2026-07-16 (rest day + recovery protocol)_
 
 ## Working
 
@@ -22,12 +22,14 @@ _Last distilled: 2026-07-16 (Push B routine edit)_
 - **Short sleep can still work** — slept little but woke refreshed (13 Jul); don’t assume bad day from hours alone.
 - **Cardio + Abs day (15 Jul)** — showed up on day 3 of rotation; abs and step-ups fine even when tired.
 - **Lunch recovery** — post-workout low energy improved after eating (15 Jul).
+- **Smart rest day (16 Jul)** — skipped Push B when very tired + muscle ache after 3 gym days; correct burnout prevention.
+- **Recovery routine locked** — `recovery-routine.md`: max 3 consecutive gym days; default rest after Cardio+Abs; morning gate + return criteria.
 
 ## Not working / watch
 
 - **Assisted pull-up machine** — removed from Pull A (14 Jul); replaced with **Close Grip Lat Pulldown (Cable)** `4E5257DE`.
 - **Finisher when late + no content** — 15 min treadmill vs 20 min target; fatigue without podcast/video (14 Jul).
-- **Cumulative fatigue on Cardio day (15 Jul)** — low post-workout energy, more body ache after Push A + Pull A; treadmill **low incline**, 15 min again.
+- **3-day block without rest (13–15 Jul)** — Push A + Pull A + Cardio left user very tired by 16 Jul; **schedule must include rest before Push B**.
 - **Jumping jacks when gassed** — 5×30 felt **really pressing** on tired cardio day (15 Jul).
 - **Plank when fatigued** — could not hold (13 s logged); may need knee plank or shorter holds — don’t treat as motivation failure.
 - **Hevy sync** — completed workout data can flow back into routine templates; verify set counts after edits.
@@ -42,7 +44,8 @@ _Last distilled: 2026-07-16 (Push B routine edit)_
 - **Nutrition + steps** — fix slowly; capture in journal when changes start.
 - Fill **Diet** detail in `user-context.md` when user shares eating style / targets.
 - **Cardio day plank** — consider regression (knee plank / 20–30 s target) when cumulative fatigue is high; confirm before Hevy edit.
-- **Push B vs rest** — listen to body after 3 consecutive days; sleep and food before next strength session.
+- **Push B vs rest** — listen to body after 3 consecutive days; sleep and food before next strength session — **rest day 16 Jul applied**.
+- **Recovery protocol** — see `recovery-routine.md`; agents use morning gate before encouraging gym.
 
 ## Routine change log
 
