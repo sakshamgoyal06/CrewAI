@@ -95,12 +95,12 @@ const treadmill = (notes: string) => ({
 });
 
 const pushBMap: Mapping[] = [
-  pick("Bench Press", (t) => /bench press \(barbell\)/i.test(t.title), () => 10, "Flat barbell bench — shared anchor; Push B leads with flat then incline barbell."),
+  pick("Bench Press", (t) => /bench press \(barbell\)/i.test(t.title), () => 10, "Flat barbell bench — shared anchor; Push B leads with flat then incline DB."),
   pick(
-    "Incline Bench Press Barbell",
-    (t) => /incline bench press \(barbell\)/i.test(t.title),
+    "Incline Bench Press Dumbbell",
+    (t) => /incline bench press \(dumbbell\)/i.test(t.title),
     () => 20,
-    "Incline Barbell Bench — upper chest; Push A uses incline dumbbell instead.",
+    "Incline DB — gym has no incline barbell; shared with Push A but different day order.",
   ),
   pick("Pec Deck", (t) => /butterfly \(pec deck\)/i.test(t.title), () => 10, "Pec Deck — replaces Push A cable fly crossovers."),
   pick("Arnold Press", (t) => /arnold press \(dumbbell\)/i.test(t.title), () => 10, "Arnold Press — replaces Push A seated dumbbell OHP."),
@@ -186,10 +186,10 @@ const pushBPayload = {
   routine: {
     title: "Push B",
     folder_id: FOLDER_ID,
-    notes: `Primary: Chest\nSecondary: Shoulders and Triceps\n\nSecond push day — different exercises from Push A.\nPush B: flat barbell, incline barbell, pec deck, Arnold press, front raise, skullcrushers, rope pushdown.\n\nProgram rules:\n- Compounds: 3×8–10. Isolations/abs: 3×12–15.\n- Finish with 20 min incline treadmill.\n- Progress compounds after 10/10/10; isolations after 15/15/15.\n- Normal sets only. No warm-ups. Starting weight unset.`,
+    notes: `Primary: Chest\nSecondary: Shoulders and Triceps\n\nSecond push day — complementary to Push A.\nPush B: flat barbell → incline DB, pec deck, Arnold press, front raise, skullcrushers, rope pushdown.\n(Incline DB shared — no incline barbell at gym.)\n\nProgram rules:\n- Compounds: 3×8–10. Isolations/abs: 3×12–15.\n- Finish with 20 min incline treadmill.\n- Progress compounds after 10/10/10; isolations after 15/15/15.\n- Normal sets only. No warm-ups. Starting weight unset.`,
     exercises: [
       ex(pushBMap[0]!, 180, `3 working sets of 8–10.\nProgress after clean 10/10/10.\nFlat barbell bench anchor.\nKeep shoulder blades retracted.\nControl the eccentric.\nStop before unsafe grinding.`, compound()),
-      ex(pushBMap[1]!, 150, `3 working sets of 8–10.\nProgress after clean 10/10/10.\nIncline barbell — upper chest (Push A uses incline DB).\nModerate incline.\nControl the stretch.`, compound()),
+      ex(pushBMap[1]!, 150, `3 working sets of 8–10.\nProgress after clean 10/10/10.\nIncline dumbbell — no incline barbell at gym.\nStable shoulder blades.\nControl the stretch.`, compound()),
       ex(pushBMap[2]!, 75, `3 working sets of 12–15.\nProgress after clean 15/15/15.\nPec deck fly — not cable crossovers.\nControl the stretch.\nPause briefly at contraction.`, isolation()),
       ex(pushBMap[3]!, 150, `3 working sets of 8–10.\nProgress after clean 10/10/10.\nArnold press — not seated dumbbell OHP.\nRotate smoothly.\nAvoid excessive lower-back arch.`, compound()),
       ex(pushBMap[4]!, 60, `3 working sets of 12–15.\nProgress after clean 15/15/15.\nFront raise — Push A hits side delts via cable lateral.\nLead with elbows.\nAvoid swinging.`, isolation()),

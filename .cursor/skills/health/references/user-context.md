@@ -45,8 +45,9 @@ _Last updated: 2026-07-16 (Push B differentiation)_
 
 ### Push B notes (current)
 
-- **Differentiated from Push A** (16 Jul) — no duplicate movement templates except shared flat barbell bench.
-- Order: **Barbell Bench** flat → **Incline Barbell Bench** → **Pec Deck** → **Arnold Press** → **Front Raise** → **Skullcrusher** → **Rope Pushdown**.
+- **Differentiated from Push A** (16 Jul) — shoulders/triceps/abs differ; chest uses **flat barbell + incline DB** (no incline barbell at gym).
+- Order: **Barbell Bench** flat → **Incline Dumbbell Bench** → **Pec Deck** → **Arnold Press** → **Front Raise** → **Skullcrusher** → **Rope Pushdown**.
+- Push A order is the reverse for the two bench movements (incline DB first, then flat barbell).
 - Abs: Crunch + Reverse Crunch (not cable crunch / hanging knee raise).
 - Treadmill last; 20 min target; queue content if training late.
 

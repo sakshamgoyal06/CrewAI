@@ -1,7 +1,7 @@
 /**
  * Update Push B: differentiate from Push A.
  * - Keep flat barbell bench
- * - Replace chest press machine with incline barbell bench
+ * - Replace chest press machine with incline dumbbell bench (no incline barbell at gym)
  * - Swap overlapping movements for complementary push variants
  */
 import "dotenv/config";
@@ -13,10 +13,8 @@ import type { HevyPostRoutineBody } from "../../../../src/pillars/health/workout
 
 const ROUTINE_ID = "b55c11d6-23d9-439f-ae9d-5f9e9e4e203a";
 
-/** Push A template IDs — Push B must not duplicate these slots. */
+/** Push A template IDs — avoid duplicating except flat bench + incline DB (gym has no incline barbell). */
 const PUSH_A_IDS = new Set([
-  "07B38369", // Incline Bench Press (Dumbbell)
-  "79D0BB3A", // Bench Press (Barbell) — shared anchor on Push B per user
   "651F844C", // Cable Fly Crossovers
   "9930DF71", // Seated Overhead Press (Dumbbell)
   "DE68C825", // Single Arm Lateral Raise (Cable)
@@ -59,13 +57,13 @@ Stop before unsafe grinding.`,
     sets: compound(),
   },
   {
-    exercise_template_id: "50DFDFAB",
+    exercise_template_id: "07B38369",
     rest_seconds: 150,
     notes: `3 working sets of 8–10.
 Progress after clean 10/10/10.
-Incline barbell press — upper chest (Push A uses incline dumbbell).
-Moderate incline; control the stretch.
-Do not bounce at the bottom.`,
+Incline dumbbell press — gym has no incline barbell setup.
+Stable shoulder blades; control the stretch.
+Push B uses flat bench first, then incline DB (Push A is the reverse order).`,
     sets: compound(),
   },
   {
@@ -140,7 +138,7 @@ If fatigued, shorten holds — knee plank regression OK.`,
 ];
 
 const overlap = pushBExercises.filter(
-  (e) => PUSH_A_IDS.has(e.exercise_template_id) && e.exercise_template_id !== "79D0BB3A",
+  (e) => PUSH_A_IDS.has(e.exercise_template_id),
 );
 if (overlap.length) {
   console.error("Unexpected overlap with Push A (besides flat bench):", overlap.map((e) => e.exercise_template_id));
@@ -149,7 +147,7 @@ if (overlap.length) {
 
 const mappingTable = [
   ["Bench Press (Barbell)", "79D0BB3A", "keep", "Flat barbell anchor"],
-  ["Chest Press (Machine)", "50DFDFAB", "swap", "→ Incline Bench Press (Barbell)"],
+  ["Chest Press (Machine)", "07B38369", "swap", "→ Incline Bench Press (Dumbbell)"],
   ["Cable Fly Crossovers", "9DCE2D64", "swap", "→ Butterfly (Pec Deck)"],
   ["Seated OHP (Dumbbell)", "A69FF221", "swap", "→ Arnold Press (Dumbbell)"],
   ["Lateral Raise (Dumbbell)", "8293E554", "swap", "→ Front Raise (Dumbbell)"],
@@ -168,9 +166,10 @@ const body: HevyPostRoutineBody = {
     notes: `Primary: Chest
 Secondary: Shoulders and Triceps
 
-Second push day — **different exercises from Push A** (not a duplicate).
-Push A: incline DB, flat barbell, cable fly, seated OHP, cable lateral, dips, overhead ext.
-Push B: flat barbell, incline barbell, pec deck, Arnold press, front raise, skullcrushers, rope pushdown.
+Second push day — complementary to Push A.
+Push A: incline DB → flat barbell, cable fly, seated OHP, cable lateral, dips, overhead ext.
+Push B: flat barbell → incline DB, pec deck, Arnold press, front raise, skullcrushers, rope pushdown.
+(Incline DB shared — no incline barbell at gym.)
 
 Program rules:
 - Compounds: 3×8–10. Isolations/abs: 3×12–15.
