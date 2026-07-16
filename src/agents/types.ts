@@ -19,6 +19,10 @@ export type AgentContext = {
    */
   memoryBlock?: string;
   /**
+   * Committed health program memory (user-context, learnings, recovery, journals).
+   */
+  healthReferenceBlock?: string;
+  /**
    * Onboarding-completed health preferences (from `user_health_profile`), appended to specialist prompts.
    */
   healthPreferences?: string;

@@ -10,5 +10,6 @@ Tracked by the Health Cursor agent. Pick up when the user asks or during hardeni
 
 ## In progress / next
 
+- [x] **Telegram health memory** — `loadHealthReferences.ts` + `/journal` → `magnus_daily_logs` (2026-07-16).
 - [ ] **Routine tuning from journals** — use `program-learnings.md` + last 7 journal entries before any Hevy routine edit.
 - [ ] **Diet section in user-context** — capture when user shares eating style.

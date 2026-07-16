@@ -165,7 +165,9 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 | `src/agents/registry.ts` | `dispatchToAgent` — **priority order**: `Notion` → `HealthComposite` → `Planner` → `LearningTracker` / `LearningPlan` → `BuildShip` |
 | `src/agents/magnusOrchestrator.ts` | Keyword override → **NOTION** (`isNotionIntentOverride`); classify intent; memory context; **GENERAL** research sub-route (`isResearchSubIntent`); `answerGeneral`; delegate specialists; `routingPlaceholder` |
 | `src/agents/intelligence/researchAgent.ts` | `RESEARCH_SYSTEM`, `runResearchAgent` — structured Markdown (Executive answer, Key points, Sources, Open questions); uses gathered URLs / search / pasted text |
-| `src/agents/health/healthRouter.ts` | `healthCompositeAgent` (`HEALTH`): sequential first-accept meal log → Hevy write → meal planner → long-term planning → Fitness → alternates → Nutrition → Energy, then generic ack |
+| `src/agents/health/healthRouter.ts` | `healthCompositeAgent` (`HEALTH`): meal log → **journal** → Hevy write → meal planner → long-term → Fitness → alternates → Nutrition → Energy; loads **`.cursor/skills/health/references/`** into prompts on Telegram |
+| `src/pillars/health/references/loadHealthReferences.ts` | Reads committed health memory (user-context, learnings, recovery, journals) + Supabase Telegram journals for phone coaching |
+| `src/agents/health/healthJournalAgent.ts` | `/journal` and EOD phrases → structured journal saved to `magnus_daily_logs` |
 | `src/pillars/health/workouts/agents/fitnessAgent.ts` | `FITNESS_SYSTEM`, `tryFitnessAgent`; reads Hevy sessions/routines when `HEVY_API_KEY` set, else Supabase `workouts`; metadata `agent: "fitness"` |
 | `src/pillars/health/workouts/agents/hevyWriteAgent.ts` | `tryHevyWriteAgent` — `hevy routine:` / `hevy workout:` / `/hevy` → Hevy REST create/update |
 | `src/pillars/health/workouts/agents/workoutsCoachAgent.ts` | Thin alias `runWorkoutsCoachAgent` → `tryFitnessAgent` |
