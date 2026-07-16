@@ -2,7 +2,7 @@
 
 Updated by **`/eod-journal`** after each end-of-day review. Specialists read this **before** editing routines or coaching advice.
 
-_Last distilled: 2026-07-15 (EOD user review)_
+_Last distilled: 2026-07-16 (rest day + recovery protocol)_
 
 ## Working
 
@@ -14,19 +14,22 @@ _Last distilled: 2026-07-15 (EOD user review)_
 - **Treadmill finisher** — engaging content (YouTube / podcast) critical when training **late** or fatigued; Push A Atomic Habits example.
 - **Split design** — Pull A = **width** (pulldowns); Pull B = **thickness** (rows). User understands; rows not missing from Pull A by accident.
 - **New movement patience** — Single Arm Lat Pulldown + Rear Delt Reverse Fly awkward at first, settle in same session; repeat setup before swapping.
-- **Push A structure** — Barbell Bench; incline DB first; abs 3×12; treadmill last (20 min target).
+- **Push A structure** — Incline DB + flat barbell; cable fly; seated OHP; cable lateral; dips + overhead ext; abs 3×12; treadmill last.
+- **Push B differentiated (16 Jul)** — flat barbell + incline DB (no incline barbell at gym), pec deck, Arnold press, front raise, skullcrushers, rope pushdown; Push B leads flat then incline DB (Push A reverses order).
 - **Hevy preflight → confirm → create** — avoids wrong exercise IDs and surprises.
 - **Explicit `reps` on abs** — prefer explicit reps over `rep_range` alone for Hevy display.
 - **Hevy Coach folder `3206984`** — verified before writes.
 - **Short sleep can still work** — slept little but woke refreshed (13 Jul); don’t assume bad day from hours alone.
 - **Cardio + Abs day (15 Jul)** — showed up on day 3 of rotation; abs and step-ups fine even when tired.
 - **Lunch recovery** — post-workout low energy improved after eating (15 Jul).
+- **Smart rest day (16 Jul)** — skipped Push B when very tired + muscle ache after 3 gym days; correct burnout prevention.
+- **Recovery routine locked** — `recovery-routine.md`: max 3 consecutive gym days; default rest after Cardio+Abs; morning gate + return criteria.
 
 ## Not working / watch
 
 - **Assisted pull-up machine** — removed from Pull A (14 Jul); replaced with **Close Grip Lat Pulldown (Cable)** `4E5257DE`.
 - **Finisher when late + no content** — 15 min treadmill vs 20 min target; fatigue without podcast/video (14 Jul).
-- **Cumulative fatigue on Cardio day (15 Jul)** — low post-workout energy, more body ache after Push A + Pull A; treadmill **low incline**, 15 min again.
+- **3-day block without rest (13–15 Jul)** — Push A + Pull A + Cardio left user very tired by 16 Jul; **schedule must include rest before Push B**.
 - **Jumping jacks when gassed** — 5×30 felt **really pressing** on tired cardio day (15 Jul).
 - **Plank when fatigued** — could not hold (13 s logged); may need knee plank or shorter holds — don’t treat as motivation failure.
 - **Hevy sync** — completed workout data can flow back into routine templates; verify set counts after edits.
@@ -41,7 +44,8 @@ _Last distilled: 2026-07-15 (EOD user review)_
 - **Nutrition + steps** — fix slowly; capture in journal when changes start.
 - Fill **Diet** detail in `user-context.md` when user shares eating style / targets.
 - **Cardio day plank** — consider regression (knee plank / 20–30 s target) when cumulative fatigue is high; confirm before Hevy edit.
-- **Push B vs rest** — listen to body after 3 consecutive days; sleep and food before next strength session.
+- **Push B vs rest** — listen to body after 3 consecutive days; sleep and food before next strength session — **rest day 16 Jul applied**.
+- **Recovery protocol** — see `recovery-routine.md`; agents use morning gate before encouraging gym.
 
 ## Routine change log
 
@@ -52,3 +56,5 @@ _Last distilled: 2026-07-15 (EOD user review)_
 | 2026-07-13 | No Push A structure change | EOD: full routine worked |
 | 2026-07-14 | Pull A: assisted pull-up → close grip lat pulldown (`4E5257DE`) | Unstable assist machine; injury risk — **applied on Hevy** |
 | 2026-07-14 | No other Pull A changes | New exercises settling in; keep reverse fly machine height note |
+| 2026-07-16 | Push B full swap vs Push A duplicates | User: remove chest press machine; add incline chest; new shoulder/triceps variants — **applied on Hevy** |
+| 2026-07-16 | Push B incline: barbell → dumbbell | Gym has no incline barbell setup — **applied on Hevy** |

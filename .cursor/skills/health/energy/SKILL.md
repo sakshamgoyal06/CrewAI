@@ -9,8 +9,9 @@ paths: "src/agents/health/energyAgent.ts"
 
 ## Load first
 
-1. `.cursor/skills/health/references/user-context.md` — Recovery section
-2. `src/agents/health/energyAgent.ts` — `ENERGY_SYSTEM`, `tryEnergyAgent`
+1. `.cursor/skills/health/references/recovery-routine.md` — rest/train gate, rest-day protocol
+2. `.cursor/skills/health/references/user-context.md` — Recovery section
+3. `src/agents/health/energyAgent.ts` — `ENERGY_SYSTEM`, `tryEnergyAgent`
 
 ## Scope
 

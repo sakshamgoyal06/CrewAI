@@ -16,6 +16,7 @@ import {
   classifyHealthSubIntent,
   hasFitnessKeyword,
 } from "../../../../agents/health/healthSubIntent.js";
+import { appendHealthReferenceBlock } from "../../references/appendHealthReferenceBlock.js";
 import { HEALTH_SPECIALIST_MODEL } from "../../../../agents/health/model.js";
 
 /**
@@ -171,7 +172,10 @@ export async function tryFitnessAgent(ctx: AgentContext): Promise<AgentResult | 
     : "";
 
   const userContent = augmentUserWithMemory(
-    `${ctx.rawMessage}${contextBlock}${ctx.healthPreferences ?? ""}`,
+    appendHealthReferenceBlock(
+      `${ctx.rawMessage}${contextBlock}${ctx.healthPreferences ?? ""}`,
+      ctx.healthReferenceBlock,
+    ),
     ctx.memoryBlock,
   );
 

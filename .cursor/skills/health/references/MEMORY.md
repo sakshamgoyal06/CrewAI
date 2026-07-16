@@ -67,6 +67,7 @@ The **Health orchestrator** (`.cursor/agents/health.md`, invoke `/health`) loads
 ### `/energy`
 
 - `src/agents/health/energyAgent.ts`
+- `references/recovery-routine.md` — **locked rest/train rules**
 - `user-context.md` → **Recovery**, sleep notes if any
 
 ### `/long-term-planning`

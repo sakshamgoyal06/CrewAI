@@ -2,7 +2,7 @@
 
 Maintained by the **Health Cursor agent** (`/health`). Update when the user establishes durable preferences, program changes, or new Hevy IDs.
 
-_Last updated: 2026-07-15 (EOD journal)_
+_Last updated: 2026-07-16 (recovery routine locked)_
 
 ## Goals
 
@@ -11,7 +11,7 @@ _Last updated: 2026-07-15 (EOD journal)_
 
 ## Training program
 
-- Split style: **Push A / Pull A / Cardio+Abs / Push B / Pull B / Legs** (+ Pre-Program Primer).
+- Split style: **Push A / Pull A / Cardio+Abs / REST / Push B / Pull B / Legs** (+ Pre-Program Primer). **Rest day after Cardio+Abs** is default (see `recovery-routine.md`).
 - **Compounds:** 3×8–10 (normal sets).
 - **Isolations / abs:** 3×12–15.
 - **Treadmill:** 20 min (1200 s); notes often include speed ~3.7–4.0, incline 14–16.
@@ -37,9 +37,19 @@ _Last updated: 2026-07-15 (EOD journal)_
 
 ### Push A notes (current)
 
-- Order includes **Barbell Bench** (not chest press machine).
+- Order: **Incline Dumbbell Bench** first, then **Barbell Bench** flat.
+- Accessories: Cable fly crossovers; seated dumbbell OHP; single-arm cable lateral raise.
+- Triceps: assisted dip; overhead cable extension.
 - Abs: **3×12** (Cable Crunch, Hanging Knee Raise).
 - Treadmill last; 20 min with incline/speed in exercise notes.
+
+### Push B notes (current)
+
+- **Differentiated from Push A** (16 Jul) — shoulders/triceps/abs differ; chest uses **flat barbell + incline DB** (no incline barbell at gym).
+- Order: **Barbell Bench** flat → **Incline Dumbbell Bench** → **Pec Deck** → **Arnold Press** → **Front Raise** → **Skullcrusher** → **Rope Pushdown**.
+- Push A order is the reverse for the two bench movements (incline DB first, then flat barbell).
+- Abs: Crunch + Reverse Crunch (not cable crunch / hanging knee raise).
+- Treadmill last; 20 min target; queue content if training late.
 
 ### Pull A notes (current)
 
@@ -56,9 +66,11 @@ _Last updated: 2026-07-15 (EOD journal)_
 
 ## Recovery / energy
 
+- **Recovery protocol:** `references/recovery-routine.md` — **locked 16 Jul**. Max **3 gym days in a row**; **rest after Cardio+Abs** before Push B by default.
 - **13 Jul:** Short sleep but **woke refreshed**; good energy for full Push A.
 - **15 Jul:** **Low energy after Cardio + Abs**; more body ache (carryover from Pull A); **felt better after lunch**.
-- **Stretching** after training helped feel fine all day — keep as habit.
+- **16 Jul:** **Rest day** — very tired + muscle ache; skipped Push B; recovery routine locked.
+- **Stretching** after training helped feel fine all day — keep as habit; **5 min gentle stretch OK on rest days**.
 - **Cardio day fatigue** — jumping jacks and plank hardest when cumulative tiredness is high; treadmill incline/duration drop is expected, not failure.
 - _(Add: typical sleep hours, HRV, patterns over time.)_
 
@@ -70,4 +82,4 @@ _(Add: race dates, season goals, multi-month arcs.)_
 
 - **Habit:** end of day → `/eod-journal` — review progress, log how you feel.
 - **Files:** `references/journal/YYYY-MM-DD.md`, distilled in `references/program-learnings.md`.
-- **Latest:** `references/journal/2026-07-15.md` — Cardio + Abs complete; Push B or rest next.
+- **Latest:** `references/journal/2026-07-16.md` — rest day; Push B deferred; recovery routine locked.

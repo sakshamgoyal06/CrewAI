@@ -12,6 +12,8 @@ import { tryAlternatesRecommenderAgent } from "./alternatesRecommenderAgent.js";
 import { tryNutritionAgent } from "./nutritionAgent.js";
 import { tryHevyWriteAgent } from "../../pillars/health/workouts/agents/hevyWriteAgent.js";
 import { runOrchestratedMealLogTurn } from "./nutritionOrchestrated.js";
+import { tryHealthJournalAgent } from "./healthJournalAgent.js";
+import { loadHealthReferenceBlock } from "../../pillars/health/references/loadHealthReferences.js";
 
 /** Short generic acknowledgement when no HEALTH sub-specialist matches the message. */
 export const HEALTH_GENERIC_ACK =
@@ -29,6 +31,7 @@ function withRouterMeta(
   result: AgentResult,
   order:
     | "meal_plan"
+    | "journal"
     | "long_term_health_planning"
     | "hevy_write"
     | "fitness"
@@ -48,7 +51,12 @@ function withRouterMeta(
 export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult> {
   const healthRow = await fetchUserHealthProfile(ctx.userProfileId);
   const healthPreferences = formatHealthPreferencesForPrompt(healthRow);
-  const ctxWithPrefs: AgentContext = { ...ctx, healthPreferences };
+  const { block: healthReferenceBlock } = await loadHealthReferenceBlock(ctx.userProfileId);
+  const ctxWithPrefs: AgentContext = {
+    ...ctx,
+    healthPreferences,
+    healthReferenceBlock,
+  };
 
   const mealParsed = parseMealLogCommand(ctx.rawMessage);
   if (mealParsed.kind === "meal") {
@@ -58,6 +66,11 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
       ctx.rawMessage,
     );
     return withRouterMeta(r, "nutrition");
+  }
+
+  const journal = await tryHealthJournalAgent(ctxWithPrefs);
+  if (journal) {
+    return withRouterMeta(journal, "journal");
   }
 
   const hevyWrite = await tryHevyWriteAgent(ctxWithPrefs);

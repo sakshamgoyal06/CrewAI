@@ -4,6 +4,7 @@ import { anthropic } from "../../tools/clients.js";
 import { augmentUserWithMemory } from "../memory/memoryAgent.js";
 import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
 import type { AgentContext, AgentResult } from "../types.js";
+import { appendHealthReferenceBlock } from "../../pillars/health/references/appendHealthReferenceBlock.js";
 import { HEALTH_SPECIALIST_MODEL } from "./model.js";
 
 /**
@@ -50,7 +51,10 @@ export async function tryEnergyAgent(ctx: AgentContext): Promise<AgentResult | n
       {
         role: "user",
         content: augmentUserWithMemory(
-          `${ctx.rawMessage}${ctx.healthPreferences ?? ""}`,
+          appendHealthReferenceBlock(
+            `${ctx.rawMessage}${ctx.healthPreferences ?? ""}`,
+            ctx.healthReferenceBlock,
+          ),
           ctx.memoryBlock,
         ),
       },

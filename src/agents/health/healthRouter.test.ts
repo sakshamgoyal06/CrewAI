@@ -20,6 +20,11 @@ vi.mock("../../tools/clients.js", () => ({
     from: () => ({
       select: () => ({
         eq: () => ({
+          contains: () => ({
+            order: () => ({
+              limit: () => Promise.resolve({ data: [], error: null }),
+            }),
+          }),
           order: () => ({
             limit: () => Promise.resolve({ data: [], error: null }),
           }),
