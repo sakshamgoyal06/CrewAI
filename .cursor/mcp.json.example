@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "google-calendar": {
+      "command": "npx",
+      "args": ["tsx", "mcp/google-calendar/server.mts"],
+      "env": {
+        "GOOGLE_OAUTH_CREDENTIALS": "/absolute/path/to/google-oauth-client-secret.json"
+      }
+    }
+  }
+}
