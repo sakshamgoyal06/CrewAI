@@ -2,16 +2,20 @@
 
 Maintained by the **Health Cursor agent** (`/health`). Update when the user establishes durable preferences, program changes, or new Hevy IDs.
 
-_Last updated: 2026-07-16 (recovery routine locked)_
+_Last updated: 2026-07-20 (swimming + weekly schedule + discipline reset)_
 
 ## Goals
 
 - Build and run a **Hevy-based workout program** inside Magnus.
 - This Cursor chat is the dedicated **health agent** pillar.
+- **Adherence:** user stance **“I should not miss”** gym mornings — discipline slips (tired wake-ups, “weekend catch-up”) are the main risk, not program design.
+- **Swimming:** started **19 Jul 2026** (first lesson); target **3–4×/week** alongside gym.
+- **Next build:** **nutrition bot** (user planning).
 
 ## Training program
 
-- Split style: **Push A / Pull A / Cardio+Abs / REST / Push B / Pull B / Legs** (+ Pre-Program Primer). **Rest day after Cardio+Abs** is default (see `recovery-routine.md`).
+- Split style: **Push A / Pull A / Cardio+Abs / REST / Push B / Pull B / Legs** (+ Pre-Program Primer). See `weekly-schedule.md` for **5–6 gym days + 3–4 swim**.
+- **Gym timing:** **morning** weekdays; **after noon** on weekends.
 - **Compounds:** 3×8–10 (normal sets).
 - **Isolations / abs:** 3×12–15.
 - **Treadmill:** 20 min (1200 s); notes often include speed ~3.7–4.0, incline 14–16.
@@ -58,6 +62,12 @@ _Last updated: 2026-07-16 (recovery routine locked)_
 - Rear delt reverse fly: machine **base+1 height** (user note).
 - Finisher: queue podcast/video when training late; ~3 min stretch minimum even when tired.
 
+### Swimming (new — 19 Jul 2026)
+
+- **First lesson:** 19 Jul 2026.
+- **Target:** 3–4 sessions / week (lessons + practice).
+- **Not a substitute** for unplanned gym skips — schedule both explicitly (`weekly-schedule.md`).
+
 ## Diet
 
 - **Sleep (14 Jul EOD):** less than ideal — prioritize more sleep.
@@ -70,6 +80,9 @@ _Last updated: 2026-07-16 (recovery routine locked)_
 - **13 Jul:** Short sleep but **woke refreshed**; good energy for full Push A.
 - **15 Jul:** **Low energy after Cardio + Abs**; more body ache (carryover from Pull A); **felt better after lunch**.
 - **16 Jul:** **Rest day** — very tired + muscle ache; skipped Push B; recovery routine locked.
+- **17–20 Jul:** **Gym gap** — no Hevy sessions after 15 Jul Cardio; **discipline** (morning tiredness, “weekend catch-up” thinking) — not fatigue rest.
+- **19 Jul:** **First swim lesson** — positive new lane.
+- **20 Jul:** Reset — journal + weekly schedule locked; **should not miss** gym mornings.
 - **Stretching** after training helped feel fine all day — keep as habit; **5 min gentle stretch OK on rest days**.
 - **Cardio day fatigue** — jumping jacks and plank hardest when cumulative tiredness is high; treadmill incline/duration drop is expected, not failure.
 - _(Add: typical sleep hours, HRV, patterns over time.)_
@@ -82,4 +95,4 @@ _(Add: race dates, season goals, multi-month arcs.)_
 
 - **Habit:** end of day → `/eod-journal` — review progress, log how you feel.
 - **Files:** `references/journal/YYYY-MM-DD.md`, distilled in `references/program-learnings.md`.
-- **Latest:** `references/journal/2026-07-16.md` — rest day; Push B deferred; recovery routine locked.
+- **Latest:** `references/journal/2026-07-20.md` — discipline reset; swim started; gym return tomorrow.

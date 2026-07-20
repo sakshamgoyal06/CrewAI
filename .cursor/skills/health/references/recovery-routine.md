@@ -2,7 +2,20 @@
 
 **Purpose:** Prevent burnout when restarting training after a long gap. Rest is **program adherence**, not failure.
 
-_Last locked: 2026-07-16 — after 3 consecutive gym days (Push A → Pull A → Cardio+Abs) and skipped Push B due to fatigue + muscle ache._
+_Last locked: 2026-07-20 — fatigue rest vs discipline skip; swimming + gym adherence._
+
+---
+
+## Fatigue rest vs discipline skip
+
+| | **Fatigue rest** (smart) | **Discipline skip** (problem) |
+|---|--------------------------|-------------------------------|
+| **Example** | 16 Jul — very tired + ache after 3 gym days | 17–20 Jul — tired morning, “weekend catch-up,” no gym |
+| **Body** | Widespread wipeout, needs recovery | Often fine by afternoon; regret, not collapse |
+| **Action** | Full rest day per protocol below | **Minimum session** or next-AM non-negotiable return — see `weekly-schedule.md` |
+| **Journal** | Note rest + recovery checklist | Note miss **same day** — don’t let gap grow |
+
+Both can coexist: respect fatigue **without** using it to excuse avoidable skips.
 
 ---
 
@@ -96,6 +109,7 @@ If still very tired tomorrow → **second rest day** is correct. Push B will wai
 
 ## Agent routing
 
-- Rest / fatigue / sleep → `/energy` + this file.
-- “Should I train today?” → run **morning gate** table; default to rest if unsure.
+- Rest / fatigue / sleep → `/energy` + this file + `weekly-schedule.md`.
+- “Should I train today?” → run **morning gate** table; if only discipline/tired → **minimum session** not zero.
 - Program edits only if recovery pattern fails repeatedly — not because of one smart rest day.
+- **Swimming** — tracked in `weekly-schedule.md`; not logged in Hevy unless user adds manually.

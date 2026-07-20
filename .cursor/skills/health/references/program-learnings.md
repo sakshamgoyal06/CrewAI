@@ -2,7 +2,7 @@
 
 Updated by **`/eod-journal`** after each end-of-day review. Specialists read this **before** editing routines or coaching advice.
 
-_Last distilled: 2026-07-16 (rest day + recovery protocol)_
+_Last distilled: 2026-07-20 (discipline gap + swimming + weekly schedule)_
 
 ## Working
 
@@ -24,6 +24,8 @@ _Last distilled: 2026-07-16 (rest day + recovery protocol)_
 - **Lunch recovery** — post-workout low energy improved after eating (15 Jul).
 - **Smart rest day (16 Jul)** — skipped Push B when very tired + muscle ache after 3 gym days; correct burnout prevention.
 - **Recovery routine locked** — `recovery-routine.md`: max 3 consecutive gym days; default rest after Cardio+Abs; morning gate + return criteria.
+- **Swimming (19 Jul)** — first lesson; plan 3–4×/week with gym — schedule explicitly (`weekly-schedule.md`).
+- **Daily journal habit** — user recommits 20 Jul; gaps grow when not journaling.
 
 ## Not working / watch
 
@@ -36,6 +38,9 @@ _Last distilled: 2026-07-16 (rest day + recovery protocol)_
 - **Evening nutrition** — dinner can run heavy; fix nutrition **slowly**, no shame spiral.
 - **Steps** — below target; improve gradually with nutrition lane.
 - **Cloud agent `.env`** — not a full runtime env; local/deploy needed for Telegram bot.
+- **Discipline slip (17–20 Jul)** — after good week (13–15 Jul), tired mornings → skip → “weekend catch-up” → **4-day gym gap**. Different from smart rest (16 Jul). User: **should not miss**.
+- **All-or-nothing mornings** — skipped full session when tired; use **minimum show-up** (see `weekly-schedule.md`) instead of zero.
+- **Dual load risk** — 5–6 gym + 3–4 swim is ambitious; watch cumulative fatigue; fatigue rest still valid.
 
 ## Open tweaks
 
@@ -46,6 +51,8 @@ _Last distilled: 2026-07-16 (rest day + recovery protocol)_
 - **Cardio day plank** — consider regression (knee plank / 20–30 s target) when cumulative fatigue is high; confirm before Hevy edit.
 - **Push B vs rest** — listen to body after 3 consecutive days; sleep and food before next strength session — **rest day 16 Jul applied**.
 - **Recovery protocol** — see `recovery-routine.md`; agents use morning gate before encouraging gym.
+- **Weekly schedule + adherence** — `weekly-schedule.md`; distinguish fatigue rest vs discipline skip.
+- **Nutrition bot** — user planning next; fill Diet in `user-context.md` when live.
 
 ## Routine change log
 
@@ -58,3 +65,4 @@ _Last distilled: 2026-07-16 (rest day + recovery protocol)_
 | 2026-07-14 | No other Pull A changes | New exercises settling in; keep reverse fly machine height note |
 | 2026-07-16 | Push B full swap vs Push A duplicates | User: remove chest press machine; add incline chest; new shoulder/triceps variants — **applied on Hevy** |
 | 2026-07-16 | Push B incline: barbell → dumbbell | Gym has no incline barbell setup — **applied on Hevy** |
+| 2026-07-20 | Weekly schedule + swim lane | Gym 5–6× AM; swim 3–4×; discipline rules — **no Hevy change** |

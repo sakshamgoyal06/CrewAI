@@ -94,6 +94,7 @@ export async function loadHealthReferenceBlock(
 
   const staticFiles: { file: string; max: number }[] = [
     { file: "user-context.md", max: MAX_FILE_CHARS },
+    { file: "weekly-schedule.md", max: MAX_FILE_CHARS },
     { file: "program-learnings.md", max: MAX_FILE_CHARS },
     { file: "recovery-routine.md", max: MAX_FILE_CHARS },
   ];

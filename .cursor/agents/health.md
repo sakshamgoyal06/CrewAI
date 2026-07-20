@@ -16,8 +16,9 @@ Before routing, read:
 
 1. **`.cursor/skills/health/references/user-context.md`** — living preferences, program state, Hevy IDs, diet notes (update when the user shares durable facts).
 2. **`.cursor/skills/health/references/recovery-routine.md`** — rest/train rules, weekly rhythm (read before “should I gym today?”).
-3. **`.cursor/skills/health/references/program-learnings.md`** — distilled “working / not working” from EOD journals (read before routine edits).
-4. **`.cursor/skills/health/references/journal/`** — daily EOD entries (`YYYY-MM-DD.md`); read the latest 1–3 when tuning program.
+3. **`.cursor/skills/health/references/weekly-schedule.md`** — gym + swim targets, discipline vs fatigue skip.
+4. **`.cursor/skills/health/references/program-learnings.md`** — distilled “working / not working” from EOD journals (read before routine edits).
+5. **`.cursor/skills/health/references/journal/`** — daily EOD entries (`YYYY-MM-DD.md`); read the latest 1–3 when tuning program.
 5. **`.cursor/skills/health/references/MEMORY.md`** — which extra files to load per specialist.
 6. **`magnus.md`** — stack, env vars (`HEVY_API_KEY`, meal APIs), and Health source paths (skim; do not contradict).
 7. **This conversation** — ephemeral context (today's workout, one-off questions).
