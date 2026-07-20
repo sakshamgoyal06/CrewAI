@@ -7,3 +7,9 @@ dist/
 
 # Session-end reminder log (optional)
 .cursor/magnus-maintenance-log.txt
+
+# Google Calendar OAuth (never commit)
+.cursor/mcp.json
+client_secret*.json
+google-calendar-token.json
+**/google-calendar-token.json

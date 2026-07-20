@@ -126,6 +126,7 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 | HTTP | `express` | **Health server** (`/health`, `/ready`) + **internal job** route for Morning Brief (`POST /internal/jobs/morning-brief`); not a general public API |
 | Jobs | `node-cron` | In-process **Morning Brief** scheduler (optional; see env); users filtered by `user_profile.timezone` |
 | Notion | `@notionhq/client` | **Server-side** API for the Notion agent and tools (`src/tools/notion.ts`); headless bot does not use Cursor MCP. Same `NOTION_TOKEN` as Morning Brief when both are enabled. |
+| Google Calendar | `googleapis`, `@modelcontextprotocol/sdk` | **Cursor MCP** (`mcp/google-calendar/server.mts`) + shared integration (`src/integrations/googleCalendar/`). OAuth desktop flow; not wired into Telegram bot yet. See **`docs/GOOGLE_CALENDAR_MCP.md`**. |
 
 ---
 
@@ -154,6 +155,10 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 | `src/tools/chatLog.ts` | `resolveTelegramUserProfile`, `recordMagnusChatMessage` (returns `{ ok }`), legacy `ensureUserProfileIdForTelegramUser`. Documents identity model in file header. |
 | `src/tools/telegram.ts` | Telegraf bot; `/morningbrief` + `morning brief` → Morning Brief; rate limit before handler; `TelegramTextHandler` receives `updateId` for logging. |
 | `scripts/test-supabase.mts` | Connectivity smoke test for Supabase + chat table. |
+| `src/integrations/googleCalendar/` | OAuth + Calendar API ops (`listEvents`, `createEvent`, …) — used by Cursor MCP and future planner wiring. |
+| `mcp/google-calendar/server.mts` | Stdio MCP server for Cursor (`list_calendars`, `list_events`, `create_event`, …). |
+| `scripts/google-calendar-auth.mts` | One-time OAuth (`npm run google-calendar:auth`). |
+| `.cursor/mcp.json.example` | Copy to `.cursor/mcp.json` with your `GOOGLE_OAUTH_CREDENTIALS` path. |
 | `src/pillars/health/workouts/` | **Health pillar — Workouts department:** Hevy API client, fitness / Hevy-write agents, routine scripts (see below). |
 | `scripts/health/workouts/hevy/` | Operational Hevy scripts (list templates, create/update routines, preflight checks). Run with `npx tsx scripts/health/workouts/hevy/<script>.mts`. |
 
@@ -279,7 +284,7 @@ Applied on project `xdrpjfdhduskhzryevze`, including: RLS on public tables; chat
 
 ## Dependencies (`package.json`)
 
-**Runtime:** `telegraf`, `@anthropic-ai/sdk`, `@supabase/supabase-js`, `@upstash/redis`, `@notionhq/client`, `dotenv`, `express`, `pino`, `node-cron`.  
+**Runtime:** `telegraf`, `@anthropic-ai/sdk`, `@supabase/supabase-js`, `@upstash/redis`, `@notionhq/client`, `googleapis`, `@modelcontextprotocol/sdk`, `zod`, `dotenv`, `express`, `pino`, `node-cron`.  
 **Dev:** `tsx`, `typescript`, `vitest`, `@types/express`, `@types/node`.
 
 ---
@@ -293,6 +298,7 @@ Applied on project `xdrpjfdhduskhzryevze`, including: RLS on public tables; chat
 | `npm start` | `node dist/index.js` |
 | `npm test` | Vitest unit tests (`src/**/*.test.ts`) |
 | `npm run test:supabase` | Supabase smoke test (needs `.env` with service role + Redis) |
+| `npm run google-calendar:auth` | One-time Google Calendar OAuth for Cursor MCP (see `docs/GOOGLE_CALENDAR_MCP.md`) |
 | `npm run start:prod` | Run compiled app with `node --env-file=.env` (run `npm run build` first). Set `NODE_ENV=production` in `.env` on the server. |
 | `docker build -t magnus .` | Build production image (`Dockerfile`; secrets via runtime `env_file`, not baked in). |
 | `npx tsx scripts/test-supabase.mts` | Same as `npm run test:supabase` |
@@ -307,6 +313,7 @@ See **Next steps when resuming** above for the main roadmap. Additionally:
 - **Business logic** writing to domain tables (`goals`, KPIs, tasks, …) with `user_profile_id` — **schema and FKs are ready**; resolve `profileId` via `resolveTelegramUserProfile` (or your job’s user context) on every insert.
 - **End-to-end / integration tests** against live Telegram or Supabase (optional hardening after features exist).
 - **Health EOD journal on Telegram** — Cursor journal files are v1; optional DB + `/journal` slash later (see `.cursor/skills/health/references/TODO.md`).
+- **Google Calendar in Telegram / planner** — MCP + integration layer ship for Cursor; optional wiring into `plannerAgent` for schedule-aware coaching is not done yet.
 
 ---
 
@@ -323,7 +330,7 @@ See **Next steps when resuming** above for the main roadmap. Additionally:
 | `.cursor/skills/health/references/user-context.md` | **Living health memory** (goals, Hevy IDs, program rules) |
 | `.cursor/skills/health/references/program-learnings.md` | Distilled from EOD journals — agents read before routine edits |
 | `.cursor/skills/health/references/journal/` | Daily EOD journal entries (`YYYY-MM-DD.md`) |
-| `.cursor/skills/health/references/TODO.md` | Deferred health work (e.g. Telegram bot env + `npm run dev`) |
+| `.cursor/mcp.json.example` | Example Cursor MCP config (Google Calendar). Copy to `.cursor/mcp.json` (gitignored). |
 
 **Using the Health agent in Cursor:** start a dedicated chat (this pillar), type **`/health`**, then ask your question. End of day: **`/eod-journal`** to review the day and update learnings for routine tuning.
 
@@ -339,4 +346,4 @@ If hooks do not run, check **Cursor Settings → Hooks** and restart Cursor afte
 4. After DB or credential changes, run `npm run test:supabase` if you touch Supabase clients or chat logging.
 5. Before ending a session with substantive changes, **update this file** and bump **Last updated** below.
 
-**Last updated:** 2026-07-13 (Health EOD journal workflow: `/eod-journal`, `program-learnings.md`, `references/journal/`)
+**Last updated:** 2026-07-20 (Google Calendar MCP: `src/integrations/googleCalendar/`, `mcp/google-calendar/server.mts`, `docs/GOOGLE_CALENDAR_MCP.md`)
