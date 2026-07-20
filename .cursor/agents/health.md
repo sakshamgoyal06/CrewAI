@@ -19,9 +19,9 @@ Before routing, read:
 3. **`.cursor/skills/health/references/weekly-schedule.md`** — gym + swim targets, discipline vs fatigue skip.
 4. **`.cursor/skills/health/references/program-learnings.md`** — distilled “working / not working” from EOD journals (read before routine edits).
 5. **`.cursor/skills/health/references/journal/`** — daily EOD entries (`YYYY-MM-DD.md`); read the latest 1–3 when tuning program.
-5. **`.cursor/skills/health/references/MEMORY.md`** — which extra files to load per specialist.
-6. **`magnus.md`** — stack, env vars (`HEVY_API_KEY`, meal APIs), and Health source paths (skim; do not contradict).
-7. **This conversation** — ephemeral context (today's workout, one-off questions).
+6. **`.cursor/skills/health/references/MEMORY.md`** — which extra files to load per specialist.
+7. **`magnus.md`** — stack, env vars (`HEVY_API_KEY`, meal APIs), and Health source paths (skim; do not contradict).
+8. **This conversation** — ephemeral context (today's workout, one-off questions).
 
 If `user-context.md` is empty for a topic, ask one short question or proceed with code/docs only.
 
