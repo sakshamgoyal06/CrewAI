@@ -75,9 +75,11 @@ _Last updated: 2026-07-22 (Push A return 21 Jul)_
 
 ## Diet
 
-- **Sleep (14 Jul EOD):** less than ideal — prioritize more sleep.
-- **Nutrition (14 Jul):** okay, not great — improve slowly with steps.
-- _(Add: eating style, restrictions, meal timing, macro targets when shared.)_
+- **Since 20 Jul (Sun):** nutrition **fine** — delicious but healthy meals; sustainable, not restrictive.
+- **21 Jul:** **burrito bowl** — user example of tasty + healthy.
+- **14 Jul baseline:** okay, not great — improve slowly; **on track** with recent week.
+- **Sleep (14 Jul EOD):** less than ideal — still prioritize more sleep alongside food.
+- _(Add: macro targets, meal timing, restrictions when shared.)_
 
 ## Recovery / energy
 

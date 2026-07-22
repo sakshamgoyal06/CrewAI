@@ -31,6 +31,7 @@ _Last distilled: 2026-07-22 (Pull A 22 Jul — 2-day gym streak)_
 - **Two-day return (21–22 Jul)** — Push A then Pull A; ~71–73 min sessions; discipline reset holding.
 - **Curl back-off (22 Jul)** — incline curl 15×8 → 10×12 on set 3; same pattern as 14 Jul Pull A.
 - **Pull A incline curl setup** — bench **4 from base** (22 Jul Hevy note).
+- **Nutrition (since 20 Jul)** — **fine**; delicious + healthy (e.g. **burrito bowl** 21 Jul); supports gym return without heavy dinners / shame spiral.
 
 ## Not working / watch
 
@@ -40,7 +41,7 @@ _Last distilled: 2026-07-22 (Pull A 22 Jul — 2-day gym streak)_
 - **Jumping jacks when gassed** — 5×30 felt **really pressing** on tired cardio day (15 Jul).
 - **Plank when fatigued** — could not hold (13 s logged); may need knee plank or shorter holds — don’t treat as motivation failure.
 - **Hevy sync** — completed workout data can flow back into routine templates; verify set counts after edits.
-- **Evening nutrition** — dinner can run heavy; fix nutrition **slowly**, no shame spiral.
+- **Evening nutrition** — dinner can run heavy; fix nutrition **slowly**, no shame spiral — **improving since 20 Jul** (healthy + enjoyable meals, e.g. burrito bowl 21 Jul).
 - **Steps** — below target; improve gradually with nutrition lane.
 - **Cloud agent `.env`** — not a full runtime env; local/deploy needed for Telegram bot.
 - **Discipline slip (17–20 Jul)** — after good week (13–15 Jul), tired mornings → skip → “weekend catch-up” → **4-day gym gap**. Different from smart rest (16 Jul). User: **should not miss**.
