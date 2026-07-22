@@ -95,4 +95,4 @@ _(Add: race dates, season goals, multi-month arcs.)_
 
 - **Habit:** end of day → `/eod-journal` — review progress, log how you feel.
 - **Files:** `references/journal/YYYY-MM-DD.md`, distilled in `references/program-learnings.md`.
-- **Latest:** `references/journal/2026-07-20.md` — discipline reset; swim started; gym return tomorrow.
+- **Latest:** `references/journal/2026-07-21.md` — backfilled 22 Jul; workout + feelings pending your input.
