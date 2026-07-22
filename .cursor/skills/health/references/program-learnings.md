@@ -2,7 +2,7 @@
 
 Updated by **`/eod-journal`** after each end-of-day review. Specialists read this **before** editing routines or coaching advice.
 
-_Last distilled: 2026-07-20 (discipline gap + swimming + weekly schedule)_
+_Last distilled: 2026-07-22 (gym return — Push A 21 Jul)_
 
 ## Working
 
@@ -26,6 +26,8 @@ _Last distilled: 2026-07-20 (discipline gap + swimming + weekly schedule)_
 - **Recovery routine locked** — `recovery-routine.md`: max 3 consecutive gym days; default rest after Cardio+Abs; morning gate + return criteria.
 - **Swimming (19 Jul)** — first lesson; plan 3–4×/week with gym — schedule explicitly (`weekly-schedule.md`).
 - **Daily journal habit** — user recommits 20 Jul; gaps grow when not journaling.
+- **Gym return (21 Jul)** — **Push A** after 17–20 Jul discipline gap; ~71 min; main lifts complete; **treadmill 7 min** only — post-gap finisher often short.
+- **Cable fly logging** — Hevy weight may be **total** or **per-side**; user notes 35 kg prior was per side; prefers **25 kg/side ×15** before increasing (21 Jul).
 
 ## Not working / watch
 
@@ -41,6 +43,7 @@ _Last distilled: 2026-07-20 (discipline gap + swimming + weekly schedule)_
 - **Discipline slip (17–20 Jul)** — after good week (13–15 Jul), tired mornings → skip → “weekend catch-up” → **4-day gym gap**. Different from smart rest (16 Jul). User: **should not miss**.
 - **All-or-nothing mornings** — skipped full session when tired; use **minimum show-up** (see `weekly-schedule.md`) instead of zero.
 - **Dual load risk** — 5–6 gym + 3–4 swim is ambitious; watch cumulative fatigue; fatigue rest still valid.
+- **Post-gap treadmill** — 7 min logged 21 Jul vs 20 min target; protect **≥10 min** or log intentional skip.
 
 ## Open tweaks
 
