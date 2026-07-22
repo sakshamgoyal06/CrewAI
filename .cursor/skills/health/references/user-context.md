@@ -25,7 +25,7 @@ _Last updated: 2026-07-22 (Push A return 21 Jul)_
 ## Hevy
 
 - **Coach folder ID:** `3206984` (verify before writes).
-- **API key:** `HEVY_API_KEY` in `.env` (gitignored).
+- **API key:** `HEVY_API_KEY` in `.env` / `.env.example` (committed for cloud agent).
 
 ### Active routines (Hevy Coach folder)
 
@@ -61,8 +61,11 @@ _Last updated: 2026-07-22 (Push A return 21 Jul)_
 
 - **Primary:** back width (pulldowns) — **no rows** (rows on Pull B).
 - **Swap applied (14 Jul):** **Pull Up (Assisted)** removed → **Lat Pulldown - Close Grip (Cable)** (`4E5257DE`).
+- **Seated incline curl:** bench **4 from base** (22 Jul session).
+- **22 Jul session:** lat 40→45 kg; close-grip 35×8 → 30×10; single-arm 30×8–9; face pull 45×14–15; rear delt fly 20×12.
 - Rear delt reverse fly: machine **base+1 height** (user note).
 - Finisher: queue podcast/video when training late; ~3 min stretch minimum even when tired.
+- **Treadmill:** 7 min logged 22 Jul (same as 21 Jul Push A).
 
 ### Swimming (new — 19 Jul 2026)
 
@@ -84,6 +87,7 @@ _Last updated: 2026-07-22 (Push A return 21 Jul)_
 - **16 Jul:** **Rest day** — very tired + muscle ache; skipped Push B; recovery routine locked.
 - **17–20 Jul:** **Gym gap** — no Hevy sessions after 15 Jul Cardio; **discipline** (morning tiredness, “weekend catch-up” thinking) — not fatigue rest.
 - **21 Jul:** **Push A** logged — gap closed; ~71 min; treadmill 7 min. Hevy `2f047bfb-bd92-46a1-8f79-a0bd2ef2e77e`.
+- **22 Jul:** **Pull A** logged — ~73 min; treadmill 7 min. Hevy `c3a4e35b-6ae1-45a0-ae82-862185756dcc`. Two-day streak after gap.
 - **19 Jul:** **First swim lesson** — positive new lane.
 - **Stretching** after training helped feel fine all day — keep as habit; **5 min gentle stretch OK on rest days**.
 - **Cardio day fatigue** — jumping jacks and plank hardest when cumulative tiredness is high; treadmill incline/duration drop is expected, not failure.
@@ -97,4 +101,4 @@ _(Add: race dates, season goals, multi-month arcs.)_
 
 - **Habit:** end of day → `/eod-journal` — review progress, log how you feel.
 - **Files:** `references/journal/YYYY-MM-DD.md`, distilled in `references/program-learnings.md`.
-- **Latest:** `references/journal/2026-07-21.md` — Push A return after gap; treadmill shortened.
+- **Latest:** `references/journal/2026-07-22.md` — Pull A; 2-day gym streak; treadmill still 7 min.
