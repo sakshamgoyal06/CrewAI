@@ -2,7 +2,7 @@
 
 Maintained by the **Health Cursor agent** (`/health`). Update when the user establishes durable preferences, program changes, or new Hevy IDs.
 
-_Last updated: 2026-07-20 (swimming + weekly schedule + discipline reset)_
+_Last updated: 2026-07-22 (Push A return 21 Jul)_
 
 ## Goals
 
@@ -42,10 +42,12 @@ _Last updated: 2026-07-20 (swimming + weekly schedule + discipline reset)_
 ### Push A notes (current)
 
 - Order: **Incline Dumbbell Bench** first, then **Barbell Bench** flat.
+- **21 Jul session:** user logged **bench before incline** in Hevy (flat 50→60 kg, incline 30×10×3) — may differ from template order when logging live.
 - Accessories: Cable fly crossovers; seated dumbbell OHP; single-arm cable lateral raise.
+- **Cable fly (21 Jul):** prior 35 kg log was **per side**; target **25 kg/side ×15** all sets before adding weight (Hevy notes on workout).
 - Triceps: assisted dip; overhead cable extension.
-- Abs: **3×12** (Cable Crunch, Hanging Knee Raise).
-- Treadmill last; 20 min with incline/speed in exercise notes.
+- Abs: **3×12** (Cable Crunch, Hanging Knee Raise — log showed **Lying Leg Raise** 21 Jul).
+- Treadmill last; 20 min target; **21 Jul only 7 min** logged post-gap.
 
 ### Push B notes (current)
 
@@ -81,8 +83,8 @@ _Last updated: 2026-07-20 (swimming + weekly schedule + discipline reset)_
 - **15 Jul:** **Low energy after Cardio + Abs**; more body ache (carryover from Pull A); **felt better after lunch**.
 - **16 Jul:** **Rest day** — very tired + muscle ache; skipped Push B; recovery routine locked.
 - **17–20 Jul:** **Gym gap** — no Hevy sessions after 15 Jul Cardio; **discipline** (morning tiredness, “weekend catch-up” thinking) — not fatigue rest.
+- **21 Jul:** **Push A** logged — gap closed; ~71 min; treadmill 7 min. Hevy `2f047bfb-bd92-46a1-8f79-a0bd2ef2e77e`.
 - **19 Jul:** **First swim lesson** — positive new lane.
-- **20 Jul:** Reset — journal + weekly schedule locked; **should not miss** gym mornings.
 - **Stretching** after training helped feel fine all day — keep as habit; **5 min gentle stretch OK on rest days**.
 - **Cardio day fatigue** — jumping jacks and plank hardest when cumulative tiredness is high; treadmill incline/duration drop is expected, not failure.
 - _(Add: typical sleep hours, HRV, patterns over time.)_
@@ -95,4 +97,4 @@ _(Add: race dates, season goals, multi-month arcs.)_
 
 - **Habit:** end of day → `/eod-journal` — review progress, log how you feel.
 - **Files:** `references/journal/YYYY-MM-DD.md`, distilled in `references/program-learnings.md`.
-- **Latest:** `references/journal/2026-07-21.md` — backfilled 22 Jul; workout + feelings pending your input.
+- **Latest:** `references/journal/2026-07-21.md` — Push A return after gap; treadmill shortened.

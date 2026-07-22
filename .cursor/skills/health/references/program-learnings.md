@@ -69,3 +69,4 @@ _Last distilled: 2026-07-22 (gym return — Push A 21 Jul)_
 | 2026-07-16 | Push B full swap vs Push A duplicates | User: remove chest press machine; add incline chest; new shoulder/triceps variants — **applied on Hevy** |
 | 2026-07-16 | Push B incline: barbell → dumbbell | Gym has no incline barbell setup — **applied on Hevy** |
 | 2026-07-20 | Weekly schedule + swim lane | Gym 5–6× AM; swim 3–4×; discipline rules — **no Hevy change** |
+| 2026-07-21 | Cable fly note on Push A (25/side ×15) | Per-side vs total weight confusion — **pending Hevy template update** |
