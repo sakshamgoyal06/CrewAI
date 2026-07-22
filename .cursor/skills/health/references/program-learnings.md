@@ -19,7 +19,7 @@ _Last distilled: 2026-07-22 (Pull A 22 Jul — 2-day gym streak)_
 - **Hevy preflight → confirm → create** — avoids wrong exercise IDs and surprises.
 - **Explicit `reps` on abs** — prefer explicit reps over `rep_range` alone for Hevy display.
 - **Hevy Coach folder `3206984`** — verified before writes.
-- **Short sleep can still work** — slept little but woke refreshed (13 Jul); don’t assume bad day from hours alone.
+- **Short sleep can still work** — slept little but woke refreshed (13 Jul); don’t assume bad day from hours alone — but **22 Jul: okay-okay sleep, not great**; stack with 2 gym days → watch tomorrow (Cardio+Abs).
 - **Cardio + Abs day (15 Jul)** — showed up on day 3 of rotation; abs and step-ups fine even when tired.
 - **Lunch recovery** — post-workout low energy improved after eating (15 Jul).
 - **Smart rest day (16 Jul)** — skipped Push B when very tired + muscle ache after 3 gym days; correct burnout prevention.

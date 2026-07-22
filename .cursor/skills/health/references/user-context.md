@@ -76,9 +76,10 @@ _Last updated: 2026-07-22 (Push A return 21 Jul)_
 ## Diet
 
 - **Since 20 Jul (Sun):** nutrition **fine** — delicious but healthy meals; sustainable, not restrictive.
-- **21 Jul:** **burrito bowl** — user example of tasty + healthy.
+- **21 Jul:** **burrito bowl**.
+- **22 Jul (planned dinner):** **green pasta** with **spinach gravy** + **garlic bread**.
 - **14 Jul baseline:** okay, not great — improve slowly; **on track** with recent week.
-- **Sleep (14 Jul EOD):** less than ideal — still prioritize more sleep alongside food.
+- **Sleep:** **22 Jul AM** — last night **okay-okay, not great**; still trained Pull A. Prioritize sleep before Cardio+Abs tomorrow.
 - _(Add: macro targets, meal timing, restrictions when shared.)_
 
 ## Recovery / energy
@@ -89,7 +90,7 @@ _Last updated: 2026-07-22 (Push A return 21 Jul)_
 - **16 Jul:** **Rest day** — very tired + muscle ache; skipped Push B; recovery routine locked.
 - **17–20 Jul:** **Gym gap** — no Hevy sessions after 15 Jul Cardio; **discipline** (morning tiredness, “weekend catch-up” thinking) — not fatigue rest.
 - **21 Jul:** **Push A** logged — gap closed; ~71 min; treadmill 7 min. Hevy `2f047bfb-bd92-46a1-8f79-a0bd2ef2e77e`.
-- **22 Jul:** **Pull A** logged — ~73 min; treadmill 7 min. Hevy `c3a4e35b-6ae1-45a0-ae82-862185756dcc`. Two-day streak after gap.
+- **22 Jul:** **Pull A** logged — ~73 min; treadmill 7 min. Hevy `c3a4e35b-6ae1-45a0-ae82-862185756dcc`. Two-day streak after gap. Sleep **okay-okay** night before.
 - **19 Jul:** **First swim lesson** — positive new lane.
 - **Stretching** after training helped feel fine all day — keep as habit; **5 min gentle stretch OK on rest days**.
 - **Cardio day fatigue** — jumping jacks and plank hardest when cumulative tiredness is high; treadmill incline/duration drop is expected, not failure.
