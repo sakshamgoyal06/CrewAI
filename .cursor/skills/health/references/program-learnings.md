@@ -2,7 +2,7 @@
 
 Updated by **`/eod-journal`** after each end-of-day review. Specialists read this **before** editing routines or coaching advice.
 
-_Last distilled: 2026-07-22 (Pull A 22 Jul — 2-day gym streak)_
+_Last distilled: 2026-07-26 (Legs 24 Jul — last Hevy session)_
 
 ## Working
 
@@ -32,6 +32,7 @@ _Last distilled: 2026-07-22 (Pull A 22 Jul — 2-day gym streak)_
 - **Curl back-off (22 Jul)** — incline curl 15×8 → 10×12 on set 3; same pattern as 14 Jul Pull A.
 - **Pull A incline curl setup** — bench **4 from base** (22 Jul Hevy note).
 - **Nutrition (since 20 Jul)** — **fine**; delicious + healthy (e.g. **burrito bowl** 21 Jul); supports gym return without heavy dinners / shame spiral.
+- **Legs (24 Jul)** — leg press **80→100→120 ×12**; extensions/curls solid; ~55 min; no treadmill. First leg day in Jul return arc.
 
 ## Not working / watch
 
@@ -48,6 +49,8 @@ _Last distilled: 2026-07-22 (Pull A 22 Jul — 2-day gym streak)_
 - **All-or-nothing mornings** — skipped full session when tired; use **minimum show-up** (see `weekly-schedule.md`) instead of zero.
 - **Dual load risk** — 5–6 gym + 3–4 swim is ambitious; watch cumulative fatigue; fatigue rest still valid.
 - **Post-gap treadmill** — **7 min logged 21 Jul and 22 Jul** (Push A + Pull A); not a one-off — queue content, set **≥10 min floor**, or log intentional skip.
+- **Rotation drift (23 Jul)** — **Cardio+Abs skipped** after Pull A (22 Jul); **Legs logged 24 Jul** instead — name misses vs intentional swap; journal gaps recur without EOD habit.
+- **Legs abbreviated sets (24 Jul)** — machine squat and DB RDL only **2 sets**; watch if pattern repeats.
 
 ## Open tweaks
 
@@ -75,3 +78,4 @@ _Last distilled: 2026-07-22 (Pull A 22 Jul — 2-day gym streak)_
 | 2026-07-20 | Weekly schedule + swim lane | Gym 5–6× AM; swim 3–4×; discipline rules — **no Hevy change** |
 | 2026-07-21 | Cable fly note on Push A (25/side ×15) | Per-side vs total weight confusion — **pending Hevy template update** |
 | 2026-07-22 | No routine change | Pull A as planned; treadmill finisher still short — habit tweak only |
+| 2026-07-24 | No routine change | Legs as logged; squat/RDL 2 sets only — monitor |

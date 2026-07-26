@@ -2,7 +2,7 @@
 
 Maintained by the **Health Cursor agent** (`/health`). Update when the user establishes durable preferences, program changes, or new Hevy IDs.
 
-_Last updated: 2026-07-22 (Push A return 21 Jul)_
+_Last updated: 2026-07-26 (Legs 24 Jul — last session)_
 
 ## Goals
 
@@ -67,6 +67,12 @@ _Last updated: 2026-07-22 (Push A return 21 Jul)_
 - Finisher: queue podcast/video when training late; ~3 min stretch minimum even when tired.
 - **Treadmill:** 7 min logged 22 Jul (same as 21 Jul Push A).
 
+### Legs notes (current)
+
+- **24 Jul session:** leg press **80→100→120 ×12**; leg ext 70×12–15; curl 50→70 ×15; calves done; crunch + reverse crunch superset.
+- **Watch:** machine squat and DB RDL only **2 sets** in 24 Jul log — aim for 3 when fresh.
+- No treadmill on legs day (24 Jul).
+
 ### Swimming (new — 19 Jul 2026)
 
 - **First lesson:** 19 Jul 2026.
@@ -91,6 +97,9 @@ _Last updated: 2026-07-22 (Push A return 21 Jul)_
 - **17–20 Jul:** **Gym gap** — no Hevy sessions after 15 Jul Cardio; **discipline** (morning tiredness, “weekend catch-up” thinking) — not fatigue rest.
 - **21 Jul:** **Push A** logged — gap closed; ~71 min; treadmill 7 min. Hevy `2f047bfb-bd92-46a1-8f79-a0bd2ef2e77e`.
 - **22 Jul:** **Pull A** logged — ~73 min; treadmill 7 min. Hevy `c3a4e35b-6ae1-45a0-ae82-862185756dcc`. Two-day streak after gap. Sleep **okay-okay** night before.
+- **23 Jul:** **No gym** — Cardio+Abs planned, not logged.
+- **24 Jul:** **Legs** logged — ~55 min; leg press to 120×12. Hevy `c9cf2802-49a8-47f7-a914-a7981d05fa8a`. No treadmill.
+- **25–26 Jul:** **No gym** (as of 26 Jul log).
 - **19 Jul:** **First swim lesson** — positive new lane.
 - **Stretching** after training helped feel fine all day — keep as habit; **5 min gentle stretch OK on rest days**.
 - **Cardio day fatigue** — jumping jacks and plank hardest when cumulative tiredness is high; treadmill incline/duration drop is expected, not failure.
@@ -104,4 +113,4 @@ _(Add: race dates, season goals, multi-month arcs.)_
 
 - **Habit:** end of day → `/eod-journal` — review progress, log how you feel.
 - **Files:** `references/journal/YYYY-MM-DD.md`, distilled in `references/program-learnings.md`.
-- **Latest:** `references/journal/2026-07-22.md` — Pull A; 2-day gym streak; treadmill still 7 min.
+- **Latest:** `references/journal/2026-07-24.md` — Legs; last Hevy session (logged 26 Jul).
