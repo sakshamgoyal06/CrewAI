@@ -19,7 +19,12 @@ import { logger } from "../logger.js";
 import { loggableError } from "../util/loggableError.js";
 import { anthropic } from "../tools/clients.js";
 import { augmentUserWithMemory } from "./memory/memoryAgent.js";
-import { createCalendarEvent, readCalendarEvents } from "./tools/calendarTool.js";
+import {
+  createCalendarEvent,
+  deleteCalendarEvent,
+  readCalendarEvents,
+  updateCalendarEvent,
+} from "./tools/calendarTool.js";
 import { logNote } from "./tools/logNoteTool.js";
 import type { AgentContext, AgentResult } from "./types.js";
 
@@ -35,12 +40,25 @@ journaling and logging, reminders, and any question that spans several parts of 
 
 Tools:
 - read_calendar for anything about his schedule, availability, or "what does my day look like".
-  Read before you answer; never guess at what is on his calendar.
+  Read before you answer; never guess at what is on his calendar. Pass a query to find a specific
+  event by name.
 - create_calendar_event when he asks to add, book, schedule, or block time. Resolve relative dates
   ("tomorrow", "Friday 6pm") against the current time and timezone given below. Default to one
-  hour when he gives a start but no end. Confirm what you created in one line.
+  hour when he gives a start but no end.
+- update_calendar_event to move, rename, or re-locate something. Read first to get the id. Send only
+  the fields that change — a new start with no end keeps the original duration.
+- delete_calendar_event to cancel something. Read first to get the id.
 - log_note when he tells you something worth remembering — a decision, a reflection, how the day
   went, a thing that happened. Log the substance, not the pleasantries.
+
+Changing and deleting:
+- Never show him an event id. They are for you.
+- If more than one event could be the one he means, ask which — do not pick. If exactly one matches,
+  act without asking.
+- Say precisely what you changed or removed, with the old and new time where relevant, so a mistake
+  is obvious straight away.
+- Only delete when he asks you to cancel or remove something. Moving is an update, not a
+  delete-and-recreate.
 
 Style: direct and warm, like someone who knows him well. Lead with the answer. Skip preamble and
 sign-offs. Under ~150 words unless he asks for more. When you have his schedule in front of you,
@@ -64,6 +82,10 @@ const TOOLS: Tool[] = [
         end_iso: {
           type: "string",
           description: "Range end, ISO 8601. Defaults to 7 days after start.",
+        },
+        query: {
+          type: "string",
+          description: "Free-text filter, for finding a named event to change or cancel.",
         },
       },
       required: [],
@@ -89,6 +111,39 @@ const TOOLS: Tool[] = [
         location: { type: "string" },
       },
       required: ["summary", "start_iso", "end_iso"],
+    },
+  },
+  {
+    name: "update_calendar_event",
+    description:
+      "Change an existing event: move it, rename it, change location or description. Requires the id from read_calendar. Send only the fields that change.",
+    input_schema: {
+      type: "object",
+      properties: {
+        event_id: { type: "string", description: "From read_calendar." },
+        summary: { type: "string", description: "New title." },
+        start_iso: {
+          type: "string",
+          description:
+            "New start, ISO 8601 local time without offset (2026-07-28T18:00:00). Omit end_iso to keep the same duration.",
+        },
+        end_iso: { type: "string", description: "New end, same format." },
+        description: { type: "string" },
+        location: { type: "string" },
+      },
+      required: ["event_id"],
+    },
+  },
+  {
+    name: "delete_calendar_event",
+    description:
+      "Cancel and remove an event. Requires the id from read_calendar. Use only when the user asks to cancel or delete.",
+    input_schema: {
+      type: "object",
+      properties: {
+        event_id: { type: "string", description: "From read_calendar." },
+      },
+      required: ["event_id"],
     },
   },
   {
@@ -151,6 +206,7 @@ async function runTool(
         return await readCalendarEvents({
           startIso: typeof input.start_iso === "string" ? input.start_iso : undefined,
           endIso: typeof input.end_iso === "string" ? input.end_iso : undefined,
+          query: typeof input.query === "string" ? input.query : undefined,
           timeZone,
         });
       case "create_calendar_event":
@@ -161,6 +217,22 @@ async function runTool(
           description:
             typeof input.description === "string" ? input.description : undefined,
           location: typeof input.location === "string" ? input.location : undefined,
+          timeZone,
+        });
+      case "update_calendar_event":
+        return await updateCalendarEvent({
+          eventId: String(input.event_id ?? ""),
+          summary: typeof input.summary === "string" ? input.summary : undefined,
+          startIso: typeof input.start_iso === "string" ? input.start_iso : undefined,
+          endIso: typeof input.end_iso === "string" ? input.end_iso : undefined,
+          description:
+            typeof input.description === "string" ? input.description : undefined,
+          location: typeof input.location === "string" ? input.location : undefined,
+          timeZone,
+        });
+      case "delete_calendar_event":
+        return await deleteCalendarEvent({
+          eventId: String(input.event_id ?? ""),
           timeZone,
         });
       case "log_note":

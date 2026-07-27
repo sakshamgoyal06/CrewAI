@@ -25,7 +25,7 @@ Telegram message
   orchestrator     classify to one of five intents (silently)
       │
       ├─ GENERAL ──────────────────►  MAGNUS himself (has tools)
-      │                                 • Google Calendar: read, create
+      │                                 • Google Calendar: read, create, update, delete
       │                                 • log_note: Supabase + Notion
       │
       ├─ HEALTH ───────────────────►  Health composite (deep: sub-router + external data)
@@ -61,7 +61,7 @@ when a pillar earns it.
 | **Supabase** | Boot | Profiles, chat history, logs, meals, journals | Nothing runs |
 | **Upstash Redis** | Boot | Rate limit, update dedupe | Nothing runs |
 | **Anthropic** | Boot | Classifier and every agent | Nothing runs |
-| **Google Calendar** | Optional | Magnus (read + create) | Magnus says it is not connected |
+| **Google Calendar** | Optional | Magnus (read, create, update, delete) | Magnus says it is not connected |
 | **Hevy** | Optional | Health (read sessions, write routines) | Coaching from Supabase `workouts` only |
 | **Notion** | Optional | Magnus `log_note`, Morning Brief page | Notes still save to Supabase |
 | **Anthropic `web_search`** | Optional, default on | Meal estimates | Falls through to USDA / CalorieNinjas |
@@ -116,8 +116,8 @@ the rest of the schema exists solely on the hosted project.
 
 - **No user-facing commands beyond `/start` and `/help`.** Everything else is plain language.
 - **No specialist announcements.** The user hears one voice.
-- **No calendar update or delete from chat.** Reading and creating only, so Magnus cannot quietly
-  move or remove something.
+- **No calendar change without a read first.** Edits and deletes work from an event id returned by
+  a read, so Magnus cannot act on a guess, and it asks when several events match.
 - **No research agent or web search for general questions.** Magnus answers from knowledge and
   memory; only meal estimates search the web.
 - **No semantic memory.** Recall is recent-window plus structured reads, not embeddings.

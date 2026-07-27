@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const configuredMock = vi.hoisted(() => vi.fn());
 const listEventsMock = vi.hoisted(() => vi.fn());
 const createEventMock = vi.hoisted(() => vi.fn());
+const getEventMock = vi.hoisted(() => vi.fn());
+const updateEventMock = vi.hoisted(() => vi.fn());
+const deleteEventMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../../integrations/googleCalendar/auth.js", () => ({
   googleCalendarConfigured: configuredMock,
@@ -11,9 +14,17 @@ vi.mock("../../integrations/googleCalendar/auth.js", () => ({
 vi.mock("../../integrations/googleCalendar/operations.js", () => ({
   listEvents: listEventsMock,
   createEvent: createEventMock,
+  getEvent: getEventMock,
+  updateEvent: updateEventMock,
+  deleteEvent: deleteEventMock,
 }));
 
-import { createCalendarEvent, readCalendarEvents } from "./calendarTool.js";
+import {
+  createCalendarEvent,
+  deleteCalendarEvent,
+  readCalendarEvents,
+  updateCalendarEvent,
+} from "./calendarTool.js";
 
 const IST = "Asia/Kolkata";
 
@@ -73,6 +84,26 @@ describe("readCalendarEvents", () => {
 
     expect(out).toContain("(all day)");
     expect(out).toContain("@ Indiranagar");
+  });
+
+  it("includes the event id so edits and deletes can reference it", async () => {
+    listEventsMock.mockResolvedValue([
+      {
+        id: "evt_abc123",
+        summary: "Gym",
+        start: "2026-07-28T01:30:00.000Z",
+        end: "2026-07-28T02:30:00.000Z",
+        calendarId: "primary",
+      },
+    ]);
+    expect(await readCalendarEvents({ timeZone: IST })).toContain("[id: evt_abc123]");
+  });
+
+  it("passes a query through and reports when it matches nothing", async () => {
+    listEventsMock.mockResolvedValue([]);
+    const out = await readCalendarEvents({ query: "dentist", timeZone: IST });
+    expect(listEventsMock).toHaveBeenCalledWith(expect.objectContaining({ query: "dentist" }));
+    expect(out).toContain('matching "dentist"');
   });
 
   it("says so when the range is empty", async () => {
@@ -144,5 +175,119 @@ describe("createCalendarEvent", () => {
     ).toContain("start and an end");
 
     expect(createEventMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateCalendarEvent", () => {
+  beforeEach(() => {
+    configuredMock.mockReset();
+    getEventMock.mockReset();
+    updateEventMock.mockReset();
+    configuredMock.mockReturnValue(true);
+  });
+
+  const EXISTING = {
+    id: "evt_1",
+    summary: "Gym",
+    start: "2026-07-28T01:30:00.000Z",
+    end: "2026-07-28T02:30:00.000Z",
+    calendarId: "primary",
+  };
+
+  it("keeps the original duration when only a new start is given", async () => {
+    getEventMock.mockResolvedValue(EXISTING);
+    updateEventMock.mockResolvedValue({
+      ...EXISTING,
+      start: "2026-07-28T02:30:00.000Z",
+      end: "2026-07-28T03:30:00.000Z",
+    });
+
+    await updateCalendarEvent({
+      eventId: "evt_1",
+      startIso: "2026-07-28T08:00:00",
+      timeZone: IST,
+    });
+
+    const arg = updateEventMock.mock.calls[0]?.[0] as { start?: string; end?: string };
+    expect(arg.start).toBe("2026-07-28T08:00:00");
+    // One hour later, matching the event's original length.
+    expect(arg.end).toBe("2026-07-28T09:00:00");
+  });
+
+  it("respects an explicit end", async () => {
+    getEventMock.mockResolvedValue(EXISTING);
+    updateEventMock.mockResolvedValue(EXISTING);
+
+    await updateCalendarEvent({
+      eventId: "evt_1",
+      startIso: "2026-07-28T08:00:00",
+      endIso: "2026-07-28T10:00:00",
+      timeZone: IST,
+    });
+
+    const arg = updateEventMock.mock.calls[0]?.[0] as { end?: string };
+    expect(arg.end).toBe("2026-07-28T10:00:00");
+  });
+
+  it("refuses without an id or without any change", async () => {
+    expect(await updateCalendarEvent({ eventId: "  ", timeZone: IST })).toContain("needs its id");
+    expect(await updateCalendarEvent({ eventId: "evt_1", timeZone: IST })).toContain(
+      "Nothing to change",
+    );
+    expect(updateEventMock).not.toHaveBeenCalled();
+  });
+
+  it("reports a stale id instead of failing opaquely", async () => {
+    getEventMock.mockResolvedValue(null);
+    const out = await updateCalendarEvent({
+      eventId: "gone",
+      summary: "New name",
+      timeZone: IST,
+    });
+    expect(out).toContain("no longer exists");
+    expect(updateEventMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteCalendarEvent", () => {
+  beforeEach(() => {
+    configuredMock.mockReset();
+    getEventMock.mockReset();
+    deleteEventMock.mockReset();
+    configuredMock.mockReturnValue(true);
+  });
+
+  it("names what it removed, so a wrong deletion is obvious", async () => {
+    getEventMock.mockResolvedValue({
+      id: "evt_1",
+      summary: "Swimming",
+      start: "2026-07-28T13:30:00.000Z",
+      end: "2026-07-28T14:30:00.000Z",
+      calendarId: "primary",
+    });
+    deleteEventMock.mockResolvedValue({ deleted: true, eventId: "evt_1" });
+
+    const out = await deleteCalendarEvent({ eventId: "evt_1", timeZone: IST });
+
+    expect(out).toContain('Deleted "Swimming"');
+    expect(out).toContain("19:00");
+    expect(deleteEventMock).toHaveBeenCalledWith({ eventId: "evt_1" });
+  });
+
+  it("does not call the API without an id, or for an event already gone", async () => {
+    expect(await deleteCalendarEvent({ eventId: "", timeZone: IST })).toContain("needs its id");
+    getEventMock.mockResolvedValue(null);
+    expect(await deleteCalendarEvent({ eventId: "gone", timeZone: IST })).toContain(
+      "no longer exists",
+    );
+    expect(deleteEventMock).not.toHaveBeenCalled();
+  });
+
+  it("explains itself when Calendar is not connected", async () => {
+    configuredMock.mockReturnValue(false);
+    expect(await deleteCalendarEvent({ eventId: "evt_1", timeZone: IST })).toContain(
+      "GOOGLE_CALENDAR_REFRESH_TOKEN",
+    );
+    expect(getEventMock).not.toHaveBeenCalled();
   });
 });

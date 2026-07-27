@@ -67,6 +67,16 @@ export async function listEvents(input: {
     .filter((e): e is CalendarEventBrief => e !== null);
 }
 
+export async function getEvent(input: {
+  calendarId?: string;
+  eventId: string;
+}): Promise<CalendarEventBrief | null> {
+  const { calendar } = await getAuthenticatedCalendarClient();
+  const calendarId = input.calendarId ?? "primary";
+  const res = await calendar.events.get({ calendarId, eventId: input.eventId });
+  return formatEvent(res.data, calendarId);
+}
+
 export async function getFreeBusy(input: {
   timeMin: string;
   timeMax: string;

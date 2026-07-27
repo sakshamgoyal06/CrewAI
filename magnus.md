@@ -77,7 +77,7 @@ shell or `.env`.
 | `src/agents/magnusOrchestrator.ts` | Health onboarding gate → classify → memory → pillar specialist or Magnus |
 | `src/agents/orchestratorIntent.ts` | The five-way classifier, plus the one coercion (explicit meal log → HEALTH) |
 | `src/agents/magnusAgent.ts` | Magnus himself: tool loop over calendar read/create and `log_note` |
-| `src/agents/tools/calendarTool.ts` | Google Calendar as text for the model, formatted in the user's timezone |
+| `src/agents/tools/calendarTool.ts` | Google Calendar read / create / update / delete as text for the model, in the user's timezone; reads carry event ids so edits cannot act on a guess |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
@@ -182,7 +182,6 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Memory reads tables nothing writes.** Fifteen read-only tables produce `gaps` every turn.
   Either write to them or stop reading them. Largest open item.
 - **Schema not reproducible** from `supabase/migrations/`.
-- **Calendar is read + create only.** No update or delete from chat, deliberately.
 - **Semantic recall** — no embeddings; memory is recent-window plus structured reads.
 - **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data.
 - **Morning Brief does not read the calendar** — it predates the calendar tools.
@@ -190,6 +189,6 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-07-27 (four pillars + Magnus-only surface; Google Calendar wired into chat;
+**Last updated:** 2026-07-27 (four pillars + Magnus-only surface; Google Calendar read/create/update/delete in chat;
 `/menu`, department commands, delegation notices, Planner, Notion agent, Research and the wealth /
 joy / wisdom specialist sets removed)

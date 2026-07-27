@@ -70,12 +70,20 @@ If they are missing, Magnus says the calendar is not connected rather than inven
 | “book gym 7am tomorrow” | Creates a one-hour event (the default when you give no end time) |
 | “add dentist Tuesday 4pm for 30 minutes at Indiranagar” | Creates it with location |
 | “block two hours for deep work tomorrow morning” | Creates the block |
+| “move gym to 8am” | Moves it, keeping the same duration |
+| “rename Working AI Session to Deep work” | Renames it |
+| “cancel swimming on Wednesday” | Deletes it, and tells you what it removed |
 
 Times are interpreted and displayed in your profile timezone (`user_profile.timezone`), not UTC.
 Magnus reads before answering — it never guesses at what is on your calendar.
 
-Reads and creates only. Updating and deleting exist in the integration layer but are not exposed to
-chat yet, so Magnus cannot silently move or remove something you scheduled elsewhere.
+Magnus has to read an event before it can change or delete one — editing works from the event id
+returned by a read, never from a guess. If more than one event matches what you asked for, it asks
+which one instead of picking. When it does change or remove something it names the event and the old
+and new times, so a mistake is visible immediately.
+
+A move keeps the original duration unless you give a new end time: "move gym to 8am" shifts a
+one-hour session to 08:00–09:00.
 
 ---
 
