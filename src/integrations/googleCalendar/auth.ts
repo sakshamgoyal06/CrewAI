@@ -43,7 +43,9 @@ function loadClientCredentials(): InstalledCredentials {
   const path = googleOAuthCredentialsPath();
   if (!path) {
     throw new Error(
-      "Google Calendar is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_CALENDAR_REFRESH_TOKEN (see docs/GOOGLE_CALENDAR.md).",
+      "Google Calendar is not configured. For first-time setup set GOOGLE_OAUTH_CREDENTIALS to your " +
+        "OAuth desktop client JSON; for the deployed bot set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET " +
+        "and GOOGLE_CALENDAR_REFRESH_TOKEN. See docs/GOOGLE_CALENDAR.md.",
     );
   }
   const raw = JSON.parse(readFileSync(path, "utf8")) as {
@@ -57,9 +59,14 @@ function loadClientCredentials(): InstalledCredentials {
   return creds;
 }
 
-export function createOAuth2Client(): OAuth2Client {
+/**
+ * `redirectUri` overrides the credentials file. Desktop clients may use any loopback port, which is
+ * how the auth script captures the code without copy-paste — Google retired the out-of-band flow,
+ * so loopback is the only workable option.
+ */
+export function createOAuth2Client(redirectUri?: string): OAuth2Client {
   const creds = loadClientCredentials();
-  const redirect = creds.redirect_uris?.[0] ?? "urn:ietf:wg:oauth:2.0:oob";
+  const redirect = redirectUri ?? creds.redirect_uris?.[0] ?? "http://127.0.0.1";
   return new google.auth.OAuth2(creds.client_id, creds.client_secret, redirect);
 }
 
