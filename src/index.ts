@@ -3,6 +3,10 @@ import "dotenv/config";
 import { logger } from "./logger.js";
 import { loggableError } from "./util/loggableError.js";
 import "./tools/clients.js";
+import {
+  capabilityLogFields,
+  describeCapabilities,
+} from "./config/magnusCapabilities.js";
 import { startHealthServer } from "./healthServer.js";
 import { createMagnus, handleMessage } from "./magnus.js";
 import { startBot } from "./tools/telegram.js";
@@ -11,6 +15,10 @@ const magnus = createMagnus();
 magnus.start();
 
 async function main(): Promise<void> {
+  logger.info(
+    capabilityLogFields(describeCapabilities()),
+    "capabilities (npm run telegram:check for detail)",
+  );
   await startHealthServer();
   await startBot(async (text, reply, telegramUserId, updateId, sendTyping) => {
     try {
