@@ -39,7 +39,6 @@ const { defaultMemoryPayload } = vi.hoisted(() => {
     joy: {},
     patterns: [],
     gaps: [],
-    semanticRecallAvailable: false,
   };
   return { defaultMemoryPayload };
 });

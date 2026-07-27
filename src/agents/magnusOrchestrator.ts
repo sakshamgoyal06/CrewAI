@@ -55,8 +55,12 @@ function textFromMessage(msg: Message): string {
   return "";
 }
 
-export function routingPlaceholder(intent: Exclude<Intent, "GENERAL">): string {
-  return `🧠 MAGNUS routing to ${intent} department... (agents coming soon)`;
+/**
+ * Safety net only: every intent has a registered specialist, so this is unreachable unless one is
+ * removed or a new intent is added without wiring. Says something useful rather than "coming soon".
+ */
+export function unroutedReply(intent: Exclude<Intent, "GENERAL">): string {
+  return `I couldn't hand that to a ${intent.toLowerCase()} specialist just now. Try rephrasing, or use /menu to pick a lane directly.`;
 }
 
 async function answerGeneral(
@@ -280,13 +284,14 @@ export async function runOrchestratorReply(input: {
     };
   }
 
+  logger.warn({ intent }, "no specialist registered for intent");
   return {
-    replyText: routingPlaceholder(intent),
+    replyText: unroutedReply(intent),
     intent,
     agentMetadata: {
       pillar: pillarRoute.pillar,
       department: pillarRoute.department,
-      routing_placeholder: true,
+      unrouted: true,
       ...slashMetadata(slashRoute),
     },
   };

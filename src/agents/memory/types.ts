@@ -58,6 +58,4 @@ export type MemoryContext = {
    * Explicit missing data or failed optional queries — never silent empty failure.
    */
   gaps: string[];
-  /** True when pgvector / reflection embeddings are wired (see `semanticRecall`). */
-  semanticRecallAvailable: boolean;
 };

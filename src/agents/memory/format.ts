@@ -95,10 +95,6 @@ export function formatMemoryBlockForSystem(
     parts.push(`Data gaps: ${ctx.gaps.join("; ")}`);
   }
 
-  if (!ctx.semanticRecallAvailable) {
-    parts.push("Semantic recall: not available (embeddings / pgvector not wired).");
-  }
-
   const out = parts.filter(Boolean).join("\n\n");
   return out.length > maxChars ? `${out.slice(0, maxChars)}…` : out;
 }

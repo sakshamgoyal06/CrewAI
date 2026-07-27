@@ -4,7 +4,6 @@ import type { Intent } from "../../intent.js";
 import { INTENTS } from "../../intent.js";
 import {
   intentToPillarRoute,
-  inferPillarRouteFromMessage,
   resolvePillarRoute,
 } from "./intentToPillarRoute.js";
 import type { PillarRoute } from "./pillarTypes.js";
@@ -29,11 +28,6 @@ describe("intentToPillarRoute", () => {
   });
 });
 
-describe("inferPillarRouteFromMessage", () => {
-  it("returns null (stub for future LLM routing)", () => {
-    expect(inferPillarRouteFromMessage("plan my week around workouts")).toBeNull();
-  });
-});
 
 describe("resolvePillarRoute", () => {
   it("uses slash department when provided", () => {

@@ -16,7 +16,6 @@ function assertMemoryContextShape(m: MemoryContext): void {
   expect(m).toHaveProperty("joy");
   expect(m).toHaveProperty("patterns");
   expect(m).toHaveProperty("gaps");
-  expect(m).toHaveProperty("semanticRecallAvailable");
   expect(Array.isArray(m.gaps)).toBe(true);
   expect(Array.isArray(m.activeGoals)).toBe(true);
   expect(Array.isArray(m.patterns)).toBe(true);
@@ -45,7 +44,6 @@ describe("MemoryContext contract", () => {
       joy: { summary: "ok", happinessReserve: { tank_level: 50 } },
       patterns: [{ name: "p" }],
       gaps: ["optional_table: missing"],
-      semanticRecallAvailable: false,
     };
     assertMemoryContextShape(sample);
   });

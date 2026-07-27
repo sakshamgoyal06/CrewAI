@@ -42,13 +42,6 @@ export function intentToPillarRoute(intent: Intent): PillarRoute {
   }
 }
 
-/**
- * Optional LLM-based routing from free text (not implemented).
- * Returns `null` so callers fall back to {@link intentToPillarRoute} or other signals.
- */
-export function inferPillarRouteFromMessage(_message: string): PillarRoute | null {
-  return null;
-}
 
 /**
  * Pillar route for a turn: optional slash-selected {@link DepartmentId} overrides
