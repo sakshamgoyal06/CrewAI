@@ -12,6 +12,8 @@ For **Cursor-ready prompts** to implement new agents and routing (copy-paste blo
 
 For **setting up (or rebuilding) the Telegram bot end to end**, see **`docs/TELEGRAM_SETUP.md`**; hosting-only detail stays in **`docs/DEPLOY_TELEGRAM.md`**.
 
+For **what each component is, whether it is reachable, and whether it earns its place** (keep / decide / cut, with usage evidence), see **`docs/ARCHITECTURE.md`**.
+
 ---
 
 ## Daily agent hardening (rolling)
@@ -189,8 +191,7 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 | `src/agents/health/healthOnboarding.ts` | `fetchUserHealthProfile`, `startHealthOnboarding`, `runHealthOnboardingTurn`, `formatHealthPreferencesForPrompt` — gates Health until `user_health_profile.onboarding_completed_at` is set |
 | `src/agents/planning/plannerAgent.ts` | `PLANNER_SYSTEM`, `runPlannerAgent` — text planning coach for `PLANNING` (locked day, optional profile north star / timezone) |
 | `src/agents/knowledge/notionAgent.ts` | `NOTION` — append dated log under parent page, query today’s check-in DB, create Goals row; requires env (see `.env.example`) |
-| `src/agents/memory/` | `loadMemoryContext`, `formatMemoryBlockForSystem`, `augmentUserWithMemory`, `intentToMemoryPurpose`, `semanticRecall` (pgvector **stub**; logs at debug) |
-| `src/agents/index.ts` | Barrel re-exports (includes memory API) |
+| `src/agents/memory/` | `loadMemoryContext`, `formatMemoryBlockForSystem`, `augmentUserWithMemory`, `intentToMemoryPurpose` |
 
 **Health onboarding:** Apply migration `supabase/migrations/20260412140000_user_health_profile.sql` so `user_health_profile` exists. If a row exists and `onboarding_completed_at` is null, **every** message is handled by Health onboarding (no intent classification) until the user finishes the four questions or types `skip`. The first time the classifier returns **HEALTH** and there is no row, Magnus inserts the profile and sends the intro. No new environment variables.
 
