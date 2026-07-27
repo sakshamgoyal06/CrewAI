@@ -18,17 +18,31 @@ There is no calendar command. Just ask.
 
 Scopes used are calendar read plus events write — nothing else.
 
-## 2. Authorize once, locally
+## 2. Publish the OAuth app
+
+**Do not skip this.** While the app sits in **Testing**, Google expires refresh tokens after
+**7 days**, so the bot silently loses calendar access every week.
+
+Google Cloud → **Google Auth Platform → Audience → Publish app** (older consoles: OAuth consent
+screen → Publish app). You will see an "unverified app" warning when you authorize, which is fine
+for a personal bot with your own account — verification only matters for distributing to others.
+
+## 3. Authorize once, locally
 
 ```bash
+git pull
 export GOOGLE_OAUTH_CREDENTIALS=/absolute/path/to/client_secret.json
 npm run google-calendar:auth
 ```
 
-Open the printed URL, approve, paste the code back. The script saves a token file for local use
-**and prints a refresh token** for the deployed bot.
+The script opens a loopback listener, prints a URL, and waits. Approve in the browser (click
+**Advanced → Go to Magnus** past the unverified warning), and it captures the code automatically —
+no copy-paste. It saves a token file for local use **and prints the refresh token** for the deploy.
 
-## 3. Give the deployed bot access
+If the loopback port is blocked, `npm run google-calendar:auth -- --manual` falls back to pasting
+the code by hand.
+
+## 4. Give the deployed bot access
 
 A hosted container has no browser and no persistent disk, so the token file is useless there.
 Set these three variables on the host (Railway → Variables) instead:
@@ -39,8 +53,8 @@ GOOGLE_CLIENT_SECRET=...
 GOOGLE_CALENDAR_REFRESH_TOKEN=...
 ```
 
-The refresh token does not expire unless you revoke it or leave the OAuth app in testing mode for
-an extended period, so this survives redeploys. Confirm with `npm run telegram:check` — the
+With the app published, the refresh token does not expire unless you revoke it, so this survives
+redeploys. Confirm with `npm run telegram:check` — the
 **Google Calendar** capability reads `ready` once all three are present.
 
 If they are missing, Magnus says the calendar is not connected rather than inventing events.
@@ -84,8 +98,8 @@ Reload Cursor's MCP servers to get `list_calendars`, `list_events`, `get_free_bu
 | Symptom | Fix |
 |---|---|
 | “Google Calendar is not connected” | One of the three variables is missing. `npm run telegram:check` names which. |
-| `invalid_grant` in logs | The refresh token was revoked, or the OAuth app left testing. Re-run `npm run google-calendar:auth` and update the host. |
-| Access blocked during authorization | Add your Google account under OAuth consent screen → Test users. |
+| `invalid_grant` in logs | The refresh token expired (app still in Testing — publish it) or was revoked. Re-run the auth script and update the host. |
+| Access blocked during authorization | Add your Google account under Audience → Test users, or publish the app. |
 | Events appear at the wrong hour | Check `user_profile.timezone` in Supabase; that is what Magnus formats against. |
 | MCP server not loading in Cursor | Use an absolute path for `GOOGLE_OAUTH_CREDENTIALS`; run `npx tsx mcp/google-calendar/server.mts` to see stderr. |
 
