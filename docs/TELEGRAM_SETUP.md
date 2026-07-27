@@ -132,14 +132,23 @@ it needs a container host (Railway, Fly, Render, a VPS), not a serverless platfo
 1. Push this repo to GitHub.
 2. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo** → pick this
    repo. Railway reads `railway.toml` and `Dockerfile`; no build config needed.
-3. **Variables** → paste everything from section 2, plus:
-   - `NODE_ENV=production`
-   - `MAGNUS_TELEGRAM_MODE=webhook` (see below)
-4. **Settings → Networking → Generate Domain**. This gives Railway's `RAILWAY_PUBLIC_DOMAIN`, which
-   Magnus turns into the webhook URL by itself.
-5. Deploy. Logs should show `capabilities`, `health server listening`, `telegram webhook route
-   mounted`, `starting telegram runtime`, then `Magnus online (Telegram + health)`.
-6. Message the bot. Every push to `main` redeploys automatically.
+3. **Variables → Raw Editor** → paste everything from section 2, plus `NODE_ENV=production` and
+   `MAGNUS_TELEGRAM_MODE=webhook`. Do **not** set `HEALTH_PORT` here; Railway injects `PORT` and
+   routes to it.
+4. **Settings → Networking → Generate Domain** (port `8080` if asked). This is what gives Railway's
+   `RAILWAY_PUBLIC_DOMAIN`, which Magnus turns into the webhook URL by itself.
+5. **Redeploy** so the new domain and variables are in the environment. The deploy before this
+   crash-loops — no credentials yet — which is expected, not a broken build.
+6. Logs, in order: `clients initialized`, `capabilities`, `telegram webhook route mounted`,
+   `health server listening`, `starting telegram runtime` with `"mode":"webhook"`, then
+   `Magnus online (Telegram + health)`.
+7. Message the bot. Every push to `main` redeploys automatically.
+
+Nothing needs to be run by hand on the host: booting in webhook mode registers the webhook and the
+command list itself. `npm run telegram:setup` is for local use or repair.
+
+If the log line reads `"mode":"polling"` with a reason mentioning no public URL, the domain did not
+exist yet when the process booted — redeploy. Magnus prefers degraded polling over going dark.
 
 `railway.toml` already pins the parts that matter: `restartPolicyType = "ALWAYS"`,
 `numReplicas = 1`, healthcheck on `/health`.

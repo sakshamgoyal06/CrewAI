@@ -139,6 +139,15 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
   });
 
   const port = healthListenPort();
+  const injectedPort = process.env.PORT?.trim();
+  if (injectedPort && injectedPort !== String(port)) {
+    // Railway, Render and friends route to PORT; binding elsewhere fails the healthcheck.
+    logger.warn(
+      { listening: port, platformPort: injectedPort },
+      "HEALTH_PORT differs from the platform's PORT — unset HEALTH_PORT on a managed host",
+    );
+  }
+
   return new Promise((resolve, reject) => {
     const server = app.listen(port, () => {
       logger.info({ port }, "health server listening");
