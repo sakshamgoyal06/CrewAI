@@ -161,21 +161,63 @@ export const TELEGRAM_MENU_COMMAND: TelegramBotCommand = {
   description: "Department picker — choose lane, then type your message",
 };
 
+export const TELEGRAM_HELP_COMMAND: TelegramBotCommand = {
+  command: "help",
+  description: "What Magnus can do — every lane, grouped",
+};
+
 export const TELEGRAM_MINIMAL_BOT_COMMANDS: readonly TelegramBotCommand[] = [
   TELEGRAM_MENU_COMMAND,
+  TELEGRAM_HELP_COMMAND,
   { command: "meal", description: "Log a meal (nutrition pipeline)" },
 ];
 
+/** Everyday lanes for the native menu; the rest stay one `/menu` tap away. */
+const CORE_COMMAND_KEYS: readonly string[] = [
+  "meal",
+  "journal",
+  "health",
+  "workouts",
+  "hevy",
+  "plan",
+  "research",
+  "morningbrief",
+];
+
+export type TelegramCommandsMode = "minimal" | "core" | "full";
+
+export function telegramCommandsMode(): TelegramCommandsMode {
+  const mode = process.env.MAGNUS_TELEGRAM_COMMANDS_MODE?.trim().toLowerCase();
+  if (mode === "full" || mode === "minimal") {
+    return mode;
+  }
+  return "core";
+}
+
 /**
- * `full` — register every slash command in the Telegram menu (native menu may auto-send on tap).
- * `minimal` (default) — register `/menu` + `/meal` only; use `/menu` for the full inline picker.
+ * `core` (default) — `/menu`, `/help`, and the everyday lanes.
+ * `minimal` — `/menu`, `/help`, `/meal` only.
+ * `full` — every lane; the native menu becomes long but nothing is hidden.
+ *
+ * Tapping a lane sends a bare `/command`, which routes with its `DEFAULT_SLASH_PROMPTS` text —
+ * no empty turns either way.
  */
 export function getTelegramBotCommandsForRegistration(): readonly TelegramBotCommand[] {
-  const mode = process.env.MAGNUS_TELEGRAM_COMMANDS_MODE?.trim().toLowerCase();
-  if (mode === "full") {
-    return TELEGRAM_BOT_COMMANDS;
+  const mode = telegramCommandsMode();
+  if (mode === "minimal") {
+    return TELEGRAM_MINIMAL_BOT_COMMANDS;
   }
-  return TELEGRAM_MINIMAL_BOT_COMMANDS;
+  const lanes =
+    mode === "full"
+      ? TELEGRAM_BOT_COMMANDS
+      : CORE_COMMAND_KEYS.map((key) => {
+          const found = TELEGRAM_BOT_COMMANDS.find((c) => c.command === key);
+          if (!found) {
+            throw new Error(`Unknown core Telegram command: ${key}`);
+          }
+          return found;
+        });
+  return [TELEGRAM_MENU_COMMAND, TELEGRAM_HELP_COMMAND, ...lanes];
 }
 
 export function isSlashCommandKey(key: string): boolean {

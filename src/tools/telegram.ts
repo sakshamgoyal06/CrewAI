@@ -18,6 +18,13 @@ import {
   mergePendingSlashIntoMessage,
   setPendingSlashCommand,
 } from "./pendingSlashSelection.js";
+import {
+  buildHelpMessage,
+  buildStartMessage,
+  isHelpCommand,
+  isMenuCommand,
+  isStartCommand,
+} from "../magnus/telegramIntro.js";
 
 const TELEGRAM_UPDATE_DEDUP_TTL_SEC = 86_400;
 
@@ -269,12 +276,19 @@ export function startBot(onMessage: TelegramTextHandler): Promise<void> {
 
     const rawText = await mergePendingSlashIntoMessage(telegramUserId, ctx.message.text);
 
-    if (/^\/menu(?:@\S+)?\s*$/i.test(rawText.trim())) {
+    if (isMenuCommand(rawText)) {
       await clearPendingSlashCommand(telegramUserId);
       await ctx.reply(
         "Pick a lane below — then type your message and send. Your text is combined with that department (no empty slash-only turn).",
         buildDepartmentInlineKeyboard(),
       );
+      return;
+    }
+
+    if (isStartCommand(rawText) || isHelpCommand(rawText)) {
+      await clearPendingSlashCommand(telegramUserId);
+      const body = isStartCommand(rawText) ? buildStartMessage() : buildHelpMessage();
+      await ctx.reply(body, { parse_mode: "HTML" });
       return;
     }
 

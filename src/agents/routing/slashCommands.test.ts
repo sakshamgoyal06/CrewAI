@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   effectiveSlashUserMessage,
@@ -68,20 +68,53 @@ describe("TELEGRAM_BOT_COMMANDS", () => {
 });
 
 describe("getTelegramBotCommandsForRegistration", () => {
-  it("defaults to minimal menu (menu + meal)", () => {
-    const old = process.env.MAGNUS_TELEGRAM_COMMANDS_MODE;
-    delete process.env.MAGNUS_TELEGRAM_COMMANDS_MODE;
-    const cmds = getTelegramBotCommandsForRegistration();
-    expect(cmds.map((c) => c.command)).toEqual(["menu", "meal"]);
-    process.env.MAGNUS_TELEGRAM_COMMANDS_MODE = old;
+  const original = process.env.MAGNUS_TELEGRAM_COMMANDS_MODE;
+
+  function setMode(mode: string | undefined): void {
+    if (mode === undefined) {
+      delete process.env.MAGNUS_TELEGRAM_COMMANDS_MODE;
+    } else {
+      process.env.MAGNUS_TELEGRAM_COMMANDS_MODE = mode;
+    }
+  }
+
+  afterEach(() => setMode(original));
+
+  it("defaults to the core lanes, led by /menu and /help", () => {
+    setMode(undefined);
+    const names = getTelegramBotCommandsForRegistration().map((c) => c.command);
+    expect(names.slice(0, 2)).toEqual(["menu", "help"]);
+    expect(names).toContain("journal");
+    expect(names).toContain("morningbrief");
+    expect(names).not.toContain("culture");
   });
 
-  it("uses full list when MAGNUS_TELEGRAM_COMMANDS_MODE=full", () => {
-    const old = process.env.MAGNUS_TELEGRAM_COMMANDS_MODE;
-    process.env.MAGNUS_TELEGRAM_COMMANDS_MODE = "full";
-    const cmds = getTelegramBotCommandsForRegistration();
-    expect(cmds.length).toBe(TELEGRAM_BOT_COMMANDS.length);
-    process.env.MAGNUS_TELEGRAM_COMMANDS_MODE = old;
+  it("registers menu, help, and meal only in minimal mode", () => {
+    setMode("minimal");
+    const names = getTelegramBotCommandsForRegistration().map((c) => c.command);
+    expect(names).toEqual(["menu", "help", "meal"]);
+  });
+
+  it("registers every lane in full mode", () => {
+    setMode("full");
+    const names = getTelegramBotCommandsForRegistration().map((c) => c.command);
+    expect(names).toHaveLength(TELEGRAM_BOT_COMMANDS.length + 2);
+    for (const { command } of TELEGRAM_BOT_COMMANDS) {
+      expect(names).toContain(command);
+    }
+  });
+
+  it("never registers a duplicate command name", () => {
+    for (const mode of ["minimal", "core", "full"]) {
+      setMode(mode);
+      const names = getTelegramBotCommandsForRegistration().map((c) => c.command);
+      expect(new Set(names).size).toBe(names.length);
+    }
+  });
+
+  it("registers at most 100 commands (Telegram setMyCommands limit)", () => {
+    setMode("full");
+    expect(getTelegramBotCommandsForRegistration().length).toBeLessThanOrEqual(100);
   });
 });
 
