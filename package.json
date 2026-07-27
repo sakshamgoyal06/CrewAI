@@ -11,6 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:supabase": "tsx scripts/test-supabase.mts",
+    "telegram:check": "tsx scripts/telegram/setup.mts",
+    "telegram:setup": "tsx scripts/telegram/setup.mts --apply",
     "google-calendar:auth": "tsx scripts/google-calendar-auth.mts",
     "start:prod": "node --env-file=.env dist/index.js"
   },
