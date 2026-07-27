@@ -1,13 +1,14 @@
+/**
+ * Four pillars plus Magnus himself. The user never picks one — the classifier does, silently.
+ *
+ * GENERAL is not a fallback bucket: it is Magnus's own work (journaling, logging, calendar,
+ * reminders, day management, and anything that spans pillars).
+ */
 export const INTENTS = [
   "HEALTH",
   "WEALTH",
-  "BUILD",
-  "PLANNING",
-  "RELATIONSHIPS",
-  "LEARNING",
   "HAPPINESS",
-  "CULTURE",
-  "NOTION",
+  "WISDOM",
   "GENERAL",
 ] as const;
 

@@ -1,23 +1,30 @@
 /**
- * Natural-language intent resolution for {@link runOrchestratorReply}:
- * classify → optional coercions → research heuristic (no slash commands).
+ * Silent intent classification. The user always talks to Magnus; this decides whether a pillar
+ * specialist writes the answer or Magnus handles it himself.
  */
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { parseIntent, type Intent } from "../intent.js";
 import { anthropic } from "../tools/clients.js";
-import { isResearchSubIntent } from "./intelligence/researchRouting.js";
-import { isNotionIntentOverride } from "./knowledge/notionIntent.js";
 import { parseMealLogCommand } from "../meals/parseMealLogCommand.js";
 
 const MODEL = "claude-sonnet-4-6";
 
-const CLASSIFY_SYSTEM = `You are MAGNUS, a personal AI chief of staff. Classify the intent of the user message into exactly one category:
-HEALTH | WEALTH | BUILD | PLANNING | RELATIONSHIPS | LEARNING | HAPPINESS | CULTURE | NOTION | GENERAL
-Use NOTION when the user wants to log, create, or query something in Notion (pages, Goals DB, check-ins, patterns, briefs).
-Use CULTURE when the user wants **recommendations** for books, films, series, poetry, or other arts keyed to mood, taste, or what to read/watch next (not travel planning — that is HAPPINESS).
-Use GENERAL when the user asks to research, compare, summarize, or look up external information (even if the topic touches planning or wealth).
-Reply with only the category name, nothing else.`;
+const CLASSIFY_SYSTEM = `Classify a message to a personal assistant into exactly one category.
+
+HEALTH — training, workouts, the gym, food and meals, nutrition, sleep, recovery, energy, injury,
+body composition, or logging any of these.
+WEALTH — money: budgeting, spending, saving, debt, net worth, investing, financial goals.
+HAPPINESS — leisure and people: books, film, music for enjoyment, games, hobbies, creative
+practice, rest, travel and trips, friends, family, relationships.
+WISDOM — getting better: learning something, courses, practice, career direction and growth,
+skills, and shipping projects.
+GENERAL — everything else, and specifically: the calendar and schedule, what the day or week
+looks like, reminders, journaling and logging, questions spanning several categories, looking
+something up, and ordinary conversation.
+
+When a message could fit two categories, choose the one the user is asking you to act on.
+Reply with only the category name.`;
 
 function textFromMessage(msg: Message): string {
   for (const block of msg.content) {
@@ -31,7 +38,7 @@ function textFromMessage(msg: Message): string {
 async function classifyIntent(userMessage: string): Promise<Intent> {
   const msg = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 64,
+    max_tokens: 16,
     system: CLASSIFY_SYSTEM,
     messages: [{ role: "user", content: userMessage }],
   });
@@ -39,26 +46,14 @@ async function classifyIntent(userMessage: string): Promise<Intent> {
 }
 
 /**
- * Full Magnus cycle for **non-slash** text: LLM classify, then deterministic fixes so
- * strong Notion / meal prefixes and research phrasing land in the right department.
+ * Classify, then apply the one deterministic correction worth having: an explicit meal log is
+ * health work even when the classifier reads it as small talk about food.
  */
 export async function resolveIntentNaturalLanguage(userMessage: string): Promise<Intent> {
-  let intent = await classifyIntent(userMessage);
+  const intent = await classifyIntent(userMessage);
 
-  if (intent === "GENERAL" && isNotionIntentOverride(userMessage)) {
-    intent = "NOTION";
-  }
-
-  if (intent === "GENERAL" && parseMealLogCommand(userMessage).kind === "meal") {
-    intent = "HEALTH";
-  }
-
-  if (
-    intent !== "NOTION" &&
-    intent !== "HEALTH" &&
-    isResearchSubIntent(userMessage)
-  ) {
-    intent = "GENERAL";
+  if (intent !== "HEALTH" && parseMealLogCommand(userMessage).kind === "meal") {
+    return "HEALTH";
   }
 
   return intent;

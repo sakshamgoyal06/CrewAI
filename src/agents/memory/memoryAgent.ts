@@ -41,7 +41,7 @@ function shortProfileIdForLogs(id: string): string {
 }
 
 export function intentToMemoryPurpose(intent: Intent): MemoryPurpose {
-  if (intent === "HAPPINESS" || intent === "CULTURE") {
+  if (intent === "HAPPINESS") {
     return "pattern";
   }
   if (intent === "GENERAL" || intent === "HEALTH") {

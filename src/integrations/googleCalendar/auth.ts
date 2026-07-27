@@ -1,4 +1,14 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+/**
+ * Google Calendar OAuth for two very different environments.
+ *
+ * **Deployed bot:** no browser, no writable home directory, no persistent disk. Credentials come
+ * from `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_CALENDAR_REFRESH_TOKEN`; the client
+ * exchanges the refresh token for access tokens on demand and never writes to disk.
+ *
+ * **Local / first-time setup:** the desktop OAuth flow in `scripts/google-calendar-auth.mts`
+ * writes a token file, and also prints the refresh token to paste into the host's env.
+ */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { google } from "googleapis";
@@ -17,11 +27,23 @@ type InstalledCredentials = {
   redirect_uris?: string[];
 };
 
-function loadInstalledCredentials(): InstalledCredentials {
+function envValue(name: string): string | undefined {
+  const v = process.env[name]?.trim();
+  return v ? v : undefined;
+}
+
+/** Client id and secret from env, falling back to the desktop credentials JSON. */
+function loadClientCredentials(): InstalledCredentials {
+  const id = envValue("GOOGLE_CLIENT_ID");
+  const secret = envValue("GOOGLE_CLIENT_SECRET");
+  if (id && secret) {
+    return { client_id: id, client_secret: secret };
+  }
+
   const path = googleOAuthCredentialsPath();
   if (!path) {
     throw new Error(
-      "Missing GOOGLE_OAUTH_CREDENTIALS — path to Google OAuth Desktop client JSON (see docs/GOOGLE_CALENDAR_MCP.md).",
+      "Google Calendar is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_CALENDAR_REFRESH_TOKEN (see docs/GOOGLE_CALENDAR.md).",
     );
   }
   const raw = JSON.parse(readFileSync(path, "utf8")) as {
@@ -36,10 +58,21 @@ function loadInstalledCredentials(): InstalledCredentials {
 }
 
 export function createOAuth2Client(): OAuth2Client {
-  const creds = loadInstalledCredentials();
-  const redirect =
-    creds.redirect_uris?.[0] ?? "urn:ietf:wg:oauth:2.0:oob";
+  const creds = loadClientCredentials();
+  const redirect = creds.redirect_uris?.[0] ?? "urn:ietf:wg:oauth:2.0:oob";
   return new google.auth.OAuth2(creds.client_id, creds.client_secret, redirect);
+}
+
+/** True when the deployed bot can authenticate without any user interaction. */
+export function googleCalendarConfigured(): boolean {
+  if (
+    envValue("GOOGLE_CLIENT_ID") &&
+    envValue("GOOGLE_CLIENT_SECRET") &&
+    envValue("GOOGLE_CALENDAR_REFRESH_TOKEN")
+  ) {
+    return true;
+  }
+  return Boolean(googleOAuthCredentialsPath()) && existsSync(googleCalendarTokenPath());
 }
 
 export function loadSavedToken(client: OAuth2Client): boolean {
@@ -47,8 +80,7 @@ export function loadSavedToken(client: OAuth2Client): boolean {
   if (!existsSync(tokenPath)) {
     return false;
   }
-  const token = JSON.parse(readFileSync(tokenPath, "utf8"));
-  client.setCredentials(token);
+  client.setCredentials(JSON.parse(readFileSync(tokenPath, "utf8")));
   return true;
 }
 
@@ -84,17 +116,23 @@ export async function getAuthenticatedCalendarClient(): Promise<{
   calendar: ReturnType<typeof google.calendar>;
 }> {
   const auth = createOAuth2Client();
-  if (!loadSavedToken(auth)) {
+  const refreshToken = envValue("GOOGLE_CALENDAR_REFRESH_TOKEN");
+
+  if (refreshToken) {
+    auth.setCredentials({ refresh_token: refreshToken });
+  } else if (!loadSavedToken(auth)) {
     throw new Error(
-      `Google Calendar not authenticated. Run: npx tsx scripts/google-calendar-auth.mts`,
+      "Google Calendar is not authenticated. Run `npm run google-calendar:auth` locally, then set GOOGLE_CALENDAR_REFRESH_TOKEN on the host.",
     );
+  } else {
+    // File-backed local runs: persist refreshed tokens so the next run stays authenticated.
+    auth.on("tokens", (tokens) => {
+      if (tokens.refresh_token) {
+        auth.setCredentials({ ...auth.credentials, ...tokens });
+        saveToken(auth);
+      }
+    });
   }
-  auth.on("tokens", (tokens) => {
-    if (tokens.refresh_token) {
-      auth.setCredentials({ ...auth.credentials, ...tokens });
-      saveToken(auth);
-    }
-  });
-  const calendar = google.calendar({ version: "v3", auth });
-  return { auth, calendar };
+
+  return { auth, calendar: google.calendar({ version: "v3", auth }) };
 }

@@ -1,83 +1,50 @@
 /**
- * `/start` and `/help` — answered locally (no classifier, no Claude call) so a fresh chat or a
- * "what can you do?" tap never spends a turn guessing. Group membership is asserted in tests
- * against the registered command list, so a new lane cannot silently drop out of `/help`.
+ * `/start` and `/help` — answered locally so a new chat never spends a model call.
+ *
+ * There are deliberately no other commands. Magnus is the whole interface: the user writes in
+ * plain language and routing happens invisibly.
  */
-import {
-  TELEGRAM_BOT_COMMANDS,
-  type TelegramBotCommand,
-} from "../agents/routing/slashCommands.js";
-
-export type CommandGroup = {
-  title: string;
-  commands: readonly string[];
-};
-
-export const HELP_GROUPS: readonly CommandGroup[] = [
-  {
-    title: "Health",
-    commands: ["health", "workouts", "hevy", "meal", "journal", "longhealth"],
-  },
-  {
-    title: "Wealth",
-    commands: ["wealth", "invest", "fire", "networth", "finance"],
-  },
-  {
-    title: "Wisdom",
-    commands: ["plan", "learn", "track", "build", "research", "notion"],
-  },
-  {
-    title: "Joy",
-    commands: ["relationships", "trip", "culture"],
-  },
-  {
-    title: "Rituals",
-    commands: ["morningbrief"],
-  },
-];
-
-function descriptionFor(command: string): string {
-  const found: TelegramBotCommand | undefined = TELEGRAM_BOT_COMMANDS.find(
-    (c) => c.command === command,
-  );
-  return found?.description ?? command;
-}
 
 export function buildStartMessage(): string {
   return [
     "<b>Magnus is online.</b>",
     "",
-    "Talk to me in plain English — I route each message to the right specialist (health, wealth, wisdom, joy) and remember the thread.",
+    "Just talk to me. No commands, no menus — write the way you'd text a friend who keeps track of your life.",
     "",
-    "Three ways in:",
-    "• Just type — “should I train today?”, “log a meal: 2 eggs and toast”, “plan my week”.",
-    "• /menu — pick a lane, then send your message.",
-    "• A slash command — /health, /meal, /journal, /plan, /research and friends.",
+    "Some of what I do:",
+    "• <b>Your day</b> — “what's on today?”, “am I free Thursday evening?”, “book gym 7am tomorrow”",
+    "• <b>Health</b> — training, meals, sleep, recovery. “log lunch: rice and dal”, “should I train today?”",
+    "• <b>Money, learning, downtime</b> — budgeting, career and study plans, what to read or watch next",
+    "• <b>Remembering</b> — tell me how the day went and I'll keep it",
     "",
-    "/help lists every lane.",
+    "/help if you want the longer version.",
   ].join("\n");
 }
 
 export function buildHelpMessage(): string {
-  const lines: string[] = ["<b>Magnus commands</b>", ""];
-
-  for (const group of HELP_GROUPS) {
-    lines.push(`<b>${group.title}</b>`);
-    for (const command of group.commands) {
-      lines.push(`/${command} — ${descriptionFor(command)}`);
-    }
-    lines.push("");
-  }
-
-  lines.push(
-    "<b>Getting around</b>",
-    "/menu — inline picker for every lane",
-    "/help — this list",
+  return [
+    "<b>How to use me</b>",
     "",
-    "A command with no text uses a sensible default prompt, so tapping one from the menu always does something useful. Plain text works too — routing is automatic.",
-  );
-
-  return lines.join("\n");
+    "Write in plain English. I work out what you need — there is nothing to choose and no syntax to learn.",
+    "",
+    "<b>Calendar</b>",
+    "“what does my day look like?” · “anything on Friday?” · “add dentist Tuesday 4pm” · “block two hours for deep work tomorrow morning”",
+    "",
+    "<b>Health</b>",
+    "“log dinner: two rotis, paneer curry” · “should I train today? knees sore” · “review my last few workouts” · “rest day, slept badly” (I'll journal it)",
+    "",
+    "<b>Money</b>",
+    "“I overspent on food this month, what now?” · “how should I think about my emergency fund?”",
+    "",
+    "<b>Learning and work</b>",
+    "“plan how I learn Rust over two months” · “I want to move toward a staff role — where do I start?”",
+    "",
+    "<b>Downtime</b>",
+    "“something short to read tonight” · “four days in Kerala, low effort — ideas?”",
+    "",
+    "<b>Anything worth remembering</b>",
+    "Just tell me. “Decided to drop the side project” gets logged and comes back when it's relevant.",
+  ].join("\n");
 }
 
 function isBareCommand(text: string, name: string): boolean {
@@ -90,8 +57,4 @@ export function isStartCommand(text: string): boolean {
 
 export function isHelpCommand(text: string): boolean {
   return isBareCommand(text, "help");
-}
-
-export function isMenuCommand(text: string): boolean {
-  return isBareCommand(text, "menu");
 }

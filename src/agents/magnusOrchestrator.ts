@@ -1,13 +1,15 @@
-import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
-
+/**
+ * The routing cycle behind every message.
+ *
+ * The user talks to Magnus and hears Magnus. Internally each turn is classified to a pillar; a
+ * specialist may write the answer, but nothing in the reply says so. There are no user-facing
+ * commands for choosing a lane, and no announcement when one is chosen.
+ */
 import type { Intent } from "../intent.js";
 import { logger } from "../logger.js";
-import { anthropic } from "../tools/clients.js";
-import { runResearchAgent } from "./intelligence/researchAgent.js";
-import { isResearchSubIntent } from "./intelligence/researchRouting.js";
+import { runMagnusAgent } from "./magnusAgent.js";
 import { resolveIntentNaturalLanguage } from "./orchestratorIntent.js";
 import {
-  augmentUserWithMemory,
   formatMemoryBlockForSystem,
   intentToMemoryPurpose,
   loadMemoryContext,
@@ -18,95 +20,34 @@ import {
   startHealthOnboarding,
 } from "./health/healthOnboarding.js";
 import { isMealCommand } from "../meals/parseMealLogCommand.js";
-import { dispatchToAgent, findAgentForIntent } from "./registry.js";
-import { intentToPillarRoute, resolvePillarRoute } from "./routing/intentToPillarRoute.js";
-import {
-  effectiveSlashUserMessage,
-  parseSlashCommand,
-  type SlashDirectRoute,
-} from "./routing/slashCommands.js";
-import type { DepartmentId } from "./routing/pillarTypes.js";
+import { dispatchToAgent } from "./registry.js";
+import { intentToPillarRoute } from "./routing/intentToPillarRoute.js";
 import type { AgentContext } from "./types.js";
-
-const MODEL = "claude-sonnet-4-6";
-
-const GENERAL_SYSTEM =
-  "You are MAGNUS, a warm and direct personal AI chief of staff for Saksham. Keep replies under 100 words.";
 
 export type OrchestratorReply = {
   replyText: string;
   intent: Intent;
+  /** Internal only — recorded in chat metadata, never shown to the user. */
   delegatedAgent?: string;
   agentMetadata?: Record<string, unknown>;
 };
 
-/** Fired when Magnus commits to a specialist — before memory load and specialist LLM. */
-export type BeforeDelegationInfo = {
-  intent: Intent;
-  delegatedAgent: string;
-};
-
-function textFromMessage(msg: Message): string {
-  for (const block of msg.content) {
-    if (block.type === "text") {
-      return block.text;
-    }
-  }
-  return "";
-}
-
-/**
- * Safety net only: every intent has a registered specialist, so this is unreachable unless one is
- * removed or a new intent is added without wiring. Says something useful rather than "coming soon".
- */
-export function unroutedReply(intent: Exclude<Intent, "GENERAL">): string {
-  return `I couldn't hand that to a ${intent.toLowerCase()} specialist just now. Try rephrasing, or use /menu to pick a lane directly.`;
-}
-
-async function answerGeneral(
-  userMessage: string,
-  memoryBlock?: string,
-): Promise<string> {
-  const msg = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 512,
-    system: GENERAL_SYSTEM,
-    messages: [
-      { role: "user", content: augmentUserWithMemory(userMessage, memoryBlock) },
-    ],
-  });
-  return textFromMessage(msg).trim() || "…";
-}
-
-function slashMetadata(slash: SlashDirectRoute | null): Record<string, unknown> {
-  return slash ? { slash_command: slash.commandKey } : {};
-}
-
-/**
- * Single entry for chat: health onboarding gates → intent (slash **or** natural-language cycle) →
- * pillar/department → memory → specialist / Research / general.
- */
 export async function runOrchestratorReply(input: {
   userMessage: string;
   userProfileId: string;
   telegramUserId: string;
   timezone?: string;
   northStarGoal?: string;
-  /** "1" = Planner, "2" = Research — skips classify. */
-  disambiguationChoice?: "1" | "2";
-  onBeforeDelegation?: (info: BeforeDelegationInfo) => void | Promise<void>;
 }): Promise<OrchestratorReply> {
   const healthProfile = await fetchUserHealthProfile(input.userProfileId);
+  const healthRoute = intentToPillarRoute("HEALTH");
 
+  // Onboarding owns every turn until it finishes, so health advice starts from real constraints.
   if (
     healthProfile &&
     !healthProfile.onboarding_completed_at &&
     !isMealCommand(input.userMessage)
   ) {
-    await input.onBeforeDelegation?.({
-      intent: "HEALTH",
-      delegatedAgent: "HealthOnboarding",
-    });
     const ob = await runHealthOnboardingTurn(
       {
         userMessage: input.userMessage,
@@ -115,7 +56,6 @@ export async function runOrchestratorReply(input: {
       },
       healthProfile,
     );
-    const healthRoute = intentToPillarRoute("HEALTH");
     return {
       replyText: ob.text,
       intent: "HEALTH",
@@ -128,38 +68,14 @@ export async function runOrchestratorReply(input: {
     };
   }
 
-  let intent: Intent;
-  let userMessageForAgent = input.userMessage;
-  let slashRoute: SlashDirectRoute | null = null;
-
-  if (input.disambiguationChoice === "1") {
-    intent = "PLANNING";
-  } else if (input.disambiguationChoice === "2") {
-    intent = "GENERAL";
-  } else {
-    slashRoute = parseSlashCommand(input.userMessage);
-    if (slashRoute) {
-      intent = slashRoute.intent;
-      userMessageForAgent = effectiveSlashUserMessage(slashRoute);
-    } else {
-      intent = await resolveIntentNaturalLanguage(input.userMessage);
-    }
-  }
-
-  const slashDept: DepartmentId | undefined =
-    slashRoute && !slashRoute.forceResearch ? slashRoute.department : undefined;
+  const intent = await resolveIntentNaturalLanguage(input.userMessage);
 
   if (intent === "HEALTH" && !healthProfile && !isMealCommand(input.userMessage)) {
-    await input.onBeforeDelegation?.({
-      intent: "HEALTH",
-      delegatedAgent: "HealthOnboarding",
-    });
     const started = await startHealthOnboarding({
       userMessage: input.userMessage,
       userProfileId: input.userProfileId,
       telegramUserId: input.telegramUserId,
     });
-    const healthRoute = intentToPillarRoute("HEALTH");
     return {
       replyText: started.text,
       intent: "HEALTH",
@@ -172,104 +88,46 @@ export async function runOrchestratorReply(input: {
     };
   }
 
-  const willResearch =
-    intent === "GENERAL" &&
-    (input.disambiguationChoice === "2" ||
-      slashRoute?.forceResearch === true ||
-      isResearchSubIntent(userMessageForAgent));
+  const pillarRoute = intentToPillarRoute(intent);
 
-  const pillarRoute = resolvePillarRoute(intent, slashDept);
-  const routingCtx: AgentContext = {
+  const memory = await loadMemoryContext({
     userProfileId: input.userProfileId,
     telegramUserId: input.telegramUserId,
-    timezone: input.timezone,
-    northStarGoal: input.northStarGoal,
-    rawMessage: userMessageForAgent,
-    intent,
-    pillar: pillarRoute.pillar,
-    department: pillarRoute.department,
-    slashCommandKey: slashRoute?.commandKey,
-  };
-  const specialistForIntent =
-    intent === "GENERAL" ? null : findAgentForIntent(intent, routingCtx);
-
-  if (willResearch) {
-    await input.onBeforeDelegation?.({
-      intent: "GENERAL",
-      delegatedAgent: "Research",
-    });
-  } else if (specialistForIntent !== null) {
-    await input.onBeforeDelegation?.({
-      intent,
-      delegatedAgent: specialistForIntent.name,
-    });
-  }
-
-  const needsMemory = intent === "GENERAL" || specialistForIntent !== null;
-
-  let memoryBlock = "";
-  if (needsMemory) {
-    const memory = await loadMemoryContext({
-      userProfileId: input.userProfileId,
-      telegramUserId: input.telegramUserId,
-      purpose: intentToMemoryPurpose(intent),
-    });
-    memoryBlock = formatMemoryBlockForSystem(memory);
-    logger.debug(
-      {
-        module: "magnusOrchestrator",
-        intent,
-        pillar: pillarRoute.pillar,
-        department: pillarRoute.department,
-        memoryPurpose: memory.purpose,
-        memoryGapCount: memory.gaps.length,
-        memoryRecentTurns: memory.recentSignals.recentChatTurns.length,
-      },
-      "memory context prepared for turn",
-    );
-  }
-
-  if (intent === "GENERAL") {
-    if (willResearch) {
-      const research = await runResearchAgent({
-        userProfileId: input.userProfileId,
-        telegramUserId: input.telegramUserId,
-        timezone: input.timezone,
-        northStarGoal: input.northStarGoal,
-        rawMessage: userMessageForAgent,
-        intent: "GENERAL",
-        memoryBlock,
-        pillar: pillarRoute.pillar,
-        department: pillarRoute.department,
-      });
-      return {
-        replyText: research.text,
-        intent,
-        delegatedAgent: "Research",
-        agentMetadata: {
-          ...research.metadata,
-          ...slashMetadata(slashRoute),
-        },
-      };
-    }
-    return {
-      replyText: await answerGeneral(userMessageForAgent, memoryBlock),
-      intent,
-    };
-  }
+    purpose: intentToMemoryPurpose(intent),
+  });
+  const memoryBlock = formatMemoryBlockForSystem(memory);
 
   const ctx: AgentContext = {
     userProfileId: input.userProfileId,
     telegramUserId: input.telegramUserId,
     timezone: input.timezone,
     northStarGoal: input.northStarGoal,
-    rawMessage: userMessageForAgent,
+    rawMessage: input.userMessage,
     intent,
     memoryBlock,
     pillar: pillarRoute.pillar,
     department: pillarRoute.department,
-    slashCommandKey: slashRoute?.commandKey,
   };
+
+  logger.debug(
+    {
+      module: "magnusOrchestrator",
+      intent,
+      pillar: pillarRoute.pillar,
+      memoryGapCount: memory.gaps.length,
+      memoryRecentTurns: memory.recentSignals.recentChatTurns.length,
+    },
+    "turn routed",
+  );
+
+  if (intent === "GENERAL") {
+    const magnus = await runMagnusAgent(ctx);
+    return {
+      replyText: magnus.text,
+      intent,
+      agentMetadata: magnus.metadata,
+    };
+  }
 
   const delegated = await dispatchToAgent(ctx, intent);
   if (delegated) {
@@ -278,21 +136,19 @@ export async function runOrchestratorReply(input: {
       intent,
       delegatedAgent: delegated.agentName,
       agentMetadata: {
+        pillar: pillarRoute.pillar,
+        department: pillarRoute.department,
         ...delegated.result.metadata,
-        ...slashMetadata(slashRoute),
       },
     };
   }
 
-  logger.warn({ intent }, "no specialist registered for intent");
+  // Unreachable while every pillar has an agent; Magnus answers rather than apologising.
+  logger.warn({ intent }, "no specialist registered for intent; Magnus answering");
+  const fallback = await runMagnusAgent(ctx);
   return {
-    replyText: unroutedReply(intent),
+    replyText: fallback.text,
     intent,
-    agentMetadata: {
-      pillar: pillarRoute.pillar,
-      department: pillarRoute.department,
-      unrouted: true,
-      ...slashMetadata(slashRoute),
-    },
+    agentMetadata: { ...fallback.metadata, unrouted: true },
   };
 }

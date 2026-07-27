@@ -57,246 +57,62 @@ vi.mock("./memory/memoryAgent.js", async (importOriginal) => {
 import { loadMemoryContext } from "./memory/memoryAgent.js";
 import { runOrchestratorReply } from "./magnusOrchestrator.js";
 
+const TURN = {
+  userProfileId: "00000000-0000-0000-0000-000000000001",
+  telegramUserId: "12345",
+  timezone: "Asia/Kolkata",
+};
+
+function replyText(text: string): { content: { type: "text"; text: string }[] } {
+  return { content: [{ type: "text" as const, text }] };
+}
+
 describe("runOrchestratorReply", () => {
   beforeEach(() => {
     createMock.mockReset();
-    createMock.mockImplementation(async () => ({
-      content: [{ type: "text" as const, text: "GENERAL" }],
-    }));
+    createMock.mockImplementation(async () => replyText("GENERAL"));
     vi.mocked(loadMemoryContext).mockReset();
     vi.mocked(loadMemoryContext).mockResolvedValue(defaultMemoryPayload);
   });
 
-  it("answers GENERAL via Claude general path (two API calls)", async () => {
+  it("answers GENERAL as Magnus himself, with no specialist recorded", async () => {
     createMock
-      .mockResolvedValueOnce({
-        content: [{ type: "text" as const, text: "GENERAL" }],
-      })
-      .mockResolvedValueOnce({
-        content: [{ type: "text" as const, text: "Warm reply." }],
-      });
+      .mockResolvedValueOnce(replyText("GENERAL"))
+      .mockResolvedValueOnce(replyText("Two things today."));
 
-    const out = await runOrchestratorReply({
-      userMessage: "How are you?",
-      userProfileId: "p1",
-      telegramUserId: "t1",
-    });
+    const out = await runOrchestratorReply({ userMessage: "how's my day?", ...TURN });
 
     expect(out.intent).toBe("GENERAL");
-    expect(out.replyText).toBe("Warm reply.");
+    expect(out.replyText).toBe("Two things today.");
     expect(out.delegatedAgent).toBeUndefined();
-    expect(createMock).toHaveBeenCalledTimes(2);
+    expect(out.agentMetadata?.specialist).toBe("Magnus");
   });
 
-  it("delegates WEALTH to Wealth composite when classifier returns WEALTH", async () => {
+  it.each([
+    ["WEALTH", "Wealth"],
+    ["HAPPINESS", "Happiness"],
+    ["WISDOM", "Wisdom"],
+  ])("routes %s to the %s pillar without telling the user", async (intent, agentName) => {
     createMock
-      .mockResolvedValueOnce({
-        content: [{ type: "text" as const, text: "WEALTH" }],
-      })
-      .mockResolvedValueOnce({
-        content: [{ type: "text" as const, text: "Process coaching reply." }],
-      });
+      .mockResolvedValueOnce(replyText(intent))
+      .mockResolvedValueOnce(replyText("Here is the answer."));
 
-    const out = await runOrchestratorReply({
-      userMessage: "portfolio rebalance",
-      userProfileId: "p1",
-      telegramUserId: "t1",
-    });
+    const out = await runOrchestratorReply({ userMessage: "a question", ...TURN });
 
-    expect(out.intent).toBe("WEALTH");
-    expect(out.delegatedAgent).toBe("WealthComposite");
-    expect(out.replyText).toContain("Process coaching");
-    expect(createMock).toHaveBeenCalledTimes(2);
+    expect(out.intent).toBe(intent);
+    expect(out.delegatedAgent).toBe(agentName);
+    expect(out.replyText).toBe("Here is the answer.");
+    // Routing is internal: it appears in metadata, never in the reply body.
+    expect(out.replyText).not.toMatch(/specialist|routing|pillar/i);
   });
 
-  it("delegates PLANNING to Planner specialist", async () => {
+  it("loads memory once per turn", async () => {
     createMock
-      .mockResolvedValueOnce({
-        content: [{ type: "text" as const, text: "PLANNING" }],
-      })
-      .mockResolvedValueOnce({
-        content: [{ type: "text" as const, text: "Planner coaching reply." }],
-      });
+      .mockResolvedValueOnce(replyText("WISDOM"))
+      .mockResolvedValueOnce(replyText("ok"));
 
-    const out = await runOrchestratorReply({
-      userMessage: "plan my week",
-      userProfileId: "p1",
-      telegramUserId: "t1",
-    });
+    await runOrchestratorReply({ userMessage: "help me learn rust", ...TURN });
 
-    expect(out.intent).toBe("PLANNING");
-    expect(out.replyText).toBe("Planner coaching reply.");
-    expect(out.delegatedAgent).toBe("Planner");
-    expect(createMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("skips classify and uses Planner when disambiguation follow-up is 1", async () => {
-    createMock.mockResolvedValueOnce({
-      content: [{ type: "text" as const, text: "Planner from disambig." }],
-    });
-
-    const out = await runOrchestratorReply({
-      userMessage: "Plan my week and research competitors",
-      userProfileId: "p1",
-      telegramUserId: "t1",
-      disambiguationChoice: "1",
-    });
-
-    expect(out.intent).toBe("PLANNING");
-    expect(out.delegatedAgent).toBe("Planner");
-    expect(out.replyText).toBe("Planner from disambig.");
-    expect(createMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("skips classify and uses Research when disambiguation follow-up is 2", async () => {
-    createMock.mockResolvedValueOnce({
-      content: [
-        {
-          type: "text" as const,
-          text: "## Executive answer\nOk.\n## Key points\n- a\n## Sources\n- **T** — https://x — r.\n## Open questions / risks\n- n",
-        },
-      ],
-    });
-
-    const out = await runOrchestratorReply({
-      userMessage: "Plan my week and research competitors",
-      userProfileId: "p1",
-      telegramUserId: "t1",
-      disambiguationChoice: "2",
-    });
-
-    expect(out.intent).toBe("GENERAL");
-    expect(out.delegatedAgent).toBe("Research");
-    expect(out.replyText).toContain("Executive answer");
-    expect(createMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("routes research-style messages to Research even when classifier returns PLANNING", async () => {
-    createMock
-      .mockResolvedValueOnce({
-        content: [{ type: "text" as const, text: "PLANNING" }],
-      })
-      .mockResolvedValueOnce({
-        content: [
-          {
-            type: "text" as const,
-            text: "## Executive answer\nDisposal.\n## Key points\n- a\n## Sources\n- **T** — https://x — r.\n## Open questions / risks\n- n",
-          },
-        ],
-      });
-
-    const out = await runOrchestratorReply({
-      userMessage: "Research services to dispose of a large wooden bed in HSR, Bangalore",
-      userProfileId: "p1",
-      telegramUserId: "t1",
-    });
-
-    expect(out.intent).toBe("GENERAL");
-    expect(out.delegatedAgent).toBe("Research");
-    expect(out.replyText).toContain("Executive answer");
-    expect(createMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("calls onBeforeDelegation before loadMemoryContext when delegating to a specialist", async () => {
-    const order: string[] = [];
-    vi.mocked(loadMemoryContext).mockImplementation(async () => {
-      order.push("memory");
-      return defaultMemoryPayload;
-    });
-
-    createMock
-      .mockResolvedValueOnce({
-        content: [{ type: "text" as const, text: "PLANNING" }],
-      })
-      .mockResolvedValueOnce({
-        content: [{ type: "text" as const, text: "Planner coaching reply." }],
-      });
-
-    await runOrchestratorReply({
-      userMessage: "plan my week",
-      userProfileId: "p1",
-      telegramUserId: "t1",
-      onBeforeDelegation: async () => {
-        order.push("before");
-      },
-    });
-
-    expect(order).toEqual(["before", "memory"]);
-  });
-
-  it("delegates GENERAL research sub-intent to Research", async () => {
-    createMock
-      .mockResolvedValueOnce({
-        content: [{ type: "text" as const, text: "GENERAL" }],
-      })
-      .mockResolvedValueOnce({
-        content: [
-          {
-            type: "text" as const,
-            text: "## Executive answer\nOk.\n## Key points\n- a\n## Sources\n- **T** — https://x — r.\n## Open questions / risks\n- n",
-          },
-        ],
-      });
-
-    const out = await runOrchestratorReply({
-      userMessage: "research the latest on LLM evals",
-      userProfileId: "p1",
-      telegramUserId: "t1",
-    });
-
-    expect(out.intent).toBe("GENERAL");
-    expect(out.delegatedAgent).toBe("Research");
-    expect(out.replyText).toContain("Executive answer");
-    expect(createMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("delegates LEARNING to Learning Plan specialist", async () => {
-    createMock
-      .mockResolvedValueOnce({
-        content: [{ type: "text" as const, text: "LEARNING" }],
-      })
-      .mockResolvedValueOnce({
-        content: [
-          {
-            type: "text" as const,
-            text: "Sketch three milestones: ownership basics, borrowing rules, then lifetimes in APIs. Revisit each thread after a few days.",
-          },
-        ],
-      });
-
-    const out = await runOrchestratorReply({
-      userMessage: "I want to learn about Rust lifetimes",
-      userProfileId: "p1",
-      telegramUserId: "t1",
-    });
-
-    expect(out.intent).toBe("LEARNING");
-    expect(out.delegatedAgent).toBe("LearningPlan");
-    expect(out.replyText).toContain("milestones");
-    expect(createMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("classifies then coerces Notion keyword phrases to NOTION and delegates to Notion agent", async () => {
-    vi.stubEnv("NOTION_TOKEN", "");
-    vi.stubEnv("NOTION_API_KEY", "");
-    vi.stubEnv("NOTION_INTEGRATION_TOKEN", "");
-    try {
-      createMock.mockResolvedValueOnce({
-        content: [{ type: "text" as const, text: "GENERAL" }],
-      });
-
-      const out = await runOrchestratorReply({
-        userMessage: "log this to notion: reminder about taxes",
-        userProfileId: "p1",
-        telegramUserId: "t1",
-      });
-
-      expect(out.intent).toBe("NOTION");
-      expect(out.delegatedAgent).toBe("Notion");
-      expect(out.replyText).toMatch(/configured|NOTION_DAILY_LOG_PARENT_PAGE_ID/i);
-      expect(createMock).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.unstubAllEnvs();
-    }
+    expect(vi.mocked(loadMemoryContext)).toHaveBeenCalledTimes(1);
   });
 });

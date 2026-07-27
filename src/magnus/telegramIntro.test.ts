@@ -1,52 +1,41 @@
 import { describe, expect, it } from "vitest";
 
-import { TELEGRAM_BOT_COMMANDS } from "../agents/routing/slashCommands.js";
 import {
   buildHelpMessage,
   buildStartMessage,
-  HELP_GROUPS,
   isHelpCommand,
-  isMenuCommand,
   isStartCommand,
 } from "./telegramIntro.js";
 
 describe("command triggers", () => {
-  it("matches bare commands, including @botname and trailing space", () => {
+  it("matches bare commands, including @botname and stray whitespace", () => {
     expect(isStartCommand("/start")).toBe(true);
     expect(isStartCommand("  /Start  ")).toBe(true);
-    expect(isHelpCommand("/help@magnus_bot")).toBe(true);
-    expect(isMenuCommand("/menu ")).toBe(true);
+    expect(isHelpCommand("/help@MagnusLifeOsBot")).toBe(true);
   });
 
   it("ignores commands with a payload or unrelated text", () => {
     expect(isStartCommand("/start now")).toBe(false);
     expect(isHelpCommand("help me plan the week")).toBe(false);
-    expect(isMenuCommand("/menus")).toBe(false);
   });
 });
 
-describe("/help", () => {
-  it("covers every registered lane exactly once", () => {
-    const grouped = HELP_GROUPS.flatMap((g) => g.commands);
-    expect(new Set(grouped).size).toBe(grouped.length);
-
-    const registered = TELEGRAM_BOT_COMMANDS.map((c) => c.command).sort();
-    expect([...grouped].sort()).toEqual(registered);
-  });
-
-  it("renders each lane with its description", () => {
-    const help = buildHelpMessage();
-    for (const { command, description } of TELEGRAM_BOT_COMMANDS) {
-      expect(help).toContain(`/${command} — ${description}`);
-    }
-    expect(help).toContain("/menu");
-  });
-});
-
-describe("/start", () => {
-  it("points at plain text, the menu, and help", () => {
+describe("intro copy", () => {
+  it("tells the user to write plainly rather than pick a lane", () => {
     const start = buildStartMessage();
-    expect(start).toContain("/menu");
     expect(start).toContain("/help");
+    expect(start.toLowerCase()).toContain("no commands");
+  });
+
+  it("gives worked examples across the pillars without naming agents", () => {
+    const help = buildHelpMessage();
+    for (const cue of ["Calendar", "Health", "Money", "Learning", "Downtime"]) {
+      expect(help).toContain(cue);
+    }
+    expect(help).not.toMatch(/specialist|agent|pillar|route/i);
+  });
+
+  it("advertises no slash commands at all — there are none to learn", () => {
+    expect(buildHelpMessage()).not.toMatch(/^\/[a-z]/m);
   });
 });

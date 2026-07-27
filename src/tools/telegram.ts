@@ -1,4 +1,4 @@
-import { Markup, Telegraf } from "telegraf";
+import { Telegraf } from "telegraf";
 
 import {
   handlerTimeoutMs,
@@ -15,22 +15,12 @@ import {
 import { redis } from "./clients.js";
 import { checkMessageRateLimit } from "./rateLimit.js";
 import {
-  getTelegramBotCommandsForRegistration,
-  inlineKeyboardCommands,
-  isSlashCommandKey,
-} from "../agents/routing/slashCommands.js";
-import {
-  clearPendingSlashCommand,
-  mergePendingSlashIntoMessage,
-  setPendingSlashCommand,
-} from "./pendingSlashSelection.js";
-import {
   buildHelpMessage,
   buildStartMessage,
   isHelpCommand,
-  isMenuCommand,
   isStartCommand,
 } from "../magnus/telegramIntro.js";
+import { BOT_COMMANDS } from "../config/telegramCommands.js";
 
 const TELEGRAM_UPDATE_DEDUP_TTL_SEC = 86_400;
 
@@ -153,52 +143,6 @@ export type TelegramTextHandler = (
   sendTyping?: () => void | Promise<void>,
 ) => Promise<void>;
 
-function isMorningBriefTrigger(text: string): boolean {
-  const t = text.trim();
-  if (/^\/morningbrief(@\S+)?\b/i.test(t)) {
-    return true;
-  }
-  return /^morning\s+brief\.?$/i.test(t);
-}
-
-function buildDepartmentInlineKeyboard() {
-  const items = inlineKeyboardCommands();
-  const rows: ReturnType<typeof Markup.button.callback>[][] = [];
-  for (let i = 0; i < items.length; i += 2) {
-    const a = items[i];
-    const b = items[i + 1];
-    const row = [Markup.button.callback(a.label, `magnus_cmd:${a.command}`)];
-    if (b) {
-      row.push(Markup.button.callback(b.label, `magnus_cmd:${b.command}`));
-    }
-    rows.push(row);
-  }
-  return Markup.inlineKeyboard(rows);
-}
-
-async function runMorningBriefForCtx(
-  telegramUserId: string,
-  replyPlain: (r: string) => Promise<unknown>,
-): Promise<void> {
-  try {
-    const { runMorningBriefForTelegramUser } = await import(
-      "../jobs/morningBriefManual.js"
-    );
-    const out = await runMorningBriefForTelegramUser(telegramUserId, new Date());
-    if (out.ok) {
-      await replyPlain(out.ack);
-    } else {
-      await replyPlain(out.reply);
-    }
-  } catch (e) {
-    logger.error(
-      { err: loggableError(e), telegramUserId: maskTelegramUserId(telegramUserId) },
-      "morning brief command failed",
-    );
-    await replyPlain("Something went wrong. Check server logs.");
-  }
-}
-
 export type TelegramWebhookMount = {
   /** Full URL registered with Telegram (the watchdog compares against it). */
   url: string;
@@ -228,60 +172,6 @@ export function createTelegramRuntime(onMessage: TelegramTextHandler): TelegramR
   const b = getBot();
   const config = resolveTelegramRuntime();
 
-  b.on("callback_query", async (ctx) => {
-    const updateId = ctx.update.update_id;
-    if (!(await claimTelegramUpdate(updateId))) {
-      await ctx.answerCbQuery();
-      return;
-    }
-
-    const cq = ctx.callbackQuery;
-    const data =
-      cq && "data" in cq && typeof cq.data === "string" ? cq.data : undefined;
-    if (!data?.startsWith("magnus_cmd:")) {
-      await ctx.answerCbQuery();
-      return;
-    }
-
-    const key = data.slice("magnus_cmd:".length);
-    const telegramUserId = String(ctx.from?.id ?? "");
-    if (!telegramUserId) {
-      await ctx.answerCbQuery();
-      return;
-    }
-
-    const rate = await checkMessageRateLimit(telegramUserId);
-    if (!rate.ok) {
-      await ctx.answerCbQuery(`Slow down — try in ~${rate.retryAfterSec}s`);
-      return;
-    }
-
-    try {
-      if (key === "morningbrief") {
-        await ctx.answerCbQuery();
-        await runMorningBriefForCtx(telegramUserId, (r) => ctx.reply(r));
-        return;
-      }
-
-      if (!isSlashCommandKey(key)) {
-        await ctx.answerCbQuery("Unknown command");
-        return;
-      }
-
-      await setPendingSlashCommand(telegramUserId, key);
-      await ctx.answerCbQuery("Now type your message");
-      await ctx.reply(
-        "Lane selected. Send your next message as plain text (no slash). It will be routed as that department. Sending any /command cancels this pick.",
-      );
-    } catch (e) {
-      logger.error(
-        { err: loggableError(e), telegramUserId: maskTelegramUserId(telegramUserId) },
-        "callback_query handler failed",
-      );
-      await ctx.answerCbQuery("Error — try again");
-    }
-  });
-
   b.on("text", async (ctx) => {
     const updateId = ctx.update.update_id;
     if (!(await claimTelegramUpdate(updateId))) {
@@ -306,33 +196,13 @@ export function createTelegramRuntime(onMessage: TelegramTextHandler): TelegramR
           }
         : undefined;
 
-    const rawText = await mergePendingSlashIntoMessage(telegramUserId, ctx.message.text);
-
-    if (isMenuCommand(rawText)) {
-      await clearPendingSlashCommand(telegramUserId);
-      await ctx.reply(
-        "Pick a lane below — then type your message and send. Your text is combined with that department (no empty slash-only turn).",
-        buildDepartmentInlineKeyboard(),
-      );
-      return;
-    }
+    const rawText = ctx.message.text;
 
     if (isStartCommand(rawText) || isHelpCommand(rawText)) {
-      await clearPendingSlashCommand(telegramUserId);
-      const body = isStartCommand(rawText) ? buildStartMessage() : buildHelpMessage();
-      await ctx.reply(body, { parse_mode: "HTML" });
-      return;
-    }
-
-    if (isMorningBriefTrigger(rawText)) {
-      const rate = await checkMessageRateLimit(telegramUserId);
-      if (!rate.ok) {
-        await reply(
-          `You're sending messages too quickly. Try again in about ${rate.retryAfterSec} seconds.`,
-        );
-        return;
-      }
-      await runMorningBriefForCtx(telegramUserId, (r) => reply(r));
+      await ctx.reply(
+        isStartCommand(rawText) ? buildStartMessage() : buildHelpMessage(),
+        { parse_mode: "HTML" },
+      );
       return;
     }
 
@@ -355,7 +225,7 @@ export function createTelegramRuntime(onMessage: TelegramTextHandler): TelegramR
 
   async function registerCommands(): Promise<void> {
     try {
-      await b.telegram.setMyCommands([...getTelegramBotCommandsForRegistration()]);
+      await b.telegram.setMyCommands([...BOT_COMMANDS]);
     } catch (e) {
       logger.warn({ err: loggableError(e) }, "setMyCommands failed (non-fatal)");
     }
@@ -368,7 +238,7 @@ export function createTelegramRuntime(onMessage: TelegramTextHandler): TelegramR
     }
     await b.telegram.setWebhook(hook.url, {
       secret_token: hook.secretToken,
-      allowed_updates: ["message", "callback_query"],
+      allowed_updates: ["message"],
     });
   }
 

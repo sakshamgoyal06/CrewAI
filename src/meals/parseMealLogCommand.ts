@@ -30,13 +30,9 @@ export function isMealCommand(input: string): boolean {
   return parseMealLogCommand(input).kind === "meal";
 }
 
-import { parseSlashCommand } from "../agents/routing/slashCommands.js";
+const SLASH_MEAL_RE = /^\/meal(?:@\S+)?\b/i;
 
-/**
- * Telegram **slash** meal log only (`/meal …`, optional `@BotName`).
- * Delegates to {@link parseSlashCommand}; inline `meal:` / `log meal:` use {@link isMealCommand}.
- */
+/** `/meal …` specifically, as opposed to the `meal:` / `log meal:` prefixes. */
 export function isSlashMealCommand(input: string): boolean {
-  const r = parseSlashCommand(input);
-  return r !== null && r.commandKey === "meal" && !r.forceResearch;
+  return SLASH_MEAL_RE.test(input.trim()) && isMealCommand(input);
 }

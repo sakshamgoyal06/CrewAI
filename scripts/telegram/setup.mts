@@ -4,7 +4,7 @@
  *   npm run telegram:check          read-only: env capabilities + what Telegram currently has
  *   npm run telegram:setup          apply: drop webhook, register commands, menu button, profile text
  *
- * Flags: --apply, --mode=minimal|core|full, --drop-pending, --probe-conflict, --json
+ * Flags: --apply, --drop-pending, --probe-conflict, --json
  *
  * Safe to run against a live bot: the read-only path never mutates, and the apply path only
  * touches bot configuration (never messages or chats).
@@ -17,7 +17,7 @@ import {
   type Capability,
   type CapabilitySummary,
 } from "../../src/config/magnusCapabilities.js";
-import { getTelegramBotCommandsForRegistration } from "../../src/agents/routing/slashCommands.js";
+import { BOT_COMMANDS } from "../../src/config/telegramCommands.js";
 import {
   redactWebhookUrl,
   resolveTelegramRuntime,
@@ -35,7 +35,6 @@ const BOT_SHORT_DESCRIPTION =
 
 type Flags = {
   apply: boolean;
-  mode?: string;
   dropPending: boolean;
   probeConflict: boolean;
   json: boolean;
@@ -57,8 +56,6 @@ function parseFlags(argv: readonly string[]): Flags {
       flags.probeConflict = true;
     } else if (arg === "--json") {
       flags.json = true;
-    } else if (arg.startsWith("--mode=")) {
-      flags.mode = arg.slice("--mode=".length).trim().toLowerCase();
     } else {
       console.error(`Unknown flag: ${arg}`);
       process.exit(2);
@@ -222,10 +219,7 @@ async function probeConflict(token: string): Promise<void> {
 }
 
 async function applyBotConfig(token: string, flags: Flags): Promise<boolean> {
-  if (flags.mode) {
-    process.env.MAGNUS_TELEGRAM_COMMANDS_MODE = flags.mode;
-  }
-  const commands = [...getTelegramBotCommandsForRegistration()];
+  const commands = [...BOT_COMMANDS];
 
   const set = await api<boolean>(token, "setMyCommands", { commands });
   if (!set.ok) {
@@ -233,9 +227,7 @@ async function applyBotConfig(token: string, flags: Flags): Promise<boolean> {
     return false;
   }
   console.log(
-    `  commands: registered ${commands.length} (${process.env.MAGNUS_TELEGRAM_COMMANDS_MODE ?? "core"}) — ${commands
-      .map((c) => `/${c.command}`)
-      .join(" ")}`,
+    `  commands: registered ${commands.length} — ${commands.map((c) => `/${c.command}`).join(" ")}`,
   );
 
   const button = await api<boolean>(token, "setChatMenuButton", {
@@ -267,9 +259,6 @@ async function applyBotConfig(token: string, flags: Flags): Promise<boolean> {
 
 async function main(): Promise<void> {
   const flags = parseFlags(process.argv.slice(2));
-  if (flags.mode) {
-    process.env.MAGNUS_TELEGRAM_COMMANDS_MODE = flags.mode;
-  }
 
   const summary = describeCapabilities(process.env);
 

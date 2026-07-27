@@ -71,7 +71,11 @@ const NOTION_TOKEN_VARS = [
   "NOTION_API_KEY",
   "NOTION_INTEGRATION_TOKEN",
 ] as const;
-const SERPAPI_VARS = ["MAGNUS_SERPAPI_KEY", "SERPAPI_API_KEY"] as const;
+const GOOGLE_CALENDAR_VARS = [
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_CALENDAR_REFRESH_TOKEN",
+] as const;
 const HEVY_VARS = ["HEVY_API_KEY", "MAGNUS_HEVY_API_KEY"] as const;
 
 function coreRequirements(env: EnvBag, production: boolean): CoreRequirement[] {
@@ -118,24 +122,16 @@ function coreRequirements(env: EnvBag, production: boolean): CoreRequirement[] {
 function mealCapability(env: EnvBag): Capability {
   const webFirst = !isFalsy(env, "MAGNUS_MEAL_LOG_WEB_FIRST");
   const anthropicWebSearch = webFirst && !isFalsy(env, "MAGNUS_MEAL_ANTHROPIC_WEB_SEARCH");
-  const serp = webFirst && Boolean(firstSet(env, SERPAPI_VARS));
   const usda = Boolean(val(env, "USDA_FDC_API_KEY"));
   const ninjas = Boolean(val(env, "CALORIENINJAS_API_KEY"));
-  const proxy = Boolean(val(env, "HEALTHIFYME_PROXY_URL"));
   const llm = isTrue(env, "MAGNUS_MEAL_LOG_LLM_FALLBACK");
 
   const sources: string[] = [];
   if (anthropicWebSearch) {
-    sources.push("Anthropic web_search");
-  }
-  if (serp) {
-    sources.push("SerpAPI");
+    sources.push("web search");
   }
   if (usda) {
     sources.push("USDA FDC");
-  }
-  if (proxy) {
-    sources.push("Healthify proxy");
   }
   if (ninjas) {
     sources.push("CalorieNinjas");
@@ -151,7 +147,7 @@ function mealCapability(env: EnvBag): Capability {
   return {
     id: "meals",
     title: "Meal logging",
-    telegram: "/meal, “meal: …”",
+    telegram: "“log lunch: rice and dal”",
     status,
     detail:
       sources.length === 0
@@ -166,7 +162,7 @@ function morningBriefCapability(env: EnvBag): Capability {
     return {
       id: "morning_brief",
       title: "Morning Brief",
-      telegram: "/morningbrief",
+      telegram: "daily push",
       status: "off",
       detail: "Disabled by MAGNUS_MORNING_BRIEF_ENABLED=false.",
       missing: ["MAGNUS_MORNING_BRIEF_ENABLED"],
@@ -185,11 +181,11 @@ function morningBriefCapability(env: EnvBag): Capability {
   return {
     id: "morning_brief",
     title: "Morning Brief",
-    telegram: "/morningbrief",
+    telegram: "daily push",
     status: cron ? "ready" : "partial",
     detail: cron
-      ? `Scheduled in-process around local hour ${val(env, "MAGNUS_MORNING_BRIEF_LOCAL_HOUR") ?? "7"}; /morningbrief works on demand.`
-      : "On demand only — set MAGNUS_MORNING_BRIEF_CRON_ENABLED=true for the daily push.",
+      ? `Scheduled in-process around local hour ${val(env, "MAGNUS_MORNING_BRIEF_LOCAL_HOUR") ?? "7"}.`
+      : "Not scheduled — set MAGNUS_MORNING_BRIEF_CRON_ENABLED=true for the daily push. Asking Magnus about your day works either way.",
     missing,
   };
 }
@@ -205,23 +201,23 @@ function notionCapability(env: EnvBag): Capability {
   if (!token) {
     return {
       id: "notion",
-      title: "Notion LifeOS",
-      telegram: "/notion",
+      title: "Notion journal mirror",
+      telegram: "“log …”",
       status: "off",
-      detail: "No Notion token — the agent replies that Notion is not configured.",
+      detail: "No Notion token — notes are still saved to Supabase, just not mirrored.",
       missing: ["NOTION_TOKEN"],
     };
   }
 
   return {
     id: "notion",
-    title: "Notion LifeOS",
-    telegram: "/notion",
+    title: "Notion journal mirror",
+    telegram: "“log …”",
     status: targets.length > 0 ? "ready" : "partial",
     detail:
       targets.length > 0
         ? `Token set; targets configured: ${targets.length}.`
-        : "Token set but no page or database IDs — writes have nowhere to go.",
+        : "Token set but no parent page — notes save to Supabase only.",
     missing:
       targets.length > 0
         ? []
@@ -229,17 +225,26 @@ function notionCapability(env: EnvBag): Capability {
   };
 }
 
-function researchCapability(env: EnvBag): Capability {
-  const serp = Boolean(firstSet(env, SERPAPI_VARS));
+function calendarCapability(env: EnvBag): Capability {
+  const missing = GOOGLE_CALENDAR_VARS.filter((name) => !val(env, name));
+  if (missing.length === 0) {
+    return {
+      id: "calendar",
+      title: "Google Calendar",
+      telegram: "“what's on today?”, “book gym 7am”",
+      status: "ready",
+      detail: "Magnus reads your schedule and creates events.",
+      missing: [],
+    };
+  }
   return {
-    id: "research",
-    title: "Research",
-    telegram: "/research",
-    status: serp ? "ready" : "partial",
-    detail: serp
-      ? "Google via SerpAPI plus page fetches."
-      : "Works on URLs or text you paste; no web search without a SerpAPI key.",
-    missing: serp ? [] : ["MAGNUS_SERPAPI_KEY"],
+    id: "calendar",
+    title: "Google Calendar",
+    telegram: "“what's on today?”",
+    status: "off",
+    detail:
+      "Not connected — Magnus will say so rather than guess. Run `npm run google-calendar:auth` locally, then set these on the host.",
+    missing,
   };
 }
 
@@ -248,7 +253,7 @@ function workoutsCapability(env: EnvBag): Capability {
   return {
     id: "workouts",
     title: "Workouts (Hevy)",
-    telegram: "/workouts, /hevy",
+    telegram: "“should I train today?”",
     status: hevy ? "ready" : "partial",
     detail: hevy
       ? "Reads recent Hevy sessions and routines; can create routines and log workouts."
@@ -316,9 +321,10 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
     {
       id: "chat",
       title: "Chat + pillar routing",
-      telegram: "plain text, /menu",
+      telegram: "plain text",
       status: "ready",
-      detail: "Health, Wealth, Wisdom, and Joy specialists via classifier or slash command.",
+      detail:
+        "Magnus answers everything; health, wealth, happiness and wisdom are routed silently.",
       missing: [],
     },
     workoutsCapability(env),
@@ -326,14 +332,14 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
     {
       id: "journal",
       title: "Health journal",
-      telegram: "/journal",
+      telegram: "“rest day, slept badly”",
       status: "ready",
-      detail: "Saved to magnus_daily_logs and reused by later health replies.",
+      detail: "Saved to magnus_daily_logs and reused by later replies.",
       missing: [],
     },
     morningBriefCapability(env),
     notionCapability(env),
-    researchCapability(env),
+    calendarCapability(env),
     proactiveCapability(env),
     accessCapability(env),
     deliveryCapability(env),
