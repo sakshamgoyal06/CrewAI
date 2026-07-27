@@ -1,6 +1,7 @@
 import { Markup, Telegraf } from "telegraf";
 
 import {
+  handlerTimeoutMs,
   redactWebhookUrl,
   resolveTelegramRuntime,
   type TelegramRuntimeMode,
@@ -63,7 +64,7 @@ let bot: Telegraf | null = null;
 
 function getBot(): Telegraf {
   if (!bot) {
-    bot = new Telegraf(getToken());
+    bot = new Telegraf(getToken(), { handlerTimeout: handlerTimeoutMs() });
   }
   return bot;
 }

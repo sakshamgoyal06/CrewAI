@@ -138,6 +138,20 @@ export function resolveTelegramRuntime(env: EnvBag = process.env): TelegramRunti
   };
 }
 
+/**
+ * Telegraf aborts a handler after this long. Its 90s default is shorter than a tool-using turn
+ * (web research plus a Claude call that itself retries), which shows up as a turn that silently
+ * never replies. Default 5 minutes.
+ */
+export function handlerTimeoutMs(env: EnvBag = process.env): number {
+  const raw = val(env, "MAGNUS_TELEGRAM_HANDLER_TIMEOUT_MS");
+  const n = raw ? Number.parseInt(raw, 10) : NaN;
+  if (Number.isNaN(n) || n < 1000) {
+    return 300_000;
+  }
+  return n;
+}
+
 /** Redacts the unguessable path segment so the URL is safe to log. */
 export function redactWebhookUrl(url: string): string {
   return url.replace(/\/telegram\/[a-f0-9]+$/i, "/telegram/***");

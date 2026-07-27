@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  handlerTimeoutMs,
   redactWebhookUrl,
   resolveTelegramRuntime,
   webhookPathForToken,
@@ -85,6 +86,15 @@ describe("webhook path and secret", () => {
   it("derive a secret when none is configured, and honour an explicit one", () => {
     expect(webhookSecretForToken({}, TOKEN)).toMatch(/^[a-f0-9]{64}$/);
     expect(webhookSecretForToken({ TELEGRAM_WEBHOOK_SECRET: "s3cret" }, TOKEN)).toBe("s3cret");
+  });
+});
+
+describe("handlerTimeoutMs", () => {
+  it("defaults to five minutes and rejects nonsense", () => {
+    expect(handlerTimeoutMs({})).toBe(300_000);
+    expect(handlerTimeoutMs({ MAGNUS_TELEGRAM_HANDLER_TIMEOUT_MS: "600000" })).toBe(600_000);
+    expect(handlerTimeoutMs({ MAGNUS_TELEGRAM_HANDLER_TIMEOUT_MS: "12" })).toBe(300_000);
+    expect(handlerTimeoutMs({ MAGNUS_TELEGRAM_HANDLER_TIMEOUT_MS: "soon" })).toBe(300_000);
   });
 });
 
