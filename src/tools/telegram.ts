@@ -1,5 +1,10 @@
 import { Markup, Telegraf } from "telegraf";
 
+import {
+  redactWebhookUrl,
+  resolveTelegramRuntime,
+  type TelegramRuntimeMode,
+} from "../config/telegramRuntime.js";
 import { logger, maskTelegramUserId } from "../logger.js";
 import { loggableError } from "../util/loggableError.js";
 import {
@@ -193,8 +198,34 @@ async function runMorningBriefForCtx(
   }
 }
 
-export function startBot(onMessage: TelegramTextHandler): Promise<void> {
+export type TelegramWebhookMount = {
+  /** Full URL registered with Telegram (the watchdog compares against it). */
+  url: string;
+  path: string;
+  secretToken: string;
+  handleUpdate: (update: unknown) => Promise<void>;
+};
+
+export type TelegramRuntime = {
+  mode: TelegramRuntimeMode;
+  /** Present in webhook mode: mount this on the health server before calling `start()`. */
+  webhook?: TelegramWebhookMount;
+  /** Begin receiving updates: launch polling, or register the webhook with Telegram. */
+  start: () => Promise<void>;
+  stop: (reason: string) => void;
+  /** Watchdog probe. */
+  getMe: () => Promise<unknown>;
+  getWebhookUrl: () => Promise<string>;
+  registerWebhook: () => Promise<void>;
+};
+
+/**
+ * Registers handlers and returns a runtime that has not started receiving updates yet, so the
+ * caller can mount the webhook route before Telegram is told where to deliver.
+ */
+export function createTelegramRuntime(onMessage: TelegramTextHandler): TelegramRuntime {
   const b = getBot();
+  const config = resolveTelegramRuntime();
 
   b.on("callback_query", async (ctx) => {
     const updateId = ctx.update.update_id;
@@ -314,21 +345,92 @@ export function startBot(onMessage: TelegramTextHandler): Promise<void> {
     await onMessage(rawText, reply, telegramUserId, updateId, sendTyping);
   });
 
-  process.once("SIGINT", () => b.stop("SIGINT"));
-  process.once("SIGTERM", () => b.stop("SIGTERM"));
-
-  return new Promise((resolve, reject) => {
-    void b
-      .launch({}, async () => {
-        try {
-          await b.telegram.setMyCommands([
-            ...getTelegramBotCommandsForRegistration(),
-          ]);
-        } catch (e) {
-          logger.warn({ err: loggableError(e) }, "setMyCommands failed (non-fatal)");
-        }
-        resolve();
-      })
-      .catch(reject);
+  b.catch((err, ctx) => {
+    logger.error(
+      { err: loggableError(err), updateType: ctx.updateType },
+      "unhandled telegraf error",
+    );
   });
+
+  async function registerCommands(): Promise<void> {
+    try {
+      await b.telegram.setMyCommands([...getTelegramBotCommandsForRegistration()]);
+    } catch (e) {
+      logger.warn({ err: loggableError(e) }, "setMyCommands failed (non-fatal)");
+    }
+  }
+
+  async function registerWebhook(): Promise<void> {
+    const hook = config.webhook;
+    if (!hook) {
+      return;
+    }
+    await b.telegram.setWebhook(hook.url, {
+      secret_token: hook.secretToken,
+      allowed_updates: ["message", "callback_query"],
+    });
+  }
+
+  async function startPolling(): Promise<void> {
+    // A webhook left over from a previous webhook-mode deploy would swallow every update.
+    try {
+      await b.telegram.deleteWebhook();
+    } catch (e) {
+      logger.warn({ err: loggableError(e) }, "deleteWebhook before polling failed");
+    }
+    await new Promise<void>((resolve, reject) => {
+      void b
+        .launch({}, async () => {
+          await registerCommands();
+          resolve();
+        })
+        .catch(reject);
+    });
+  }
+
+  async function startWebhook(): Promise<void> {
+    await registerWebhook();
+    await registerCommands();
+  }
+
+  return {
+    mode: config.mode,
+    webhook: config.webhook
+      ? {
+          url: config.webhook.url,
+          path: config.webhook.path,
+          secretToken: config.webhook.secretToken,
+          handleUpdate: async (update) => {
+            await b.handleUpdate(update as Parameters<typeof b.handleUpdate>[0]);
+          },
+        }
+      : undefined,
+    start: async () => {
+      logger.info(
+        {
+          mode: config.mode,
+          reason: config.reason,
+          webhookUrl: config.webhook ? redactWebhookUrl(config.webhook.url) : null,
+        },
+        "starting telegram runtime",
+      );
+      if (config.mode === "webhook") {
+        await startWebhook();
+      } else {
+        await startPolling();
+      }
+    },
+    stop: (reason: string) => b.stop(reason),
+    getMe: () => b.telegram.getMe(),
+    getWebhookUrl: async () => {
+      const info = await b.telegram.getWebhookInfo();
+      return info.url ?? "";
+    },
+    registerWebhook,
+  };
+}
+
+/** Long-polling shortcut kept for scripts and tests that do not need the webhook path. */
+export async function startBot(onMessage: TelegramTextHandler): Promise<void> {
+  await createTelegramRuntime(onMessage).start();
 }

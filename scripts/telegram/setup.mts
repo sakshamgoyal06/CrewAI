@@ -18,6 +18,10 @@ import {
   type CapabilitySummary,
 } from "../../src/config/magnusCapabilities.js";
 import { getTelegramBotCommandsForRegistration } from "../../src/agents/routing/slashCommands.js";
+import {
+  redactWebhookUrl,
+  resolveTelegramRuntime,
+} from "../../src/config/telegramRuntime.js";
 
 const API_TIMEOUT_MS = 15_000;
 
@@ -135,35 +139,63 @@ function printCapabilities(summary: CapabilitySummary): void {
   }
 }
 
-async function reportWebhook(
-  token: string,
-  flags: Flags,
-): Promise<{ hadWebhook: boolean; pending: number }> {
-  const info = await api<{
-    url?: string;
-    pending_update_count?: number;
-    last_error_message?: string;
-  }>(token, "getWebhookInfo");
+type WebhookInfo = {
+  url?: string;
+  pending_update_count?: number;
+  last_error_message?: string;
+  last_error_date?: number;
+};
 
+async function reportDelivery(token: string, flags: Flags): Promise<void> {
+  const runtime = resolveTelegramRuntime(process.env);
+  console.log(`  mode: ${runtime.mode} — ${runtime.reason}`);
+
+  const info = await api<WebhookInfo>(token, "getWebhookInfo");
   if (!info.ok) {
     console.log(`  webhook: could not read (${info.description})`);
-    return { hadWebhook: false, pending: 0 };
+    return;
   }
 
-  const url = info.result.url?.trim() ?? "";
+  const current = info.result.url?.trim() ?? "";
   const pending = info.result.pending_update_count ?? 0;
-
-  if (!url) {
-    console.log(`  webhook: none (long polling) — ${pending} pending update(s)`);
-    return { hadWebhook: false, pending };
+  console.log(
+    `  webhook now: ${current ? redactWebhookUrl(current) : "none"} — ${pending} pending update(s)`,
+  );
+  if (info.result.last_error_message) {
+    console.log(`  last delivery error: ${info.result.last_error_message}`);
   }
 
-  console.log(`  webhook: ${url} — conflicts with long polling`);
+  if (runtime.mode === "webhook" && runtime.webhook) {
+    const expected = runtime.webhook.url;
+    const matches = current.replace(/\/+$/, "") === expected.replace(/\/+$/, "");
+    console.log(`  webhook wanted: ${redactWebhookUrl(expected)} (${runtime.webhook.source})`);
+    if (matches) {
+      console.log("  webhook: already registered correctly");
+      return;
+    }
+    if (!flags.apply) {
+      console.log("  webhook: not registered — run `npm run telegram:setup` on the host");
+      return;
+    }
+    const set = await api<boolean>(token, "setWebhook", {
+      url: expected,
+      secret_token: runtime.webhook.secretToken,
+      allowed_updates: ["message", "callback_query"],
+      drop_pending_updates: flags.dropPending,
+    });
+    console.log(set.ok ? "  webhook: registered" : `  webhook: failed — ${set.description}`);
+    return;
+  }
+
+  if (!current) {
+    return;
+  }
+
+  console.log("  webhook: set, but this environment polls — updates would be swallowed");
   if (!flags.apply) {
     console.log("           run `npm run telegram:setup` to remove it");
-    return { hadWebhook: true, pending };
+    return;
   }
-
   const del = await api<boolean>(token, "deleteWebhook", {
     drop_pending_updates: flags.dropPending,
   });
@@ -172,7 +204,6 @@ async function reportWebhook(
       ? `           removed${flags.dropPending ? " (pending updates dropped)" : ""}`
       : `           delete failed: ${del.description}`,
   );
-  return { hadWebhook: true, pending };
 }
 
 async function probeConflict(token: string): Promise<void> {
@@ -271,7 +302,7 @@ async function main(): Promise<void> {
   }
   console.log(`  bot: @${me.result.username ?? "unknown"} (${me.result.first_name ?? ""})`);
 
-  await reportWebhook(token, flags);
+  await reportDelivery(token, flags);
 
   if (flags.probeConflict) {
     await probeConflict(token);

@@ -6,6 +6,8 @@
  * remote host's variables (e.g. pasted Railway config) as easily as `process.env`.
  */
 
+import { resolveTelegramRuntime } from "./telegramRuntime.js";
+
 export type EnvBag = Record<string, string | undefined>;
 
 /** `ready` — usable now. `partial` — works but a better path is unconfigured. `off` — unavailable. */
@@ -255,6 +257,29 @@ function workoutsCapability(env: EnvBag): Capability {
   };
 }
 
+function deliveryCapability(env: EnvBag): Capability {
+  const runtime = resolveTelegramRuntime(env);
+  if (runtime.mode === "webhook") {
+    return {
+      id: "delivery",
+      title: "Update delivery",
+      telegram: "webhook",
+      status: "ready",
+      detail: `Telegram posts to this host (${runtime.reason}); redeploys cannot collide.`,
+      missing: [],
+    };
+  }
+  return {
+    id: "delivery",
+    title: "Update delivery",
+    telegram: "long polling",
+    status: "partial",
+    detail:
+      "Only one process may poll this token — a second instance causes 409 Conflict. On a host, prefer MAGNUS_TELEGRAM_MODE=webhook.",
+    missing: ["MAGNUS_TELEGRAM_MODE"],
+  };
+}
+
 function accessCapability(env: EnvBag): Capability {
   const auto = isTrue(env, "MAGNUS_AUTO_ALLOWLIST_NEW_USERS");
   return {
@@ -311,6 +336,7 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
     researchCapability(env),
     proactiveCapability(env),
     accessCapability(env),
+    deliveryCapability(env),
   ];
 
   return {

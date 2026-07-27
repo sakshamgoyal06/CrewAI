@@ -118,6 +118,22 @@ describe("describeCapabilities — optional lanes", () => {
   });
 });
 
+describe("describeCapabilities — update delivery", () => {
+  it("is partial while long polling and ready on a webhook host", () => {
+    expect(capability(CORE_ENV, "delivery").status).toBe("partial");
+    expect(
+      capability(
+        {
+          ...CORE_ENV,
+          MAGNUS_TELEGRAM_MODE: "webhook",
+          RAILWAY_PUBLIC_DOMAIN: "magnus.up.railway.app",
+        },
+        "delivery",
+      ).status,
+    ).toBe("ready");
+  });
+});
+
 describe("capabilityLogFields", () => {
   it("buckets capability ids by status", () => {
     const fields = capabilityLogFields(describeCapabilities(CORE_ENV));
