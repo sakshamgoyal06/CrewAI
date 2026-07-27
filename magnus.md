@@ -1,92 +1,36 @@
 # Magnus — project tracker
 
-**This file (`magnus.md` at the repository root) is the single source of truth** for what the codebase does, what was integrated with Supabase, and how to run and extend the project. Update it when you ship meaningful changes.
+**This file is the source of truth** for what the code does and how to run it. Update it when you
+ship anything that changes behaviour, dependencies, environment, or the database.
 
-For **philosophy, product intent, and target architecture** (LifeOS ↔ Magnus), see **`MAGNUS_CORE_CONTEXT.md`**.
-
-For **agent roster, prompts, scope, and bot actions** (review hub), see **`docs/AGENT_ROSTER.md`**.
-
-For **pillar → department → specialist** target routing (Health, Wealth, Wisdom, Joy), see **`docs/AGENT_ARCHITECTURE.md`**.
-
-For **Cursor-ready prompts** to implement new agents and routing (copy-paste blocks), see **`docs/CURSOR_AGENT_PROMPTS.md`**.
-
-For **setting up (or rebuilding) the Telegram bot end to end**, see **`docs/TELEGRAM_SETUP.md`**; hosting-only detail stays in **`docs/DEPLOY_TELEGRAM.md`**.
-
-For **what each component is, whether it is reachable, and whether it earns its place** (keep / decide / cut, with usage evidence), see **`docs/ARCHITECTURE.md`**.
+| Doc | Purpose |
+|-----|---------|
+| **`docs/ARCHITECTURE.md`** | What the system is: Magnus, four pillars, connections, ownership |
+| **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
+| **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
+| **`MAGNUS_CORE_CONTEXT.md`** | Product intent and philosophy |
 
 ---
 
-## Daily agent hardening (rolling)
+## What Magnus is
 
-**Plan:** Tackle **one specialist per day** until the roster feels production-grade: prompts, tool boundaries, error handling, tests, and real Telegram UX (no duplicate boilerplate, no wrong routing, no repeated bad answers).
+A single-user Telegram bot. The user writes plain language; Magnus answers in one voice. Each turn
+is silently classified to one of five intents — four pillars plus Magnus's own work — and a
+specialist may write the answer, but the user is never told and cannot address one directly.
 
-| Day (first focus) | Agent | Code |
-|-------------------|--------|------|
-| **2026-04-13** | **Culture** (books / film / poetry) | `src/agents/joy/cultureRecommenderAgent.ts` |
+**There are exactly two commands: `/start` and `/help`.** Both are answered locally with no model
+call. No menu, no lane picker, no per-department commands.
 
-**Next days:** Continue down Joy → Health → Wealth → Wisdom → Intelligence as needed; update this table when the order changes.
+| Owner | Scope |
+|---|---|
+| **Magnus** (`GENERAL`) | The day and week, Google Calendar, journaling and logging, reminders, cross-pillar questions, ordinary conversation. The only agent with tools. |
+| **Health** | Training, workouts, meals and macros, sleep, recovery, the health journal. Deep: sub-router, Hevy, nutrition providers, program memory, onboarding gate. |
+| **Wealth** | Budgeting, spending, saving, debt, net worth, financial goals, investing philosophy. |
+| **Happiness** | Books, film, music, games, hobbies, creative practice, rest, travel, relationships. |
+| **Wisdom** | Learning plans, skills and craft, career direction and growth, shipping projects. |
 
-**Culture — known gaps from live chat (2026-04-12):** Recommending the **same titles** across follow-up asks for “fresh” lists; **platform/region availability** stated confidently without live catalog tools. Tomorrow’s pass should tighten anti-repetition instructions, humility on streaming availability, and optional regression tests on the system prompt.
-
----
-
-## Current status (2026-04-12)
-
-**Verdict:** The **base is ready** for **agent hardening** and **domain-table writes**, as long as you complete the **owner checklist** below. The stack is **production-oriented** (structured logging, health checks, timeouts, RLS policies, rate limits, CI build+test). **Full product QA** (E2E, load, staging deploy) remains ahead.
-
-**Latest build (what shipped recently):**
-
-- **Routing & orchestrator** — Slash commands (`src/agents/routing/slashCommands.ts`), pillar routing (`intentToPillarRoute`, `resolvePillarRoute`), natural-language intent in `orchestratorIntent.ts`, `magnusOrchestrator` cycle (slash vs classify → memory → dispatch). Wealth composite + Joy agents registered; specialist prompts include **`SPECIALIST_USER_IDENTITY`** (`promptIdentity.ts`) so models do not address the user as “Magnus”.
-- **Telegram** — `setMyCommands` via **`getTelegramBotCommandsForRegistration()`**; **`MAGNUS_TELEGRAM_COMMANDS_MODE`** is **`core`** by default (`/menu`, `/help`, plus meal / journal / health / workouts / hevy / plan / research / morningbrief), with **`minimal`** (`/menu`, `/help`, `/meal`) and **`full`** (every lane) available. **`/start`** and **`/help`** are answered locally from `src/magnus/telegramIntro.ts` (no classifier, no Claude call). **`/menu`** sends an **inline keyboard**; picks set **pending slash** in Redis and merge the **next plain-text message** into `/<cmd> <text>` (`pendingSlashSelection.ts`).
-- **Meal logging pipeline** — Session-based `meal_logs` with multi-component rows, per-day rollups, optional daily macro targets (`mealLogPipeline`, `recordMealLog`, `mealDaySummary`, `formatMealLogReply`). CalorieNinjas/USDA scaling and picks (`calorieNinjasScale`, `calorieNinjaPick`), optional web-research estimate path, consolidated Telegram replies.
-- **Health / Nutrition** — `nutritionOrchestrated` coordinates parsing (`mealParserAgent`, `jsonExtract`), API estimates, and meal-log completion; `healthRouter` and nutrition stack aligned with the new meal path; additional Health specialists (meal planner, alternates, long-term planning, workouts coach) where wired.
-- **Orchestrator & Telegram** — Chunking/formatting (`telegramFormat`), delegation notice (`delegationNotice.ts`).
-- **Morning Brief** — Prompt includes specialist identity line (`morningBriefPrompt.ts`).
-- **Supabase migrations** — `20260412190000_meal_logs_align_magnus.sql`, `20260412210000_meal_session_and_daily_targets.sql`, `20260412220000_meal_logs_estimate_source_web_research.sql` (apply in Dashboard or `supabase db push` if not already).
-- **Tests** — Broadened coverage for meals, health JSON extract, orchestrator paths, slash commands, pending merge; `npm run build` + `npm test` green.
-
-**Database:** On **2026-04-12**, all **`public`** tables on project `xdrpjfdhduskhzryevze` were **`TRUNCATE … RESTART IDENTITY CASCADE`** (profiles, chat history, meal logs, and domain tables are **empty**). New Telegram users get fresh `user_profile` rows as they chat; re-seed anything you need for demos.
-
-| Area | State |
-|------|--------|
-| **Runtime** | Telegram bot + health HTTP + typed TS + `npm run build` / `npm test` / CI workflow |
-| **Database** | Schema + FKs to `user_profile`, RLS + `service_role_only` on public tables; **currently empty** after truncate — **seed or create rows** as you build features |
-| **App ↔ DB** | **Wired today:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `meal_logs` (+ related meal migrations), `user_health_profile`. **Lightly / not wired in app logic yet:** most other domain tables (goals, KPIs, tasks, …) — **next phase** |
-| **Agents** | `src/agents/` — orchestrator registry, **Notion**, Health composite, **Planner**, **Learning** (tracker / plan), **Build & Ship**, **Research** (GENERAL research sub-route only); **Memory** (semantic recall **stub**); see **Agents** below |
-
-### Your checklist before the next phase (nothing blocking in code)
-
-1. **`.env`** — Copy from `.env.example`, fill all secrets; never commit `.env`.
-2. **Local chat access** — Set **`MAGNUS_AUTO_ALLOWLIST_NEW_USERS=true`** while developing, or new Telegram users get `allowlisted: false`.
-3. **Production deploy** — Set **`NODE_ENV=production`** and **`SUPABASE_SERVICE_ROLE_KEY`** (required); point your orchestrator at **`/health`** and **`/ready`**; ensure **one** process long-polls each Telegram bot token.
-4. **Supabase** — Confirm project **`xdrpjfdhduskhzryevze`** (or your target) matches migrations you expect; re-run smoke: `npx tsx scripts/test-supabase.mts` after credential changes.
-5. **CI** — Push to GitHub with **Actions enabled** so `.github/workflows/ci.yml` runs (optional but recommended).
-6. **Secrets hygiene** — Rotate any key ever exposed; restrict Supabase Dashboard access.
-
-**You do not need** to finish E2E or full monitoring before starting subagents and DB writes — add those in parallel as the product matures.
-
----
-
-## Next steps when resuming
-
-1. **Refine and complete each agent** — Follow the **Daily agent hardening** table above (Culture first on **2026-04-13**). Bring every specialist to **production quality**: clear prompts, tool boundaries, error handling, tests, and observability. Broader backlog: **Notion** (env + DB writes), **Health stack** (onboarding slot accuracy, gates vs slash intent), **Planner**, **Research**, **Memory** (replace `semanticRecall` stub with real embeddings when ready). Close gaps called out in `memory` context (`gaps`) rather than silent failures.
-
-2. **Subagents and routing** — Keep new specialists behind `src/agents/`, register in `registry.ts`, and extend `handleMessage` / `createMagnus().start()` only when interfaces are stable.
-
-3. **Database usable, then hosted bot** — **Prove the database end-to-end**: inserts/updates with `user_profile_id`, domain tables you care about, `npm run test:supabase`, and seeds/smokes. Then **deploy** (Docker, Railway, Fly.io, VPS, …) so the bot runs **continuously**. Use **`NODE_ENV=production`**, **`SUPABASE_SERVICE_ROLE_KEY`**, **`/health` / `/ready`**, and **one** long-poller per bot token.
-
----
-
-## Git: this project is Magnus (not CrewAI-only)
-
-The product is **Magnus**. If `git remote -v` still points at a repo named **`CrewAI`** or another unrelated name, **rename the repository on GitHub** (Settings → General → Repository name → e.g. `Magnus`) **or** create a new repo `Magnus` and point `origin` at it:
-
-```bash
-git remote set-url origin https://github.com/<your-username>/Magnus.git
-git push -u origin main
-```
-
-Keep **one canonical remote** so collaborators and CI match the real project name.
+Wealth, Happiness and Wisdom are single prompt-only agents sharing one runner
+(`src/agents/pillarSpecialist.ts`) — intentionally shallow until a pillar earns depth.
 
 ---
 
@@ -94,44 +38,33 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 
 | Item | Detail |
 |------|--------|
-| **Runtime** | Node.js ≥ 20 (`package.json` engines) |
-| **Language** | TypeScript, ESM (`"type": "module"`), `tsx` for dev |
-| **Entry** | `src/index.ts` → `npm run dev` runs `tsx watch src/index.ts` |
-| **Supabase project** | `xdrpjfdhduskhzryevze` (region ap-northeast-1) — use Dashboard for SQL; migrations were applied via Supabase MCP during development |
-| **Primary interface** | Telegram bot (Telegraf long-polling) |
-| **Health HTTP** | Express on `HEALTH_PORT` (default **8080**): `GET /health` (liveness), `GET /ready` (Supabase + Redis), `POST /internal/jobs/morning-brief` (auth via `MAGNUS_INTERNAL_JOB_SECRET`) |
-| **Logging** | **pino** (JSON); set `LOG_LEVEL` / `NODE_ENV` |
+| **Runtime** | Node.js ≥ 20, TypeScript ESM, `tsx` for dev |
+| **Entry** | `src/index.ts` |
+| **Interface** | Telegram (Telegraf) — long polling or webhook |
+| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `POST /internal/jobs/morning-brief` |
+| **Model** | `claude-sonnet-4-6` for classification and every agent |
+| **Supabase project** | `xdrpjfdhduskhzryevze` (ap-northeast-1) |
+| **Logging** | pino JSON; Telegram user ids masked in production |
+| **Deploy** | Railway from `Dockerfile` + `railway.toml` (restart ALWAYS, one replica) |
 
 ---
 
-## Quick start (local)
+## Quick start
 
-1. Clone or open this repo: `Magnus/` is the project root.
-2. `npm install`
-3. Copy `.env.example` → `.env` and fill secrets (never commit `.env`).
-4. **Required for boot:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (recommended with RLS), `SUPABASE_ANON_KEY` (optional if service role set), `ANTHROPIC_API_KEY`, `UPSTASH_REDIS_*` or `REDIS_*`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (default outbound chat for `sendMessage` without options). Set **`MAGNUS_AUTO_ALLOWLIST_NEW_USERS=true`** for local dev if you want new Telegram users allowlisted.
-5. **`NODE_ENV=production`** requires **`SUPABASE_SERVICE_ROLE_KEY`** (boot fails without it).
-6. `npm run telegram:check` — capability report for your `.env`; `npm run telegram:setup` applies the bot config (webhook removal, commands, menu button, description). Full walkthrough: **`docs/TELEGRAM_SETUP.md`**.
-7. `npm run dev` — logs should show health server listening, a `capabilities` line, then `Magnus online (Telegram + health)` after Telegram connects.
-8. `npm test` — unit tests (no live API keys required; needs the dummy Supabase/Anthropic/Redis vars from `.github/workflows/ci.yml` in your shell or `.env`).
-9. Optional: `npx tsx scripts/test-supabase.mts` (Supabase insert/delete on `magnus_chat_messages`).
+```bash
+npm install
+cp .env.example .env          # fill the six required values
+npm run telegram:check        # what your env enables, and what Telegram currently holds
+npm run telegram:setup        # register /start + /help, menu button, profile text
+npm run dev
+```
 
----
+**Required to boot:** `TELEGRAM_BOT_TOKEN`, `ANTHROPIC_API_KEY`, `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`. Set
+`MAGNUS_AUTO_ALLOWLIST_NEW_USERS=true` or new Telegram users get a refusal.
 
-## Tech stack (in use vs reserved)
-
-| Layer | Packages | Status |
-|-------|----------|--------|
-| Bot | `telegraf` | In use: `startBot`, `sendMessage`, `sendMarkdown`, text handler |
-| LLM | `@anthropic-ai/sdk` | In use: `claude-sonnet-4-6` for classify + GENERAL replies |
-| Database | `@supabase/supabase-js` | In use: profiles, chat log; service role bypasses RLS |
-| Cache / rate limits | `@upstash/redis` | Required at boot; **inbound message rate limit** per Telegram user (fixed window, `MAGNUS_RATE_LIMIT_PER_MINUTE`; `0` = off) |
-| Logging | `pino` | Structured JSON logs; Telegram user ids masked in production (`maskTelegramUserId`) |
-| Config | `dotenv` | Loaded in `clients.ts` and `index.ts` |
-| HTTP | `express` | **Health server** (`/health`, `/ready`) + **internal job** route for Morning Brief (`POST /internal/jobs/morning-brief`); not a general public API |
-| Jobs | `node-cron` | In-process **Morning Brief** scheduler (optional; see env); users filtered by `user_profile.timezone` |
-| Notion | `@notionhq/client` | **Server-side** API for the Notion agent and tools (`src/tools/notion.ts`); headless bot does not use Cursor MCP. Same `NOTION_TOKEN` as Morning Brief when both are enabled. |
-| Google Calendar | `googleapis`, `@modelcontextprotocol/sdk` | **Cursor MCP** (`mcp/google-calendar/server.mts`) + shared integration (`src/integrations/googleCalendar/`). OAuth desktop flow; not wired into Telegram bot yet. See **`docs/GOOGLE_CALENDAR_MCP.md`**. |
+`npm test` needs the dummy Supabase/Anthropic/Redis values from `.github/workflows/ci.yml` in your
+shell or `.env`.
 
 ---
 
@@ -139,167 +72,79 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 
 | Path | Responsibility |
 |------|----------------|
-| `src/index.ts` | `dotenv` → `logger` → `clients` → capability log → `createTelegramRuntime` → `startHealthServer()` (mounts the webhook route in webhook mode) → `telegram.start()` → watchdog → graceful shutdown on `SIGTERM`/`SIGINT`. |
-| `src/healthServer.ts` | Express: `/health`, `/ready` (Redis `PING` + Supabase `user_profile` head query); `POST /internal/jobs/morning-brief` (Bearer / `X-Magnus-Job-Secret`); optional Telegram webhook route (secret-token checked, 200 before processing). Returns a `close()` handle. |
-| `src/config/telegramRuntime.ts` | Polling vs webhook (`MAGNUS_TELEGRAM_MODE`); derives the public URL from `TELEGRAM_WEBHOOK_URL` / `RAILWAY_PUBLIC_DOMAIN` / `RENDER_EXTERNAL_URL` / `FLY_APP_NAME`, and the route path + secret from the bot token. Falls back to polling with a logged reason. |
-| `src/tools/telegramWatchdog.ts` | Probes `getMe` on an interval, re-registers a drifted webhook, exits non-zero after N consecutive failures so the host restarts (`MAGNUS_TELEGRAM_WATCHDOG_INTERVAL_MS`, `MAGNUS_TELEGRAM_WATCHDOG_FAILURES`). |
-| `src/jobs/morningBrief.ts` | Morning Brief ritual: Claude `MORNING_BRIEF_SYSTEM`, context from Supabase, optional Telegram + Notion. |
-| `src/jobs/morningBriefCron.ts` | `node-cron` every 15 min (UTC tick); per-user local hour/window + Redis dedupe. |
-| `src/jobs/morningBriefManual.ts` | Manual trigger helper (used by Telegram). |
-| `src/tools/notionMorningBrief.ts` | Optional Notion child page under `NOTION_MORNING_BRIEF_PARENT_PAGE_ID`. |
-| `src/logger.ts` | `pino` instance + `maskTelegramUserId`. |
-| `src/intent.ts` | `parseIntent` / `INTENTS` (pure; used by `magnus` + tests). |
-| `src/magnus.ts` | `createMagnus().start()` schedules Morning Brief cron; `handleMessage`: resolve profile → allowlist/tier gates → **meal log commands** (`/meal`, `meal:`, `log meal:`) → `runOrchestratorReply` → optional delegation notice → persist chat rows. |
-| `src/meals/` | `parseMealLogCommand` / `isMealCommand`, `estimateMealNutrition` (CalorieNinjas → USDA FDC → optional proxy → optional LLM), `recordMealLog` → `meal_logs`. |
-| `src/config/projectSettings.ts` | Env-backed toggles (e.g. `MAGNUS_DELEGATION_NOTICE`). |
-| `src/magnus/delegationNotice.ts` | User-facing copy when a specialist takes the turn. |
-| `src/agents/` | Types, `dispatchToAgent`, **Notion** (`knowledge/notionAgent.ts`), Health composite, Planner, **Research** (`intelligence/researchAgent.ts`), `runOrchestratorReply` (see **Agents** below). |
-| `src/tools/notion.ts` | Notion API client (`NOTION_TOKEN`), retry/backoff, `ensurePageForDate`, `appendParagraphBlocks`, `queryDatabaseByDateProperty`, `createGoalPage` — IDs from env (Goals, Daily Check-ins, Patterns, daily log parent). |
-| `src/tools/dailyLog.ts` | `recordMagnusDailyLog` → `magnus_daily_logs` (mirrors Notion agent writes for memory + briefs). |
-| `src/tools/research/` | `gatherResearchMaterials`, `fetchPageExcerpt`, optional SerpAPI `searchWebAndFetch` — HTML sanitisation, timeouts, response size caps. |
-| `src/tools/clients.ts` | Singletons: `supabase` (timeouts + `auth` for server), `redis`, `anthropic` (timeout + retries). Production requires service role key. |
-| `src/tools/rateLimit.ts` | Redis fixed-window counter (60s) for inbound Telegram text (`checkMessageRateLimit`). |
-| `src/tools/chatLog.ts` | `resolveTelegramUserProfile`, `recordMagnusChatMessage` (returns `{ ok }`), legacy `ensureUserProfileIdForTelegramUser`. Documents identity model in file header. |
-| `src/tools/telegram.ts` | Telegraf bot; `/start` + `/help` + `/menu` handled locally; `/morningbrief` + `morning brief` → Morning Brief; rate limit before handler; `TelegramTextHandler` receives `updateId` for logging. |
-| `src/magnus/telegramIntro.ts` | `/start` and `/help` copy built from the registered command list (grouped by pillar; tests keep it in sync). |
-| `src/config/magnusCapabilities.ts` | Pure env → capability report (`describeCapabilities`, `capabilityLogFields`) used by `npm run telegram:check` and the boot log. |
-| `scripts/telegram/setup.mts` | `npm run telegram:check` / `npm run telegram:setup` — capability report, webhook removal, `setMyCommands`, menu button, bot description, optional 409 conflict probe. |
-| `scripts/test-supabase.mts` | Connectivity smoke test for Supabase + chat table. |
-| `src/integrations/googleCalendar/` | OAuth + Calendar API ops (`listEvents`, `createEvent`, …) — used by Cursor MCP and future planner wiring. |
-| `mcp/google-calendar/server.mts` | Stdio MCP server for Cursor (`list_calendars`, `list_events`, `create_event`, …). |
-| `scripts/google-calendar-auth.mts` | One-time OAuth (`npm run google-calendar:auth`). |
-| `.cursor/mcp.json.example` | Copy to `.cursor/mcp.json` with your `GOOGLE_OAUTH_CREDENTIALS` path. |
-| `src/pillars/health/workouts/` | **Health pillar — Workouts department:** Hevy API client, fitness / Hevy-write agents, routine scripts (see below). |
-| `scripts/health/workouts/hevy/` | Operational Hevy scripts (list templates, create/update routines, preflight checks). Run with `npx tsx scripts/health/workouts/hevy/<script>.mts`. |
-
-### Agents (orchestration)
-
-| File | Role |
-|------|------|
-| `src/agents/types.ts` | `AgentContext`, `AgentResult`, `DepartmentAgent` |
-| `src/agents/registry.ts` | `dispatchToAgent` — **priority order**: `Notion` → `HealthComposite` → `Planner` → `LearningTracker` / `LearningPlan` → `BuildShip` |
-| `src/agents/magnusOrchestrator.ts` | Keyword override → **NOTION** (`isNotionIntentOverride`); classify intent; memory context; **GENERAL** research sub-route (`isResearchSubIntent`); `answerGeneral`; delegate specialists; `routingPlaceholder` |
-| `src/agents/intelligence/researchAgent.ts` | `RESEARCH_SYSTEM`, `runResearchAgent` — structured Markdown (Executive answer, Key points, Sources, Open questions); uses gathered URLs / search / pasted text |
-| `src/agents/health/healthRouter.ts` | `healthCompositeAgent` (`HEALTH`): meal log → **journal** → Hevy write → meal planner → long-term → Fitness → alternates → Nutrition → Energy; loads **`.cursor/skills/health/references/`** into prompts on Telegram |
-| `src/pillars/health/references/loadHealthReferences.ts` | Reads committed health memory (user-context, learnings, recovery, journals) + Supabase Telegram journals for phone coaching |
-| `src/agents/health/healthJournalAgent.ts` | `/journal` and EOD phrases → structured journal saved to `magnus_daily_logs` |
-| `src/pillars/health/workouts/agents/fitnessAgent.ts` | `FITNESS_SYSTEM`, `tryFitnessAgent`; reads Hevy sessions/routines when `HEVY_API_KEY` set, else Supabase `workouts`; metadata `agent: "fitness"` |
-| `src/pillars/health/workouts/agents/hevyWriteAgent.ts` | `tryHevyWriteAgent` — `hevy routine:` / `hevy workout:` / `/hevy` → Hevy REST create/update |
-| `src/pillars/health/workouts/agents/workoutsCoachAgent.ts` | Thin alias `runWorkoutsCoachAgent` → `tryFitnessAgent` |
-| `src/pillars/health/workouts/hevy/` | Hevy API client (`hevyClient.ts`), env (`hevyEnv.ts`), write-command parser, prompt formatters |
-| `src/agents/health/healthSubIntent.ts` | `hasFitnessKeyword`, `classifyHealthSubIntent` (same model as orchestrator; `max_tokens: 64`; no new env vars) |
-| `src/agents/health/healthOnboarding.ts` | `fetchUserHealthProfile`, `startHealthOnboarding`, `runHealthOnboardingTurn`, `formatHealthPreferencesForPrompt` — gates Health until `user_health_profile.onboarding_completed_at` is set |
-| `src/agents/planning/plannerAgent.ts` | `PLANNER_SYSTEM`, `runPlannerAgent` — text planning coach for `PLANNING` (locked day, optional profile north star / timezone) |
-| `src/agents/knowledge/notionAgent.ts` | `NOTION` — append dated log under parent page, query today’s check-in DB, create Goals row; requires env (see `.env.example`) |
-| `src/agents/memory/` | `loadMemoryContext`, `formatMemoryBlockForSystem`, `augmentUserWithMemory`, `intentToMemoryPurpose` |
-
-**Health onboarding:** Apply migration `supabase/migrations/20260412140000_user_health_profile.sql` so `user_health_profile` exists. If a row exists and `onboarding_completed_at` is null, **every** message is handled by Health onboarding (no intent classification) until the user finishes the four questions or types `skip`. The first time the classifier returns **HEALTH** and there is no row, Magnus inserts the profile and sends the intro. No new environment variables.
-
-**Routing model:** Free text goes **Magnus → classify → `resolvePillarRoute` on `AgentContext` → memory (when applicable) → `dispatchToAgent`**. **Telegram `/commands`** (see `src/agents/routing/slashCommands.ts` — also **setMyCommands** on bot launch) **skip classification**, set **intent + `DepartmentId`**, and pass **body-after-command** (or a default prompt) to the department agent; **`/research`** forces the Research path. **Wealth** uses **`wealthCompositeAgent`** (`src/agents/wealth/wealthRouter.ts`) to pick Trading / Investment / … from `ctx.department`. **Health** still uses **`healthCompositeAgent`** (meal → planner → … → fitness → nutrition → energy). **Joy** specialists are registered again (`RELATIONSHIPS`, `HAPPINESS`, `CULTURE`). For natural-language turns, **Notion** / **meal:** coercions apply when the classifier returns `GENERAL`. Then: same registry order as code. Plain `GENERAL` (non-research) uses the short Claude reply.
-
-**Slash aliases:** `/relationship` is an alias of `/relationships` (same intent, department, and default prompt; see `COMMAND_ALIASES` in `slashCommands.ts`).
-
-**Memory context (orchestrator):** Each turn calls `loadMemoryContext({ userProfileId, telegramUserId, purpose })` (`purpose` from `intentToMemoryPurpose`). A compact string from `formatMemoryBlockForSystem` is appended to the user message for **GENERAL** / **Research** (`augmentUserWithMemory`) and passed as **`memoryBlock`** on `AgentContext` for specialists (Health stack, Planner). Missing optional tables surface as **`gaps`** inside that block — not silent failure. Structured logs at **debug** (`memoryAgent`, `magnusOrchestrator`): purpose, gap count, turn counts, shortened profile id — **not** raw message bodies. A separate `get_memory` tool is **not** implemented; memory is always loaded once per turn for the orchestrator path.
-
-### Meal logging (Telegram)
-
-**`/meal` only** skips intent classification (direct invoke). **`meal:`** / **`log meal:`** go through **`runOrchestratorReply`** (classify → if `GENERAL`, coerce to `HEALTH` so the meal pipeline still runs). All paths still use the Health composite / meal orchestration inside the orchestrator (not a separate `handleMessage` bypass).
-
-**Practical APIs (default):** Order is **CalorieNinjas → USDA FDC** — HTTP-only, no LLM tokens. Set **`CALORIENINJAS_API_KEY`** and/or **`USDA_FDC_API_KEY`** in `.env`.
-
-**Optional fallbacks:** If **`HEALTHIFYME_PROXY_URL`** is set, Magnus tries your bridge **after** both APIs fail (see `src/meals/providers/healthifyMeProxy.ts`). There is **no official HealthifyMe public API**; the proxy is your own service.
-
-**LLM estimate:** Only if **`MAGNUS_MEAL_LOG_LLM_FALLBACK=true`** — uses Claude JSON when APIs (and optional proxy) all fail; otherwise the row is still logged with `estimate_source: unavailable` and the reply explains missing keys.
-
-**Commands:** `/meal …`, `meal: …`, `log meal: …`. Rows go to **`meal_logs`** with **session grouping** and **component lines** once migrations through **`20260412210000_meal_session_and_daily_targets.sql`** are applied; align columns with **`20260412190000_meal_logs_align_magnus.sql`**; optional **`estimate_source`** / web research via **`20260412220000_meal_logs_estimate_source_web_research.sql`**.
+| `src/index.ts` | Boot: clients → capability log → Telegram runtime → health server → watchdog → graceful shutdown |
+| `src/magnus.ts` | Turn handler: allowlist gate, chat persistence, typing indicator, orchestrator call. Starts the Morning Brief cron. |
+| `src/agents/magnusOrchestrator.ts` | Health onboarding gate → classify → memory → pillar specialist or Magnus |
+| `src/agents/orchestratorIntent.ts` | The five-way classifier, plus the one coercion (explicit meal log → HEALTH) |
+| `src/agents/magnusAgent.ts` | Magnus himself: tool loop over calendar read/create and `log_note` |
+| `src/agents/tools/calendarTool.ts` | Google Calendar as text for the model, formatted in the user's timezone |
+| `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured |
+| `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
+| `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
+| `src/agents/health/healthRouter.ts` | Health composite: meal log → journal → Hevy write → fitness → nutrition |
+| `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
+| `src/agents/memory/` | `loadMemoryContext`, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
+| `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
+| `src/meals/` | Meal parsing, estimate chain (web search → USDA → CalorieNinjas → optional LLM), `meal_logs` writes |
+| `src/pillars/health/workouts/` | Hevy client, fitness agent, Hevy write agent |
+| `src/pillars/health/references/` | Reads committed program memory + Telegram journals |
+| `src/jobs/` | Morning Brief: prompt, context, cron, timezone window. Optional. |
+| `src/tools/telegram.ts` | Telegraf bot, `/start` and `/help`, rate limit, update dedupe, webhook mount |
+| `src/tools/telegramWatchdog.ts` | Liveness probe; exits so the host restarts |
+| `src/config/telegramRuntime.ts` | Polling vs webhook, public URL derivation, handler timeout |
+| `src/config/telegramCommands.ts` | The two registered commands (import-free, so the CLI needs no credentials) |
+| `src/config/magnusCapabilities.ts` | Env → capability report for `telegram:check` and the boot log |
+| `src/healthServer.ts` | `/health`, `/ready`, Morning Brief job route, Telegram webhook route |
+| `src/integrations/googleCalendar/` | OAuth (env refresh token or local token file) + Calendar operations |
+| `mcp/google-calendar/server.mts` | Optional stdio MCP server for Cursor — not part of the bot |
 
 ---
 
-## Runtime behaviour (summary)
+## Behaviour
 
-1. **Identity** — Each Telegram **user** is keyed by `ctx.from.id` (string). Profiles are stored in `user_profile.telegram_chat_id` (same string; column name is legacy).
-2. **Profile resolution** — `resolveTelegramUserProfile`: find by `telegram_chat_id`; else adopt a single orphan row with null Telegram id; else insert defaults + access fields.
-3. **Access (dummy)** — `allowlisted`, `user_tier`, `access_flags` on `user_profile`. Env: **`MAGNUS_AUTO_ALLOWLIST_NEW_USERS`** must be **`true`** for new profiles to get `allowlisted: true` (default **false** for safer production), `MAGNUS_DEFAULT_USER_TIER` (`standard` \| `premium` \| `internal`). If not allowlisted or `access_flags.chat === false`, return a fixed refusal string (no user/assistant chat rows for the blocked path).
-4. **Rate limit** — Inbound text messages: Redis-backed fixed 60s window per Telegram user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, default 30/min; `0` disables).
-5. **Intent classification** — Categories include `NOTION`, `HEALTH`, … `/meal` forces `HEALTH` without classify. Otherwise classify → pillar/department on context → delegate when a specialist is registered (`NOTION` → Notion, `HEALTH` → Health composite, `PLANNING` → Planner, `LEARNING` → learning specialists, `BUILD` → Build & Ship); otherwise **routing placeholder**. `GENERAL` → **Research** (research sub-route) or short Claude reply.
-6. **Chat persistence** — Table `magnus_chat_messages`: each successful turn logs **user** then **assistant** with `user_profile_id`, `telegram_user_id`, optional `intent`, `metadata` (tier, flags, `telegram_user_id`). When **`MAGNUS_DELEGATION_NOTICE`** is on and Magnus delegates to a specialist (`delegated_agent` set), an extra **assistant** row is written first for the short delegation notice (`metadata.delegation_notice: true`), then the specialist reply. Proactive `sendMessage` / `sendMarkdown` logs an extra **assistant** row with `metadata.outbound`.
-7. **Telegraf** — `startBot` returns a Promise resolved in the launch callback so startup logging works without awaiting the infinite polling loop.
-
----
-
-## Environment variables
-
-See **`.env.example`** for the full list. Highlights:
-
-- **`SUPABASE_SERVICE_ROLE_KEY`** — Use for this server. **Required when `NODE_ENV=production`.** With RLS `service_role_only` policies, anon cannot read/write data.
-- **`MAGNUS_SUPABASE_DB_TIMEOUT_MS`**, **`MAGNUS_ANTHROPIC_TIMEOUT_MS`**, **`MAGNUS_ANTHROPIC_MAX_RETRIES`** — Client timeouts/retries (see `.env.example`).
-- **`HEALTH_PORT`** — Port for `/health` and `/ready` (default 8080).
-- **`MAGNUS_RATE_LIMIT_PER_MINUTE`** — Inbound Telegram messages per user per minute (`0` = off).
-- **`MAGNUS_DELEGATION_NOTICE`** — When **`true`** (default), Telegram sends a short notice **before** the specialist reply whenever a department agent or research handles the turn; set **`false`** to reduce message volume at mass scale.
-- **`MAGNUS_TELEGRAM_COMMANDS_MODE`** — Native Telegram command menu: **`core`** (default), `minimal`, or `full`. Apply changes with **`npm run telegram:setup`** (or restart the bot).
-- **`MAGNUS_TELEGRAM_MODE`** — **`polling`** (default) or **`webhook`**. Webhook is recommended on an always-on host: no `409 Conflict` on overlapping deploys and Telegram retries delivery. Optional **`TELEGRAM_WEBHOOK_URL`** (auto-derived on Railway / Render / Fly) and **`TELEGRAM_WEBHOOK_SECRET`** (derived from the bot token when unset).
-- **`MAGNUS_TELEGRAM_WATCHDOG_INTERVAL_MS`** / **`MAGNUS_TELEGRAM_WATCHDOG_FAILURES`** — Telegram liveness probe (default 60000 ms, 5 failures; `0` disables). Exits non-zero so the platform restarts.
-- **`MAGNUS_AUTO_ALLOWLIST_NEW_USERS`** — Must be **`true`** to seed `allowlisted: true` for **new** profiles.
-- **`MAGNUS_DEFAULT_USER_TIER`** — Seeded tier for new profiles.
-- **`LOG_LEVEL`** — e.g. `debug`, `info`, `warn`, `error`.
-- **`CALORIENINJAS_API_KEY`**, **`USDA_FDC_API_KEY`**, **`HEALTHIFYME_PROXY_URL`** / **`HEALTHIFYME_PROXY_TOKEN`** — meal logging (see **Meal logging** above and `.env.example`).
-- **`HEVY_API_KEY`** — Hevy Pro developer key for Workouts department (read recent workouts/routines in Fitness agent; create routines/workouts via `hevy routine:` / `hevy workout:` or `/hevy`). Optional **`MAGNUS_HEVY_API_BASE_URL`**, **`MAGNUS_HEVY_FETCH_TIMEOUT_MS`**.
-- **`MAGNUS_SERPAPI_KEY`** or **`SERPAPI_API_KEY`** — optional; enables Google search via SerpAPI when the user asks for research but provides no URLs (see `.env.example`).
-- **`MAGNUS_RESEARCH_FETCH_TIMEOUT_MS`**, **`MAGNUS_RESEARCH_MAX_RESPONSE_BYTES`** — bounds for research HTTP fetches.
-- **Morning Brief** — `MAGNUS_MORNING_BRIEF_ENABLED` (default **true**; set `false` to disable generation). `MAGNUS_MORNING_BRIEF_CRON_ENABLED` (default **false**; set **true** to start in-process cron). `MAGNUS_MORNING_BRIEF_LOCAL_HOUR` (0–23, default **7**), `MAGNUS_MORNING_BRIEF_WINDOW_MINUTES` (default **14**). `MAGNUS_INTERNAL_JOB_SECRET` — required for `POST /internal/jobs/morning-brief`. `MAGNUS_MORNING_BRIEF_DEFAULT_USER_PROFILE_ID` — optional default profile for HTTP trigger when body omits `userProfileId`. **Notion (optional):** `NOTION_TOKEN`, `NOTION_MORNING_BRIEF_PARENT_PAGE_ID`, optional `NOTION_MORNING_BRIEF_TITLE_PROPERTY` (default `title`).
-- **Notion agent (chat)** — same **`NOTION_TOKEN`** (or `NOTION_API_KEY`); optional **`NOTION_GOALS_DATABASE_ID`**, **`NOTION_DAILY_CHECKINS_DATABASE_ID`**, **`NOTION_PATTERNS_DATABASE_ID`**, **`NOTION_DAILY_LOG_PARENT_PAGE_ID`**, and property/title overrides — see **`.env.example`**. **`SKIP_NOTION_INTEGRATION`** — skip optional live tests in `notion.integration.test.ts`.
+1. **Identity** — Each Telegram user is keyed by `ctx.from.id`, stored in
+   `user_profile.telegram_chat_id` (legacy column name).
+2. **Access** — `allowlisted`, `user_tier`, `access_flags` on `user_profile`. Not allowlisted means
+   a fixed refusal and no chat rows.
+3. **Rate limit** — Redis fixed 60s window per user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, 0 disables).
+4. **Dedupe** — `update_id` claimed in Redis for 24h, so webhook retries never double-reply.
+5. **Classification** — Five intents. `GENERAL` is Magnus's own work, not a fallback bucket.
+6. **Memory** — Loaded once per turn and appended to the prompt; missing optional tables surface as
+   `gaps` rather than failing.
+7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
+   routing in `metadata` (`delegated_agent`, `agent_metadata`).
+8. **Replies** — One reply per turn, chunked only for Telegram's size limit, sent as HTML.
 
 ---
 
-## Database — identity and tables
+## Database
 
-### Canonical keys
+**Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `meal_logs`,
+`user_health_profile`.
 
-| Concept | Where |
-|--------|--------|
-| App user (UUID) | `user_profile.id` |
-| Telegram user id (string) | `user_profile.telegram_chat_id` (unique when set) + duplicated on `magnus_chat_messages.telegram_user_id` |
-| Row ownership | `user_profile_id` FK on `magnus_chat_messages` and on **domain** tables (goals, tasks, health, wealth, etc.) |
+**Read only:** `workouts`, `goals`, `memory_summaries`, `daily_scores`, `happiness_reserve`,
+`patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans`.
 
-### `user_profile` (relevant columns)
+Public tables use RLS with a `service_role_only` policy; the service role key bypasses it. The new
+Supabase `sb_secret_…` key format works as service role.
 
-- `id`, `north_star_goal`, `timezone`, `telegram_chat_id`, `created_at`, `updated_at`
-- `allowlisted`, `user_tier`, `access_flags` (jsonb)
-
-### `magnus_chat_messages` (relevant columns)
-
-- `id`, `user_profile_id`, `telegram_user_id`, `role` (`user` \| `assistant` \| `system`), `content`, `source`, `intent`, `metadata`, `created_at`
-- Retention: function `purge_expired_magnus_chat_messages()` deletes rows older than 30 days (schedule via pg_cron or external job).
-
-### `magnus_daily_logs` (free-form daily notes)
-
-- **Purpose:** Durable mirror of LifeOS “log a note” behaviour — complements **Notion** (human-readable) and structured **`daily_scores`** (evening check-in sliders). Written when the **Notion** agent appends a dated page or creates a Goals row (`src/tools/dailyLog.ts`); surfaced in **memory** (`loadMemoryContext`) and **Morning Brief** context (`recentMagnusDailyLogs` in the JSON payload).
-- **Columns:** `user_profile_id`, `log_date` (DATE), `body`, `source` (`telegram` \| `notion` \| `system`), optional `notion_page_id`, `metadata` (jsonb), timestamps.
-- **Migration:** `supabase/migrations/20260412120000_magnus_daily_logs.sql` — apply in Supabase SQL Editor (or your migration workflow) before relying on inserts.
-
-### Migrations (audited)
-
-Applied on project `xdrpjfdhduskhzryevze`, including: RLS on public tables; chat table + purge function; unique partial index on `user_profile(telegram_chat_id)`; profile access columns; `telegram_user_id` on chat messages; **`user_profile_id`** added to domain tables missing it (nullable for legacy rows).
-
-**Advisor:** Public tables use RLS with a **`service_role_only`** policy (`auth.role() = 'service_role'`); the **service role** JWT bypasses RLS for this server. **Anon** cannot read/write those tables — expected. Some **SECURITY DEFINER** views in the DB may still need review if you expose them to other roles later.
+`supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile` and `meal_logs` only —
+everything else was applied directly to the project and **cannot be rebuilt from this repo**.
 
 ---
 
-## Operations and troubleshooting
+## Environment
 
-- **Always on** — Deploy runbook (Railway click-path, webhook vs polling, watchdog, uptime monitoring) in **`docs/TELEGRAM_SETUP.md` → “Keeping it always on”**. `railway.toml` pins `restartPolicyType = "ALWAYS"`, one replica, and the `/health` check.
-- **Container health** — See **`docker-compose.example.yml`** (HTTP `healthcheck` on `GET /health`) and **`Dockerfile`** (multi-stage build; inject secrets with Compose `env_file` or your host env — do not bake `.env` into the image). **`npm run start:prod`** runs `node --env-file=.env dist/index.js` after `npm run build`; set **`NODE_ENV=production`** in the env file you pass on the server. Reference template: **`.env.production.example`** (placeholders only).
-- **Telegram `409 Conflict` / “terminated by other getUpdates”** — Only one process may long-poll the same bot token; stop duplicate `npm run dev` or other hosts using the same token. Confirm with **`npm run telegram:check -- --probe-conflict`**.
-- **Bot silent / no updates** — A webhook set on the token swallows every update while Magnus long-polls. **`npm run telegram:check`** reports it; **`npm run telegram:setup`** removes it.
-- **Supabase permission errors with anon key** — Use **service role** in `.env` for this server.
-- **Secrets** — Never commit real `.env` or paste keys into chats; rotate if leaked.
+See `.env.example`, which is grouped by purpose. Highlights beyond the six required values:
 
----
-
-## Dependencies (`package.json`)
-
-**Runtime:** `telegraf`, `@anthropic-ai/sdk`, `@supabase/supabase-js`, `@upstash/redis`, `@notionhq/client`, `googleapis`, `@modelcontextprotocol/sdk`, `zod`, `dotenv`, `express`, `pino`, `node-cron`.  
-**Dev:** `tsx`, `typescript`, `vitest`, `@types/express`, `@types/node`.
+- **`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_CALENDAR_REFRESH_TOKEN`** — calendar on a
+  host with no browser or disk. See `docs/GOOGLE_CALENDAR.md`.
+- **`HEVY_API_KEY`** — real workout data for the Health pillar.
+- **`NOTION_TOKEN` + `NOTION_DAILY_LOG_PARENT_PAGE_ID`** — mirror journal notes to Notion.
+- **`USDA_FDC_API_KEY`, `CALORIENINJAS_API_KEY`** — meal macros.
+- **`MAGNUS_TELEGRAM_MODE=webhook`** — recommended on a host; no 409 on overlapping deploys.
+- **`MAGNUS_MORNING_BRIEF_CRON_ENABLED`** — the unprompted daily push (off by default).
+- **`TELEGRAM_CHAT_ID`** — default outbound chat for proactive messages.
 
 ---
 
@@ -307,59 +152,44 @@ Applied on project `xdrpjfdhduskhzryevze`, including: RLS on public tables; chat
 
 | Command | Purpose |
 |---------|---------|
-| `npm run dev` | Watch mode: `tsx watch src/index.ts` |
-| `npm run build` | `tsc` → `dist/` |
-| `npm start` | `node dist/index.js` |
-| `npm test` | Vitest unit tests (`src/**/*.test.ts`) |
-| `npm run test:supabase` | Supabase smoke test (needs `.env` with service role + Redis) |
-| `npm run telegram:check` | Read-only: capability report from `.env` + current Telegram config (`-- --json`, `-- --probe-conflict`) |
-| `npm run telegram:setup` | Apply Telegram config: delete webhook, register commands, menu button, description (`-- --mode=full`, `-- --drop-pending`) |
-| `npm run google-calendar:auth` | One-time Google Calendar OAuth for Cursor MCP (see `docs/GOOGLE_CALENDAR_MCP.md`) |
-| `npm run start:prod` | Run compiled app with `node --env-file=.env` (run `npm run build` first). Set `NODE_ENV=production` in `.env` on the server. |
-| `docker build -t magnus .` | Build production image (`Dockerfile`; secrets via runtime `env_file`, not baked in). |
-| `npx tsx scripts/test-supabase.mts` | Same as `npm run test:supabase` |
+| `npm run dev` | Watch mode |
+| `npm run build` / `npm start` | Compile to `dist/`, run compiled |
+| `npm test` | Vitest unit tests |
+| `npm run telegram:check` | Capability report + current Telegram config (`-- --json`, `-- --probe-conflict`) |
+| `npm run telegram:setup` | Apply Telegram config: webhook, commands, menu button, description |
+| `npm run test:supabase` | Supabase insert/delete smoke test |
+| `npm run google-calendar:auth` | One-time OAuth; prints the refresh token for the host |
+| `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
+| `npx tsx scripts/health/workouts/hevy/hevy-*.mts` | Hevy read/search/smoke helpers |
 
 ---
 
-## Not built yet (tracked)
+## Operations
 
-See **Next steps when resuming** above for the main roadmap. Additionally:
-
-- **Additional cron / proactive loops** beyond Morning Brief (reviews, pattern jobs, reminders).
-- **Business logic** writing to domain tables (`goals`, KPIs, tasks, …) with `user_profile_id` — **schema and FKs are ready**; resolve `profileId` via `resolveTelegramUserProfile` (or your job’s user context) on every insert.
-- **End-to-end / integration tests** against live Telegram or Supabase (optional hardening after features exist).
-- **Health EOD journal on Telegram** — Cursor journal files are v1; optional DB + `/journal` slash later (see `.cursor/skills/health/references/TODO.md`).
-- **Google Calendar in Telegram / planner** — MCP + integration layer ship for Cursor; optional wiring into `plannerAgent` for schedule-aware coaching is not done yet.
-
----
-
-## Cursor (IDE) — tracker maintenance
-
-| Artifact | Purpose |
-|----------|---------|
-| `.cursor/rules/magnus-md-maintenance.mdc` | **Always-on rule:** read `magnus.md` when starting real work; update it when finishing work that changes behavior, deps, env, or DB. |
-| `.cursor/hooks.json` | Registers `sessionStart` / `sessionEnd` hooks. |
-| `.cursor/hooks/magnus-session-start.mjs` | Injects `magnus.md` (truncated if huge) into the agent’s **additional_context** when a new Composer session starts. |
-| `.cursor/hooks/magnus-session-end.mjs` | Appends a one-line reminder to `.cursor/magnus-maintenance-log.txt` (gitignored). Cursor does **not** auto-edit `magnus.md` on session end; the rule + agent still apply. |
-| `.cursor/agents/health.md` | **Health pillar subagent** — invoke **`/health`** in Agent chat. Routes to specialist skills and loads memory from `.cursor/skills/health/references/`. |
-| `.cursor/skills/health/` | Health specialist skills: `/fitness`, `/hevy`, `/eod-journal`, `/workouts`, `/energy`, `/nutrition`, `/meal-log`, `/meal-planner`, `/alternates`, `/long-term-planning`. See `references/MEMORY.md`. |
-| `.cursor/skills/health/references/user-context.md` | **Living health memory** (goals, Hevy IDs, program rules) |
-| `.cursor/skills/health/references/program-learnings.md` | Distilled from EOD journals — agents read before routine edits |
-| `.cursor/skills/health/references/journal/` | Daily EOD journal entries (`YYYY-MM-DD.md`) |
-| `.cursor/mcp.json.example` | Example Cursor MCP config (Google Calendar). Copy to `.cursor/mcp.json` (gitignored). |
-
-**Using the Health agent in Cursor:** start a dedicated chat (this pillar), type **`/health`**, then ask your question. End of day: **`/eod-journal`** to review the day and update learnings for routine tuning.
-
-If hooks do not run, check **Cursor Settings → Hooks** and restart Cursor after editing `hooks.json`.
+- **Always on** — `docs/TELEGRAM_SETUP.md` → "Keeping it always on". Railway restarts `ALWAYS`, one
+  replica, healthcheck on `/health`.
+- **Webhook vs polling** — Only one process may poll a token; webhook mode makes overlapping
+  deploys harmless. `npm run telegram:check -- --probe-conflict` detects a duplicate poller.
+- **Watchdog** — Probes Telegram every 60s and exits non-zero after five failures so the host
+  restarts. Also re-registers a drifted webhook.
+- **Uptime** — Railway only healthchecks at deploy time; add an external ping on `/ready`.
+- **Secrets** — Never commit `.env`. Rotate anything that has been pasted anywhere.
 
 ---
 
-## How to resume a session
+## Not built yet
 
-1. Read **`magnus.md`** (this file) and **Next steps when resuming**; the **sessionStart** hook may inject a copy into context automatically.
-2. Confirm **`git remote`** matches the **Magnus** repo you intend (see **Git: this project is Magnus**).
-3. Ensure `.env` is complete and run `npm run dev`.
-4. After DB or credential changes, run `npm run test:supabase` if you touch Supabase clients or chat logging.
-5. Before ending a session with substantive changes, **update this file** and bump **Last updated** below.
+- **Memory reads tables nothing writes.** Fifteen read-only tables produce `gaps` every turn.
+  Either write to them or stop reading them. Largest open item.
+- **Schema not reproducible** from `supabase/migrations/`.
+- **Calendar is read + create only.** No update or delete from chat, deliberately.
+- **Semantic recall** — no embeddings; memory is recent-window plus structured reads.
+- **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data.
+- **Morning Brief does not read the calendar** — it predates the calendar tools.
+- **No E2E tests** against live Telegram, Supabase, Hevy or Google.
 
-**Last updated:** 2026-07-27 (Telegram clean setup + always-on: `docs/TELEGRAM_SETUP.md`, `scripts/telegram/setup.mts`, `src/config/magnusCapabilities.ts`, `src/config/telegramRuntime.ts` webhook mode, `src/tools/telegramWatchdog.ts`, graceful shutdown, `core` command mode)
+---
+
+**Last updated:** 2026-07-27 (four pillars + Magnus-only surface; Google Calendar wired into chat;
+`/menu`, department commands, delegation notices, Planner, Notion agent, Research and the wealth /
+joy / wisdom specialist sets removed)
