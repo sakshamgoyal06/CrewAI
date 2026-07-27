@@ -1,5 +1,8 @@
 # Deploy Magnus Telegram bot (Health + Hevy)
 
+> **Setting the bot up (BotFather, env, commands, verification)?** Start with
+> **[`docs/TELEGRAM_SETUP.md`](./TELEGRAM_SETUP.md)** — this page covers hosting only.
+
 Magnus is a **long-running Node process** (Telegram long-polling + HTTP health). **GitHub alone cannot host it** — use GitHub as the **source repo** and deploy to a small always-on host.
 
 Recommended: **Railway** (connects to GitHub, auto-deploy on push). Alternatives: **Fly.io**, **Render**, **DigitalOcean App Platform**, or any VPS with Docker.
@@ -25,9 +28,9 @@ Health memory is loaded from:
 
 ## 1. Create Telegram bot
 
-1. Open Telegram → **@BotFather** → `/newbot`
-2. Save **bot token** → `TELEGRAM_BOT_TOKEN`
-3. Message your bot once from your phone (so it can reply to you)
+See **[`docs/TELEGRAM_SETUP.md`](./TELEGRAM_SETUP.md)** for the full flow (BotFather, `npm run
+telegram:setup`, verification). In short: `/newbot` in **@BotFather**, save the token as
+`TELEGRAM_BOT_TOKEN`, message your bot once from your phone.
 
 `TELEGRAM_CHAT_ID` is optional for inbound DMs (the bot replies to the chat that messaged it). Set it if you use proactive `sendMessage` / Morning Brief defaults.
 
@@ -52,7 +55,9 @@ Copy `.env.example` → `.env` locally, or set variables in Railway **Variables*
 Optional:
 
 - `MAGNUS_HEALTH_REFERENCES_DIR` — override path to health memory files (default: `.cursor/skills/health/references`)
-- `MAGNUS_TELEGRAM_COMMANDS_MODE=full` — show all slash commands in native Telegram menu
+- `MAGNUS_TELEGRAM_COMMANDS_MODE` — `core` (default), `minimal`, or `full` native command menu
+
+Run `npm run telegram:check` against the host's variables to see which capabilities are live.
 
 ---
 
@@ -84,12 +89,9 @@ Needs at least: `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `us
 
 ## 5. Verify from your phone
 
-1. Open your bot in Telegram.
-2. `/menu` → **Health** → “Should I train today? Very tired, muscle ache.”
-   - Should reference **recovery routine** (rest after 3 days, etc.).
-3. `/hevy` → `routine update: b55c11d6-23d9-439f-ae9d-5f9e9e4e203a — …` (with `HEVY_API_KEY` set).
-4. `/journal rest day — very tired, muscle ache, skipped Push B`
-   - Saves to Supabase; future health replies include it.
+Run `npm run telegram:setup` once against the production token so commands and the menu button
+match the deploy, then walk the checklist in
+**[`docs/TELEGRAM_SETUP.md`](./TELEGRAM_SETUP.md#6-verify-from-your-phone)**.
 
 Health check (host):
 
