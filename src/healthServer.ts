@@ -7,7 +7,20 @@ import { logger } from "./logger.js";
 import { loggableError } from "./util/loggableError.js";
 import { redis, supabase } from "./tools/clients.js";
 
-export function startHealthServer(): Promise<void> {
+export type HealthServerOptions = {
+  /** Webhook mode: Telegram POSTs updates to this path on the same port as the health checks. */
+  telegramWebhook?: {
+    path: string;
+    secretToken: string;
+    handleUpdate: (update: unknown) => Promise<void>;
+  };
+};
+
+export type HealthServer = {
+  close: () => Promise<void>;
+};
+
+export function startHealthServer(options: HealthServerOptions = {}): Promise<HealthServer> {
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "32kb" }));
@@ -15,6 +28,27 @@ export function startHealthServer(): Promise<void> {
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok" });
   });
+
+  const hook = options.telegramWebhook;
+  if (hook) {
+    /**
+     * Acknowledge immediately and process out of band: an agent turn can outlast Telegram's
+     * delivery timeout, and a slow 200 makes Telegram retry (and eventually drop the webhook).
+     * Retries that do arrive are absorbed by the Redis update dedupe in `tools/telegram.ts`.
+     */
+    app.post(hook.path, (req, res) => {
+      if (req.get("x-telegram-bot-api-secret-token") !== hook.secretToken) {
+        logger.warn("rejected telegram webhook post with bad secret token");
+        res.status(401).json({ error: "unauthorized" });
+        return;
+      }
+      res.status(200).json({ ok: true });
+      void hook.handleUpdate(req.body).catch((err: unknown) => {
+        logger.error({ err: loggableError(err) }, "telegram webhook update failed");
+      });
+    });
+    logger.info("telegram webhook route mounted");
+  }
 
   app.get("/ready", async (_req, res) => {
     try {
@@ -108,7 +142,12 @@ export function startHealthServer(): Promise<void> {
   return new Promise((resolve, reject) => {
     const server = app.listen(port, () => {
       logger.info({ port }, "health server listening");
-      resolve();
+      resolve({
+        close: () =>
+          new Promise<void>((done) => {
+            server.close(() => done());
+          }),
+      });
     });
     server.on("error", reject);
   });

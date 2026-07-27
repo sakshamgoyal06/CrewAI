@@ -3,7 +3,10 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-restartPolicyType = "ON_FAILURE"
+# ALWAYS, not ON_FAILURE: a personal assistant should come back even from a clean exit.
+restartPolicyType = "ALWAYS"
+restartPolicyMaxRetries = 10
 healthcheckPath = "/health"
 healthcheckTimeout = 120
+# One instance. In polling mode a second replica means 409 Conflict on every update.
 numReplicas = 1
