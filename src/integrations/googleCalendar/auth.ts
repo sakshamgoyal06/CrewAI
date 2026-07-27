@@ -70,6 +70,15 @@ export function createOAuth2Client(redirectUri?: string): OAuth2Client {
   return new google.auth.OAuth2(creds.client_id, creds.client_secret, redirect);
 }
 
+/**
+ * The resolved client id and secret, wherever they came from — so the auth script can print the
+ * exact values to paste into the host instead of telling you to go find them.
+ */
+export function resolvedClientCredentials(): { clientId: string; clientSecret: string } {
+  const creds = loadClientCredentials();
+  return { clientId: creds.client_id, clientSecret: creds.client_secret };
+}
+
 /** True when the deployed bot can authenticate without any user interaction. */
 export function googleCalendarConfigured(): boolean {
   if (
