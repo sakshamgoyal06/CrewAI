@@ -60,6 +60,7 @@ service variables instead of shipping a file.
 | Morning Brief push | `MAGNUS_MORNING_BRIEF_CRON_ENABLED=true`, `MAGNUS_MORNING_BRIEF_LOCAL_HOUR`, `TELEGRAM_CHAT_ID` | `/morningbrief` still works on demand; nothing arrives on its own |
 | Morning Brief over HTTP | `MAGNUS_INTERNAL_JOB_SECRET` | `POST /internal/jobs/morning-brief` is rejected |
 | Native command menu | `MAGNUS_TELEGRAM_COMMANDS_MODE` (`core` default, `minimal`, `full`) | Core lanes only |
+| Always-on hosting | `MAGNUS_TELEGRAM_MODE=webhook` (see [section 5](#5-keeping-it-always-on)) | Long polling: fine locally, collides with itself on redeploy |
 
 `npm run telegram:check` prints this same picture from your actual environment, marking each
 capability **ok**, **warn**, or **off** with the variable that would upgrade it. The bot logs the
@@ -120,26 +121,77 @@ with no text uses its default prompt, so tapping one from the menu never wastes 
 
 ---
 
-## 5. Run exactly one poller
+## 5. Keeping it always on
 
-Telegram allows a single long-poller per token. Two processes means `409 Conflict` and messages
-landing at random.
+`npm run dev` is for development only — it dies with your terminal. For a bot you can message at
+3am, the process has to live on a host that restarts it. Magnus is a long-running Node process, so
+it needs a container host (Railway, Fly, Render, a VPS), not a serverless platform.
 
-Local:
+### Deploy on Railway
 
-```bash
-npm run dev
-```
+1. Push this repo to GitHub.
+2. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo** → pick this
+   repo. Railway reads `railway.toml` and `Dockerfile`; no build config needed.
+3. **Variables** → paste everything from section 2, plus:
+   - `NODE_ENV=production`
+   - `MAGNUS_TELEGRAM_MODE=webhook` (see below)
+4. **Settings → Networking → Generate Domain**. This gives Railway's `RAILWAY_PUBLIC_DOMAIN`, which
+   Magnus turns into the webhook URL by itself.
+5. Deploy. Logs should show `capabilities`, `health server listening`, `telegram webhook route
+   mounted`, `starting telegram runtime`, then `Magnus online (Telegram + health)`.
+6. Message the bot. Every push to `main` redeploys automatically.
 
-Production (Railway reads `railway.toml` + `Dockerfile`; see `docs/DEPLOY_TELEGRAM.md` for
-alternatives):
+`railway.toml` already pins the parts that matter: `restartPolicyType = "ALWAYS"`,
+`numReplicas = 1`, healthcheck on `/health`.
 
-- `NODE_ENV=production`
-- `SUPABASE_SERVICE_ROLE_KEY` set
-- one replica
-- health checks on `/health` and `/ready`
+### Webhook vs polling
 
-Before testing production, stop `npm run dev`.
+| | Polling (default) | Webhook (`MAGNUS_TELEGRAM_MODE=webhook`) |
+|---|---|---|
+| Needs a public URL | No | Yes — auto-derived on Railway, Render, Fly |
+| Two instances at once | `409 Conflict`, updates land at random | Harmless |
+| Redeploys | Old and new instance overlap and fight | Seamless |
+| Host briefly down | Updates wait in Telegram's queue | Telegram retries delivery |
+| Right for | Laptop, VPS behind NAT | Any always-on host |
+
+Webhook mode mounts a route on the same port as the health server, at an unguessable path derived
+from your bot token, and rejects any request without Telegram's secret header. Set
+`TELEGRAM_WEBHOOK_URL` only if the public URL is not discoverable from the platform.
+
+If webhook mode is requested but no public URL is available, Magnus logs why and falls back to
+polling rather than going dark.
+
+### Self-healing
+
+The failure that matters is the quiet one: the process is alive, `/health` returns 200, and
+Telegram updates stopped arriving. A watchdog probes `getMe` every 60 seconds, re-registers the
+webhook if it drifts (someone ran `telegram:setup` elsewhere, or Telegram dropped it after repeated
+errors), and after five consecutive failures exits non-zero so the host starts a fresh process.
+Tune with `MAGNUS_TELEGRAM_WATCHDOG_INTERVAL_MS` and `MAGNUS_TELEGRAM_WATCHDOG_FAILURES`; `0`
+disables it.
+
+Shutdown is graceful: `SIGTERM` stops the bot, closes the HTTP server, and exits within 10 seconds,
+so redeploys do not sit through the platform's kill timeout.
+
+### Know when it is down
+
+Railway only runs the healthcheck at deploy time, so add an external ping — [UptimeRobot](https://uptimerobot.com)
+or [Better Stack](https://betterstack.com), 5-minute interval, `GET https://YOUR-HOST/ready`, alert
+to email or another Telegram bot. `/ready` checks Supabase and Redis, so it catches credential
+expiry and quota problems, not just a dead process.
+
+### Other hosts
+
+| Host | Notes |
+|------|-------|
+| **Fly.io** | `fly launch` with the same Dockerfile, `fly secrets set …`; `FLY_APP_NAME` gives the webhook URL. Set `min_machines_running = 1` so it never scales to zero. |
+| **Render** | Web Service from the Dockerfile; `RENDER_EXTERNAL_URL` gives the webhook URL. Avoid the free tier — it sleeps. |
+| **VPS** | `docker compose -f docker-compose.example.yml up -d` with `restart: unless-stopped`. |
+| **Serverless (Vercel, Lambda)** | Not supported: the Morning Brief cron and long agent turns need a process that stays up. |
+
+Wherever you land, run `npm run telegram:setup` once with the host's variables (or from the host
+shell) so the webhook and command list point at that deploy, and stop any local `npm run dev` —
+in polling mode it steals updates from production.
 
 ---
 
@@ -169,8 +221,11 @@ curl https://YOUR-HOST/ready
 
 | Symptom | Cause and fix |
 |---------|---------------|
-| Bot silent, no logs | A webhook is still set, or nothing is polling. Run `npm run telegram:check`. |
-| `409 Conflict` in logs | Two pollers on one token. Stop local dev or the duplicate deploy; confirm with `--probe-conflict`. |
+| Bot silent, no logs | A webhook is still set while polling, or nothing is running. Run `npm run telegram:check`. |
+| `409 Conflict` in logs | Two pollers on one token. Stop local dev or the duplicate deploy; confirm with `--probe-conflict`. Switching the host to webhook mode removes the class of problem. |
+| Silent only during deploys | Polling mode with overlapping instances — use `MAGNUS_TELEGRAM_MODE=webhook`. |
+| Webhook set but nothing arrives | Check `last delivery error` in `npm run telegram:check`; usually the public domain is not routing to the app, or the app was down when Telegram gave up. The watchdog re-registers automatically within a minute. |
+| Bot dies overnight, no restart | Host restart policy. On Railway confirm `restartPolicyType = "ALWAYS"` took effect; on a VPS use `restart: unless-stopped`. |
 | “You're not allowlisted” | Set `MAGNUS_AUTO_ALLOWLIST_NEW_USERS=true`, or set `allowlisted = true` on your `user_profile` row. |
 | Menu shows the wrong commands | Re-run `npm run telegram:setup`. Telegram caches per client; force-close the app if it lingers. |
 | Replies are generic, never specialist | Missing `ANTHROPIC_API_KEY` or the message routed to `GENERAL` — try the explicit slash command. |

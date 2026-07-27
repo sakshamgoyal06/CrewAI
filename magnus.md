@@ -137,8 +137,10 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 
 | Path | Responsibility |
 |------|----------------|
-| `src/index.ts` | `dotenv` → `logger` → `clients` → `startHealthServer()` → `startBot` → `handleMessage` → one or more `reply()` calls per turn (delegation notice + specialist when enabled). |
-| `src/healthServer.ts` | Express: `/health`, `/ready` (Redis `PING` + Supabase `user_profile` head query); `POST /internal/jobs/morning-brief` (Bearer / `X-Magnus-Job-Secret`). |
+| `src/index.ts` | `dotenv` → `logger` → `clients` → capability log → `createTelegramRuntime` → `startHealthServer()` (mounts the webhook route in webhook mode) → `telegram.start()` → watchdog → graceful shutdown on `SIGTERM`/`SIGINT`. |
+| `src/healthServer.ts` | Express: `/health`, `/ready` (Redis `PING` + Supabase `user_profile` head query); `POST /internal/jobs/morning-brief` (Bearer / `X-Magnus-Job-Secret`); optional Telegram webhook route (secret-token checked, 200 before processing). Returns a `close()` handle. |
+| `src/config/telegramRuntime.ts` | Polling vs webhook (`MAGNUS_TELEGRAM_MODE`); derives the public URL from `TELEGRAM_WEBHOOK_URL` / `RAILWAY_PUBLIC_DOMAIN` / `RENDER_EXTERNAL_URL` / `FLY_APP_NAME`, and the route path + secret from the bot token. Falls back to polling with a logged reason. |
+| `src/tools/telegramWatchdog.ts` | Probes `getMe` on an interval, re-registers a drifted webhook, exits non-zero after N consecutive failures so the host restarts (`MAGNUS_TELEGRAM_WATCHDOG_INTERVAL_MS`, `MAGNUS_TELEGRAM_WATCHDOG_FAILURES`). |
 | `src/jobs/morningBrief.ts` | Morning Brief ritual: Claude `MORNING_BRIEF_SYSTEM`, context from Supabase, optional Telegram + Notion. |
 | `src/jobs/morningBriefCron.ts` | `node-cron` every 15 min (UTC tick); per-user local hour/window + Redis dedupe. |
 | `src/jobs/morningBriefManual.ts` | Manual trigger helper (used by Telegram). |
@@ -234,6 +236,8 @@ See **`.env.example`** for the full list. Highlights:
 - **`MAGNUS_RATE_LIMIT_PER_MINUTE`** — Inbound Telegram messages per user per minute (`0` = off).
 - **`MAGNUS_DELEGATION_NOTICE`** — When **`true`** (default), Telegram sends a short notice **before** the specialist reply whenever a department agent or research handles the turn; set **`false`** to reduce message volume at mass scale.
 - **`MAGNUS_TELEGRAM_COMMANDS_MODE`** — Native Telegram command menu: **`core`** (default), `minimal`, or `full`. Apply changes with **`npm run telegram:setup`** (or restart the bot).
+- **`MAGNUS_TELEGRAM_MODE`** — **`polling`** (default) or **`webhook`**. Webhook is recommended on an always-on host: no `409 Conflict` on overlapping deploys and Telegram retries delivery. Optional **`TELEGRAM_WEBHOOK_URL`** (auto-derived on Railway / Render / Fly) and **`TELEGRAM_WEBHOOK_SECRET`** (derived from the bot token when unset).
+- **`MAGNUS_TELEGRAM_WATCHDOG_INTERVAL_MS`** / **`MAGNUS_TELEGRAM_WATCHDOG_FAILURES`** — Telegram liveness probe (default 60000 ms, 5 failures; `0` disables). Exits non-zero so the platform restarts.
 - **`MAGNUS_AUTO_ALLOWLIST_NEW_USERS`** — Must be **`true`** to seed `allowlisted: true` for **new** profiles.
 - **`MAGNUS_DEFAULT_USER_TIER`** — Seeded tier for new profiles.
 - **`LOG_LEVEL`** — e.g. `debug`, `info`, `warn`, `error`.
@@ -282,6 +286,7 @@ Applied on project `xdrpjfdhduskhzryevze`, including: RLS on public tables; chat
 
 ## Operations and troubleshooting
 
+- **Always on** — Deploy runbook (Railway click-path, webhook vs polling, watchdog, uptime monitoring) in **`docs/TELEGRAM_SETUP.md` → “Keeping it always on”**. `railway.toml` pins `restartPolicyType = "ALWAYS"`, one replica, and the `/health` check.
 - **Container health** — See **`docker-compose.example.yml`** (HTTP `healthcheck` on `GET /health`) and **`Dockerfile`** (multi-stage build; inject secrets with Compose `env_file` or your host env — do not bake `.env` into the image). **`npm run start:prod`** runs `node --env-file=.env dist/index.js` after `npm run build`; set **`NODE_ENV=production`** in the env file you pass on the server. Reference template: **`.env.production.example`** (placeholders only).
 - **Telegram `409 Conflict` / “terminated by other getUpdates”** — Only one process may long-poll the same bot token; stop duplicate `npm run dev` or other hosts using the same token. Confirm with **`npm run telegram:check -- --probe-conflict`**.
 - **Bot silent / no updates** — A webhook set on the token swallows every update while Magnus long-polls. **`npm run telegram:check`** reports it; **`npm run telegram:setup`** removes it.
@@ -356,4 +361,4 @@ If hooks do not run, check **Cursor Settings → Hooks** and restart Cursor afte
 4. After DB or credential changes, run `npm run test:supabase` if you touch Supabase clients or chat logging.
 5. Before ending a session with substantive changes, **update this file** and bump **Last updated** below.
 
-**Last updated:** 2026-07-27 (Telegram clean setup: `docs/TELEGRAM_SETUP.md`, `scripts/telegram/setup.mts`, `src/config/magnusCapabilities.ts`, `src/magnus/telegramIntro.ts`, `core` command mode)
+**Last updated:** 2026-07-27 (Telegram clean setup + always-on: `docs/TELEGRAM_SETUP.md`, `scripts/telegram/setup.mts`, `src/config/magnusCapabilities.ts`, `src/config/telegramRuntime.ts` webhook mode, `src/tools/telegramWatchdog.ts`, graceful shutdown, `core` command mode)

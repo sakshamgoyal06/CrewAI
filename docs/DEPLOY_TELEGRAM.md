@@ -66,11 +66,16 @@ Run `npm run telegram:check` against the host's variables to see which capabilit
 1. Push this repo to GitHub (`sakshamgoyal06/CrewAI` or your fork).
 2. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**.
 3. Select the Magnus repo. Railway reads `railway.toml` + `Dockerfile`.
-4. Add **all secrets** from section 2 in Railway → Service → Variables.
-5. Deploy. Open **Settings → Networking** → generate a public domain (for `/health` checks only; Telegram uses outbound polling).
-6. Logs should show: `Magnus online (Telegram + health)`.
+4. Add **all secrets** from section 2 in Railway → Service → Variables, plus `NODE_ENV=production`
+   and **`MAGNUS_TELEGRAM_MODE=webhook`**.
+5. Deploy. Open **Settings → Networking** → **Generate Domain**. In webhook mode Magnus derives the
+   webhook URL from `RAILWAY_PUBLIC_DOMAIN`, so the domain is required, not just for health checks.
+6. Logs should show: `telegram webhook route mounted` then `Magnus online (Telegram + health)`.
 
-**Important:** Only **one** running instance per `TELEGRAM_BOT_TOKEN`. Stop local `npm run dev` before testing production.
+**Important:** in polling mode only **one** running instance per `TELEGRAM_BOT_TOKEN` — stop local
+`npm run dev` before testing production. Webhook mode makes overlapping instances harmless; see
+[`docs/TELEGRAM_SETUP.md`](./TELEGRAM_SETUP.md#5-keeping-it-always-on) for the trade-offs, watchdog,
+and uptime monitoring.
 
 ---
 
