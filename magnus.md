@@ -10,6 +10,8 @@ For **pillar → department → specialist** target routing (Health, Wealth, Wis
 
 For **Cursor-ready prompts** to implement new agents and routing (copy-paste blocks), see **`docs/CURSOR_AGENT_PROMPTS.md`**.
 
+For **setting up (or rebuilding) the Telegram bot end to end**, see **`docs/TELEGRAM_SETUP.md`**; hosting-only detail stays in **`docs/DEPLOY_TELEGRAM.md`**.
+
 ---
 
 ## Daily agent hardening (rolling)
@@ -33,7 +35,7 @@ For **Cursor-ready prompts** to implement new agents and routing (copy-paste blo
 **Latest build (what shipped recently):**
 
 - **Routing & orchestrator** — Slash commands (`src/agents/routing/slashCommands.ts`), pillar routing (`intentToPillarRoute`, `resolvePillarRoute`), natural-language intent in `orchestratorIntent.ts`, `magnusOrchestrator` cycle (slash vs classify → memory → dispatch). Wealth composite + Joy agents registered; specialist prompts include **`SPECIALIST_USER_IDENTITY`** (`promptIdentity.ts`) so models do not address the user as “Magnus”.
-- **Telegram** — `setMyCommands` via **`getTelegramBotCommandsForRegistration()`**; default **`MAGNUS_TELEGRAM_COMMANDS_MODE`** is **minimal** (`/menu` + `/meal`) so the native menu does not auto-send dozens of empty `/commands`. **`/menu`** sends an **inline keyboard**; picks set **pending slash** in Redis and merge the **next plain-text message** into `/<cmd> <text>` (`pendingSlashSelection.ts`). **`MAGNUS_TELEGRAM_COMMANDS_MODE=full`** restores the long command list.
+- **Telegram** — `setMyCommands` via **`getTelegramBotCommandsForRegistration()`**; **`MAGNUS_TELEGRAM_COMMANDS_MODE`** is **`core`** by default (`/menu`, `/help`, plus meal / journal / health / workouts / hevy / plan / research / morningbrief), with **`minimal`** (`/menu`, `/help`, `/meal`) and **`full`** (every lane) available. **`/start`** and **`/help`** are answered locally from `src/magnus/telegramIntro.ts` (no classifier, no Claude call). **`/menu`** sends an **inline keyboard**; picks set **pending slash** in Redis and merge the **next plain-text message** into `/<cmd> <text>` (`pendingSlashSelection.ts`).
 - **Meal logging pipeline** — Session-based `meal_logs` with multi-component rows, per-day rollups, optional daily macro targets (`mealLogPipeline`, `recordMealLog`, `mealDaySummary`, `formatMealLogReply`). CalorieNinjas/USDA scaling and picks (`calorieNinjasScale`, `calorieNinjaPick`), optional web-research estimate path, consolidated Telegram replies.
 - **Health / Nutrition** — `nutritionOrchestrated` coordinates parsing (`mealParserAgent`, `jsonExtract`), API estimates, and meal-log completion; `healthRouter` and nutrition stack aligned with the new meal path; additional Health specialists (meal planner, alternates, long-term planning, workouts coach) where wired.
 - **Orchestrator & Telegram** — Chunking/formatting (`telegramFormat`), delegation notice (`delegationNotice.ts`).
@@ -107,9 +109,10 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 3. Copy `.env.example` → `.env` and fill secrets (never commit `.env`).
 4. **Required for boot:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (recommended with RLS), `SUPABASE_ANON_KEY` (optional if service role set), `ANTHROPIC_API_KEY`, `UPSTASH_REDIS_*` or `REDIS_*`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (default outbound chat for `sendMessage` without options). Set **`MAGNUS_AUTO_ALLOWLIST_NEW_USERS=true`** for local dev if you want new Telegram users allowlisted.
 5. **`NODE_ENV=production`** requires **`SUPABASE_SERVICE_ROLE_KEY`** (boot fails without it).
-6. `npm run dev` — logs should show health server listening, then `Magnus online (Telegram + health)` after Telegram connects.
-7. `npm test` — unit tests (no live API keys required).
-8. Optional: `npx tsx scripts/test-supabase.mts` (Supabase insert/delete on `magnus_chat_messages`).
+6. `npm run telegram:check` — capability report for your `.env`; `npm run telegram:setup` applies the bot config (webhook removal, commands, menu button, description). Full walkthrough: **`docs/TELEGRAM_SETUP.md`**.
+7. `npm run dev` — logs should show health server listening, a `capabilities` line, then `Magnus online (Telegram + health)` after Telegram connects.
+8. `npm test` — unit tests (no live API keys required; needs the dummy Supabase/Anthropic/Redis vars from `.github/workflows/ci.yml` in your shell or `.env`).
+9. Optional: `npx tsx scripts/test-supabase.mts` (Supabase insert/delete on `magnus_chat_messages`).
 
 ---
 
@@ -153,7 +156,10 @@ Keep **one canonical remote** so collaborators and CI match the real project nam
 | `src/tools/clients.ts` | Singletons: `supabase` (timeouts + `auth` for server), `redis`, `anthropic` (timeout + retries). Production requires service role key. |
 | `src/tools/rateLimit.ts` | Redis fixed-window counter (60s) for inbound Telegram text (`checkMessageRateLimit`). |
 | `src/tools/chatLog.ts` | `resolveTelegramUserProfile`, `recordMagnusChatMessage` (returns `{ ok }`), legacy `ensureUserProfileIdForTelegramUser`. Documents identity model in file header. |
-| `src/tools/telegram.ts` | Telegraf bot; `/morningbrief` + `morning brief` → Morning Brief; rate limit before handler; `TelegramTextHandler` receives `updateId` for logging. |
+| `src/tools/telegram.ts` | Telegraf bot; `/start` + `/help` + `/menu` handled locally; `/morningbrief` + `morning brief` → Morning Brief; rate limit before handler; `TelegramTextHandler` receives `updateId` for logging. |
+| `src/magnus/telegramIntro.ts` | `/start` and `/help` copy built from the registered command list (grouped by pillar; tests keep it in sync). |
+| `src/config/magnusCapabilities.ts` | Pure env → capability report (`describeCapabilities`, `capabilityLogFields`) used by `npm run telegram:check` and the boot log. |
+| `scripts/telegram/setup.mts` | `npm run telegram:check` / `npm run telegram:setup` — capability report, webhook removal, `setMyCommands`, menu button, bot description, optional 409 conflict probe. |
 | `scripts/test-supabase.mts` | Connectivity smoke test for Supabase + chat table. |
 | `src/integrations/googleCalendar/` | OAuth + Calendar API ops (`listEvents`, `createEvent`, …) — used by Cursor MCP and future planner wiring. |
 | `mcp/google-calendar/server.mts` | Stdio MCP server for Cursor (`list_calendars`, `list_events`, `create_event`, …). |
@@ -227,6 +233,7 @@ See **`.env.example`** for the full list. Highlights:
 - **`HEALTH_PORT`** — Port for `/health` and `/ready` (default 8080).
 - **`MAGNUS_RATE_LIMIT_PER_MINUTE`** — Inbound Telegram messages per user per minute (`0` = off).
 - **`MAGNUS_DELEGATION_NOTICE`** — When **`true`** (default), Telegram sends a short notice **before** the specialist reply whenever a department agent or research handles the turn; set **`false`** to reduce message volume at mass scale.
+- **`MAGNUS_TELEGRAM_COMMANDS_MODE`** — Native Telegram command menu: **`core`** (default), `minimal`, or `full`. Apply changes with **`npm run telegram:setup`** (or restart the bot).
 - **`MAGNUS_AUTO_ALLOWLIST_NEW_USERS`** — Must be **`true`** to seed `allowlisted: true` for **new** profiles.
 - **`MAGNUS_DEFAULT_USER_TIER`** — Seeded tier for new profiles.
 - **`LOG_LEVEL`** — e.g. `debug`, `info`, `warn`, `error`.
@@ -276,7 +283,8 @@ Applied on project `xdrpjfdhduskhzryevze`, including: RLS on public tables; chat
 ## Operations and troubleshooting
 
 - **Container health** — See **`docker-compose.example.yml`** (HTTP `healthcheck` on `GET /health`) and **`Dockerfile`** (multi-stage build; inject secrets with Compose `env_file` or your host env — do not bake `.env` into the image). **`npm run start:prod`** runs `node --env-file=.env dist/index.js` after `npm run build`; set **`NODE_ENV=production`** in the env file you pass on the server. Reference template: **`.env.production.example`** (placeholders only).
-- **Telegram `409 Conflict` / “terminated by other getUpdates”** — Only one process may long-poll the same bot token; stop duplicate `npm run dev` or other hosts using the same token.
+- **Telegram `409 Conflict` / “terminated by other getUpdates”** — Only one process may long-poll the same bot token; stop duplicate `npm run dev` or other hosts using the same token. Confirm with **`npm run telegram:check -- --probe-conflict`**.
+- **Bot silent / no updates** — A webhook set on the token swallows every update while Magnus long-polls. **`npm run telegram:check`** reports it; **`npm run telegram:setup`** removes it.
 - **Supabase permission errors with anon key** — Use **service role** in `.env` for this server.
 - **Secrets** — Never commit real `.env` or paste keys into chats; rotate if leaked.
 
@@ -298,6 +306,8 @@ Applied on project `xdrpjfdhduskhzryevze`, including: RLS on public tables; chat
 | `npm start` | `node dist/index.js` |
 | `npm test` | Vitest unit tests (`src/**/*.test.ts`) |
 | `npm run test:supabase` | Supabase smoke test (needs `.env` with service role + Redis) |
+| `npm run telegram:check` | Read-only: capability report from `.env` + current Telegram config (`-- --json`, `-- --probe-conflict`) |
+| `npm run telegram:setup` | Apply Telegram config: delete webhook, register commands, menu button, description (`-- --mode=full`, `-- --drop-pending`) |
 | `npm run google-calendar:auth` | One-time Google Calendar OAuth for Cursor MCP (see `docs/GOOGLE_CALENDAR_MCP.md`) |
 | `npm run start:prod` | Run compiled app with `node --env-file=.env` (run `npm run build` first). Set `NODE_ENV=production` in `.env` on the server. |
 | `docker build -t magnus .` | Build production image (`Dockerfile`; secrets via runtime `env_file`, not baked in). |
@@ -346,4 +356,4 @@ If hooks do not run, check **Cursor Settings → Hooks** and restart Cursor afte
 4. After DB or credential changes, run `npm run test:supabase` if you touch Supabase clients or chat logging.
 5. Before ending a session with substantive changes, **update this file** and bump **Last updated** below.
 
-**Last updated:** 2026-07-20 (Google Calendar MCP: `src/integrations/googleCalendar/`, `mcp/google-calendar/server.mts`, `docs/GOOGLE_CALENDAR_MCP.md`)
+**Last updated:** 2026-07-27 (Telegram clean setup: `docs/TELEGRAM_SETUP.md`, `scripts/telegram/setup.mts`, `src/config/magnusCapabilities.ts`, `src/magnus/telegramIntro.ts`, `core` command mode)
