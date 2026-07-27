@@ -41,7 +41,7 @@ function shortProfileIdForLogs(id: string): string {
 }
 
 export function intentToMemoryPurpose(intent: Intent): MemoryPurpose {
-  if (intent === "HAPPINESS" || intent === "CULTURE") {
+  if (intent === "HAPPINESS") {
     return "pattern";
   }
   if (intent === "GENERAL" || intent === "HEALTH") {
@@ -320,8 +320,6 @@ export async function loadMemoryContext(input: {
     patterns.push(...(pat.data ?? []));
   }
 
-  const semanticRecallAvailable = false;
-
   const ctx: MemoryContext = {
     purpose: input.purpose,
     loadedAt,
@@ -336,7 +334,6 @@ export async function loadMemoryContext(input: {
     joy,
     patterns,
     gaps,
-    semanticRecallAvailable,
   };
 
   log.debug(
@@ -347,7 +344,6 @@ export async function loadMemoryContext(input: {
       recentTurnCount: ctx.recentSignals.recentChatTurns.length,
       goalCount: ctx.activeGoals.length,
       patternCount: ctx.patterns.length,
-      semanticRecallAvailable: ctx.semanticRecallAvailable,
     },
     "memory context loaded",
   );
@@ -355,23 +351,3 @@ export async function loadMemoryContext(input: {
   return ctx;
 }
 
-/**
- * Semantic similarity over reflection embeddings (pgvector). Stub until table + RPC exist.
- */
-export async function semanticRecall(
-  _queryEmbedding: number[],
-  userProfileId: string,
-  limit: number,
-  deps?: LoadDeps,
-): Promise<{ matches: Array<Record<string, unknown>>; available: boolean }> {
-  log.debug(
-    {
-      profileId: shortProfileIdForLogs(userProfileId),
-      limit,
-      embeddingDims: _queryEmbedding.length,
-    },
-    "semanticRecall: pgvector / reflection embeddings not wired — stub (TODO)",
-  );
-  void deps;
-  return { matches: [], available: false };
-}

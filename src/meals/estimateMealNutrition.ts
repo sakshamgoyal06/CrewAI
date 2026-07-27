@@ -1,18 +1,13 @@
 import type { MealNutritionEstimate } from "./types.js";
-import {
-  mealLogHealthifyProxyConfigured,
-  mealLogLlmFallbackEnabled,
-  mealLogWebResearchEnabled,
-} from "./mealEnv.js";
+import { mealLogLlmFallbackEnabled, mealLogWebResearchEnabled } from "./mealEnv.js";
 import { estimateViaCalorieNinjas } from "./providers/calorieNinjas.js";
-import { estimateViaHealthifyMeProxy } from "./providers/healthifyMeProxy.js";
 import { estimateViaLlm } from "./providers/llmEstimate.js";
 import { estimateViaUsdaFdc } from "./providers/usdaFdc.js";
 import { estimateViaWebResearch } from "./providers/webResearchEstimate.js";
 
 /**
- * Default order: **Web (Anthropic web_search, then optional SerpAPI + excerpts + Claude) → USDA FDC → Healthify proxy → CalorieNinjas → optional LLM JSON**.
- * Web runs when `MAGNUS_MEAL_LOG_WEB_FIRST` is not false and Anthropic web search is allowed (default) and/or a SerpAPI key is set. See `mealEnv.mealLogWebResearchEnabled`.
+ * Order: **Anthropic web_search → USDA FDC → CalorieNinjas → optional Claude JSON**. Web runs
+ * unless `MAGNUS_MEAL_LOG_WEB_FIRST=false`; the LLM fallback only with `MAGNUS_MEAL_LOG_LLM_FALLBACK=true`.
  */
 export async function estimateMealNutrition(
   query: string,
@@ -32,13 +27,6 @@ export async function estimateMealNutrition(
   const usda = await estimateViaUsdaFdc(q);
   if (usda && usda.calories !== null) {
     return usda;
-  }
-
-  if (mealLogHealthifyProxyConfigured()) {
-    const proxy = await estimateViaHealthifyMeProxy(q);
-    if (proxy && proxy.calories !== null) {
-      return proxy;
-    }
   }
 
   const cn = await estimateViaCalorieNinjas(q);

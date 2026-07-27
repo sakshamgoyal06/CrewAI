@@ -4,34 +4,10 @@ import { extractJsonObject } from "../../agents/health/jsonExtract.js";
 import { HEALTH_SPECIALIST_MODEL } from "../../agents/health/model.js";
 import { logger } from "../../logger.js";
 import { anthropic } from "../../tools/clients.js";
-import { searchWebAndFetch } from "../../tools/research/search.js";
 import { mealLogAnthropicWebSearchEnabled } from "../mealEnv.js";
 import type { MealItemLine, MealNutritionEstimate } from "../types.js";
 
-const MAX_CONTEXT_CHARS = 14_000;
-const MAX_RESULTS = 4;
-
-const SYSTEM = `You are a nutrition estimation assistant. You receive:
-1) The user's exact food line (may include grams, counts, or brand names).
-2) Plain-text excerpts from web search results (menus, nutrition pages, databases).
-
-Your job: produce **best-effort calories and macros for what the user actually ate**, not a generic100g table unless that is what they logged.
-
-Rules:
-- Prefer **brand / restaurant menu** numbers when the user names a chain or dish (e.g. official nutrition PDFs, FatSecret brand pages, company sites).
-- If the user gave **grams** (e.g. 50g, 30gm) and the web data is **per 100g** (or another basis), **scale** to their grams and say so in serving_assumption.
-- If the user gave **counts** (e.g. 1 mini bowl) and the web gives **per mini**, use that directly; if only "regular" is listed, state what you assumed for "mini".
-- If data conflicts, pick the most specific match to the user's wording and mention uncertainty briefly in serving_assumption.
-- Never invent a brand number with no support in excerpts; then use the closest generic estimate and say so.
-
-Reply with **only** one JSON object (no markdown):
-{"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"serving_assumption":string,"items":[{"name":string,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"portion_note"?:string}]}
-
-serving_assumption must be 1–4 short sentences: what basis you used and any inference (e.g. "Scaled Tarla Dalal ~95 kcal/100g aloo baingan to 50g." or "Used California Burrito mini bowl 600 kcal from nutrition page.").
-
-items: one row per logical food in the user line, or a single summary row if the line is one dish. Macros should sum consistently with top-level calories when possible.`;
-
-/** Same rules as SYSTEM, but evidence comes only from **web_search** (no pre-loaded excerpts). */
+/** Evidence comes only from the `web_search` server tool — no pre-fetched excerpts. */
 const SYSTEM_ANTHROPIC_WEB = `You are a nutrition estimation assistant. The user gives one food / meal line (may include grams, counts, or brand names).
 
 You **must** call the **web_search** tool at least once to find current nutrition, menu, or label data before you write JSON. Do not rely on memory alone for branded or restaurant items.
@@ -236,73 +212,17 @@ async function estimateViaAnthropicWebSearch(query: string): Promise<MealNutriti
   }
 }
 
-/**
- * SerpAPI search + page excerpts, then Claude structured estimate. Returns null if Serp is unconfigured,
- * search yields no usable excerpts, or JSON parse fails.
- */
-async function estimateViaSerpApiAndExcerpts(query: string): Promise<MealNutritionEstimate | null> {
-  const q = query.trim();
-  if (!q) {
-    return null;
-  }
-
-  const searchQuery = `${q} calories nutrition kcal`;
-  const { sources, searchQuery: usedQuery } = await searchWebAndFetch(searchQuery, {
-    maxResults: MAX_RESULTS,
-  });
-  if (sources.length === 0) {
-    return null;
-  }
-
-  let bundle = "";
-  const citationMeta: { title: string; url: string }[] = [];
-  for (const s of sources) {
-    const chunk = `Title: ${s.title}\nURL: ${s.url}\n${s.excerpt}`;
-    const next = bundle ? `${bundle}\n\n-----\n\n${chunk}` : chunk;
-    if (next.length > MAX_CONTEXT_CHARS) {
-      break;
-    }
-    bundle = next;
-    citationMeta.push({ title: s.title, url: s.url });
-  }
-  if (!bundle) {
-    return null;
-  }
-
-  const userContent = `User food line:\n${q}\n\nWeb excerpts:\n${bundle}`;
-
-  const msg = await anthropic.messages.create({
-    model: HEALTH_SPECIALIST_MODEL,
-    max_tokens: 1024,
-    system: SYSTEM,
-    messages: [{ role: "user", content: userContent }],
-  });
-
-  const raw = stripJsonFence(allTextFromMessage(msg).trim());
-  return parseEstimateJson(raw, q, {
-    search_provider: "serpapi_excerpts",
-    search_query: usedQuery,
-    citations: citationMeta,
-  });
-}
-
-/**
- * Web-first estimate: **Anthropic web_search** (default), then **SerpAPI + fetched excerpts** if configured and the first path fails.
- */
+/** Web-first estimate via the Anthropic `web_search` server tool. */
 export async function estimateViaWebResearch(query: string): Promise<MealNutritionEstimate | null> {
   const q = query.trim();
   if (!q) {
     return null;
   }
 
-  if (mealLogAnthropicWebSearchEnabled()) {
-    logger.debug({ querySnippet: q.slice(0, 100) }, "meal web research: trying Anthropic web_search");
-    const anth = await estimateViaAnthropicWebSearch(q);
-    if (anth && anth.calories !== null) {
-      return anth;
-    }
+  if (!mealLogAnthropicWebSearchEnabled()) {
+    return null;
   }
 
-  logger.debug({ querySnippet: q.slice(0, 100) }, "meal web research: trying SerpAPI + excerpts");
-  return estimateViaSerpApiAndExcerpts(q);
+  logger.debug({ querySnippet: q.slice(0, 100) }, "meal web research via Anthropic web_search");
+  return estimateViaAnthropicWebSearch(q);
 }

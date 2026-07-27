@@ -22,165 +22,51 @@ vi.mock("../tools/clients.js", () => ({
   redis: {},
 }));
 
-import { dispatchToAgent } from "./registry.js";
-import { PLANNER_SYSTEM, runPlannerAgent } from "./planning/plannerAgent.js";
+import { dispatchToAgent, findAgentForIntent } from "./registry.js";
 
-describe("Planner routing and behaviour", () => {
+const BASE = {
+  userProfileId: "00000000-0000-0000-0000-000000000001",
+  telegramUserId: "1",
+};
+
+describe("pillar dispatch", () => {
   beforeEach(() => {
+    messagesCreate.mockReset();
     messagesCreate.mockResolvedValue({
-      content: [{ type: "text", text: "Prioritise deep work first." }],
+      content: [{ type: "text", text: "Specialist answer." }],
     });
   });
 
-  it("PLANNER_SYSTEM includes locked-day guidance", () => {
-    expect(PLANNER_SYSTEM.toLowerCase()).toContain("locked");
+  it.each([
+    ["WEALTH", "Wealth", "wealth"],
+    ["HAPPINESS", "Happiness", "joy"],
+    ["WISDOM", "Wisdom", "wisdom"],
+  ] as const)("dispatches %s to %s", async (intent, agentName, pillar) => {
+    const out = await dispatchToAgent(
+      { ...BASE, rawMessage: "a question", intent },
+      intent,
+    );
+    expect(out?.agentName).toBe(agentName);
+    expect(out?.result.metadata).toMatchObject({ specialist: agentName, pillar });
   });
 
-  it("runPlannerAgent requests a bounded max_tokens", async () => {
-    await runPlannerAgent({
-      userProfileId: "00000000-0000-0000-0000-000000000001",
-      telegramUserId: "1",
-      rawMessage: "What should I focus on today?",
-      intent: "PLANNING",
-    });
+  it("registers a specialist for every pillar intent", () => {
+    for (const intent of ["HEALTH", "WEALTH", "HAPPINESS", "WISDOM"] as const) {
+      expect(findAgentForIntent(intent)).not.toBeNull();
+    }
+  });
+
+  it("has no specialist for GENERAL — Magnus answers those himself", () => {
+    expect(findAgentForIntent("GENERAL")).toBeNull();
+  });
+
+  it("keeps light pillar replies bounded", async () => {
+    await dispatchToAgent(
+      { ...BASE, rawMessage: "how should I budget?", intent: "WEALTH" },
+      "WEALTH",
+    );
     expect(messagesCreate).toHaveBeenCalledWith(
       expect.objectContaining({ max_tokens: 768 }),
     );
-  });
-
-  it("dispatches intent BUILD to Build & Ship", async () => {
-    const out = await dispatchToAgent(
-      {
-        userProfileId: "00000000-0000-0000-0000-000000000001",
-        telegramUserId: "1",
-        rawMessage: "Scope milestones for my side project",
-        intent: "BUILD",
-      },
-      "BUILD",
-    );
-    expect(out?.agentName).toBe("BuildShip");
-    expect(out?.result.metadata).toMatchObject({
-      specialist: "BuildShip",
-      pillar: "wisdom",
-      department: "build_ship",
-    });
-  });
-
-  it("dispatches intent PLANNING to Planner (not placeholder)", async () => {
-    const out = await dispatchToAgent(
-      {
-        userProfileId: "00000000-0000-0000-0000-000000000001",
-        telegramUserId: "1",
-        rawMessage: "Help me plan my week",
-        intent: "PLANNING",
-      },
-      "PLANNING",
-    );
-    expect(out?.agentName).toBe("Planner");
-    expect(out?.result.metadata).toMatchObject({ department: "PLANNING" });
-  });
-
-  it("dispatches intent NOTION to Notion specialist", async () => {
-    const out = await dispatchToAgent(
-      {
-        userProfileId: "00000000-0000-0000-0000-000000000001",
-        telegramUserId: "1",
-        rawMessage: "notion ping",
-        intent: "NOTION",
-      },
-      "NOTION",
-    );
-    expect(out?.agentName).toBe("Notion");
-    expect(out?.result.metadata).toMatchObject({ specialist: "Notion", department: "NOTION" });
-  });
-
-  it("dispatches intent LEARNING to Learning Plan specialist", async () => {
-    const out = await dispatchToAgent(
-      {
-        userProfileId: "00000000-0000-0000-0000-000000000001",
-        telegramUserId: "1",
-        rawMessage: "Help me plan a curriculum for statistics",
-        intent: "LEARNING",
-      },
-      "LEARNING",
-    );
-    expect(out?.agentName).toBe("LearningPlan");
-    expect(out?.result.metadata).toMatchObject({
-      specialist: "LearningPlan",
-      pillar: "wisdom",
-      department: "learning_plan",
-    });
-  });
-
-  it("dispatches intent LEARNING to Learning Tracker when message looks like a review", async () => {
-    const out = await dispatchToAgent(
-      {
-        userProfileId: "00000000-0000-0000-0000-000000000001",
-        telegramUserId: "1",
-        rawMessage: "Weekly learning review — what should I adjust?",
-        intent: "LEARNING",
-      },
-      "LEARNING",
-    );
-    expect(out?.agentName).toBe("LearningTracker");
-    expect(out?.result.metadata).toMatchObject({
-      specialist: "LearningTracker",
-      pillar: "wisdom",
-      department: "tracker",
-    });
-  });
-
-  it("dispatches intent HAPPINESS to Trip Designer", async () => {
-    const out = await dispatchToAgent(
-      {
-        userProfileId: "00000000-0000-0000-0000-000000000001",
-        telegramUserId: "1",
-        rawMessage: "Help me sketch a long weekend in Lisbon",
-        intent: "HAPPINESS",
-      },
-      "HAPPINESS",
-    );
-    expect(out?.agentName).toBe("TripDesigner");
-    expect(out?.result.metadata).toMatchObject({
-      specialist: "TripDesigner",
-      pillar: "joy",
-      department: "adventure_trips",
-    });
-  });
-
-  it("dispatches intent CULTURE to Culture Recommender", async () => {
-    const out = await dispatchToAgent(
-      {
-        userProfileId: "00000000-0000-0000-0000-000000000001",
-        telegramUserId: "1",
-        rawMessage: "Melancholy Sunday — a film and a poem?",
-        intent: "CULTURE",
-      },
-      "CULTURE",
-    );
-    expect(out?.agentName).toBe("CultureRecommender");
-    expect(out?.result.metadata).toMatchObject({
-      specialist: "CultureRecommender",
-      pillar: "joy",
-      department: "culture",
-    });
-  });
-
-  it("dispatches intent WEALTH to Wealth composite (default trading)", async () => {
-    const out = await dispatchToAgent(
-      {
-        userProfileId: "00000000-0000-0000-0000-000000000001",
-        telegramUserId: "1",
-        rawMessage: "Review my trading journal habits",
-        intent: "WEALTH",
-      },
-      "WEALTH",
-    );
-    expect(out?.agentName).toBe("WealthComposite");
-    expect(out?.result.metadata).toMatchObject({
-      specialist: "TradingCopilot",
-      pillar: "wealth",
-      department: "trading",
-    });
   });
 });

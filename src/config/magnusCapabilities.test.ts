@@ -118,6 +118,37 @@ describe("describeCapabilities — optional lanes", () => {
   });
 });
 
+describe("describeCapabilities — Google Calendar", () => {
+  it("is off until all three OAuth values are present, and names the missing ones", () => {
+    const none = capability(CORE_ENV, "calendar");
+    expect(none.status).toBe("off");
+    expect(none.missing).toEqual([
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+      "GOOGLE_CALENDAR_REFRESH_TOKEN",
+    ]);
+
+    const partial = capability(
+      { ...CORE_ENV, GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret" },
+      "calendar",
+    );
+    expect(partial.status).toBe("off");
+    expect(partial.missing).toEqual(["GOOGLE_CALENDAR_REFRESH_TOKEN"]);
+
+    const ready = capability(
+      {
+        ...CORE_ENV,
+        GOOGLE_CLIENT_ID: "id",
+        GOOGLE_CLIENT_SECRET: "secret",
+        GOOGLE_CALENDAR_REFRESH_TOKEN: "refresh",
+      },
+      "calendar",
+    );
+    expect(ready.status).toBe("ready");
+    expect(ready.missing).toEqual([]);
+  });
+});
+
 describe("describeCapabilities — update delivery", () => {
   it("is partial while long polling and ready on a webhook host", () => {
     expect(capability(CORE_ENV, "delivery").status).toBe("partial");

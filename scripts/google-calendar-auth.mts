@@ -38,7 +38,23 @@ async function main(): Promise<void> {
   await exchangeCodeForToken(oauth2, code);
 
   console.log(`\nSaved token to ${googleCalendarTokenPath()}`);
-  console.log("Restart Cursor (or reload MCP) to use google-calendar tools.\n");
+
+  const refresh = oauth2.credentials.refresh_token;
+  if (refresh) {
+    console.log("\nFor the deployed bot, set these three on your host (Railway → Variables):\n");
+    console.log(
+      `GOOGLE_CLIENT_ID=${process.env.GOOGLE_CLIENT_ID?.trim() ?? "<client_id from your OAuth JSON>"}`,
+    );
+    console.log("GOOGLE_CLIENT_SECRET=<client_secret from your OAuth JSON>");
+    console.log(`GOOGLE_CALENDAR_REFRESH_TOKEN=${refresh}`);
+    console.log(
+      "\nThe refresh token does not expire unless you revoke it, so the bot stays authenticated across redeploys.\n",
+    );
+  } else {
+    console.log(
+      "\nNo refresh token returned — re-run after revoking access at https://myaccount.google.com/permissions so Google issues a fresh one.\n",
+    );
+  }
 }
 
 main().catch((err) => {

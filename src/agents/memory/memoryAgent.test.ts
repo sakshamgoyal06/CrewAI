@@ -7,7 +7,7 @@ vi.mock("../../tools/clients.js", () => ({
 }));
 
 import { supabase } from "../../tools/clients.js";
-import { loadMemoryContext, semanticRecall } from "./memoryAgent.js";
+import { loadMemoryContext } from "./memoryAgent.js";
 
 describe("loadMemoryContext", () => {
   const from = vi.mocked(supabase.from);
@@ -143,7 +143,6 @@ describe("loadMemoryContext", () => {
     expect(ctx.recentSignals.recentChatTurns[0]?.role).toBe("user");
     expect(ctx.activeGoals[0]?.label).toBe("Lift 3x");
     expect(ctx.joy.summary).toMatch(/72/);
-    expect(ctx.semanticRecallAvailable).toBe(false);
     expect(ctx.gaps.length).toBeGreaterThan(0);
   });
 
@@ -160,10 +159,3 @@ describe("loadMemoryContext", () => {
   });
 });
 
-describe("semanticRecall", () => {
-  it("returns unavailable stub without throwing", async () => {
-    const out = await semanticRecall([0.1, 0.2], "00000000-0000-0000-0000-000000000099", 3);
-    expect(out.available).toBe(false);
-    expect(out.matches).toEqual([]);
-  });
-});

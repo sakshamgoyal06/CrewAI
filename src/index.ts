@@ -30,7 +30,6 @@ async function main(): Promise<void> {
       try {
         const messages = await handleMessage(text, telegramUserId, {
           updateId,
-          sendProgress: (html) => reply(html, { parse_mode: "HTML" }),
           sendTyping,
         });
         for (const chunk of messages) {

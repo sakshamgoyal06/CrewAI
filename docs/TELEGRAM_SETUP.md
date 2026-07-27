@@ -46,20 +46,19 @@ service variables instead of shipping a file.
 | `ANTHROPIC_API_KEY` | Every specialist reply and the intent classifier |
 | `SUPABASE_URL` | Profiles, chat history, meal logs, journals |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server writes; **required** when `NODE_ENV=production` (RLS blocks anon) |
-| `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | Rate limit, update dedupe, `/menu` lane state (`REDIS_URL` / `REDIS_TOKEN` also accepted) |
+| `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | Rate limit and update dedupe (`REDIS_URL` / `REDIS_TOKEN` also accepted) |
 
 **Per purpose — set the ones you actually want:**
 
 | Purpose | Variables | Without it |
 |---------|-----------|------------|
 | Allowlist yourself | `MAGNUS_AUTO_ALLOWLIST_NEW_USERS=true` | New Telegram users get a refusal until you flip `user_profile.allowlisted` by hand |
-| Workouts (`/workouts`, `/hevy`) | `HEVY_API_KEY` | Coaching only; no Hevy reads or writes |
-| Meals (`/meal`) | `USDA_FDC_API_KEY`, `CALORIENINJAS_API_KEY` | Falls back to web research; meals still log, macros are rougher |
-| Research (`/research`) | `MAGNUS_SERPAPI_KEY` | Works only on URLs or text you paste |
-| Notion (`/notion`) | `NOTION_TOKEN` + at least one of `NOTION_DAILY_LOG_PARENT_PAGE_ID`, `NOTION_GOALS_DATABASE_ID`, `NOTION_DAILY_CHECKINS_DATABASE_ID` | The Notion agent replies that it is not configured |
-| Morning Brief push | `MAGNUS_MORNING_BRIEF_CRON_ENABLED=true`, `MAGNUS_MORNING_BRIEF_LOCAL_HOUR`, `TELEGRAM_CHAT_ID` | `/morningbrief` still works on demand; nothing arrives on its own |
+| Calendar (“what's on today?”, “book gym 7am”) | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALENDAR_REFRESH_TOKEN` — see [`GOOGLE_CALENDAR.md`](./GOOGLE_CALENDAR.md) | Magnus says the calendar is not connected |
+| Workouts (“should I train today?”) | `HEVY_API_KEY` | Coaching only; no Hevy reads or writes |
+| Meals (“log lunch: rice and dal”) | `USDA_FDC_API_KEY`, `CALORIENINJAS_API_KEY` | Falls back to web search; meals still log, macros are rougher |
+| Notion mirror for notes | `NOTION_TOKEN` + `NOTION_DAILY_LOG_PARENT_PAGE_ID` | Notes still save to Supabase, just not mirrored |
+| Morning Brief push | `MAGNUS_MORNING_BRIEF_CRON_ENABLED=true`, `MAGNUS_MORNING_BRIEF_LOCAL_HOUR`, `TELEGRAM_CHAT_ID` | Asking Magnus about your day still works; nothing arrives unprompted |
 | Morning Brief over HTTP | `MAGNUS_INTERNAL_JOB_SECRET` | `POST /internal/jobs/morning-brief` is rejected |
-| Native command menu | `MAGNUS_TELEGRAM_COMMANDS_MODE` (`core` default, `minimal`, `full`) | Core lanes only |
 | Always-on hosting | `MAGNUS_TELEGRAM_MODE=webhook` (see [section 5](#5-keeping-it-always-on)) | Long polling: fine locally, collides with itself on redeploy |
 
 `npm run telegram:check` prints this same picture from your actual environment, marking each
@@ -99,7 +98,6 @@ It does four things, all idempotent:
 Useful variants:
 
 ```bash
-npm run telegram:setup -- --mode=full        # register every lane in the native menu
 npm run telegram:setup -- --drop-pending     # skip the backlog after downtime
 npm run telegram:check -- --probe-conflict   # ask Telegram whether another process is polling
 npm run telegram:check -- --json             # machine-readable capability report
@@ -108,16 +106,12 @@ npm run telegram:check -- --json             # machine-readable capability repor
 `--probe-conflict` issues one `getUpdates` call, which briefly interrupts a running poller. Use it
 when you suspect a duplicate deploy, not as a routine check.
 
-### Command modes
+### There are no commands to learn
 
-| Mode | Native menu shows | Use when |
-|------|-------------------|----------|
-| `core` (default) | `/menu`, `/help`, `/meal`, `/journal`, `/health`, `/workouts`, `/hevy`, `/plan`, `/research`, `/morningbrief` | Everyday personal use |
-| `minimal` | `/menu`, `/help`, `/meal` | You prefer a nearly empty menu and drive everything from `/menu` |
-| `full` | Every lane, including wealth and joy | You want one tap to any specialist |
-
-Every lane stays reachable in any mode: type it, or use the `/menu` inline picker. A command sent
-with no text uses its default prompt, so tapping one from the menu never wastes a turn.
+Magnus registers exactly two: `/start` and `/help`, both answered locally without a model call.
+Everything else is plain language — you write “what's on tomorrow?” or “log dinner: two rotis and
+paneer”, and Magnus works out who answers. There is no menu, no lane picker, and no way to address
+a specialist directly, by design: one voice, one thread.
 
 ---
 
@@ -132,14 +126,23 @@ it needs a container host (Railway, Fly, Render, a VPS), not a serverless platfo
 1. Push this repo to GitHub.
 2. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo** → pick this
    repo. Railway reads `railway.toml` and `Dockerfile`; no build config needed.
-3. **Variables** → paste everything from section 2, plus:
-   - `NODE_ENV=production`
-   - `MAGNUS_TELEGRAM_MODE=webhook` (see below)
-4. **Settings → Networking → Generate Domain**. This gives Railway's `RAILWAY_PUBLIC_DOMAIN`, which
-   Magnus turns into the webhook URL by itself.
-5. Deploy. Logs should show `capabilities`, `health server listening`, `telegram webhook route
-   mounted`, `starting telegram runtime`, then `Magnus online (Telegram + health)`.
-6. Message the bot. Every push to `main` redeploys automatically.
+3. **Variables → Raw Editor** → paste everything from section 2, plus `NODE_ENV=production` and
+   `MAGNUS_TELEGRAM_MODE=webhook`. Do **not** set `HEALTH_PORT` here; Railway injects `PORT` and
+   routes to it.
+4. **Settings → Networking → Generate Domain** (port `8080` if asked). This is what gives Railway's
+   `RAILWAY_PUBLIC_DOMAIN`, which Magnus turns into the webhook URL by itself.
+5. **Redeploy** so the new domain and variables are in the environment. The deploy before this
+   crash-loops — no credentials yet — which is expected, not a broken build.
+6. Logs, in order: `clients initialized`, `capabilities`, `telegram webhook route mounted`,
+   `health server listening`, `starting telegram runtime` with `"mode":"webhook"`, then
+   `Magnus online (Telegram + health)`.
+7. Message the bot. Every push to `main` redeploys automatically.
+
+Nothing needs to be run by hand on the host: booting in webhook mode registers the webhook and the
+command list itself. `npm run telegram:setup` is for local use or repair.
+
+If the log line reads `"mode":"polling"` with a reason mentioning no public URL, the domain did not
+exist yet when the process booted — redeploy. Magnus prefers degraded polling over going dark.
 
 `railway.toml` already pins the parts that matter: `restartPolicyType = "ALWAYS"`,
 `numReplicas = 1`, healthcheck on `/health`.
@@ -199,14 +202,14 @@ in polling mode it steals updates from production.
 
 | Send | Expect |
 |------|--------|
-| `/start` | Welcome text explaining plain text, `/menu`, and slash commands (answered locally, no model call) |
-| `/help` | Every lane grouped by pillar |
-| `/menu` → tap **Health** → “should I train today? knees sore” | Reply that reflects your recovery rules and recent sessions |
-| `/meal 2 eggs, toast, black coffee` | Logged with macros and a running day total |
-| `/journal rest day, slept 6h, skipped Push B` | Saved confirmation; later health replies reference it |
-| `/workouts` (with `HEVY_API_KEY`) | References your real recent Hevy sessions |
-| `/research best evidence on creatine timing` | Structured answer with sources |
-| `/morningbrief` | Brief generated on demand |
+| `/start` | What Magnus does, in plain language (no model call) |
+| `/help` | Worked examples across calendar, health, money, learning, downtime |
+| “what does my day look like?” | Your real calendar, described as a day (needs Google Calendar) |
+| “book gym 7am tomorrow” | Event created, confirmed in one line |
+| “log lunch: rice and dal” | Logged with macros and a running day total |
+| “should I train today? knees sore” | Reply reflecting your recovery rules and recent Hevy sessions |
+| “rest day, slept badly, skipped Push B” | Saved to the journal, and referenced by later replies |
+| “I've decided to drop the side project” | Logged, and mirrored to Notion when configured |
 
 Host checks:
 
@@ -227,8 +230,8 @@ curl https://YOUR-HOST/ready
 | Webhook set but nothing arrives | Check `last delivery error` in `npm run telegram:check`; usually the public domain is not routing to the app, or the app was down when Telegram gave up. The watchdog re-registers automatically within a minute. |
 | Bot dies overnight, no restart | Host restart policy. On Railway confirm `restartPolicyType = "ALWAYS"` took effect; on a VPS use `restart: unless-stopped`. |
 | “You're not allowlisted” | Set `MAGNUS_AUTO_ALLOWLIST_NEW_USERS=true`, or set `allowlisted = true` on your `user_profile` row. |
-| Menu shows the wrong commands | Re-run `npm run telegram:setup`. Telegram caches per client; force-close the app if it lingers. |
-| Replies are generic, never specialist | Missing `ANTHROPIC_API_KEY` or the message routed to `GENERAL` — try the explicit slash command. |
+| Menu shows old commands | Re-run `npm run telegram:setup`. Telegram caches per client; force-close the app if it lingers. |
+| Answers feel shallow on a pillar | Only Health is deep today; Wealth, Happiness and Wisdom are single prompt-only agents by design. |
 | Meals log with no macros | No nutrition provider configured; see the capability table. |
 | `/ready` fails | Supabase or Redis credentials are wrong on the host. |
 | Flood of old messages after downtime | `npm run telegram:setup -- --drop-pending`. |
