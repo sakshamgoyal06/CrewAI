@@ -20,6 +20,7 @@ import {
   createOAuth2Client,
   exchangeCodeForToken,
   getAuthUrl,
+  resolvedClientCredentials,
 } from "../src/integrations/googleCalendar/auth.js";
 import { googleCalendarTokenPath } from "../src/integrations/googleCalendar/paths.js";
 
@@ -39,11 +40,11 @@ function report(refreshToken?: string): void {
     return;
   }
 
+  const { clientId, clientSecret } = resolvedClientCredentials();
+
   console.log("\nSet these three on your host (Railway → Variables):\n");
-  console.log(
-    `GOOGLE_CLIENT_ID=${process.env.GOOGLE_CLIENT_ID?.trim() ?? "<client_id from your OAuth JSON>"}`,
-  );
-  console.log("GOOGLE_CLIENT_SECRET=<client_secret from your OAuth JSON>");
+  console.log(`GOOGLE_CLIENT_ID=${clientId}`);
+  console.log(`GOOGLE_CLIENT_SECRET=${clientSecret}`);
   console.log(`GOOGLE_CALENDAR_REFRESH_TOKEN=${refreshToken}`);
   console.log(
     "\nIf the OAuth app is still in Testing, publish it (Google Cloud → Audience → Publish app)\n" +
