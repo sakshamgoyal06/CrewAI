@@ -4,11 +4,18 @@
  *
  * Times are rendered in the user's timezone, because a model shown UTC will faithfully repeat UTC
  * back to someone who lives in Asia/Kolkata.
+ *
+ * Read output carries the event id, which is how editing and deleting stay honest: Magnus has to
+ * have read an event before it can change one. The ids are for the model, not the user — the system
+ * prompt forbids showing them.
  */
 import { googleCalendarConfigured } from "../../integrations/googleCalendar/auth.js";
 import {
   createEvent,
+  deleteEvent,
+  getEvent,
   listEvents,
+  updateEvent,
   type CalendarEventBrief,
 } from "../../integrations/googleCalendar/operations.js";
 
@@ -41,6 +48,7 @@ function formatWhen(event: CalendarEventBrief, timeZone: string): string {
 export async function readCalendarEvents(input: {
   startIso?: string;
   endIso?: string;
+  query?: string;
   timeZone: string;
 }): Promise<string> {
   if (!googleCalendarConfigured()) {
@@ -62,16 +70,19 @@ export async function readCalendarEvents(input: {
     timeMin: start.toISOString(),
     timeMax: end.toISOString(),
     maxResults: 30,
+    query: input.query,
   });
 
   if (events.length === 0) {
-    return "No events in that range.";
+    return input.query
+      ? `No events matching "${input.query}" in that range.`
+      : "No events in that range.";
   }
 
   return events
     .map((e) => {
       const where = e.location ? ` @ ${e.location}` : "";
-      return `- ${formatWhen(e, input.timeZone)} — ${e.summary}${where}`;
+      return `- ${formatWhen(e, input.timeZone)} — ${e.summary}${where} [id: ${e.id}]`;
     })
     .join("\n");
 }
@@ -104,4 +115,80 @@ export async function createCalendarEvent(input: {
   });
 
   return `Created "${created.summary}" — ${formatWhen(created, input.timeZone)}.`;
+}
+
+/**
+ * Patch an existing event. A new start with no new end keeps the original duration, so "move gym to
+ * 8am" does not silently turn a one-hour session into a zero-length one.
+ */
+export async function updateCalendarEvent(input: {
+  eventId: string;
+  summary?: string;
+  startIso?: string;
+  endIso?: string;
+  description?: string;
+  location?: string;
+  timeZone: string;
+}): Promise<string> {
+  if (!googleCalendarConfigured()) {
+    return NOT_CONFIGURED;
+  }
+  if (!input.eventId.trim()) {
+    return "Read the calendar first — changing an event needs its id.";
+  }
+
+  const changes = [input.summary, input.startIso, input.endIso, input.description, input.location];
+  if (changes.every((v) => v === undefined || v.trim() === "")) {
+    return "Nothing to change — give a new title, time, location or description.";
+  }
+
+  const existing = await getEvent({ eventId: input.eventId.trim() });
+  if (!existing) {
+    return "That event no longer exists. Read the calendar again for current ids.";
+  }
+
+  let endIso = input.endIso?.trim() || undefined;
+  if (input.startIso?.trim() && !endIso && existing.start.includes("T") && existing.end) {
+    const durationMs = new Date(existing.end).getTime() - new Date(existing.start).getTime();
+    const newStart = new Date(input.startIso.trim());
+    if (!Number.isNaN(newStart.getTime()) && durationMs > 0) {
+      // Keep the wall-clock offset out of it: Google reads the naive string against `timeZone`.
+      endIso = new Date(newStart.getTime() + durationMs)
+        .toISOString()
+        .replace(/\.\d{3}Z$/, "");
+    }
+  }
+
+  const updated = await updateEvent({
+    eventId: input.eventId.trim(),
+    summary: input.summary?.trim() || undefined,
+    start: input.startIso?.trim() || undefined,
+    end: endIso,
+    description: input.description,
+    location: input.location,
+    timeZone: input.timeZone,
+  });
+
+  return `Updated "${updated.summary}" — now ${formatWhen(updated, input.timeZone)}.`;
+}
+
+/** Deletes by id, and reports what was removed so a wrong deletion is obvious immediately. */
+export async function deleteCalendarEvent(input: {
+  eventId: string;
+  timeZone: string;
+}): Promise<string> {
+  if (!googleCalendarConfigured()) {
+    return NOT_CONFIGURED;
+  }
+  if (!input.eventId.trim()) {
+    return "Read the calendar first — deleting an event needs its id.";
+  }
+
+  const existing = await getEvent({ eventId: input.eventId.trim() });
+  if (!existing) {
+    return "That event no longer exists — nothing to delete.";
+  }
+
+  await deleteEvent({ eventId: input.eventId.trim() });
+  return `Deleted "${existing.summary}" (was ${formatWhen(existing, input.timeZone)}).`;
 }
