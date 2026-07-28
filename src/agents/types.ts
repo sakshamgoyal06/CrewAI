@@ -3,6 +3,7 @@
  */
 import type { Intent } from "../intent.js";
 import type { Pillar } from "./routing/pillarTypes.js";
+import type { MemoryPackage } from "./memory/memoryPackage.js";
 
 export type HealthSubIntent = "FITNESS" | "NUTRITION" | "ENERGY" | "OTHER";
 
@@ -16,8 +17,11 @@ export type AgentContext = {
   intent: Intent;
   /**
    * Preformatted memory from `loadMemoryContext` — orchestrator-only; augment specialist prompts.
+   * @deprecated Prefer `memoryPackage.memoryBlock`.
    */
   memoryBlock?: string;
+  /** Phases 1–4: verbatim history, summary buffer, semantic facts, adaptive retrieval. */
+  memoryPackage?: MemoryPackage;
   /**
    * Committed health program memory (user-context, learnings, recovery, journals).
    */

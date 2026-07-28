@@ -37,6 +37,7 @@ export type MemoryContext = {
     userTier?: string;
   } | null;
   recentSignals: {
+    /** Chronological chat turns (may exceed verbatim window; split in memoryPackage). */
     recentChatTurns: MemoryChatTurn[];
     /** Recent rows from `daily_scores` when present. */
     dailyScores?: Array<Record<string, unknown>>;

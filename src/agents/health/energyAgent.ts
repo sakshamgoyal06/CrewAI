@@ -1,7 +1,7 @@
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { anthropic } from "../../tools/clients.js";
-import { augmentUserWithMemory } from "../memory/memoryAgent.js";
+import { buildAgentMessages } from "../memory/memoryAgent.js";
 import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
 import type { AgentContext, AgentResult } from "../types.js";
 import { appendHealthReferenceBlock } from "../../pillars/health/references/appendHealthReferenceBlock.js";
@@ -47,18 +47,13 @@ export async function tryEnergyAgent(ctx: AgentContext): Promise<AgentResult | n
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 512,
     system: ENERGY_SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: augmentUserWithMemory(
-          appendHealthReferenceBlock(
-            `${ctx.rawMessage}${ctx.healthPreferences ?? ""}`,
-            ctx.healthReferenceBlock,
-          ),
-          ctx.memoryBlock,
-        ),
-      },
-    ],
+    messages: buildAgentMessages(
+      ctx,
+      appendHealthReferenceBlock(
+        `${ctx.rawMessage}${ctx.healthPreferences ?? ""}`,
+        ctx.healthReferenceBlock,
+      ),
+    ),
   });
   const text = textFromMessage(msg).trim() || "…";
   return {

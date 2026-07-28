@@ -11,7 +11,7 @@
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { anthropic } from "../tools/clients.js";
-import { augmentUserWithMemory } from "./memory/memoryAgent.js";
+import { buildAgentMessages } from "./memory/memoryAgent.js";
 import type { AgentContext, AgentResult } from "./types.js";
 
 export const PILLAR_MODEL = "claude-sonnet-4-6";
@@ -47,15 +47,10 @@ export async function runPillarSpecialist(input: {
     model: PILLAR_MODEL,
     max_tokens: input.maxTokens ?? 768,
     system: input.system,
-    messages: [
-      {
-        role: "user",
-        content: augmentUserWithMemory(
-          `${input.ctx.rawMessage}${optionalProfileBlock(input.ctx)}`,
-          input.ctx.memoryBlock,
-        ),
-      },
-    ],
+    messages: buildAgentMessages(
+      input.ctx,
+      `${input.ctx.rawMessage}${optionalProfileBlock(input.ctx)}`,
+    ),
   });
 
   return {

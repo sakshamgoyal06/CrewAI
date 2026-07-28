@@ -10,10 +10,11 @@ import { logger } from "../logger.js";
 import { runMagnusAgent } from "./magnusAgent.js";
 import { resolveIntentNaturalLanguage } from "./orchestratorIntent.js";
 import {
-  formatMemoryBlockForSystem,
   intentToMemoryPurpose,
   loadMemoryContext,
+  buildMemoryPackage,
 } from "./memory/memoryAgent.js";
+import type { MemoryChatTurn } from "./memory/types.js";
 import {
   fetchUserHealthProfile,
   runHealthOnboardingTurn,
@@ -30,6 +31,8 @@ export type OrchestratorReply = {
   /** Internal only — recorded in chat metadata, never shown to the user. */
   delegatedAgent?: string;
   agentMetadata?: Record<string, unknown>;
+  /** For post-turn memory maintenance (summary + semantic facts). */
+  memoryPackageChronologicalTurns?: MemoryChatTurn[];
 };
 
 export async function runOrchestratorReply(input: {
@@ -95,7 +98,13 @@ export async function runOrchestratorReply(input: {
     telegramUserId: input.telegramUserId,
     purpose: intentToMemoryPurpose(intent),
   });
-  const memoryBlock = formatMemoryBlockForSystem(memory);
+  const memoryPackage = await buildMemoryPackage({
+    memory,
+    intent,
+    rawMessage: input.userMessage,
+    userProfileId: input.userProfileId,
+  });
+  const memoryBlock = memoryPackage.memoryBlock;
 
   const ctx: AgentContext = {
     userProfileId: input.userProfileId,
@@ -105,6 +114,7 @@ export async function runOrchestratorReply(input: {
     rawMessage: input.userMessage,
     intent,
     memoryBlock,
+    memoryPackage,
     pillar: pillarRoute.pillar,
     department: pillarRoute.department,
   };
@@ -126,6 +136,7 @@ export async function runOrchestratorReply(input: {
       replyText: magnus.text,
       intent,
       agentMetadata: magnus.metadata,
+      memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
     };
   }
 
@@ -140,6 +151,7 @@ export async function runOrchestratorReply(input: {
         department: pillarRoute.department,
         ...delegated.result.metadata,
       },
+      memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
     };
   }
 
@@ -150,5 +162,6 @@ export async function runOrchestratorReply(input: {
     replyText: fallback.text,
     intent,
     agentMetadata: { ...fallback.metadata, unrouted: true },
+    memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
   };
 }

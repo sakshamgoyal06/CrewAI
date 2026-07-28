@@ -1,7 +1,7 @@
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { anthropic } from "../../tools/clients.js";
-import { augmentUserWithMemory } from "../memory/memoryAgent.js";
+import { buildAgentMessages } from "../memory/memoryAgent.js";
 import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
 import type { AgentContext, AgentResult } from "../types.js";
 import { HEALTH_SPECIALIST_MODEL } from "./model.js";
@@ -42,15 +42,14 @@ LifeOS: supportive tone, no shame; keep replies under ~220 words unless they ask
  * Runs the alternates recommender (call after `matchesAlternatesIntent` is true).
  */
 export async function runAlternatesRecommenderAgent(ctx: AgentContext): Promise<AgentResult> {
-  const userBlock = augmentUserWithMemory(
-    `${ctx.rawMessage}${ctx.healthPreferences ?? ""}`,
-    ctx.memoryBlock,
-  );
   const msg = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 896,
     system: ALTERNATES_RECOMMENDER_SYSTEM,
-    messages: [{ role: "user", content: userBlock }],
+    messages: buildAgentMessages(
+      ctx,
+      `${ctx.rawMessage}${ctx.healthPreferences ?? ""}`,
+    ),
   });
   const text = textFromMessage(msg).trim() || "…";
   return {

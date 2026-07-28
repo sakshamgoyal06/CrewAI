@@ -9,7 +9,7 @@ import {
 } from "../hevy/index.js";
 import { logger } from "../../../../logger.js";
 import { anthropic, supabase } from "../../../../tools/clients.js";
-import { augmentUserWithMemory } from "../../../../agents/memory/memoryAgent.js";
+import { buildAgentMessages } from "../../../../agents/memory/memoryAgent.js";
 import { SPECIALIST_USER_IDENTITY } from "../../../../agents/promptIdentity.js";
 import type { AgentContext, AgentResult } from "../../../../agents/types.js";
 import {
@@ -171,24 +171,16 @@ export async function tryFitnessAgent(ctx: AgentContext): Promise<AgentResult | 
     ? `\n\nContext for this user:\n${workoutSummary}`
     : "";
 
-  const userContent = augmentUserWithMemory(
-    appendHealthReferenceBlock(
-      `${ctx.rawMessage}${contextBlock}${ctx.healthPreferences ?? ""}`,
-      ctx.healthReferenceBlock,
-    ),
-    ctx.memoryBlock,
+  const userContent = appendHealthReferenceBlock(
+    `${ctx.rawMessage}${contextBlock}${ctx.healthPreferences ?? ""}`,
+    ctx.healthReferenceBlock,
   );
 
   const msg = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 768,
     system: FITNESS_SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: userContent,
-      },
-    ],
+    messages: buildAgentMessages(ctx, userContent),
   });
 
   const text = textFromMessage(msg).trim() || "…";

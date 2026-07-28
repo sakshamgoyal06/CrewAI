@@ -6,6 +6,7 @@
  * in chat metadata.
  */
 import { runOrchestratorReply } from "./agents/magnusOrchestrator.js";
+import { runPostTurnMemoryMaintenance } from "./agents/memory/memoryAgent.js";
 import { scheduleMorningBriefCron } from "./jobs/morningBriefCron.js";
 import { splitPlainForTelegram } from "./magnus/telegramChunk.js";
 import { markdownishToTelegramHtml } from "./magnus/telegramFormat.js";
@@ -136,6 +137,15 @@ export async function handleMessage(
     });
     if (!asstLog.ok) {
       log.warn({ err: asstLog.error }, "assistant reply not persisted to chat log");
+    }
+
+    if (orchestrated.memoryPackageChronologicalTurns) {
+      void runPostTurnMemoryMaintenance({
+        userProfileId: user.profileId,
+        userMessage,
+        assistantReply: replyText,
+        chronologicalTurns: orchestrated.memoryPackageChronologicalTurns,
+      }).catch(() => {});
     }
 
     return plainChunksToTelegramHtml(replyText);
