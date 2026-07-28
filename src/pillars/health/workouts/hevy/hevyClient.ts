@@ -314,6 +314,39 @@ export async function fetchHevyWorkoutsPage(
   );
 }
 
+function pickHevyWorkoutFromDetailResponse(data: unknown): HevyWorkout | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+  const o = data as Record<string, unknown>;
+  if (typeof o.id === "string") {
+    return o as HevyWorkout;
+  }
+  const inner = o.workout;
+  if (inner && typeof inner === "object" && typeof (inner as Record<string, unknown>).id === "string") {
+    return inner as HevyWorkout;
+  }
+  return null;
+}
+
+/** GET /v1/workouts/{id} — full session when list rows are sparse. */
+export async function fetchHevyWorkoutById(
+  apiKey: string,
+  workoutId: string,
+  options: { fetchImpl?: typeof fetch; timeoutMs?: number } = {},
+): Promise<{ ok: true; workout: HevyWorkout } | { ok: false; error: string; status?: number }> {
+  const path = `/v1/workouts/${encodeURIComponent(workoutId)}`;
+  const r = await hevyGetJson<unknown>(path, apiKey, {}, options);
+  if (!r.ok) {
+    return r;
+  }
+  const workout = pickHevyWorkoutFromDetailResponse(r.data);
+  if (!workout?.id) {
+    return { ok: false, error: "Hevy returned no workout body", status: 200 };
+  }
+  return { ok: true, workout };
+}
+
 export async function fetchHevyRoutinesPage(
   apiKey: string,
   page: number,
