@@ -6,7 +6,7 @@ import { completeMealLogFromPipeline, completeMealLogWithEstimate } from "../../
 import { estimateMealNutrition } from "../../meals/estimateMealNutrition.js";
 import { anthropic } from "../../tools/clients.js";
 import type { AgentContext, AgentResult } from "../types.js";
-import { augmentUserWithMemory } from "../memory/memoryAgent.js";
+import { buildAgentMessages } from "../memory/memoryAgent.js";
 import {
   buildAggregateMealEstimate,
   estimateMealComponentsInParallel,
@@ -180,11 +180,8 @@ export async function runOrchestratedMealLogTurn(
 
 /** Optional tool use for general nutrition Q&A (calorie lookups). */
 export async function runOrchestratedNutritionAdviceTurn(ctx: AgentContext): Promise<AgentResult> {
-  const userBlock = augmentUserWithMemory(
-    `${ctx.rawMessage}${ctx.healthPreferences ?? ""}`,
-    ctx.memoryBlock,
-  );
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: userBlock }];
+  const userBlock = `${ctx.rawMessage}${ctx.healthPreferences ?? ""}`;
+  const messages: Anthropic.MessageParam[] = buildAgentMessages(ctx, userBlock);
 
   for (let round = 0; round < 5; round++) {
     const msg = await anthropic.messages.create({
@@ -244,7 +241,7 @@ export async function runOrchestratedNutritionAdviceTurn(ctx: AgentContext): Pro
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 512,
     system: NUTRITION_SYSTEM,
-    messages: [{ role: "user", content: userBlock }],
+    messages: buildAgentMessages(ctx, userBlock),
   });
   const text = textFromMessage(fallback).trim() || "…";
   return {

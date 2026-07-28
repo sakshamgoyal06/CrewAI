@@ -25,6 +25,7 @@ vi.mock("./tools/logNoteTool.js", () => ({
 }));
 
 vi.mock("./memory/memoryAgent.js", () => ({
+  buildAgentMessages: (_ctx: unknown, content: string) => [{ role: "user" as const, content }],
   augmentUserWithMemory: (msg: string) => msg,
 }));
 

@@ -1,7 +1,7 @@
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { anthropic } from "../../tools/clients.js";
-import { augmentUserWithMemory } from "../memory/memoryAgent.js";
+import { buildAgentMessages } from "../memory/memoryAgent.js";
 import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
 import { isMealCommand } from "../../meals/parseMealLogCommand.js";
 import type { AgentContext, AgentResult } from "../types.js";
@@ -73,15 +73,7 @@ export async function tryMealPlannerAgent(ctx: AgentContext): Promise<AgentResul
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 1024,
     system: MEAL_PLANNER_SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: augmentUserWithMemory(
-          `${ctx.rawMessage}${prefs}${profileBlock}`,
-          ctx.memoryBlock,
-        ),
-      },
-    ],
+    messages: buildAgentMessages(ctx, `${ctx.rawMessage}${prefs}${profileBlock}`),
   });
   const text = textFromMessage(msg).trim() || "…";
   return {

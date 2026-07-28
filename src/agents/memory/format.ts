@@ -1,6 +1,12 @@
+import type { MemoryRetrievalProfile } from "./adaptiveRetrieval.js";
+import { memoryConfig } from "./memoryConfig.js";
 import type { MemoryContext } from "./types.js";
 
-const DEFAULT_MAX_BLOCK = 2200;
+export type FormatMemoryBlockOptions = {
+  semanticFacts?: string[];
+  /** When true, omit chat snippets (history is in `messages[]`). */
+  omitChatSnippets?: boolean;
+};
 
 /**
  * Appends a labeled memory section to the user message for Claude (specialists / GENERAL).
@@ -16,12 +22,15 @@ export function augmentUserWithMemory(
 }
 
 /**
- * Compact string for system-side injection (or user-message augmentation).
+ * Structured non-chat context: profile, goals, logs, semantic facts, rolling DB summaries.
  */
 export function formatMemoryBlockForSystem(
   ctx: MemoryContext,
-  maxChars: number = DEFAULT_MAX_BLOCK,
+  profile?: MemoryRetrievalProfile,
+  options: FormatMemoryBlockOptions = {},
 ): string {
+  const config = memoryConfig();
+  const maxChars = profile?.memoryBlockMaxChars ?? config.memoryBlockMaxChars;
   const parts: string[] = [];
 
   if (ctx.profile?.northStarGoal?.trim()) {
@@ -34,24 +43,45 @@ export function formatMemoryBlockForSystem(
     parts.push(`Tier: ${ctx.profile.userTier.trim()}`);
   }
 
-  if (ctx.recentSignals.dailyScores && ctx.recentSignals.dailyScores.length > 0) {
+  const includeDailyScores = profile?.includeDailyScores ?? true;
+  const includeDailyLogs = profile?.includeDailyLogs ?? true;
+  const includeGoals = profile?.includeGoals ?? true;
+  const includeJoy = profile?.includeJoy ?? true;
+  const includePatterns = profile?.includePatterns ?? true;
+  const includeRolling = profile?.includeRollingSummaries ?? true;
+  const includeGaps = profile?.includeGaps ?? config.includeGapsInBlock;
+  const includeChatSnippets =
+    (profile?.includeChatSnippetsInBlock ?? false) && !options.omitChatSnippets;
+
+  if (includeDailyScores && ctx.recentSignals.dailyScores && ctx.recentSignals.dailyScores.length > 0) {
     parts.push(
       `Recent daily scores (raw sample): ${JSON.stringify(ctx.recentSignals.dailyScores.slice(0, 2)).slice(0, 700)}`,
     );
   }
 
-  if (ctx.recentSignals.dailyLogs && ctx.recentSignals.dailyLogs.length > 0) {
-    const lines = ctx.recentSignals.dailyLogs.slice(0, 6).map((d) => {
-      const day = d.logDate ? `${d.logDate} ` : "";
-      const src = d.source ? `[${d.source}] ` : "";
-      const snip = d.body.slice(0, 220);
-      const ell = d.body.length > 220 ? "…" : "";
-      return `- ${day}${src}${snip}${ell}`;
-    });
+  if (includeDailyLogs && ctx.recentSignals.dailyLogs && ctx.recentSignals.dailyLogs.length > 0) {
+    const lines = ctx.recentSignals.dailyLogs
+      .slice(0, config.dailyLogsInBlock)
+      .map((d) => {
+        const day = d.logDate ? `${d.logDate} ` : "";
+        const src = d.source ? `[${d.source}] ` : "";
+        const snip = d.body.slice(0, config.dailyLogSnippetChars);
+        const ell = d.body.length > config.dailyLogSnippetChars ? "…" : "";
+        return `- ${day}${src}${snip}${ell}`;
+      });
     parts.push(`Recent Magnus daily logs (newest first):\n${lines.join("\n")}`);
   }
 
-  if (ctx.recentSignals.recentChatTurns.length > 0) {
+  if (options.semanticFacts && options.semanticFacts.length > 0) {
+    const lines = options.semanticFacts.map((f) => {
+      const snip = f.slice(0, config.semanticFactSnippetChars);
+      const ell = f.length > config.semanticFactSnippetChars ? "…" : "";
+      return `- ${snip}${ell}`;
+    });
+    parts.push(`Remembered facts about this user:\n${lines.join("\n")}`);
+  }
+
+  if (includeChatSnippets && ctx.recentSignals.recentChatTurns.length > 0) {
     const lines = ctx.recentSignals.recentChatTurns.slice(0, 8).map((t) => {
       const snippet = t.content.slice(0, 160);
       const ell = t.content.length > 160 ? "…" : "";
@@ -61,14 +91,18 @@ export function formatMemoryBlockForSystem(
     parts.push(`Recent chat (truncated, newest first):\n${lines.join("\n")}`);
   }
 
-  if (ctx.rollingSummaries.summary7d?.trim()) {
-    parts.push(`7d summary: ${ctx.rollingSummaries.summary7d.trim().slice(0, 600)}`);
+  if (includeRolling && ctx.rollingSummaries.summary7d?.trim()) {
+    parts.push(
+      `7d summary: ${ctx.rollingSummaries.summary7d.trim().slice(0, config.rollingSummarySnippetChars)}`,
+    );
   }
-  if (ctx.rollingSummaries.summary30d?.trim()) {
-    parts.push(`30d summary: ${ctx.rollingSummaries.summary30d.trim().slice(0, 600)}`);
+  if (includeRolling && ctx.rollingSummaries.summary30d?.trim()) {
+    parts.push(
+      `30d summary: ${ctx.rollingSummaries.summary30d.trim().slice(0, config.rollingSummarySnippetChars)}`,
+    );
   }
 
-  if (ctx.activeGoals.length > 0) {
+  if (includeGoals && ctx.activeGoals.length > 0) {
     const gl = ctx.activeGoals
       .slice(0, 8)
       .map((g) =>
@@ -80,18 +114,24 @@ export function formatMemoryBlockForSystem(
     parts.push(`Active goals: ${gl}`);
   }
 
-  if (ctx.joy.summary?.trim()) {
+  if (includeJoy && ctx.joy.summary?.trim()) {
     parts.push(`Joy / happiness: ${ctx.joy.summary.trim().slice(0, 500)}`);
   }
-  if (ctx.joy.happinessReserve && Object.keys(ctx.joy.happinessReserve).length > 0) {
-    parts.push(`Happiness reserve (raw): ${JSON.stringify(ctx.joy.happinessReserve).slice(0, 500)}`);
+  if (
+    includeJoy &&
+    ctx.joy.happinessReserve &&
+    Object.keys(ctx.joy.happinessReserve).length > 0
+  ) {
+    parts.push(
+      `Happiness reserve (raw): ${JSON.stringify(ctx.joy.happinessReserve).slice(0, 500)}`,
+    );
   }
 
-  if (ctx.patterns.length > 0) {
+  if (includePatterns && ctx.patterns.length > 0) {
     parts.push(`Patterns (sample): ${JSON.stringify(ctx.patterns.slice(0, 3)).slice(0, 600)}`);
   }
 
-  if (ctx.gaps.length > 0) {
+  if (includeGaps && ctx.gaps.length > 0) {
     parts.push(`Data gaps: ${ctx.gaps.join("; ")}`);
   }
 

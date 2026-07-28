@@ -43,16 +43,31 @@ const { defaultMemoryPayload } = vi.hoisted(() => {
   return { defaultMemoryPayload };
 });
 
-vi.mock("./memory/memoryAgent.js", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("./memory/memoryAgent.js")>();
-  return {
-    ...mod,
-    loadMemoryContext: vi.fn().mockResolvedValue(defaultMemoryPayload),
-    formatMemoryBlockForSystem: vi.fn().mockReturnValue(""),
-    augmentUserWithMemory: (msg: string, _block?: string) => msg,
-    intentToMemoryPurpose: () => "chat" as const,
-  };
-});
+vi.mock("./memory/memoryAgent.js", () => ({
+  loadMemoryContext: vi.fn().mockResolvedValue(defaultMemoryPayload),
+  buildMemoryPackage: vi.fn().mockResolvedValue({
+    verbatimTurns: [],
+    semanticFacts: [],
+    memoryBlock: "",
+    retrievalProfile: {
+      includeDailyLogs: true,
+      includeDailyScores: true,
+      includeGoals: true,
+      includeJoy: true,
+      includePatterns: true,
+      includeRollingSummaries: true,
+      includeSemanticFacts: true,
+      includeGaps: false,
+      includeChatSnippetsInBlock: false,
+      memoryBlockMaxChars: 4500,
+      verbatimTurnLimit: 10,
+    },
+    chronologicalTurns: [],
+  }),
+  buildAgentMessages: (_ctx: unknown, content: string) => [{ role: "user" as const, content }],
+  augmentUserWithMemory: (msg: string, _block?: string) => msg,
+  intentToMemoryPurpose: () => "chat" as const,
+}));
 
 import { loadMemoryContext } from "./memory/memoryAgent.js";
 import { runOrchestratorReply } from "./magnusOrchestrator.js";

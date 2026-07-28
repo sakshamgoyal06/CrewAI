@@ -109,8 +109,7 @@ shell or `.env`.
 3. **Rate limit** — Redis fixed 60s window per user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, 0 disables).
 4. **Dedupe** — `update_id` claimed in Redis for 24h, so webhook retries never double-reply.
 5. **Classification** — Five intents. `GENERAL` is Magnus's own work, not a fallback bucket.
-6. **Memory** — Loaded once per turn and appended to the prompt; missing optional tables surface as
-   `gaps` rather than failing.
+6. **Memory** — Loaded once per turn: recent chat as verbatim `messages[]` (configurable window), rolling summary for older turns, semantic facts from `memory_summaries`, plus structured profile/goals/logs. Tunable via `MAGNUS_MEMORY_*` in `.env.example`. Post-turn maintenance updates conversation summary and extracted facts.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
    routing in `metadata` (`delegated_agent`, `agent_metadata`).
 8. **Replies** — One reply per turn, chunked only for Telegram's size limit, sent as HTML.
@@ -179,8 +178,9 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ## Not built yet
 
-- **Memory reads tables nothing writes.** Fifteen read-only tables produce `gaps` every turn.
-  Either write to them or stop reading them. Largest open item.
+- **Memory reads tables nothing writes.** Fifteen read-only tables can produce `gaps` every turn when
+  `MAGNUS_MEMORY_INCLUDE_GAPS=true` (default off). Semantic + conversation summaries now write to
+  `memory_summaries` when Phases 2–3 are enabled.
 - **Schema not reproducible** from `supabase/migrations/`.
 - **Semantic recall** — no embeddings; memory is recent-window plus structured reads.
 - **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data.
@@ -191,6 +191,6 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-07-28 (Hevy workout context: full set/rep detail in Fitness agent prompt; four pillars + Magnus-only surface; Google Calendar read/create/update/delete in chat;
+**Last updated:** 2026-07-28 (Phased memory: verbatim messages[], summary buffer, semantic facts, adaptive retrieval — `MAGNUS_MEMORY_*` tunables; Hevy full set detail in Fitness agent)
 `/menu`, department commands, delegation notices, Planner, Notion agent, Research and the wealth /
 joy / wisdom specialist sets removed)

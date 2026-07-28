@@ -7,8 +7,15 @@ import type { Intent } from "../../intent.js";
 import { logger } from "../../logger.js";
 import { supabase as defaultSupabase } from "../../tools/clients.js";
 import type { MemoryContext, MemoryPurpose } from "./types.js";
+import { memoryConfig } from "./memoryConfig.js";
 
 export { formatMemoryBlockForSystem, augmentUserWithMemory } from "./format.js";
+export { buildAgentMessages, buildAgentHistoryPrefix } from "./buildAgentMessages.js";
+export { buildMemoryPackage } from "./memoryPackage.js";
+export type { MemoryPackage } from "./memoryPackage.js";
+export { runPostTurnMemoryMaintenance, chronologicalTurnsFromPackage } from "./postTurnMemory.js";
+export { memoryConfig, resetMemoryConfigForTests } from "./memoryConfig.js";
+export type { MemoryConfig } from "./memoryConfig.js";
 export type {
   MemoryContext,
   MemoryPurpose,
@@ -24,6 +31,14 @@ const CHAT_LIMIT: Record<MemoryPurpose, number> = {
   brief: 12,
   pattern: 48,
 };
+
+function chatFetchLimit(purpose: MemoryPurpose): number {
+  const config = memoryConfig();
+  if (config.chatFetchLimit > 0) {
+    return Math.max(config.chatFetchLimit, config.verbatimTurnLimit);
+  }
+  return CHAT_LIMIT[purpose];
+}
 
 function truncateContent(s: string, max: number): string {
   const t = s.trim();
@@ -108,7 +123,8 @@ export async function loadMemoryContext(input: {
     gaps.push("user_profile: no row for id");
   }
 
-  const chatLimit = CHAT_LIMIT[input.purpose];
+  const chatLimit = chatFetchLimit(input.purpose);
+  const turnMax = memoryConfig().turnContentMaxChars;
   const chatResult = await safeTableQuery<
     Array<{
       role: string;
@@ -139,7 +155,7 @@ export async function loadMemoryContext(input: {
       const content = typeof row.content === "string" ? row.content : "";
       recentChatTurns.push({
         role,
-        content: truncateContent(content, 2000),
+        content: truncateContent(content, turnMax),
         intent: row.intent ?? null,
         createdAt: row.created_at ?? loadedAt,
       });

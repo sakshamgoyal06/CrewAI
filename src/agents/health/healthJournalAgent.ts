@@ -1,7 +1,7 @@
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { anthropic } from "../../tools/clients.js";
-import { augmentUserWithMemory } from "../memory/memoryAgent.js";
+import { buildAgentMessages } from "../memory/memoryAgent.js";
 import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
 import type { AgentContext, AgentResult } from "../types.js";
 import { appendHealthReferenceBlock } from "../../pillars/health/references/appendHealthReferenceBlock.js";
@@ -81,19 +81,17 @@ export async function tryHealthJournalAgent(
       ? ctx.rawMessage.trim() || "today — summarize my day from what I shared."
       : ctx.rawMessage;
 
-  const userContent = augmentUserWithMemory(
-    appendHealthReferenceBlock(
-      `${payload}${ctx.healthPreferences ?? ""}`,
-      ctx.healthReferenceBlock,
-    ),
-    ctx.memoryBlock,
-  );
-
   const msg = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 900,
     system: JOURNAL_SYSTEM,
-    messages: [{ role: "user", content: userContent }],
+    messages: buildAgentMessages(
+      ctx,
+      appendHealthReferenceBlock(
+        `${payload}${ctx.healthPreferences ?? ""}`,
+        ctx.healthReferenceBlock,
+      ),
+    ),
   });
 
   const entry = textFromMessage(msg).trim();

@@ -18,7 +18,7 @@ import type {
 import { logger } from "../logger.js";
 import { loggableError } from "../util/loggableError.js";
 import { anthropic } from "../tools/clients.js";
-import { augmentUserWithMemory } from "./memory/memoryAgent.js";
+import { buildAgentMessages } from "./memory/memoryAgent.js";
 import {
   createCalendarEvent,
   deleteCalendarEvent,
@@ -252,15 +252,10 @@ async function runTool(
 }
 
 export async function runMagnusAgent(ctx: AgentContext): Promise<AgentResult> {
-  const messages: MessageParam[] = [
-    {
-      role: "user",
-      content: augmentUserWithMemory(
-        `${ctx.rawMessage}\n\n---\n${contextBlock(ctx)}`,
-        ctx.memoryBlock,
-      ),
-    },
-  ];
+  const messages: MessageParam[] = buildAgentMessages(
+    ctx,
+    `${ctx.rawMessage}\n\n---\n${contextBlock(ctx)}`,
+  );
 
   const toolsUsed: string[] = [];
 
