@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createHevyRoutine,
+  fetchHevyWorkoutById,
   fetchHevyWorkoutsPage,
   hevyApiBaseUrl,
   updateHevyRoutine,
@@ -39,6 +40,31 @@ describe("fetchHevyWorkoutsPage", () => {
       expect(r.status).toBe(401);
       expect(r.error).toContain("nope");
     }
+  });
+});
+
+describe("fetchHevyWorkoutById", () => {
+  it("unwraps nested workout in GET response", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          workout: {
+            id: "wid-1",
+            title: "Pull",
+            exercises: [{ title: "Row", sets: [{ weight_kg: 40, reps: 10 }] }],
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    const r = await fetchHevyWorkoutById("key", "wid-1", { fetchImpl });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.workout.title).toBe("Pull");
+      expect(r.workout.exercises?.[0]?.sets?.[0]?.weight_kg).toBe(40);
+    }
+    const [url] = fetchImpl.mock.calls[0] as [string];
+    expect(url).toContain("/v1/workouts/wid-1");
   });
 });
 

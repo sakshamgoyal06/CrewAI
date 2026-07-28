@@ -3,9 +3,11 @@
  */
 import "dotenv/config";
 
-import { fetchHevyWorkoutsPage, hevyApiBaseUrl } from "../../../../src/pillars/health/workouts/hevy/hevyClient.js";
+import {
+  fetchHevyWorkoutById,
+  fetchHevyWorkoutsPage,
+} from "../../../../src/pillars/health/workouts/hevy/hevyClient.js";
 import { hevyApiKeyFromEnv } from "../../../../src/pillars/health/workouts/hevy/hevyEnv.js";
-import type { HevyWorkout } from "../../../../src/pillars/health/workouts/hevy/types.js";
 
 const apiKey = hevyApiKeyFromEnv();
 if (!apiKey) process.exit(1);
@@ -23,16 +25,11 @@ if (!workouts.length) {
 }
 
 const latest = workouts[0]!;
-const base = hevyApiBaseUrl().replace(/\/$/, "");
-
-let full: HevyWorkout = latest;
+let full = latest;
 if (latest.id) {
-  const res = await fetch(`${base}/v1/workouts/${encodeURIComponent(latest.id)}`, {
-    headers: { "api-key": apiKey, Accept: "application/json" },
-  });
-  if (res.ok) {
-    const data = (await res.json()) as { workout?: HevyWorkout } | HevyWorkout;
-    full = ("workout" in data && data.workout ? data.workout : data) as HevyWorkout;
+  const detail = await fetchHevyWorkoutById(apiKey, latest.id);
+  if (detail.ok) {
+    full = detail.workout;
   }
 }
 

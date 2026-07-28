@@ -5,6 +5,7 @@ export {
   fetchHevyExerciseTemplateCatalog,
   fetchHevyExerciseTemplatesPage,
   fetchHevyRoutinesPage,
+  fetchHevyWorkoutById,
   fetchHevyWorkoutsPage,
   hevyApiBaseUrl,
 } from "./hevyClient.js";

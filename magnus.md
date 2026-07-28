@@ -187,8 +187,10 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Morning Brief does not read the calendar** — it predates the calendar tools.
 - **No E2E tests** against live Telegram, Supabase, Hevy or Google.
 
+**Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
+
 ---
 
-**Last updated:** 2026-07-27 (four pillars + Magnus-only surface; Google Calendar read/create/update/delete in chat;
+**Last updated:** 2026-07-28 (Hevy workout context: full set/rep detail in Fitness agent prompt; four pillars + Magnus-only surface; Google Calendar read/create/update/delete in chat;
 `/menu`, department commands, delegation notices, Planner, Notion agent, Research and the wealth /
 joy / wisdom specialist sets removed)
