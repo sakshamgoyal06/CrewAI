@@ -192,5 +192,3 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 ---
 
 **Last updated:** 2026-07-28 (Phased memory: verbatim messages[], summary buffer, semantic facts, adaptive retrieval — `MAGNUS_MEMORY_*` tunables; Hevy full set detail in Fitness agent)
-`/menu`, department commands, delegation notices, Planner, Notion agent, Research and the wealth /
-joy / wisdom specialist sets removed)

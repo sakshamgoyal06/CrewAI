@@ -84,7 +84,7 @@ export function memoryConfig(): MemoryConfig {
   }
   cached = {
     conversationMessagesEnabled: envBool("MAGNUS_MEMORY_CONVERSATION_MESSAGES", true),
-    verbatimTurnLimit: envInt("MAGNUS_MEMORY_VERBATIM_TURNS", 10),
+    verbatimTurnLimit: envInt("MAGNUS_MEMORY_VERBATIM_TURNS", 14),
     chatFetchLimit: envInt("MAGNUS_MEMORY_CHAT_FETCH_LIMIT", 48),
     turnContentMaxChars: envInt("MAGNUS_MEMORY_TURN_CONTENT_MAX_CHARS", 4000),
 
@@ -100,7 +100,7 @@ export function memoryConfig(): MemoryConfig {
     semanticPersistEnabled: envBool("MAGNUS_MEMORY_SEMANTIC_PERSIST", true),
 
     adaptiveRetrievalEnabled: envBool("MAGNUS_MEMORY_ADAPTIVE_RETRIEVAL", true),
-    memoryBlockMaxChars: envInt("MAGNUS_MEMORY_BLOCK_MAX_CHARS", 4500),
+    memoryBlockMaxChars: envInt("MAGNUS_MEMORY_BLOCK_MAX_CHARS", 6000),
     includeGapsInBlock: envBool("MAGNUS_MEMORY_INCLUDE_GAPS", false),
 
     dailyLogSnippetChars: envInt("MAGNUS_MEMORY_DAILY_LOG_SNIPPET_CHARS", 400),
