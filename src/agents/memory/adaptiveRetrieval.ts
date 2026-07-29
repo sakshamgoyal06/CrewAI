@@ -90,7 +90,7 @@ export function resolveMemoryRetrievalProfile(
     return {
       ...profile,
       includeDailyScores: false,
-      includeJoy: intent !== "HAPPINESS",
+      includeJoy: false,
       includePatterns: false,
       includeDailyLogs: intent === "WISDOM",
     };
