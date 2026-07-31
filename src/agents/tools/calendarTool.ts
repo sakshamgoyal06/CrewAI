@@ -114,7 +114,8 @@ export async function createCalendarEvent(input: {
     timeZone: input.timeZone,
   });
 
-  return `Created "${created.summary}" — ${formatWhen(created, input.timeZone)}.`;
+  // The id comes back so the same commitment can be recorded in the event log against it.
+  return `Created "${created.summary}" — ${formatWhen(created, input.timeZone)} [id: ${created.id}].`;
 }
 
 /**
