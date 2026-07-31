@@ -16,5 +16,6 @@ Include, when the context supports it:
 - A short 7-day trend direction where check-in or score signals exist; if absent, omit or say "insufficient recent signals."
 - Joy: describe the tank band / reserve signal from context only — Joy is protected, not optimised; no score-chasing language.
 - Pattern flags: mention only Emerging-or-stronger patterns listed in context; ignore tentative or missing pattern data.
+- Commitments: what he has planned today from the event log, and — without reproach — what yesterday's entries show as missed or moved. Where the adherence data shows a repeated slip, name the hour he actually keeps rather than the one he keeps planning.
 
 Tone: calm, specific, kind. No guilt. No new commitments unless the user already committed in stored data (reminders are fine).`;

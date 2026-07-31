@@ -22,6 +22,7 @@ export type {
   MemoryChatTurn,
   MemoryGoalRow,
   MemoryDailyLogEntry,
+  MemoryEventEntry,
 } from "./types.js";
 
 const log = logger.child({ module: "memoryAgent" });
@@ -252,6 +253,49 @@ export async function loadMemoryContext(input: {
     }));
   }
 
+  // A window either side of now: yesterday says what slipped, the next two days say what is on.
+  let eventRows: MemoryContext["recentSignals"]["events"];
+  const eventWindowStart = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  const eventWindowEnd = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+  const eventsQ = await safeTableQuery<
+    Array<{
+      title?: string | null;
+      status?: string | null;
+      pillar?: string | null;
+      planned_start_at?: string | null;
+      time_zone?: string | null;
+      all_day?: boolean | null;
+      reschedule_count?: number | null;
+      reason?: string | null;
+    }>
+  >("magnus_events", async () =>
+    await sb
+      .from("magnus_events")
+      .select("title, status, pillar, planned_start_at, time_zone, all_day, reschedule_count, reason")
+      .eq("user_profile_id", input.userProfileId)
+      .gte("planned_start_at", eventWindowStart)
+      .lte("planned_start_at", eventWindowEnd)
+      .order("planned_start_at", { ascending: true })
+      .limit(memoryConfig().eventsInBlock * 2),
+  );
+  if (!eventsQ.ok) {
+    gaps.push(eventsQ.gap);
+  } else {
+    const raw = eventsQ.data ?? [];
+    eventRows = raw
+      .filter((r) => typeof r.title === "string" && r.title.trim())
+      .map((r) => ({
+        title: truncateContent(r.title ?? "", 120),
+        status: r.status ?? "planned",
+        pillar: r.pillar ?? undefined,
+        plannedStartAt: r.planned_start_at ?? undefined,
+        timeZone: r.time_zone ?? undefined,
+        allDay: r.all_day ?? false,
+        moves: r.reschedule_count ?? 0,
+        reason: r.reason ? truncateContent(r.reason, 160) : undefined,
+      }));
+  }
+
   const activeGoals: MemoryContext["activeGoals"] = [];
   const goalsQ = await safeTableQuery<Array<Record<string, unknown> & { id?: string }>>(
     "goals",
@@ -344,6 +388,7 @@ export async function loadMemoryContext(input: {
       recentChatTurns,
       ...(dailyScoresRows.length > 0 ? { dailyScores: dailyScoresRows } : {}),
       ...(dailyLogsRows && dailyLogsRows.length > 0 ? { dailyLogs: dailyLogsRows } : {}),
+      ...(eventRows && eventRows.length > 0 ? { events: eventRows } : {}),
     },
     rollingSummaries,
     activeGoals,
