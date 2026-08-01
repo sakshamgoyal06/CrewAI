@@ -268,15 +268,15 @@ BEGIN
 
   -- An unknown IANA name would otherwise abort the write; fall back rather than lose the event.
   BEGIN
-    v_local := NEW.planned_start_at AT TIME ZONE NEW.time_zone;
+    PERFORM now() AT TIME ZONE NEW.time_zone;
   EXCEPTION
     WHEN OTHERS THEN
       NEW.metadata := COALESCE(NEW.metadata, '{}'::jsonb)
         || jsonb_build_object('invalid_time_zone', NEW.time_zone);
       NEW.time_zone := 'UTC';
-      v_local := NEW.planned_start_at AT TIME ZONE 'UTC';
   END;
 
+  v_local := NEW.planned_start_at AT TIME ZONE NEW.time_zone;
   NEW.planned_local_date := v_local::DATE;
   NEW.planned_local_time := v_local::TIME;
   NEW.planned_local_dow := CASE
@@ -609,8 +609,7 @@ COMMENT ON FUNCTION public.magnus_mark_missed_events(UUID, INTERVAL) IS
 -- Per-activity behaviour, computed in the database so the model reads a small table
 -- ---------------------------------------------------------------------------
 
-CREATE OR REPLACE VIEW public.magnus_activity_stats
-WITH (security_invoker = on) AS
+CREATE OR REPLACE VIEW public.magnus_activity_stats AS
   SELECT
     user_profile_id,
     activity_key,
@@ -633,6 +632,16 @@ WITH (security_invoker = on) AS
   FROM public.magnus_events
   WHERE deleted_at IS NULL AND activity_key IS NOT NULL
   GROUP BY user_profile_id, activity_key, pillar;
+
+-- The view should read with the caller's rights, not its owner's. The option only exists from
+-- Postgres 15, and the migration should still apply on anything older.
+DO $$
+BEGIN
+  IF current_setting('server_version_num')::INT >= 150000 THEN
+    EXECUTE 'ALTER VIEW public.magnus_activity_stats SET (security_invoker = on)';
+  END IF;
+END;
+$$;
 
 COMMENT ON VIEW public.magnus_activity_stats IS
   'Per-activity completion, slippage and timing, aggregated from magnus_events.';

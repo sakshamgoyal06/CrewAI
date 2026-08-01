@@ -119,6 +119,14 @@ BEGIN
   ASSERT row1.planned_local_time = TIME '10:00', 'local time should be computed in the fallback zone';
   DELETE FROM public.magnus_events WHERE id = other;
 
+  -- …including when only the actual times are known, which is a different code path.
+  INSERT INTO public.magnus_events (user_profile_id, title, time_zone, status, started_at)
+    VALUES (u1, 'Bad zone, done', 'Mars/Olympus', 'done', TIMESTAMPTZ '2026-08-02 10:00+00')
+    RETURNING id INTO other;
+  SELECT * INTO row1 FROM public.magnus_events WHERE id = other;
+  ASSERT row1.actual_local_date = DATE '2026-08-02', 'actual_local_date survives an unknown zone';
+  DELETE FROM public.magnus_events WHERE id = other;
+
   ---------------------------------------------------------------------------
   -- 3. Status transitions maintain their own timestamps and history
   ---------------------------------------------------------------------------
