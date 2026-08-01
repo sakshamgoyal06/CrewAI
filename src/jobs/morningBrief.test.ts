@@ -24,6 +24,12 @@ describe("buildMorningBriefUserMessage", () => {
       dailyPlans: [{ created_at: "2026-04-11T18:00:00.000Z" }],
       magnusDailyLogs: [{ body: "Ship feature", log_date: "2026-04-11", source: "notion" }],
       patternRows: [{ status: "emerging", name: "Late caffeine", hit_count: 3 }],
+      todaysCommitments: [
+        { title: "AI session", pillar: "wisdom", status: "planned", planned_local_time: "21:00:00" },
+      ],
+      recentSlips: [
+        { title: "AI session", pillar: "wisdom", status: "postponed", reschedule_count: 2 },
+      ],
     };
     expect(buildMorningBriefUserMessage(bundle)).toMatchSnapshot();
   });
@@ -70,6 +76,8 @@ describe("runMorningBrief", () => {
       dailyPlans: [],
       magnusDailyLogs: [],
       patternRows: [],
+      todaysCommitments: [],
+      recentSlips: [],
     };
     vi.spyOn(morningBriefContext, "fetchMorningBriefContext").mockResolvedValue(bundle);
 

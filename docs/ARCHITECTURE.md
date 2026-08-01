@@ -8,7 +8,7 @@ used — there are no department commands, no lane picker, and no "handing this 
 specialist" notice.
 
 Companion docs: `magnus.md` (tracker), `docs/TELEGRAM_SETUP.md` (setup and hosting),
-`docs/GOOGLE_CALENDAR.md` (calendar).
+`docs/GOOGLE_CALENDAR.md` (calendar), `docs/EVENTS.md` (the commitment log).
 
 ---
 
@@ -26,6 +26,7 @@ Telegram message
       │
       ├─ GENERAL ──────────────────►  MAGNUS himself (has tools)
       │                                 • Google Calendar: read, create, update, delete
+      │                                 • Commitment log: plan, read, status, reschedule, stats
       │                                 • log_note: Supabase + Notion
       │
       ├─ HEALTH ───────────────────►  Health composite (deep: sub-router + external data)
@@ -42,7 +43,7 @@ One message in, one reply out. Routing appears only in `magnus_chat_messages.met
 
 | Owner | Scope |
 |---|---|
-| **Magnus** | The day and week, calendar, journaling and logging, reminders, anything spanning pillars, ordinary conversation |
+| **Magnus** | The day and week, calendar, the commitment log, journaling, reminders, anything spanning pillars, ordinary conversation |
 | **Health** | Training, workouts, meals and macros, sleep, recovery, energy, the health journal |
 | **Wealth** | Budgeting, spending, saving, debt, net worth, financial goals, investing philosophy |
 | **Happiness** | Books, film, music for pleasure, games, hobbies, creative practice, rest, travel, relationships |
@@ -91,9 +92,9 @@ image) plus journals in `magnus_daily_logs`.
 | Telegram | `tools/telegram.ts`, `telegramWatchdog.ts`, `rateLimit.ts`, `config/telegramRuntime.ts`, `config/telegramCommands.ts` |
 | Presentation | `magnus/telegramIntro.ts`, `telegramFormat.ts`, `telegramChunk.ts` |
 | Routing | `intent.ts`, `agents/orchestratorIntent.ts`, `agents/magnusOrchestrator.ts`, `agents/registry.ts`, `routing/intentToPillarRoute.ts` |
-| Magnus's tools | `agents/tools/calendarTool.ts`, `agents/tools/logNoteTool.ts` |
+| Magnus's tools | `agents/tools/calendarTool.ts`, `agents/tools/eventTool.ts`, `agents/tools/logNoteTool.ts` |
 | Memory | `agents/memory/{memoryAgent,format,types}.ts` |
-| Persistence | `tools/chatLog.ts`, `tools/dailyLog.ts` |
+| Persistence | `tools/chatLog.ts`, `tools/dailyLog.ts`, `events/eventsStore.ts` |
 | Morning Brief | `jobs/*.ts` — Magnus's optional proactive daily push (`MAGNUS_MORNING_BRIEF_CRON_ENABLED`) |
 | Capability report | `config/magnusCapabilities.ts` |
 
@@ -118,6 +119,8 @@ the rest of the schema exists solely on the hosted project.
 - **No specialist announcements.** The user hears one voice.
 - **No calendar change without a read first.** Edits and deletes work from an event id returned by
   a read, so Magnus cannot act on a guess, and it asks when several events match.
+- **No rewriting a commitment's history.** Moving something logged in `magnus_events` closes the
+  original and opens a linked replacement; the slip is the data worth keeping.
 - **No research agent or web search for general questions.** Magnus answers from knowledge and
   memory; only meal estimates search the web.
 - **No semantic memory.** Recall is recent-window plus structured reads, not embeddings.

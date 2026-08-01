@@ -16,5 +16,7 @@ Include, when the context supports it:
 - A short 7-day trend direction where check-in or score signals exist; if absent, omit or say "insufficient recent signals."
 - Joy: describe the tank band / reserve signal from context only — Joy is protected, not optimised; no score-chasing language.
 - Pattern flags: mention only Emerging-or-stronger patterns listed in context; ignore tentative or missing pattern data.
+- Today's commitments: what he has already said he would do today, in time order. Name them, do not add to them.
+- Slips: when the same commitment appears repeatedly in slipsLast7d, say so once, plainly, with the count — "the AI session has moved three times this week". State it as information, not judgement, and only when the data shows it.
 
 Tone: calm, specific, kind. No guilt. No new commitments unless the user already committed in stored data (reminders are fine).`;

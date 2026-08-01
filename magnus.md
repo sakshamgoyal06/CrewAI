@@ -6,6 +6,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | Doc | Purpose |
 |-----|---------|
 | **`docs/ARCHITECTURE.md`** | What the system is: Magnus, four pillars, connections, ownership |
+| **`docs/EVENTS.md`** | `magnus_events`: the commitment log, reschedule chains, how to apply it |
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
 | **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
 | **`MAGNUS_CORE_CONTEXT.md`** | Product intent and philosophy |
@@ -23,7 +24,7 @@ call. No menu, no lane picker, no per-department commands.
 
 | Owner | Scope |
 |---|---|
-| **Magnus** (`GENERAL`) | The day and week, Google Calendar, journaling and logging, reminders, cross-pillar questions, ordinary conversation. The only agent with tools. |
+| **Magnus** (`GENERAL`) | The day and week, Google Calendar, the commitment log, journaling, reminders, cross-pillar questions, ordinary conversation. The only agent with tools. |
 | **Health** | Training, workouts, meals and macros, sleep, recovery, the health journal. Deep: sub-router, Hevy, nutrition providers, program memory, onboarding gate. |
 | **Wealth** | Budgeting, spending, saving, debt, net worth, financial goals, investing philosophy. |
 | **Happiness** | Books, film, music, games, hobbies, creative practice, rest, travel, relationships. |
@@ -76,9 +77,12 @@ shell or `.env`.
 | `src/magnus.ts` | Turn handler: allowlist gate, chat persistence, typing indicator, orchestrator call. Starts the Morning Brief cron. |
 | `src/agents/magnusOrchestrator.ts` | Health onboarding gate → classify → memory → pillar specialist or Magnus |
 | `src/agents/orchestratorIntent.ts` | The five-way classifier, plus the one coercion (explicit meal log → HEALTH) |
-| `src/agents/magnusAgent.ts` | Magnus himself: tool loop over calendar read/create and `log_note` |
+| `src/agents/magnusAgent.ts` | Magnus himself: tool loop over the calendar, the commitment log and `log_note` |
 | `src/agents/tools/calendarTool.ts` | Google Calendar read / create / update / delete as text for the model, in the user's timezone; reads carry event ids so edits cannot act on a guess |
+| `src/agents/tools/eventTool.ts` | The commitment log as tools: plan, read, set status, reschedule, per-activity stats |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured |
+| `src/events/` | `magnus_events` data layer: typed rows, scoped queries, the reschedule RPC |
+| `src/util/zonedTime.ts` | Wall-clock ↔ instant in an IANA zone, DST-aware, no date library |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
 | `src/agents/health/healthRouter.ts` | Health composite: meal log → journal → Hevy write → fitness → nutrition |
@@ -113,22 +117,32 @@ shell or `.env`.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
    routing in `metadata` (`delegated_agent`, `agent_metadata`).
 8. **Replies** — One reply per turn, chunked only for Telegram's size limit, sent as HTML.
+9. **Commitments** — Anything he says he will do goes to `magnus_events`: pillar, planned time,
+   status, outcome. Moving something never edits the original — the old row closes as
+   `postponed`/`preponed` and a linked replacement carries the new time, so slippage is data.
+   See `docs/EVENTS.md`.
 
 ---
 
 ## Database
 
-**Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `meal_logs`,
-`user_health_profile`.
+**Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`,
+`meal_logs`, `user_health_profile`.
 
 **Read only:** `workouts`, `goals`, `memory_summaries`, `daily_scores`, `happiness_reserve`,
-`patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans`.
+`patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans`,
+`magnus_activity_stats` (a view over `magnus_events`).
 
 Public tables use RLS with a `service_role_only` policy; the service role key bypasses it. The new
 Supabase `sb_secret_…` key format works as service role.
 
-`supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile` and `meal_logs` only —
-everything else was applied directly to the project and **cannot be rebuilt from this repo**.
+`supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs` and
+`magnus_events` only — everything else was applied directly to the project and **cannot be rebuilt
+from this repo**.
+
+`magnus_events` is the master table for planned and completed activity. It has to be applied by
+hand (`docs/EVENTS.md`); `npm run test:events` proves it is live, and
+`supabase/tests/magnus_events_test.sql` exercises the schema against a scratch Postgres.
 
 ---
 
@@ -157,6 +171,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npm run telegram:check` | Capability report + current Telegram config (`-- --json`, `-- --probe-conflict`) |
 | `npm run telegram:setup` | Apply Telegram config: webhook, commands, menu button, description |
 | `npm run test:supabase` | Supabase insert/delete smoke test |
+| `npm run test:events` | `magnus_events` round trip against the live project (plan → move → finish → stats → clean up) |
 | `npm run google-calendar:auth` | One-time OAuth; prints the refresh token for the host |
 | `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
 | `npx tsx scripts/health/workouts/hevy/hevy-*.mts` | Hevy read/search/smoke helpers |
@@ -184,11 +199,16 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Schema not reproducible** from `supabase/migrations/`.
 - **Semantic recall** — no embeddings; memory is recent-window plus structured reads.
 - **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data.
-- **Morning Brief does not read the calendar** — it predates the calendar tools.
+- **Morning Brief does not read the calendar** — it predates the calendar tools. It does read
+  today's commitments and the last week's slips from `magnus_events`.
+- **Reminders are stored, not sent** — `magnus_events.reminder_at` is written and indexed, and it
+  survives a reschedule, but no job reads it yet.
+- **The journal link is manual** — `magnus_events.daily_log_id` exists; nothing yet infers which
+  note is about which commitment.
 - **No E2E tests** against live Telegram, Supabase, Hevy or Google.
 
 **Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
 
 ---
 
-**Last updated:** 2026-07-28 (Phased memory: verbatim messages[], summary buffer, semantic facts, adaptive retrieval — `MAGNUS_MEMORY_*` tunables; Hevy full set detail in Fitness agent)
+**Last updated:** 2026-08-01 (`magnus_events` master commitment log: pillar, planned vs actual, status, reschedule chains, per-activity stats; six new Magnus tools; morning brief reads today's plan and the week's slips)

@@ -51,6 +51,22 @@ exports[`buildMorningBriefUserMessage > matches snapshot (fixed now, no wall-clo
       "name": "Late caffeine",
       "hit_count": 3
     }
+  ],
+  "todaysCommitments": [
+    {
+      "title": "AI session",
+      "pillar": "wisdom",
+      "status": "planned",
+      "planned_local_time": "21:00:00"
+    }
+  ],
+  "slipsLast7d": [
+    {
+      "title": "AI session",
+      "pillar": "wisdom",
+      "status": "postponed",
+      "reschedule_count": 2
+    }
   ]
 }"
 `;

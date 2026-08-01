@@ -5,6 +5,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logger } from "../logger.js";
+import { endOfLocalDay, localDateKey, startOfLocalDay } from "../util/zonedTime.js";
 
 export type MorningBriefContextBundle = {
   /** ISO timestamp for the "now" used in this brief (injected for tests). */
@@ -22,7 +23,16 @@ export type MorningBriefContextBundle = {
   magnusDailyLogs: unknown[];
   /** Emerging+ patterns only — filtered from raw rows when possible. */
   patternRows: unknown[];
+  /** What he already said he would do today, from `magnus_events`. */
+  todaysCommitments: unknown[];
+  /** The last week's missed, skipped and moved commitments — what the brief should notice. */
+  recentSlips: unknown[];
 };
+
+/** Enough of a `magnus_events` row to reason about, without paying for the whole table. */
+const EVENT_COLUMNS =
+  "id, title, pillar, status, planned_start_at, planned_local_time, planned_duration_minutes, " +
+  "reschedule_count, original_planned_start_at, start_delay_minutes, outcome_note, all_day";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST row shape varies
 async function safeList(
@@ -199,6 +209,50 @@ export async function fetchMorningBriefContext(
 
   const patternRows = filterEmergingPlusPatterns(rawPatterns ?? []);
 
+  // Close out yesterday before reading today, so a plan whose time has passed shows as missed
+  // rather than sitting in the brief as though it were still ahead of him.
+  try {
+    await supabase.rpc("magnus_mark_missed_events", {
+      p_user_profile_id: userProfileId,
+      p_grace: "2 hours",
+    });
+  } catch (err) {
+    logger.debug({ err: String(err) }, "missed-event sweep skipped");
+  }
+
+  const todayKey = localDateKey(now, timeZone);
+  const dayStart = startOfLocalDay(todayKey, timeZone);
+  const dayEnd = endOfLocalDay(todayKey, timeZone);
+
+  const todaysCommitments =
+    dayStart && dayEnd
+      ? ((await safeList("magnus_events_today", async () =>
+          await supabase
+            .from("magnus_events")
+            .select(EVENT_COLUMNS)
+            .eq("user_profile_id", userProfileId)
+            .is("deleted_at", null)
+            .is("rescheduled_to_event_id", null)
+            .gte("planned_start_at", dayStart.toISOString())
+            .lt("planned_start_at", dayEnd.toISOString())
+            .order("planned_start_at", { ascending: true })
+            .limit(30),
+        )) ?? [])
+      : [];
+
+  const recentSlips =
+    (await safeList("magnus_events_slips", async () =>
+      await supabase
+        .from("magnus_events")
+        .select(EVENT_COLUMNS)
+        .eq("user_profile_id", userProfileId)
+        .is("deleted_at", null)
+        .in("status", ["missed", "skipped", "postponed", "preponed", "cancelled"])
+        .gte("planned_start_at", since)
+        .order("planned_start_at", { ascending: false })
+        .limit(20),
+    )) ?? [];
+
   return {
     nowIso: now.toISOString(),
     timeZone,
@@ -211,6 +265,8 @@ export async function fetchMorningBriefContext(
     dailyPlans,
     magnusDailyLogs,
     patternRows,
+    todaysCommitments,
+    recentSlips,
   };
 }
 
@@ -264,6 +320,8 @@ export function buildMorningBriefUserMessage(bundle: MorningBriefContextBundle):
     recentDailyPlans: bundle.dailyPlans,
     recentMagnusDailyLogs: bundle.magnusDailyLogs,
     patternsEmergingPlus: bundle.patternRows,
+    todaysCommitments: bundle.todaysCommitments,
+    slipsLast7d: bundle.recentSlips,
   };
   return `Context JSON (stored facts only; gaps are OK):\n${JSON.stringify(payload, null, 2)}`;
 }
