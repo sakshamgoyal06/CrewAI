@@ -6,6 +6,12 @@ const createEventMock = vi.hoisted(() => vi.fn());
 const logNoteMock = vi.hoisted(() => vi.fn());
 const updateEventMock = vi.hoisted(() => vi.fn());
 const deleteEventMock = vi.hoisted(() => vi.fn());
+const planEventMock = vi.hoisted(() => vi.fn());
+const listEventsMock = vi.hoisted(() => vi.fn());
+const setEventStatusMock = vi.hoisted(() => vi.fn());
+const rescheduleLoggedMock = vi.hoisted(() => vi.fn());
+const activityStatsMock = vi.hoisted(() => vi.fn());
+const dropEventMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../tools/clients.js", () => ({
   anthropic: { messages: { create: createMock } },
@@ -22,6 +28,15 @@ vi.mock("./tools/calendarTool.js", () => ({
 
 vi.mock("./tools/logNoteTool.js", () => ({
   logNote: logNoteMock,
+}));
+
+vi.mock("./tools/eventTool.js", () => ({
+  planEvent: planEventMock,
+  listEvents: listEventsMock,
+  setEventStatus: setEventStatusMock,
+  rescheduleEvent: rescheduleLoggedMock,
+  summariseActivity: activityStatsMock,
+  dropEvent: dropEventMock,
 }));
 
 vi.mock("./memory/memoryAgent.js", () => ({
@@ -59,6 +74,12 @@ describe("runMagnusAgent", () => {
     logNoteMock.mockReset();
     updateEventMock.mockReset();
     deleteEventMock.mockReset();
+    planEventMock.mockReset();
+    listEventsMock.mockReset();
+    setEventStatusMock.mockReset();
+    rescheduleLoggedMock.mockReset();
+    activityStatsMock.mockReset();
+    dropEventMock.mockReset();
   });
 
   it("answers directly when no tool is needed", async () => {
@@ -197,5 +218,87 @@ describe("runMagnusAgent", () => {
 
     expect(out.metadata.tool_limit).toBe(true);
     expect(out.text).toContain("one thing at a time");
+  });
+
+  it("logs a commitment against the profile, in the profile's timezone", async () => {
+    planEventMock.mockResolvedValue('Logged: "AI session" — Sat 1 Aug 21:00 [wisdom] [id: e1]');
+    createMock
+      .mockResolvedValueOnce(
+        toolReply("log_event", {
+          title: "AI session",
+          pillar: "wisdom",
+          start_iso: "2026-08-01T21:00:00",
+          duration_minutes: 90,
+          tags: ["deep-work"],
+        }),
+      )
+      .mockResolvedValueOnce(textReply("Locked in for 9."));
+
+    const out = await runMagnusAgent({ ...CTX, rawMessage: "locking in an AI session at 9pm" });
+
+    expect(planEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userProfileId: CTX.userProfileId,
+        timeZone: "Asia/Kolkata",
+        title: "AI session",
+        pillar: "wisdom",
+        startIso: "2026-08-01T21:00:00",
+        durationMinutes: 90,
+        tags: ["deep-work"],
+      }),
+    );
+    expect(out.text).toBe("Locked in for 9.");
+    expect(out.metadata.tools_used).toEqual(["log_event"]);
+  });
+
+  it("moves a commitment through the reschedule tool, not by editing it", async () => {
+    listEventsMock.mockResolvedValue("- Sat 1 Aug 21:00 — AI session [wisdom] (planned) [id: e1]");
+    rescheduleLoggedMock.mockResolvedValue(
+      'Postponed "AI session" from Sat 1 Aug 21:00 to Sat 1 Aug 23:00. [id: e2]',
+    );
+    createMock
+      .mockResolvedValueOnce(toolReply("read_events", {}))
+      .mockResolvedValueOnce(
+        toolReply("reschedule_event", {
+          event_id: "e1",
+          new_start_iso: "2026-08-01T23:00:00",
+          reason: "Dinner ran long",
+        }),
+      )
+      .mockResolvedValueOnce(textReply("Moved it to 11."));
+
+    const out = await runMagnusAgent({ ...CTX, rawMessage: "push the AI session to 11" });
+
+    expect(rescheduleLoggedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: "e1",
+        newStartIso: "2026-08-01T23:00:00",
+        reason: "Dinner ran long",
+        timeZone: "Asia/Kolkata",
+      }),
+    );
+    expect(out.text).toBe("Moved it to 11.");
+    expect(out.metadata.tools_used).toEqual(["read_events", "reschedule_event"]);
+  });
+
+  it("drops arguments the model made up rather than passing junk down", async () => {
+    planEventMock.mockResolvedValue("Logged.");
+    createMock
+      .mockResolvedValueOnce(
+        toolReply("log_event", {
+          title: "Gym",
+          duration_minutes: "forty five",
+          tags: "cardio",
+          all_day: "yes",
+        }),
+      )
+      .mockResolvedValueOnce(textReply("Done."));
+
+    await runMagnusAgent({ ...CTX, rawMessage: "gym tomorrow" });
+
+    const arg = planEventMock.mock.calls[0][0];
+    expect(arg.durationMinutes).toBeUndefined();
+    expect(arg.tags).toBeUndefined();
+    expect(arg.allDay).toBeUndefined();
   });
 });
