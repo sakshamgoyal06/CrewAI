@@ -10,7 +10,7 @@ import type { youtube_v3 } from "googleapis";
 import {
   getApiKeyYoutubeClient,
   getAuthenticatedYoutubeClient,
-  youtubeOauthConfigured,
+  youtubeOauthConfiguredForUser,
 } from "./auth.js";
 import { YOUTUBE_MUSIC_CATEGORY_ID } from "./paths.js";
 import {

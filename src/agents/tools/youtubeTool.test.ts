@@ -9,6 +9,7 @@ const configured = vi.hoisted(() => ({
 vi.mock("../../integrations/youtube/auth.js", () => ({
   youtubeConfigured: () => configured.youtubeConfigured,
   youtubeOauthConfigured: () => configured.youtubeOauthConfigured,
+  youtubeOauthConfiguredForUser: async () => configured.youtubeOauthConfigured,
   youtubeApiKeyConfigured: () => configured.youtubeApiKeyConfigured,
 }));
 
@@ -184,7 +185,11 @@ describe("youtube_bookmark / cue", () => {
     expect(upsertBookmark).toHaveBeenCalledWith(
       expect.objectContaining({ videoId: "dQw4w9WgXcQ", userProfileId: "user-1" }),
     );
-    expect(rateVideo).toHaveBeenCalledWith({ videoId: "dQw4w9WgXcQ", rating: "like" });
+    expect(rateVideo).toHaveBeenCalledWith({
+      videoId: "dQw4w9WgXcQ",
+      rating: "like",
+      userProfileId: "user-1",
+    });
     expect(out).toContain("Bookmarked");
   });
 
