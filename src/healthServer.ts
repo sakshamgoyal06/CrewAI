@@ -223,7 +223,6 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
         return;
       }
 
-      const { sendMessage } = await import("./tools/telegram.js");
       const result = await runMorningBrief(
         {
           userProfileId: row.id,
@@ -231,8 +230,8 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
           chatId: row.telegram_chat_id,
           now: new Date(),
           reason: "http",
+          deliverTelegram: true,
         },
-        { sendTelegram: sendMessage },
       );
 
       res.status(200).json({

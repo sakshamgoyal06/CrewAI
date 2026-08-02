@@ -21,6 +21,10 @@ import {
   isStartCommand,
 } from "../magnus/telegramIntro.js";
 import { BOT_COMMANDS } from "../config/telegramCommands.js";
+import {
+  isMorningBriefTrigger,
+  runMorningBriefForTelegramUser,
+} from "../proactive/morningBriefManual.js";
 
 const TELEGRAM_UPDATE_DEDUP_TTL_SEC = 86_400;
 
@@ -203,6 +207,26 @@ export function createTelegramRuntime(onMessage: TelegramTextHandler): TelegramR
         isStartCommand(rawText) ? buildStartMessage() : buildHelpMessage(),
         { parse_mode: "HTML" },
       );
+      return;
+    }
+
+    if (isMorningBriefTrigger(rawText)) {
+      const rate = await checkMessageRateLimit(telegramUserId);
+      if (!rate.ok) {
+        await reply(
+          `You're sending messages too quickly. Try again in about ${rate.retryAfterSec} seconds.`,
+        );
+        return;
+      }
+      const brief = await runMorningBriefForTelegramUser(telegramUserId);
+      if (!brief.ok) {
+        await reply(brief.error);
+        return;
+      }
+      if (brief.skipped || !brief.text.trim()) {
+        await reply("Morning Brief is not available right now.");
+        return;
+      }
       return;
     }
 

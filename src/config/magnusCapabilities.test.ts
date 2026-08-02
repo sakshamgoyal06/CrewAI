@@ -92,15 +92,14 @@ describe("describeCapabilities — optional lanes", () => {
     expect(capability(CORE_ENV, "notion").missing).toContain("user_integrations.notion_token");
   });
 
-  it("reports the Morning Brief cron separately from the on-demand command", () => {
-    expect(capability(CORE_ENV, "morning_brief").status).toBe("partial");
+  it("reports proactive cron and morning brief scheduling", () => {
+    expect(capability(CORE_ENV, "morning_brief").status).toBe("ready");
+    expect(capability(CORE_ENV, "proactive").status).toBe("ready");
     expect(
-      capability({ ...CORE_ENV, MAGNUS_MORNING_BRIEF_CRON_ENABLED: "true" }, "morning_brief")
-        .status,
-    ).toBe("ready");
+      capability({ ...CORE_ENV, MAGNUS_PROACTIVE_CRON_ENABLED: "false" }, "morning_brief").status,
+    ).toBe("partial");
     expect(
-      capability({ ...CORE_ENV, MAGNUS_MORNING_BRIEF_ENABLED: "false" }, "morning_brief")
-        .status,
+      capability({ ...CORE_ENV, MAGNUS_MORNING_BRIEF_ENABLED: "false" }, "morning_brief").status,
     ).toBe("off");
   });
 

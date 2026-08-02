@@ -4,6 +4,8 @@
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { sendProactiveTelegram } from "../proactive/outbound.js";
+import type { ProactiveTrigger } from "../proactive/types.js";
 import { buildMorningBriefSystem } from "./morningBriefPrompt.js";
 import {
   buildMorningBriefUserMessage,
@@ -32,11 +34,14 @@ export type RunMorningBriefInput = {
   chatId?: string;
   now: Date;
   reason: MorningBriefReason;
+  /** When true, send the brief to Telegram (scheduled/manual/http). Default false. */
+  deliverTelegram?: boolean;
 };
 
 export type MorningBriefDeps = {
   supabase: SupabaseClient;
   invokeClaude: (system: string, user: string) => Promise<string>;
+  /** Override outbound send (tests). When omitted, uses proactive Telegram delivery. */
   sendTelegram?: (
     text: string,
     opts: { chatId: string; telegramUserIdForLog: string },
@@ -99,7 +104,7 @@ export async function runMorningBrief(
 ): Promise<MorningBriefResult> {
   const supabase = deps?.supabase ?? (await import("../tools/clients.js")).supabase;
   const invokeClaude = deps?.invokeClaude ?? defaultInvokeClaude;
-  const sendTelegram = deps?.sendTelegram;
+  const customSend = deps?.sendTelegram;
   const createNotionPage =
     deps?.createNotionPage ??
     (await import("../tools/notionMorningBrief.js")).createMorningBriefNotionPage;
@@ -139,13 +144,29 @@ export async function runMorningBrief(
     logger.warn({ err: String(err) }, "morning brief Notion write failed (non-fatal)");
   }
 
-  if (sendTelegram) {
+  const deliverTelegram = input.deliverTelegram ?? false;
+  if (deliverTelegram) {
     const chatId = input.chatId?.trim() || input.telegramUserId;
-    const parts = splitTelegramMessage(briefText);
-    for (const part of parts) {
-      await sendTelegram(part, {
+    const trigger: ProactiveTrigger =
+      input.reason === "scheduled" ? "scheduled" : "manual";
+
+    if (customSend) {
+      const parts = splitTelegramMessage(briefText);
+      for (const part of parts) {
+        await customSend(part, {
+          chatId,
+          telegramUserIdForLog: input.telegramUserId,
+        });
+      }
+    } else {
+      await sendProactiveTelegram({
         chatId,
         telegramUserIdForLog: input.telegramUserId,
+        userProfileId: input.userProfileId,
+        plainText: briefText,
+        kind: "morning_brief",
+        trigger,
+        intent: "morning_brief",
       });
     }
   }
