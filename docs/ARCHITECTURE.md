@@ -26,7 +26,7 @@ Telegram message
       │
       ├─ GENERAL ──────────────────►  MAGNUS himself (has tools)
       │                                 • Google Calendar: read, create, update, delete
-      │                                 • YouTube / YT Music: search, playlists, bookmarks, cue
+      │                                 • YouTube / YT Music: connect link, search, playlists, bookmarks, cue
       │                                 • log_note: Supabase + Notion
       │                                 • event log: plan, update, reschedule, list
       │
@@ -64,7 +64,7 @@ when a pillar earns it.
 | **Upstash Redis** | Boot | Rate limit, update dedupe | Nothing runs |
 | **Anthropic** | Boot | Classifier and every agent | Nothing runs |
 | **Google Calendar** | Optional | Magnus (read, create, update, delete) | Magnus says it is not connected |
-| **YouTube / YT Music** | Optional | Magnus (search, playlists, bookmarks, cue, recommend) | Magnus says it is not connected |
+| **YouTube / YT Music** | Optional (per-user) | Magnus (connect link, search, playlists, bookmarks, cue) | Magnus offers `connect_youtube` / says not connected |
 | **Hevy** | Optional | Health (read sessions, write routines) | Coaching from Supabase `workouts` only |
 | **Notion** | Optional | Magnus `log_note`, Morning Brief page | Notes still save to Supabase |
 | **Anthropic `web_search`** | Optional, default on | Meal estimates | Falls through to USDA / CalorieNinjas |
