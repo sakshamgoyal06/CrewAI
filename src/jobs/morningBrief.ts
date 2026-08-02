@@ -10,7 +10,6 @@ import {
   fetchMorningBriefContext,
 } from "./morningBriefContext.js";
 import { morningBriefFeatureEnabled } from "./morningBriefEnv.js";
-import { createMorningBriefNotionPage } from "../tools/notionMorningBrief.js";
 import { logger } from "../logger.js";
 
 const MODEL = "claude-sonnet-4-6";
@@ -42,7 +41,11 @@ export type MorningBriefDeps = {
     text: string,
     opts: { chatId: string; telegramUserIdForLog: string },
   ) => Promise<void>;
-  createNotionPage?: (input: { title: string; body: string }) => Promise<string | null>;
+  createNotionPage?: (input: {
+    userProfileId: string;
+    title: string;
+    body: string;
+  }) => Promise<string | null>;
   /** When false, skip work. */
   featureEnabled?: () => boolean;
 };
@@ -97,7 +100,9 @@ export async function runMorningBrief(
   const supabase = deps?.supabase ?? (await import("../tools/clients.js")).supabase;
   const invokeClaude = deps?.invokeClaude ?? defaultInvokeClaude;
   const sendTelegram = deps?.sendTelegram;
-  const createNotionPage = deps?.createNotionPage ?? createMorningBriefNotionPage;
+  const createNotionPage =
+    deps?.createNotionPage ??
+    (await import("../tools/notionMorningBrief.js")).createMorningBriefNotionPage;
   const featureEnabled = deps?.featureEnabled ?? defaultFeatureEnabled;
 
   if (!featureEnabled()) {
@@ -125,7 +130,11 @@ export async function runMorningBrief(
 
   let notionPageId: string | null = null;
   try {
-    notionPageId = await createNotionPage({ title: notionTitle, body: briefText });
+    notionPageId = await createNotionPage({
+      userProfileId: input.userProfileId,
+      title: notionTitle,
+      body: briefText,
+    });
   } catch (err) {
     logger.warn({ err: String(err) }, "morning brief Notion write failed (non-fatal)");
   }

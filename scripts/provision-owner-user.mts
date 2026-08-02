@@ -139,8 +139,14 @@ const integrations = await upsertUserIntegrations({
   googleCalendarRefreshToken: process.env.GOOGLE_CALENDAR_REFRESH_TOKEN?.trim(),
   hevyApiKey:
     process.env.HEVY_API_KEY?.trim() || process.env.MAGNUS_HEVY_API_KEY?.trim(),
+  notionToken:
+    process.env.NOTION_TOKEN?.trim() ||
+    process.env.NOTION_API_KEY?.trim() ||
+    process.env.NOTION_INTEGRATION_TOKEN?.trim(),
   notionDailyLogParentPageId: process.env.NOTION_DAILY_LOG_PARENT_PAGE_ID?.trim(),
   notionMorningBriefParentPageId: process.env.NOTION_MORNING_BRIEF_PARENT_PAGE_ID?.trim(),
+  notionGoalsDatabaseId: process.env.NOTION_GOALS_DATABASE_ID?.trim(),
+  notionDailyCheckinsDatabaseId: process.env.NOTION_DAILY_CHECKINS_DATABASE_ID?.trim(),
 });
 
 if (!integrations.ok) {

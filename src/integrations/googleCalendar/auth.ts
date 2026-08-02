@@ -141,7 +141,7 @@ export async function getAuthenticatedCalendarClient(userProfileId?: string): Pr
     auth.setCredentials({ refresh_token: refreshToken });
   } else if (!loadSavedToken(auth)) {
     throw new Error(
-      "Google Calendar is not authenticated. Run `npm run google-calendar:auth` locally, then set GOOGLE_CALENDAR_REFRESH_TOKEN on the host.",
+      "Google Calendar is not authenticated for this user. Add google_calendar_refresh_token to user_integrations (scripts/upsert-user-integrations.mts) or run google-calendar:auth locally.",
     );
   } else {
     // File-backed local runs: persist refreshed tokens so the next run stays authenticated.

@@ -11,13 +11,11 @@ export function hevyApiKeyFromEnv(): string | undefined {
 }
 
 export async function hevyApiKeyForUser(userProfileId?: string): Promise<string | undefined> {
-  if (userProfileId?.trim()) {
-    const integrations = await loadUserIntegrations(userProfileId);
-    if (integrations.hevyApiKey) {
-      return integrations.hevyApiKey;
-    }
+  if (!userProfileId?.trim()) {
+    return undefined;
   }
-  return hevyApiKeyFromEnv();
+  const integrations = await loadUserIntegrations(userProfileId);
+  return integrations.hevyApiKey;
 }
 
 export function hevyFetchTimeoutMs(): number {
