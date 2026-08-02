@@ -219,4 +219,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-02 (YouTube playlist add: use per-user OAuth for metadata after insert)
+**Last updated:** 2026-08-02 (Calendar read_calendar includes event descriptions and attachments)

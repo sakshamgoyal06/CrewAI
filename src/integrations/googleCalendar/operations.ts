@@ -10,6 +10,7 @@ export type CalendarEventBrief = {
   end: string;
   location?: string;
   description?: string;
+  attachments?: { title: string; url?: string }[];
   calendarId: string;
 };
 
@@ -22,13 +23,20 @@ function formatEvent(
   }
   const start = e.start?.dateTime ?? e.start?.date ?? "";
   const end = e.end?.dateTime ?? e.end?.date ?? "";
+  const attachments = (e.attachments ?? [])
+    .map((a) => ({
+      title: a.title?.trim() || "Attachment",
+      url: a.fileUrl?.trim() || undefined,
+    }))
+    .filter((a) => a.title || a.url);
   return {
     id: e.id,
     summary: e.summary ?? "(no title)",
     start,
     end,
     location: e.location ?? undefined,
-    description: e.description ?? undefined,
+    description: e.description?.trim() || undefined,
+    attachments: attachments.length > 0 ? attachments : undefined,
     calendarId,
   };
 }

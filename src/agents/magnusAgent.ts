@@ -54,7 +54,7 @@ const TOOLS: Tool[] = [
   {
     name: "read_calendar",
     description:
-      "Read Google Calendar events in a time range. Use for schedule, availability, and day or week summaries.",
+      "Read Google Calendar events in a time range, including descriptions and attachment links when present. Use for schedule, availability, day/week summaries, and reading event agendas.",
     input_schema: {
       type: "object",
       properties: {
