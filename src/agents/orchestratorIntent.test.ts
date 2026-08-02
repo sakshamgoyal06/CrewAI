@@ -39,6 +39,16 @@ describe("resolveIntentNaturalLanguage", () => {
     await expect(resolveIntentNaturalLanguage("/meal rice and dal")).resolves.toBe("HEALTH");
   });
 
+  it("forces YouTube actions to GENERAL so Magnus tools run", async () => {
+    classifiedAs("HAPPINESS");
+    await expect(
+      resolveIntentNaturalLanguage("search YouTube for lo-fi study beats"),
+    ).resolves.toBe("GENERAL");
+
+    classifiedAs("HAPPINESS");
+    await expect(resolveIntentNaturalLanguage("bookmark that song")).resolves.toBe("GENERAL");
+  });
+
   it("leaves ordinary talk about food to the classifier", async () => {
     classifiedAs("HAPPINESS");
     await expect(
