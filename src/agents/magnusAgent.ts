@@ -586,6 +586,7 @@ async function runTool(
           query: String(input.query ?? ""),
           kind: str(input.kind),
           maxResults: num(input.max_results),
+          userProfileId: ctx.userProfileId,
         });
       case "youtube_recommend":
         return await youtubeRecommendTool({
@@ -593,6 +594,7 @@ async function runTool(
           query: str(input.query),
           kind: str(input.kind),
           maxResults: num(input.max_results),
+          userProfileId: ctx.userProfileId,
         });
       case "youtube_playlist":
         return await youtubePlaylistTool({

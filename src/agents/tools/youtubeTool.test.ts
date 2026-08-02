@@ -90,7 +90,9 @@ describe("youtube tools — configuration", () => {
 
   it("explains when YouTube is not connected", async () => {
     configured.youtubeConfigured = false;
-    const out = await youtubeSearchTool({ query: "lofi" });
+    configured.youtubeOauthConfigured = false;
+    configured.youtubeApiKeyConfigured = false;
+    const out = await youtubeSearchTool({ query: "lofi", userProfileId: "user-1" });
     expect(out).toContain("YouTube is not connected");
     expect(searchVideos).not.toHaveBeenCalled();
   });
@@ -115,9 +117,13 @@ describe("youtube_search / recommend", () => {
 
   it("formats search hits with links and ids", async () => {
     searchVideos.mockResolvedValue([sampleVideo]);
-    const out = await youtubeSearchTool({ query: "rick astley", kind: "song" });
+    const out = await youtubeSearchTool({
+      query: "rick astley",
+      kind: "song",
+      userProfileId: "user-1",
+    });
     expect(searchVideos).toHaveBeenCalledWith(
-      expect.objectContaining({ query: "rick astley", kind: "song" }),
+      expect.objectContaining({ query: "rick astley", kind: "song", userProfileId: "user-1" }),
     );
     expect(out).toContain("Never Gonna Give You Up");
     expect(out).toContain("video_id: dQw4w9WgXcQ");
@@ -129,7 +135,10 @@ describe("youtube_search / recommend", () => {
       seed: sampleVideo,
       items: [{ ...sampleVideo, videoId: "abcdef12345", title: "Together Forever" }],
     });
-    const out = await youtubeRecommendTool({ seedVideoId: "dQw4w9WgXcQ" });
+    const out = await youtubeRecommendTool({
+      seedVideoId: "dQw4w9WgXcQ",
+      userProfileId: "user-1",
+    });
     expect(out).toContain('Because you liked "Never Gonna Give You Up"');
     expect(out).toContain("Together Forever");
   });

@@ -42,6 +42,13 @@ const NOT_CONFIGURED =
 const OAUTH_REQUIRED =
   "That needs YouTube account access. Ask me to connect Google (in-chat link for Calendar + YouTube), or run CLI auth + upsert (YOUTUBE_API_KEY alone can only search).";
 
+async function youtubeDataReady(userProfileId?: string): Promise<boolean> {
+  if (youtubeApiKeyConfigured()) {
+    return true;
+  }
+  return youtubeOauthConfiguredForUser(userProfileId);
+}
+
 function formatItem(v: YoutubeVideoBrief, index?: number): string {
   const n = index === undefined ? "-" : `${index + 1}.`;
   const dur = v.duration ? ` · ${v.duration}` : "";
@@ -84,10 +91,11 @@ async function resolveVideo(input: {
   url?: string;
   query?: string;
   kind?: YoutubeItemKind | "all";
+  userProfileId?: string;
 }): Promise<{ video?: YoutubeVideoBrief; error?: string }> {
   const fromId = input.videoId?.trim() || (input.url ? extractVideoId(input.url) : null);
   if (fromId) {
-    const video = await getVideo(fromId);
+    const video = await getVideo(fromId, input.userProfileId);
     if (!video) {
       return { error: `No YouTube video found for id ${fromId}.` };
     }
@@ -98,6 +106,7 @@ async function resolveVideo(input: {
       query: input.query.trim(),
       kind: input.kind ?? "all",
       maxResults: 1,
+      userProfileId: input.userProfileId,
     });
     if (hits.length === 0) {
       return { error: `Nothing matched "${input.query.trim()}".` };
@@ -151,8 +160,9 @@ export async function youtubeSearchTool(input: {
   query: string;
   kind?: string;
   maxResults?: number;
+  userProfileId?: string;
 }): Promise<string> {
-  if (!youtubeConfigured()) {
+  if (!(await youtubeDataReady(input.userProfileId))) {
     return NOT_CONFIGURED;
   }
   const query = input.query.trim();
@@ -164,6 +174,7 @@ export async function youtubeSearchTool(input: {
     query,
     kind,
     maxResults: input.maxResults,
+    userProfileId: input.userProfileId,
   });
   if (items.length === 0) {
     return `No results for "${query}".`;
@@ -176,8 +187,9 @@ export async function youtubeRecommendTool(input: {
   query?: string;
   kind?: string;
   maxResults?: number;
+  userProfileId?: string;
 }): Promise<string> {
-  if (!youtubeConfigured()) {
+  if (!(await youtubeDataReady(input.userProfileId))) {
     return NOT_CONFIGURED;
   }
   const kind = parseKind(input.kind) ?? "all";
@@ -186,6 +198,7 @@ export async function youtubeRecommendTool(input: {
     query: input.query,
     kind,
     maxResults: input.maxResults,
+    userProfileId: input.userProfileId,
   });
   if (items.length === 0) {
     return "No recommendations came back — try a different seed or mood.";
@@ -301,6 +314,7 @@ export async function youtubePlaylistTool(input: {
         videoId: input.videoId,
         url: input.url,
         query: input.query,
+        userProfileId: uid,
       });
       if (resolved.error || !resolved.video) {
         return resolved.error ?? "Could not resolve video.";
@@ -387,6 +401,7 @@ export async function youtubeBookmarkTool(input: {
       url: input.url,
       query: input.query,
       kind: parseKind(input.kind) ?? "all",
+      userProfileId: input.userProfileId,
     });
     if (resolved.error || !resolved.video) {
       return resolved.error ?? "Could not resolve video.";
@@ -482,6 +497,7 @@ export async function youtubeCueTool(input: {
       url: input.url,
       query: input.query,
       kind: parseKind(input.kind) ?? "all",
+      userProfileId: input.userProfileId,
     });
     if (resolved.error || !resolved.video) {
       return resolved.error ?? "Could not resolve video.";

@@ -219,4 +219,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-02 (Unified in-chat Google OAuth: Calendar + YouTube one consent, dual-write tokens)
+**Last updated:** 2026-08-02 (YouTube search/recommend use per-user OAuth token, not host API key only)
