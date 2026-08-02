@@ -9,9 +9,7 @@ import { loggableError } from "../util/loggableError.js";
 import { supabase } from "./clients.js";
 
 const DEFAULT_PROFILE = {
-  north_star_goal:
-    "Build my company, be fit, grow wealth, live intentionally",
-  timezone: "Asia/Kolkata",
+  timezone: "UTC",
 };
 
 /** Placeholder tiers — tighten rules in code as the product grows. */
@@ -28,6 +26,8 @@ export type TelegramUserProfile = {
   timezone?: string;
   /** From `user_profile.north_star_goal` when present. */
   northStarGoal?: string;
+  /** From `user_profile.display_name` when set. */
+  displayName?: string;
 };
 
 function normalizeTelegramUserId(telegramUserId: string): string {
@@ -68,6 +68,7 @@ function rowToProfile(
     access_flags: unknown;
     timezone?: string | null;
     north_star_goal?: string | null;
+    display_name?: string | null;
   },
   telegramUserId: string,
 ): TelegramUserProfile {
@@ -85,6 +86,7 @@ function rowToProfile(
     accessFlags: flags,
     timezone: row.timezone ?? undefined,
     northStarGoal: row.north_star_goal?.trim() || undefined,
+    displayName: row.display_name?.trim() || undefined,
   };
 }
 
@@ -99,7 +101,7 @@ export async function resolveTelegramUserProfile(
 
   const { data: existing, error: selErr } = await supabase
     .from("user_profile")
-    .select("id, allowlisted, user_tier, access_flags, timezone, north_star_goal")
+    .select("id, allowlisted, user_tier, access_flags, timezone, north_star_goal, display_name")
     .eq("telegram_chat_id", tid)
     .maybeSingle();
 
@@ -115,42 +117,10 @@ export async function resolveTelegramUserProfile(
         access_flags: existing.access_flags,
         timezone: existing.timezone as string | null | undefined,
         north_star_goal: existing.north_star_goal as string | null | undefined,
+        display_name: existing.display_name as string | null | undefined,
       },
       tid,
     );
-  }
-
-  const { count: orphanCount, error: countErr } = await supabase
-    .from("user_profile")
-    .select("id", { count: "exact", head: true })
-    .is("telegram_chat_id", null);
-
-  if (countErr) {
-    throw countErr;
-  }
-
-  if (orphanCount === 1) {
-    const { data: orphan, error: orphanSelErr } = await supabase
-      .from("user_profile")
-      .select("id, allowlisted, user_tier, access_flags, timezone, north_star_goal")
-      .is("telegram_chat_id", null)
-      .single();
-
-    if (orphanSelErr) {
-      throw orphanSelErr;
-    }
-
-    const { data: adopted, error: upErr } = await supabase
-      .from("user_profile")
-      .update({ telegram_chat_id: tid })
-      .eq("id", orphan.id)
-      .select("id, allowlisted, user_tier, access_flags, timezone, north_star_goal")
-      .single();
-
-    if (upErr) {
-      throw upErr;
-    }
-    return rowToProfile(adopted, tid);
   }
 
   const seed = defaultsForNewProfile();
@@ -163,14 +133,14 @@ export async function resolveTelegramUserProfile(
       user_tier: seed.userTier,
       access_flags: seed.accessFlags,
     })
-    .select("id, allowlisted, user_tier, access_flags, timezone, north_star_goal")
+    .select("id, allowlisted, user_tier, access_flags, timezone, north_star_goal, display_name")
     .single();
 
   if (insErr) {
     if (insErr.code === "23505") {
       const { data: row, error: again } = await supabase
         .from("user_profile")
-        .select("id, allowlisted, user_tier, access_flags, timezone, north_star_goal")
+        .select("id, allowlisted, user_tier, access_flags, timezone, north_star_goal, display_name")
         .eq("telegram_chat_id", tid)
         .single();
       if (again || !row) {

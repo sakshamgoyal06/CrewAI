@@ -2,15 +2,13 @@ import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { anthropic } from "../../tools/clients.js";
 import { buildAgentMessages } from "../memory/memoryAgent.js";
-import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
+import { buildSpecialistIdentity } from "../promptIdentity.js";
 import type { AgentContext, AgentResult } from "../types.js";
 import { appendHealthReferenceBlock } from "../../pillars/health/references/appendHealthReferenceBlock.js";
 import { saveHealthJournalEntry } from "../../pillars/health/journal/healthJournalStore.js";
 import { HEALTH_SPECIALIST_MODEL } from "./model.js";
 
 const JOURNAL_SYSTEM = `You are the Health EOD journal specialist for Magnus (Telegram).
-
-${SPECIALIST_USER_IDENTITY}
 
 The user is doing an end-of-day health review. Use their message plus any program memory in the prompt.
 
@@ -84,7 +82,7 @@ export async function tryHealthJournalAgent(
   const msg = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 900,
-    system: JOURNAL_SYSTEM,
+    system: `${buildSpecialistIdentity(ctx)}\n\n${JOURNAL_SYSTEM}`,
     messages: buildAgentMessages(
       ctx,
       appendHealthReferenceBlock(

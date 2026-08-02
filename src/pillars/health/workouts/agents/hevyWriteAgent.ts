@@ -6,7 +6,7 @@ import {
   fetchHevyExerciseTemplateCatalog,
   updateHevyRoutine,
 } from "../hevy/hevyClient.js";
-import { hevyApiKeyFromEnv } from "../hevy/hevyEnv.js";
+import { hevyApiKeyForUser } from "../hevy/hevyEnv.js";
 import { parseHevyWriteCommand } from "../hevy/parseHevyWriteCommand.js";
 import type {
   HevyExerciseTemplateBrief,
@@ -198,7 +198,7 @@ export async function tryHevyWriteAgent(
     return null;
   }
 
-  const apiKey = hevyApiKeyFromEnv();
+  const apiKey = await hevyApiKeyForUser(ctx.userProfileId);
   if (!apiKey) {
     return {
       text: "To create routines or workouts in Hevy, set HEVY_API_KEY (Hevy Pro → https://hevy.com/settings?developer), then restart Magnus.",

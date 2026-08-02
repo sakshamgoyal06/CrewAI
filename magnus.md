@@ -14,7 +14,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 
 ## What Magnus is
 
-A single-user Telegram bot. The user writes plain language; Magnus answers in one voice. Each turn
+A single-user Telegram bot that supports **multiple users** when provisioned per `user_profile`. The user writes plain language; Magnus answers in one voice. Each turn
 is silently classified to one of five intents — four pillars plus Magnus's own work — and a
 specialist may write the answer, but the user is never told and cannot address one directly.
 
@@ -77,9 +77,10 @@ shell or `.env`.
 | `src/agents/magnusOrchestrator.ts` | Health onboarding gate → classify → memory → pillar specialist or Magnus |
 | `src/agents/orchestratorIntent.ts` | The five-way classifier, plus the one coercion (explicit meal log → HEALTH) |
 | `src/agents/magnusAgent.ts` | Magnus himself: calendar, event log, journaling, reminders — tool loop |
-| `src/agents/tools/calendarTool.ts` | Google Calendar read / create / update / delete; delete/update sync linked `magnus_events` rows |
+| `src/agents/tools/calendarTool.ts` | Google Calendar; per-user tokens; delete/update sync linked `magnus_events` rows |
 | `src/agents/tools/eventLogTool.ts` | Event log tools: plan, update, reschedule, list (`magnus_events`) |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
+| `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
 | `src/events/` | Event log domain: timezone helpers, Supabase store, calendar sync, formatting |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
@@ -104,8 +105,7 @@ shell or `.env`.
 
 ## Behaviour
 
-1. **Identity** — Each Telegram user is keyed by `ctx.from.id`, stored in
-   `user_profile.telegram_chat_id` (legacy column name).
+1. **Identity** — Each Telegram user is keyed by `ctx.from.id` → `user_profile.telegram_chat_id` → canonical `user_profile.id`. Personalised fields: `display_name`, `timezone`, `north_star_goal`, `user_tier`, `access_flags`. New users get neutral defaults (`timezone: UTC`); owner seeding via `scripts/provision-owner-user.mts`.
 2. **Access** — `allowlisted`, `user_tier`, `access_flags` on `user_profile`. Not allowlisted means
    a fixed refusal and no chat rows.
 3. **Rate limit** — Redis fixed 60s window per user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, 0 disables).
@@ -127,7 +127,7 @@ shell or `.env`.
 ## Database
 
 **Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`,
-`user_health_profile`.
+`user_health_profile`, `user_program_memory`, `user_integrations`.
 
 **Read only:** `workouts`, `goals`, `memory_summaries`, `daily_scores`, `happiness_reserve`,
 `patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans`,
@@ -168,7 +168,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npm run test:supabase` | Supabase insert/delete smoke test |
 | `npm run google-calendar:auth` | One-time OAuth; prints the refresh token for the host |
 | `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
-| `npx tsx scripts/health/workouts/hevy/hevy-*.mts` | Hevy read/search/smoke helpers |
+| `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
 
 ---
 
@@ -200,4 +200,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-02 (Event-log corrections + calendar ↔ log sync on delete/update)
+**Last updated:** 2026-08-02 (Multi-user core/personalised context; event-log corrections; calendar ↔ log sync)

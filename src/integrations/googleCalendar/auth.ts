@@ -127,12 +127,15 @@ export async function exchangeCodeForToken(
   saveToken(client);
 }
 
-export async function getAuthenticatedCalendarClient(): Promise<{
+import { loadUserIntegrations } from "../../users/userIntegrations.js";
+
+export async function getAuthenticatedCalendarClient(userProfileId?: string): Promise<{
   auth: OAuth2Client;
   calendar: ReturnType<typeof google.calendar>;
 }> {
   const auth = createOAuth2Client();
-  const refreshToken = envValue("GOOGLE_CALENDAR_REFRESH_TOKEN");
+  const integrations = await loadUserIntegrations(userProfileId);
+  const refreshToken = integrations.googleCalendarRefreshToken;
 
   if (refreshToken) {
     auth.setCredentials({ refresh_token: refreshToken });

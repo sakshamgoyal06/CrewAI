@@ -10,6 +10,7 @@
  * prompt forbids showing them.
  */
 import { googleCalendarConfigured } from "../../integrations/googleCalendar/auth.js";
+import { loadUserIntegrations } from "../../users/userIntegrations.js";
 import {
   syncEventLogAfterCalendarDelete,
   syncEventLogAfterCalendarUpdate,
@@ -24,7 +25,22 @@ import {
 } from "../../integrations/googleCalendar/operations.js";
 
 const NOT_CONFIGURED =
-  "Google Calendar is not connected. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_CALENDAR_REFRESH_TOKEN (see docs/GOOGLE_CALENDAR.md).";
+  "Google Calendar is not connected for this account. Connect Google Calendar in settings or ask an admin.";
+
+async function calendarReady(userProfileId?: string): Promise<boolean> {
+  if (googleCalendarConfigured()) {
+    return true;
+  }
+  if (!userProfileId?.trim()) {
+    return false;
+  }
+  const integrations = await loadUserIntegrations(userProfileId);
+  return Boolean(
+    integrations.googleCalendarRefreshToken &&
+      process.env.GOOGLE_CLIENT_ID?.trim() &&
+      process.env.GOOGLE_CLIENT_SECRET?.trim(),
+  );
+}
 
 function formatWhen(event: CalendarEventBrief, timeZone: string): string {
   const allDay = !event.start.includes("T");
@@ -54,8 +70,9 @@ export async function readCalendarEvents(input: {
   endIso?: string;
   query?: string;
   timeZone: string;
+  userProfileId?: string;
 }): Promise<string> {
-  if (!googleCalendarConfigured()) {
+  if (!(await calendarReady(input.userProfileId))) {
     return NOT_CONFIGURED;
   }
 
@@ -75,6 +92,7 @@ export async function readCalendarEvents(input: {
     timeMax: end.toISOString(),
     maxResults: 30,
     query: input.query,
+    userProfileId: input.userProfileId,
   });
 
   if (events.length === 0) {
@@ -98,8 +116,9 @@ export async function createCalendarEvent(input: {
   description?: string;
   location?: string;
   timeZone: string;
+  userProfileId?: string;
 }): Promise<string> {
-  if (!googleCalendarConfigured()) {
+  if (!(await calendarReady(input.userProfileId))) {
     return NOT_CONFIGURED;
   }
   if (!input.summary.trim()) {
@@ -116,9 +135,8 @@ export async function createCalendarEvent(input: {
     description: input.description,
     location: input.location,
     timeZone: input.timeZone,
+    userProfileId: input.userProfileId,
   });
-
-  // The id comes back so the same commitment can be recorded in the event log against it.
   return `Created "${created.summary}" — ${formatWhen(created, input.timeZone)} [id: ${created.id}].`;
 }
 
@@ -136,7 +154,7 @@ export async function updateCalendarEvent(input: {
   timeZone: string;
   userProfileId?: string;
 }): Promise<string> {
-  if (!googleCalendarConfigured()) {
+  if (!(await calendarReady(input.userProfileId))) {
     return NOT_CONFIGURED;
   }
   if (!input.eventId.trim()) {
@@ -148,7 +166,10 @@ export async function updateCalendarEvent(input: {
     return "Nothing to change — give a new title, time, location or description.";
   }
 
-  const existing = await getEvent({ eventId: input.eventId.trim() });
+  const existing = await getEvent({
+    eventId: input.eventId.trim(),
+    userProfileId: input.userProfileId,
+  });
   if (!existing) {
     return "That event no longer exists. Read the calendar again for current ids.";
   }
@@ -173,6 +194,7 @@ export async function updateCalendarEvent(input: {
     description: input.description,
     location: input.location,
     timeZone: input.timeZone,
+    userProfileId: input.userProfileId,
   });
 
   let syncNote = "";
@@ -198,19 +220,25 @@ export async function deleteCalendarEvent(input: {
   timeZone: string;
   userProfileId?: string;
 }): Promise<string> {
-  if (!googleCalendarConfigured()) {
+  if (!(await calendarReady(input.userProfileId))) {
     return NOT_CONFIGURED;
   }
   if (!input.eventId.trim()) {
     return "Read the calendar first — deleting an event needs its id.";
   }
 
-  const existing = await getEvent({ eventId: input.eventId.trim() });
+  const existing = await getEvent({
+    eventId: input.eventId.trim(),
+    userProfileId: input.userProfileId,
+  });
   if (!existing) {
     return "That event no longer exists — nothing to delete.";
   }
 
-  await deleteEvent({ eventId: input.eventId.trim() });
+  await deleteEvent({
+    eventId: input.eventId.trim(),
+    userProfileId: input.userProfileId,
+  });
 
   let syncNote = "";
   if (input.userProfileId?.trim()) {

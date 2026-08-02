@@ -41,6 +41,7 @@ export async function runOrchestratorReply(input: {
   telegramUserId: string;
   timezone?: string;
   northStarGoal?: string;
+  displayName?: string;
 }): Promise<OrchestratorReply> {
   const healthProfile = await fetchUserHealthProfile(input.userProfileId);
   const healthRoute = intentToPillarRoute("HEALTH");
@@ -111,6 +112,7 @@ export async function runOrchestratorReply(input: {
     telegramUserId: input.telegramUserId,
     timezone: input.timezone,
     northStarGoal: input.northStarGoal,
+    displayName: input.displayName,
     rawMessage: input.userMessage,
     intent,
     memoryBlock,

@@ -6,12 +6,9 @@
  * not read accounts, hold positions, or give personalised financial advice.
  */
 import { runPillarSpecialist } from "../pillarSpecialist.js";
-import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
 
 export const WEALTH_SYSTEM = `You are the Wealth specialist inside Magnus.
-
-${SPECIALIST_USER_IDENTITY}
 
 Scope: budgeting, spending patterns, saving rate, cash flow, debt, net worth tracking, financial
 independence goals, and investing *philosophy* (allocation logic, risk tolerance, time horizon).
