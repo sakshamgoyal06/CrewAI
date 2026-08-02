@@ -148,7 +148,11 @@ export async function runMorningBrief(
   if (deliverTelegram) {
     const chatId = input.chatId?.trim() || input.telegramUserId;
     const trigger: ProactiveTrigger =
-      input.reason === "scheduled" ? "scheduled" : "manual";
+      input.reason === "scheduled"
+        ? "scheduled"
+        : input.reason === "http"
+          ? "http"
+          : "manual";
 
     if (customSend) {
       const parts = splitTelegramMessage(briefText);

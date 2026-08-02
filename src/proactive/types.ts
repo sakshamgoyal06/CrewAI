@@ -8,11 +8,13 @@ export type ProactiveMessageKind =
   | "event_reminder"
   | "custom";
 
-/** How the message was triggered. */
+/** How the message was triggered (maps to `magnus_chat_messages.delivery_trigger`). */
 export type ProactiveTrigger =
   | "scheduled"
   | "manual"
-  | "event_reminder";
+  | "http"
+  | "event_reminder"
+  | "system";
 
 /** Reserved for later: inactivity nudges, activity follow-ups, etc. */
 export type ProactiveTriggerFuture = "inactivity" | "activity";

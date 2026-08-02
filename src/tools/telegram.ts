@@ -9,6 +9,10 @@ import {
 import { logger, maskTelegramUserId } from "../logger.js";
 import { loggableError } from "../util/loggableError.js";
 import {
+  automatedChatFields,
+  manualTriggerRequestFields,
+} from "./chatMessageTypes.js";
+import {
   recordMagnusChatMessage,
   resolveTelegramUserProfile,
 } from "./chatLog.js";
@@ -77,6 +81,7 @@ async function logOutgoingAssistant(
       content: text,
       source: "telegram",
       intent: null,
+      ...automatedChatFields("system"),
       metadata: {
         outbound: true,
         format,
@@ -217,6 +222,31 @@ export function createTelegramRuntime(onMessage: TelegramTextHandler): TelegramR
           `You're sending messages too quickly. Try again in about ${rate.retryAfterSec} seconds.`,
         );
         return;
+      }
+      try {
+        const user = await resolveTelegramUserProfile(telegramUserId);
+        const triggerFields = manualTriggerRequestFields();
+        await recordMagnusChatMessage({
+          user_profile_id: user.profileId,
+          telegram_user_id: user.telegramUserId,
+          role: "user",
+          content: rawText,
+          source: "telegram",
+          intent: "morning_brief_request",
+          message_type: triggerFields.message_type,
+          delivery_trigger: triggerFields.delivery_trigger,
+          metadata: {
+            telegram_user_id: user.telegramUserId,
+            user_tier: user.userTier,
+            access_flags: user.accessFlags,
+            ritual: "morning_brief",
+          },
+        });
+      } catch (e) {
+        logger.warn(
+          { err: loggableError(e), telegramUserId: maskTelegramUserId(telegramUserId) },
+          "morning brief request not persisted to chat log",
+        );
       }
       const brief = await runMorningBriefForTelegramUser(telegramUserId);
       if (!brief.ok) {

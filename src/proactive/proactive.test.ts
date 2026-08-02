@@ -55,7 +55,13 @@ describe("sendProactiveTelegram", () => {
 
     expect(sent.length).toBe(1);
     expect(sent[0]).toContain("<b>Hi</b>");
-    expect(recordMagnusChatMessage).toHaveBeenCalled();
+    expect(recordMagnusChatMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message_type: "automated",
+        delivery_trigger: "manual",
+        intent: "morning_brief",
+      }),
+    );
   });
 });
 
