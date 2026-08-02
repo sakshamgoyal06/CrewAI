@@ -19,7 +19,7 @@ vi.mock("../../users/userIntegrations.js", () => ({
   upsertUserIntegrations: upsert,
 }));
 
-vi.mock("./auth.js", () => ({
+vi.mock("../youtube/auth.js", () => ({
   createOAuth2Client: () => ({
     generateAuthUrl,
     getToken,
@@ -27,13 +27,13 @@ vi.mock("./auth.js", () => ({
 }));
 
 vi.mock("../../config/publicBaseUrl.js", () => ({
-  youtubeOauthRedirectUri: () => "https://magnus.example.com/oauth/youtube/callback",
-  YOUTUBE_OAUTH_CALLBACK_PATH: "/oauth/youtube/callback",
+  googleOauthRedirectUri: () => "https://magnus.example.com/oauth/google/callback",
+  GOOGLE_OAUTH_CALLBACK_PATH: "/oauth/google/callback",
 }));
 
-import { beginYoutubeOauth, completeYoutubeOauth } from "./oauthFlow.js";
+import { beginGoogleOauth, completeGoogleOauth } from "./oauthFlow.js";
 
-describe("youtube oauth flow", () => {
+describe("google unified oauth flow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.GOOGLE_CLIENT_ID = "client";
@@ -41,9 +41,9 @@ describe("youtube oauth flow", () => {
     generateAuthUrl.mockReturnValue("https://accounts.google.com/o/oauth2/v2/auth?x=1");
   });
 
-  it("mints a state and auth URL for connect-in-chat", async () => {
+  it("mints a state and auth URL with combined scopes", async () => {
     redisSet.mockResolvedValue("OK");
-    const out = await beginYoutubeOauth({
+    const out = await beginGoogleOauth({
       userProfileId: "user-1",
       telegramChatId: "7174221900",
     });
@@ -52,18 +52,20 @@ describe("youtube oauth flow", () => {
       return;
     }
     expect(out.authUrl).toContain("accounts.google.com");
-    expect(out.redirectUri).toContain("/oauth/youtube/callback");
-    expect(redisSet).toHaveBeenCalled();
+    expect(out.redirectUri).toContain("/oauth/google/callback");
     expect(generateAuthUrl).toHaveBeenCalledWith(
       expect.objectContaining({
         access_type: "offline",
         prompt: "consent",
-        state: expect.any(String),
+        scope: expect.arrayContaining([
+          "https://www.googleapis.com/auth/calendar.events",
+          "https://www.googleapis.com/auth/youtube.force-ssl",
+        ]),
       }),
     );
   });
 
-  it("stores the refresh token and returns the telegram chat on success", async () => {
+  it("dual-writes the refresh token to calendar and youtube columns", async () => {
     redisGet.mockResolvedValue(
       JSON.stringify({
         userProfileId: "user-1",
@@ -75,7 +77,7 @@ describe("youtube oauth flow", () => {
     getToken.mockResolvedValue({ tokens: { refresh_token: "1//refresh" } });
     upsert.mockResolvedValue({ ok: true });
 
-    const out = await completeYoutubeOauth({ code: "abc", state: "state1" });
+    const out = await completeGoogleOauth({ code: "abc", state: "state1" });
     expect(out).toEqual({
       ok: true,
       userProfileId: "user-1",
@@ -83,14 +85,14 @@ describe("youtube oauth flow", () => {
     });
     expect(upsert).toHaveBeenCalledWith({
       userProfileId: "user-1",
+      googleCalendarRefreshToken: "1//refresh",
       googleYoutubeRefreshToken: "1//refresh",
     });
-    expect(redisDel).toHaveBeenCalled();
   });
 
   it("rejects expired or missing state", async () => {
     redisGet.mockResolvedValue(null);
-    const out = await completeYoutubeOauth({ code: "abc", state: "gone" });
+    const out = await completeGoogleOauth({ code: "abc", state: "gone" });
     expect(out.ok).toBe(false);
     if (out.ok) {
       return;

@@ -78,16 +78,16 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
   });
 
   /**
-   * Ops helper: shows the exact redirect_uri Magnus will send to Google.
-   * Copy this into the Google Cloud OAuth client (Web application) Authorized redirect URIs.
+   * Ops helper: exact redirect_uri Magnus sends for unified Google OAuth (Calendar + YouTube).
    */
-  app.get("/oauth/youtube", async (_req, res) => {
+  app.get("/oauth/google", async (_req, res) => {
     try {
-      const { youtubeOauthRedirectUri, resolvePublicBaseUrl } = await import(
+      const { googleOauthRedirectUri, resolvePublicBaseUrl } = await import(
         "./config/publicBaseUrl.js"
       );
-      const redirectUri = youtubeOauthRedirectUri();
+      const redirectUri = googleOauthRedirectUri();
       const base = resolvePublicBaseUrl();
+      const clientId = process.env.GOOGLE_CLIENT_ID?.trim() || null;
       if (!redirectUri || !base) {
         res.status(503).json({
           ok: false,
@@ -101,26 +101,31 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
         redirect_uri: redirectUri,
         base_url: base.base,
         source: base.source,
+        client_id: clientId,
+        scopes: ["calendar.events", "calendar.readonly", "youtube.force-ssl"],
         google_console_hint:
-          "OAuth client type must be Web application. Paste redirect_uri exactly (no trailing slash) under Authorized redirect URIs.",
+          "OAuth client type must be Web application. Paste redirect_uri exactly under Authorized redirect URIs. After connect, Magnus stores the refresh token for both Calendar and YouTube on this user.",
       });
     } catch (err) {
-      logger.warn({ err: loggableError(err) }, "oauth youtube diagnostic failed");
+      logger.warn({ err: loggableError(err) }, "oauth google diagnostic failed");
       res.status(500).json({ ok: false, error: "diagnostic_failed" });
     }
   });
 
-  /**
-   * YouTube OAuth callback — Google redirects here after the user approves in the browser.
-   * State was minted by connect_youtube and held in Redis for ~15 minutes.
-   */
-  app.get("/oauth/youtube/callback", async (req, res) => {
+  app.get("/oauth/youtube", async (_req, res) => {
+    res.redirect(302, "/oauth/google");
+  });
+
+  const handleGoogleOauthCallback = async (
+    req: express.Request,
+    res: express.Response,
+  ): Promise<void> => {
     const code = typeof req.query.code === "string" ? req.query.code : null;
     const state = typeof req.query.state === "string" ? req.query.state : null;
     const oauthError = typeof req.query.error === "string" ? req.query.error : null;
 
-    const { completeYoutubeOauth } = await import("./integrations/youtube/oauthFlow.js");
-    const result = await completeYoutubeOauth({ code, state, error: oauthError });
+    const { completeGoogleOauth } = await import("./integrations/google/oauthFlow.js");
+    const result = await completeGoogleOauth({ code, state, error: oauthError });
 
     if (!result.ok) {
       res
@@ -128,7 +133,7 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
         .type("html")
         .send(
           `<!doctype html><html><body style="font-family:system-ui;padding:2rem;max-width:32rem">` +
-            `<h2>YouTube connection did not finish</h2>` +
+            `<h2>Google connection did not finish</h2>` +
             `<p>${escapeHtml(result.userFacing)}</p>` +
             `<p>You can close this tab and go back to Telegram.</p>` +
             `</body></html>`,
@@ -141,23 +146,35 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
       .type("html")
       .send(
         `<!doctype html><html><body style="font-family:system-ui;padding:2rem;max-width:32rem">` +
-          `<h2>YouTube is connected to Magnus</h2>` +
-          `<p>You can close this tab and go back to Telegram — I will confirm there.</p>` +
+          `<h2>Google is connected to Magnus</h2>` +
+          `<p>Calendar and YouTube are ready. You can close this tab — I will confirm in Telegram.</p>` +
           `</body></html>`,
       );
 
     try {
       const { sendMessage } = await import("./tools/telegram.js");
       await sendMessage(
-        "YouTube is connected. I can search, manage playlists, bookmark, and cue songs or videos for you now.",
+        "Google is connected — Calendar and YouTube / YT Music are ready for this account.",
         { chatId: result.telegramChatId, telegramUserIdForLog: result.telegramChatId },
       );
     } catch (err) {
       logger.warn(
         { err: loggableError(err), chatId: result.telegramChatId },
-        "youtube oauth: connected but Telegram confirm failed",
+        "google oauth: connected but Telegram confirm failed",
       );
     }
+  };
+
+  /**
+   * Unified Google OAuth callback (Calendar + YouTube). Prefer this redirect URI on the Web client.
+   */
+  app.get("/oauth/google/callback", (req, res) => {
+    void handleGoogleOauthCallback(req, res);
+  });
+
+  /** Legacy alias — only works if the auth URL used this same redirect_uri. */
+  app.get("/oauth/youtube/callback", (req, res) => {
+    void handleGoogleOauthCallback(req, res);
   });
 
   /**

@@ -43,3 +43,12 @@ describe("youtubeOauthRedirectUri", () => {
     ).toEqual({ base: "https://custom.example.com", source: "MAGNUS_PUBLIC_BASE_URL" });
   });
 });
+
+describe("googleOauthRedirectUri", () => {
+  it("builds the unified Google callback URI", async () => {
+    const { googleOauthRedirectUri } = await import("./publicBaseUrl.js");
+    expect(
+      googleOauthRedirectUri({ RAILWAY_PUBLIC_DOMAIN: "crewai-production-c221.up.railway.app" }),
+    ).toBe("https://crewai-production-c221.up.railway.app/oauth/google/callback");
+  });
+});

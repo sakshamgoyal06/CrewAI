@@ -39,7 +39,7 @@ import {
   youtubeRecommendTool,
   youtubeSearchTool,
 } from "./tools/youtubeTool.js";
-import { connectYoutubeTool } from "./tools/youtubeConnectTool.js";
+import { connectGoogleTool } from "./tools/youtubeConnectTool.js";
 import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
 
@@ -404,9 +404,29 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "connect_google",
+    description:
+      "Start unified Google onboarding (Calendar + YouTube / YT Music) for this user: returns a one-time consent link. Use when they ask to connect Google, Calendar, or YouTube, or when a calendar/YouTube tool says it is not connected.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
     name: "connect_youtube",
     description:
-      "Start YouTube / YT Music onboarding for this user: returns a one-time Google consent link to send them. Use when they ask to connect YouTube, or when a YouTube tool says it is not connected.",
+      "Alias for connect_google — same one-time Google consent link covering YouTube and Calendar.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "connect_calendar",
+    description:
+      "Alias for connect_google — same one-time Google consent link covering Calendar and YouTube.",
     input_schema: {
       type: "object",
       properties: {},
@@ -613,8 +633,10 @@ async function runTool(
           cueId: str(input.cue_id),
           maxResults: num(input.max_results),
         });
+      case "connect_google":
+      case "connect_calendar":
       case "connect_youtube":
-        return await connectYoutubeTool({
+        return await connectGoogleTool({
           userProfileId: ctx.userProfileId,
           telegramUserId: ctx.telegramUserId,
         });

@@ -4,7 +4,8 @@
  * Same pattern as Google Calendar: host uses `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`;
  * per-user refresh tokens live in `user_integrations.google_youtube_refresh_token`.
  *
- * YouTube scopes are separate from Calendar, so the refresh tokens are separate too.
+ * YouTube scopes are requested together with Calendar in the in-chat Google connect flow;
+ * the same refresh token is stored on both user_integrations columns.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";

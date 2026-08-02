@@ -14,9 +14,13 @@ There is no calendar command. Just ask.
 2. **APIs & Services → Enable APIs** → enable **Google Calendar API**.
 3. **OAuth consent screen** → External (or Internal for Workspace) → add your own Google account
    under **Test users** while the app is in testing.
-4. **Credentials → Create credentials → OAuth client ID → Desktop app** → download the JSON.
+4. **Credentials → Create credentials → OAuth client ID → Web application** (required for
+   in-chat connect on Railway). Add authorized redirect URI
+   `https://<your-magnus-host>/oauth/google/callback`. A Desktop client still works for local
+   CLI auth only.
 
-Scopes used are calendar read plus events write — nothing else.
+Scopes used are calendar read plus events write. In-chat **connect Google** also requests YouTube
+scopes in the same consent and stores one refresh token on both Calendar and YouTube columns.
 
 ## 2. Publish the OAuth app
 
@@ -45,19 +49,23 @@ the code by hand.
 ## 4. Give the deployed bot access
 
 A hosted container has no browser and no persistent disk, so the token file is useless there.
-Set these three variables on the host (Railway → Variables) instead:
+Set the Web client on the host (Railway → Variables):
 
 ```
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
+```
+
+Then in Telegram say **“connect Google”** — Magnus stores per-user tokens in `user_integrations`
+(no host-level `GOOGLE_CALENDAR_REFRESH_TOKEN` required for chat users).
+
+For a one-off CLI seed you can still upsert:
+
+```
 GOOGLE_CALENDAR_REFRESH_TOKEN=...
 ```
 
-With the app published, the refresh token does not expire unless you revoke it, so this survives
-redeploys. Confirm with `npm run telegram:check` — the
-**Google Calendar** capability reads `ready` once all three are present.
-
-If they are missing, Magnus says the calendar is not connected rather than inventing events.
+via `scripts/upsert-user-integrations.mts`.
 
 ---
 

@@ -25,7 +25,7 @@ import {
 } from "../../integrations/googleCalendar/operations.js";
 
 const NOT_CONFIGURED =
-  "Google Calendar is not connected for this account. Connect Google Calendar in settings or ask an admin.";
+  "Google Calendar is not connected for this account. Ask me to connect Google (one link covers Calendar and YouTube).";
 
 async function calendarReady(userProfileId?: string): Promise<boolean> {
   if (googleCalendarConfigured()) {

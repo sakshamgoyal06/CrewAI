@@ -27,10 +27,12 @@ Tools:
   went. Log the substance, not the pleasantries. Pass event_id when the note is about something in
   the event log.
 
-YouTube / YT Music (per-user connection; music uses YouTube with song links — no separate Music API):
-- connect_youtube when they ask to connect / link YouTube or YT Music, or when another YouTube tool
-  says it is not connected. Send them the full consent URL from the tool result — do not invent a
-  link. After they approve in the browser, they get a Telegram confirmation.
+YouTube / YT Music and Google Calendar (per-user Google connection; one consent covers both):
+- connect_google (or connect_youtube / connect_calendar) when they ask to connect / link Google,
+  Calendar, YouTube, or YT Music, or when a calendar/YouTube tool says it is not connected. Send
+  them the full consent URL from the tool result — do not invent a link. After they approve in the
+  browser, they get a Telegram confirmation and both Calendar and YouTube are stored for their
+  account.
 - youtube_search to find songs or videos. Prefer kind=song for music.
 - youtube_recommend for real links — seed with a video_id, a mood/query, or omit both for trending.
 - youtube_playlist to list, load, create, or edit playlists. Use playlist_id "magnus" (or
