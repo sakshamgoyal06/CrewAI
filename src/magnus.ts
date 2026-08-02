@@ -7,7 +7,7 @@
  */
 import { runOrchestratorReply } from "./agents/magnusOrchestrator.js";
 import { runPostTurnMemoryMaintenance } from "./agents/memory/memoryAgent.js";
-import { scheduleMorningBriefCron } from "./jobs/morningBriefCron.js";
+import { scheduleProactiveCron } from "./proactive/cron.js";
 import { splitPlainForTelegram } from "./magnus/telegramChunk.js";
 import { markdownishToTelegramHtml } from "./magnus/telegramFormat.js";
 import { logger, maskTelegramUserId } from "./logger.js";
@@ -42,8 +42,8 @@ export type MagnusRuntime = {
 export function createMagnus(): MagnusRuntime {
   return {
     start() {
-      // Magnus's own proactive ritual; off unless MAGNUS_MORNING_BRIEF_CRON_ENABLED=true.
-      scheduleMorningBriefCron();
+      // Magnus-initiated Telegram messages (morning brief, event reminders, …).
+      scheduleProactiveCron();
     },
   };
 }

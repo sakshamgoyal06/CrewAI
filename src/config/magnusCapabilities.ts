@@ -161,10 +161,17 @@ function morningBriefCapability(env: EnvBag): Capability {
     };
   }
 
-  const cron = isTrue(env, "MAGNUS_MORNING_BRIEF_CRON_ENABLED");
+  const proactiveCron =
+    isTrue(env, "MAGNUS_PROACTIVE_CRON_ENABLED") ||
+    isTrue(env, "MAGNUS_MORNING_BRIEF_CRON_ENABLED") ||
+    (!isFalsy(env, "MAGNUS_PROACTIVE_CRON_ENABLED") &&
+      !isFalsy(env, "MAGNUS_MORNING_BRIEF_CRON_ENABLED"));
+  const briefCronOff = isFalsy(env, "MAGNUS_MORNING_BRIEF_CRON_ENABLED");
+  const cron = proactiveCron && !briefCronOff;
+
   const missing: string[] = [];
   if (!cron) {
-    missing.push("MAGNUS_MORNING_BRIEF_CRON_ENABLED");
+    missing.push("MAGNUS_PROACTIVE_CRON_ENABLED");
   }
   if (!val(env, "MAGNUS_INTERNAL_JOB_SECRET")) {
     missing.push("MAGNUS_INTERNAL_JOB_SECRET");
@@ -173,11 +180,11 @@ function morningBriefCapability(env: EnvBag): Capability {
   return {
     id: "morning_brief",
     title: "Morning Brief",
-    telegram: "daily push",
+    telegram: "daily push or “morning brief”",
     status: cron ? "ready" : "partial",
     detail: cron
-      ? `Scheduled in-process around local hour ${val(env, "MAGNUS_MORNING_BRIEF_LOCAL_HOUR") ?? "7"}.`
-      : "Not scheduled — set MAGNUS_MORNING_BRIEF_CRON_ENABLED=true for the daily push. Asking Magnus about your day works either way.",
+      ? `Scheduled around local hour ${val(env, "MAGNUS_MORNING_BRIEF_LOCAL_HOUR") ?? "7"} via proactive cron.`
+      : "Proactive cron off — set MAGNUS_PROACTIVE_CRON_ENABLED=true or say “morning brief” for a manual push.",
     missing,
   };
 }
@@ -306,15 +313,25 @@ function accessCapability(env: EnvBag): Capability {
   };
 }
 
-function proactiveCapability(): Capability {
+function proactiveCapability(env: EnvBag): Capability {
+  const cron =
+    isTrue(env, "MAGNUS_PROACTIVE_CRON_ENABLED") ||
+    isTrue(env, "MAGNUS_MORNING_BRIEF_CRON_ENABLED") ||
+    (!isFalsy(env, "MAGNUS_PROACTIVE_CRON_ENABLED") &&
+      !isFalsy(env, "MAGNUS_MORNING_BRIEF_CRON_ENABLED"));
+  const reminders =
+    isTrue(env, "MAGNUS_EVENT_REMINDER_ENABLED") ||
+    (!isFalsy(env, "MAGNUS_EVENT_REMINDER_ENABLED") && cron);
+
   return {
     id: "proactive",
     title: "Proactive messages",
     telegram: "bot-initiated sends",
-    status: "ready",
-    detail:
-      "Morning Brief and other pushes use each user's telegram_chat_id from user_profile (no TELEGRAM_CHAT_ID env needed).",
-    missing: [],
+    status: cron ? "ready" : "partial",
+    detail: cron
+      ? `Cron on (morning brief${reminders ? ", event reminders" : ""}); uses telegram_chat_id per user.`
+      : "Set MAGNUS_PROACTIVE_CRON_ENABLED=true for scheduled pushes.",
+    missing: cron ? [] : ["MAGNUS_PROACTIVE_CRON_ENABLED"],
   };
 }
 
@@ -346,7 +363,7 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
     notionCapability(),
     calendarCapability(env),
     youtubeCapability(env),
-    proactiveCapability(),
+    proactiveCapability(env),
     accessCapability(env),
     deliveryCapability(env),
   ];

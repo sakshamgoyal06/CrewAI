@@ -95,7 +95,8 @@ shell or `.env`.
 | `src/meals/` | Meal parsing, estimate chain (web search → USDA → CalorieNinjas → optional LLM), `meal_logs` writes |
 | `src/pillars/health/workouts/` | Hevy client, fitness agent, Hevy write agent |
 | `src/pillars/health/references/` | Reads committed program memory + Telegram journals |
-| `src/jobs/` | Morning Brief: prompt, context, cron, timezone window. Optional. |
+| `src/jobs/` | Morning Brief: prompt, context, cron (legacy re-export), timezone window. Optional. |
+| `src/proactive/` | Magnus-initiated Telegram: outbound HTML, dedupe, scheduled job registry, cron tick |
 | `src/tools/telegram.ts` | Telegraf bot, `/start` and `/help`, rate limit, update dedupe, webhook mount |
 | `src/tools/telegramWatchdog.ts` | Liveness probe; exits so the host restarts |
 | `src/config/telegramRuntime.ts` | Polling vs webhook, public URL derivation, handler timeout |
