@@ -78,6 +78,39 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
   });
 
   /**
+   * Ops helper: shows the exact redirect_uri Magnus will send to Google.
+   * Copy this into the Google Cloud OAuth client (Web application) Authorized redirect URIs.
+   */
+  app.get("/oauth/youtube", async (_req, res) => {
+    try {
+      const { youtubeOauthRedirectUri, resolvePublicBaseUrl } = await import(
+        "./config/publicBaseUrl.js"
+      );
+      const redirectUri = youtubeOauthRedirectUri();
+      const base = resolvePublicBaseUrl();
+      if (!redirectUri || !base) {
+        res.status(503).json({
+          ok: false,
+          error:
+            "No public HTTPS base URL. Set MAGNUS_PUBLIC_BASE_URL or deploy with RAILWAY_PUBLIC_DOMAIN.",
+        });
+        return;
+      }
+      res.status(200).json({
+        ok: true,
+        redirect_uri: redirectUri,
+        base_url: base.base,
+        source: base.source,
+        google_console_hint:
+          "OAuth client type must be Web application. Paste redirect_uri exactly (no trailing slash) under Authorized redirect URIs.",
+      });
+    } catch (err) {
+      logger.warn({ err: loggableError(err) }, "oauth youtube diagnostic failed");
+      res.status(500).json({ ok: false, error: "diagnostic_failed" });
+    }
+  });
+
+  /**
    * YouTube OAuth callback — Google redirects here after the user approves in the browser.
    * State was minted by connect_youtube and held in Redis for ~15 minutes.
    */
