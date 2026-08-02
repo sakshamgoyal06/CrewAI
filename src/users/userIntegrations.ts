@@ -58,25 +58,46 @@ export async function loadUserIntegrations(
   return rowToIntegrations(data as Record<string, unknown>);
 }
 
+/**
+ * Partial upsert: only columns present on `input` are written.
+ * Omitting a field leaves the existing DB value alone (important for connect_youtube).
+ */
 export async function upsertUserIntegrations(
   input: { userProfileId: string } & UserIntegrations,
   client: SupabaseClient = defaultClient,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { error } = await client.from("user_integrations").upsert(
-    {
-      user_profile_id: input.userProfileId,
-      google_calendar_refresh_token: input.googleCalendarRefreshToken ?? null,
-      google_youtube_refresh_token: input.googleYoutubeRefreshToken ?? null,
-      hevy_api_key: input.hevyApiKey ?? null,
-      notion_token: input.notionToken ?? null,
-      notion_daily_log_parent_page_id: input.notionDailyLogParentPageId ?? null,
-      notion_morning_brief_parent_page_id: input.notionMorningBriefParentPageId ?? null,
-      notion_goals_database_id: input.notionGoalsDatabaseId ?? null,
-      notion_daily_checkins_database_id: input.notionDailyCheckinsDatabaseId ?? null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_profile_id" },
-  );
+  const row: Record<string, unknown> = {
+    user_profile_id: input.userProfileId,
+    updated_at: new Date().toISOString(),
+  };
+  if (input.googleCalendarRefreshToken !== undefined) {
+    row.google_calendar_refresh_token = input.googleCalendarRefreshToken || null;
+  }
+  if (input.googleYoutubeRefreshToken !== undefined) {
+    row.google_youtube_refresh_token = input.googleYoutubeRefreshToken || null;
+  }
+  if (input.hevyApiKey !== undefined) {
+    row.hevy_api_key = input.hevyApiKey || null;
+  }
+  if (input.notionToken !== undefined) {
+    row.notion_token = input.notionToken || null;
+  }
+  if (input.notionDailyLogParentPageId !== undefined) {
+    row.notion_daily_log_parent_page_id = input.notionDailyLogParentPageId || null;
+  }
+  if (input.notionMorningBriefParentPageId !== undefined) {
+    row.notion_morning_brief_parent_page_id = input.notionMorningBriefParentPageId || null;
+  }
+  if (input.notionGoalsDatabaseId !== undefined) {
+    row.notion_goals_database_id = input.notionGoalsDatabaseId || null;
+  }
+  if (input.notionDailyCheckinsDatabaseId !== undefined) {
+    row.notion_daily_checkins_database_id = input.notionDailyCheckinsDatabaseId || null;
+  }
+
+  const { error } = await client
+    .from("user_integrations")
+    .upsert(row, { onConflict: "user_profile_id" });
 
   if (error) {
     return { ok: false, error: error.message };

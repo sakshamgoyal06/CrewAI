@@ -37,10 +37,10 @@ import {
 } from "../../youtube/youtubeStore.js";
 
 const NOT_CONFIGURED =
-  "YouTube is not connected. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_YOUTUBE_REFRESH_TOKEN (see docs/YOUTUBE.md), or at least YOUTUBE_API_KEY for search.";
+  "YouTube is not connected for this user. Ask me to connect YouTube (in-chat Google link), or set YOUTUBE_API_KEY on the host for search-only. See docs/YOUTUBE.md.";
 
 const OAUTH_REQUIRED =
-  "That needs YouTube account access. Run `npm run youtube:auth` and upsert google_youtube_refresh_token via scripts/upsert-user-integrations.mts (YOUTUBE_API_KEY alone can only search).";
+  "That needs YouTube account access. Ask me to connect YouTube (in-chat Google link), or run `npm run youtube:auth` and upsert google_youtube_refresh_token (YOUTUBE_API_KEY alone can only search).";
 
 function formatItem(v: YoutubeVideoBrief, index?: number): string {
   const n = index === undefined ? "-" : `${index + 1}.`;

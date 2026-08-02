@@ -67,6 +67,7 @@ function isFalsy(env: EnvBag, name: string): boolean {
 const REDIS_URL_VARS = ["UPSTASH_REDIS_REST_URL", "REDIS_URL"] as const;
 const REDIS_TOKEN_VARS = ["UPSTASH_REDIS_REST_TOKEN", "REDIS_TOKEN"] as const;
 const GOOGLE_CALENDAR_PLATFORM_VARS = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] as const;
+const GOOGLE_YOUTUBE_PLATFORM_VARS = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] as const;
 const YOUTUBE_API_KEY_VARS = ["YOUTUBE_API_KEY", "GOOGLE_YOUTUBE_API_KEY"] as const;
 
 function coreRequirements(env: EnvBag, production: boolean): CoreRequirement[] {
@@ -218,17 +219,17 @@ function calendarCapability(env: EnvBag): Capability {
 }
 
 function youtubeCapability(env: EnvBag): Capability {
-  const platformOk = GOOGLE_CALENDAR_PLATFORM_VARS.every((name) => Boolean(val(env, name)));
+  const platformOk = GOOGLE_YOUTUBE_PLATFORM_VARS.every((name) => Boolean(val(env, name)));
   const hasApiKey = Boolean(firstSet(env, YOUTUBE_API_KEY_VARS));
 
   if (platformOk) {
     return {
       id: "youtube",
       title: "YouTube / YT Music",
-      telegram: "“find a focus playlist”, “cue this song”, “bookmark that video”",
+      telegram: "“connect YouTube”, “find a focus playlist”, “cue this song”",
       status: "partial",
       detail:
-        "OAuth app on host. Per-user refresh token in user_integrations (google_youtube_refresh_token). Optional YOUTUBE_API_KEY on host for search-only.",
+        "OAuth app on host. Say “connect YouTube” for an in-chat Google link (token → user_integrations.google_youtube_refresh_token). Optional YOUTUBE_API_KEY for search-only.",
       missing: ["user_integrations.google_youtube_refresh_token"],
     };
   }
@@ -240,7 +241,7 @@ function youtubeCapability(env: EnvBag): Capability {
       telegram: "“search YouTube for …”, “recommend something to watch”",
       status: "partial",
       detail:
-        "API key only — search and recommend work; playlists and likes need per-user OAuth in user_integrations.",
+        "API key only — search and recommend work; playlists and likes need per-user OAuth (connect YouTube in chat).",
       missing: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
     };
   }
@@ -251,7 +252,7 @@ function youtubeCapability(env: EnvBag): Capability {
     telegram: "“find a song on YouTube”",
     status: "off",
     detail:
-      "Set GOOGLE_CLIENT_ID/SECRET on host and per-user tokens via upsert-user-integrations.mts, or YOUTUBE_API_KEY for search-only.",
+      "Set GOOGLE_CLIENT_ID/SECRET on host; users connect in chat (or youtube:auth + upsert). Or set YOUTUBE_API_KEY for search-only.",
     missing: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
   };
 }
