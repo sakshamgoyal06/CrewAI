@@ -108,6 +108,32 @@ describe("readCalendarEvents", () => {
     expect(await readCalendarEvents({ timeZone: IST })).toContain("[id: evt_abc123]");
   });
 
+  it("includes description and attachment links for agendas", async () => {
+    listEventsMock.mockResolvedValue([
+      {
+        id: "evt_ai",
+        summary: "AI Working Session",
+        start: "2026-07-31T14:30:00.000Z",
+        end: "2026-07-31T15:30:00.000Z",
+        description: "- Ship YouTube OAuth\n- Test calendar read",
+        attachments: [{ title: "Session notes", url: "https://docs.google.com/document/d/abc" }],
+        calendarId: "primary",
+      },
+    ]);
+
+    const out = await readCalendarEvents({
+      timeZone: IST,
+      startIso: "2026-07-01T00:00:00+05:30",
+      endIso: "2026-08-01T00:00:00+05:30",
+    });
+
+    expect(out).toContain("AI Working Session");
+    expect(out).toContain("description:");
+    expect(out).toContain("Ship YouTube OAuth");
+    expect(out).toContain("attachment: Session notes");
+    expect(out).toContain("docs.google.com");
+  });
+
   it("passes a query through and reports when it matches nothing", async () => {
     listEventsMock.mockResolvedValue([]);
     const out = await readCalendarEvents({ query: "dentist", timeZone: IST });

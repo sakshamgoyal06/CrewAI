@@ -65,6 +65,25 @@ function formatWhen(event: CalendarEventBrief, timeZone: string): string {
   return end ? `${day} ${time(start)}–${time(end)}` : `${day} ${time(start)}`;
 }
 
+const MAX_DESCRIPTION_CHARS = 2000;
+
+function formatEventDetails(event: CalendarEventBrief): string {
+  const parts: string[] = [];
+  if (event.description) {
+    const body =
+      event.description.length > MAX_DESCRIPTION_CHARS
+        ? `${event.description.slice(0, MAX_DESCRIPTION_CHARS)}…`
+        : event.description;
+    parts.push(`description: ${body}`);
+  }
+  if (event.attachments?.length) {
+    for (const a of event.attachments) {
+      parts.push(a.url ? `attachment: ${a.title} (${a.url})` : `attachment: ${a.title}`);
+    }
+  }
+  return parts.length > 0 ? `\n  ${parts.join("\n  ")}` : "";
+}
+
 export async function readCalendarEvents(input: {
   startIso?: string;
   endIso?: string;
@@ -104,7 +123,7 @@ export async function readCalendarEvents(input: {
   return events
     .map((e) => {
       const where = e.location ? ` @ ${e.location}` : "";
-      return `- ${formatWhen(e, input.timeZone)} — ${e.summary}${where} [id: ${e.id}]`;
+      return `- ${formatWhen(e, input.timeZone)} — ${e.summary}${where}${formatEventDetails(e)} [id: ${e.id}]`;
     })
     .join("\n");
 }
