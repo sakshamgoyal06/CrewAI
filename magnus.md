@@ -125,7 +125,15 @@ shell or `.env`.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
    routing in `metadata` (`delegated_agent`, `agent_metadata`).
 8. **Replies** — One reply per turn, chunked only for Telegram's size limit, sent as HTML.
-9. **Event log** — Magnus tools `log_event`, `update_event`, `reschedule_event`, `list_events` write
+9. **Proactive Telegram** — Magnus can initiate messages without a user turn: in-process cron
+   (`MAGNUS_PROACTIVE_CRON_ENABLED`, default on) runs scheduled jobs every
+   `MAGNUS_PROACTIVE_CRON_INTERVAL_MINUTES` (default 5). Jobs: **morning brief** (local hour from
+   `MAGNUS_MORNING_BRIEF_LOCAL_HOUR` in `user_profile.timezone`; Redis dedupe per calendar day),
+   **event reminders** (`remind_at` on `magnus_events`, sets `reminded_at` after send). Manual brief:
+   say `morning brief` or `/morningbrief`. Outbound uses HTML formatting and is logged to
+   `magnus_chat_messages` with `metadata.proactive`. Future: inactivity/activity triggers plug into
+   `src/proactive/registry.ts`.
+10. **Event log** — Magnus tools `log_event`, `update_event`, `reschedule_event`, `list_events` write
    to `magnus_events`. Moving a commitment closes the old row and opens a linked replacement (never
    edits time in place). A second `log_event` for the same activity with a different time within two
    hours is rejected — Magnus must call `reschedule_event` instead. Calendar delete/update cancels or
@@ -169,7 +177,10 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
   not Railway. See `docs/YOUTUBE.md` / `docs/GOOGLE_CALENDAR.md`.
 - **`USDA_FDC_API_KEY`, `CALORIENINJAS_API_KEY`** — meal macros (platform-level).
 - **`MAGNUS_TELEGRAM_MODE=webhook`** — recommended on a host; no 409 on overlapping deploys.
-- **`MAGNUS_MORNING_BRIEF_CRON_ENABLED`** — the unprompted daily push (off by default).
+- **`MAGNUS_PROACTIVE_CRON_ENABLED`** — scheduled Magnus-initiated Telegram (default on). Set
+  `MAGNUS_MORNING_BRIEF_CRON_ENABLED=false` to skip only the brief job.
+- **`MAGNUS_MORNING_BRIEF_CRON_ENABLED`** — legacy; when false, morning brief is not scheduled
+  (manual `morning brief` still works).
 
 ---
 
@@ -214,10 +225,11 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Semantic recall** — no embeddings; memory is recent-window plus structured reads.
 - **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data.
 - **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables.
+- **No inactivity / activity-triggered proactive messages yet** — only time-based cron jobs.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube.
 
 **Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
 
 ---
 
-**Last updated:** 2026-08-02 (Calendar read_calendar includes event descriptions and attachments)
+**Last updated:** 2026-08-02 (Proactive Telegram cron: morning brief + event reminders)
