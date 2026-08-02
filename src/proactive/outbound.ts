@@ -1,6 +1,10 @@
 import { splitPlainForTelegram } from "../magnus/telegramChunk.js";
 import { markdownishToTelegramHtml } from "../magnus/telegramFormat.js";
 import { logger } from "../logger.js";
+import {
+  automatedChatFields,
+  type ChatDeliveryTrigger,
+} from "../tools/chatMessageTypes.js";
 import { recordMagnusChatMessage } from "../tools/chatLog.js";
 import type { ProactiveSendInput } from "./types.js";
 
@@ -16,6 +20,8 @@ export async function sendProactiveTelegram(input: ProactiveSendInput): Promise<
     const plain = plainChunks[i]!;
     const html = htmlChunks[i]!;
     await sendProactiveTelegramHtml(html, input.chatId);
+    const deliveryTrigger = input.trigger as ChatDeliveryTrigger;
+    const typeFields = automatedChatFields(deliveryTrigger);
     const log = await recordMagnusChatMessage({
       user_profile_id: input.userProfileId,
       telegram_user_id: input.telegramUserIdForLog,
@@ -23,10 +29,10 @@ export async function sendProactiveTelegram(input: ProactiveSendInput): Promise<
       content: plain,
       source: "telegram",
       intent: input.intent ?? input.kind,
+      message_type: typeFields.message_type,
+      delivery_trigger: typeFields.delivery_trigger,
       metadata: {
-        proactive: true,
         proactive_kind: input.kind,
-        proactive_trigger: input.trigger,
         format: "html",
         chunk_index: i,
         chunk_count: htmlChunks.length,

@@ -123,7 +123,10 @@ shell or `.env`.
    Magnus tools run (Happiness stays taste-only).
 6. **Memory** — Loaded once per turn: recent chat as verbatim `messages[]` (configurable window), rolling summary for older turns, semantic facts from `memory_summaries`, plus structured profile/goals/logs. Tunable via `MAGNUS_MEMORY_*` in `.env.example`. Post-turn maintenance updates conversation summary and extracted facts.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
-   routing in `metadata` (`delegated_agent`, `agent_metadata`).
+   routing in `metadata` (`delegated_agent`, `agent_metadata`). Columns `message_type`
+   (`conversation` | `automated`) and `delivery_trigger` (`manual`, `scheduled`, `http`,
+   `event_reminder`, `system`, …) classify normal chat vs Magnus-initiated outbound and why it
+   was sent.
 8. **Replies** — One reply per turn, chunked only for Telegram's size limit, sent as HTML.
 9. **Proactive Telegram** — Magnus can initiate messages without a user turn: in-process cron
    (`MAGNUS_PROACTIVE_CRON_ENABLED`, default on) runs scheduled jobs every
@@ -161,8 +164,8 @@ Public tables use RLS with a `service_role_only` policy; the service role key by
 Supabase `sb_secret_…` key format works as service role.
 
 `supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`,
-`magnus_events`, `memory_summaries`, and `magnus_youtube_*` — older schema was applied directly to the project before
-those migrations existed.
+`magnus_events`, `memory_summaries`, `magnus_youtube_*`, and `magnus_chat_messages` type columns;
+older schema was applied directly to the project before those migrations existed.
 
 ---
 
@@ -232,4 +235,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-02 (Proactive Telegram cron: morning brief + event reminders)
+**Last updated:** 2026-08-02 (`magnus_chat_messages.message_type` + `delivery_trigger`)

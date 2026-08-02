@@ -13,6 +13,9 @@ import { markdownishToTelegramHtml } from "./magnus/telegramFormat.js";
 import { logger, maskTelegramUserId } from "./logger.js";
 import { loggableError } from "./util/loggableError.js";
 import {
+  conversationChatFields,
+} from "./tools/chatMessageTypes.js";
+import {
   recordMagnusChatMessage,
   resolveTelegramUserProfile,
 } from "./tools/chatLog.js";
@@ -85,12 +88,16 @@ export async function handleMessage(
     access_flags: user.accessFlags,
   };
 
+  const conversationFields = conversationChatFields();
+
   const userLog = await recordMagnusChatMessage({
     user_profile_id: user.profileId,
     telegram_user_id: user.telegramUserId,
     role: "user",
     content: userMessage,
     source: "telegram",
+    message_type: conversationFields.message_type,
+    delivery_trigger: conversationFields.delivery_trigger,
     metadata: metaBase,
   });
   if (!userLog.ok) {
@@ -126,6 +133,8 @@ export async function handleMessage(
       content: replyText,
       source: "telegram",
       intent: intentForLog,
+      message_type: conversationFields.message_type,
+      delivery_trigger: conversationFields.delivery_trigger,
       metadata: {
         ...metaBase,
         ...(orchestrated.delegatedAgent !== undefined
@@ -160,6 +169,8 @@ export async function handleMessage(
       content: fallback,
       source: "telegram",
       intent: "error",
+      message_type: conversationFields.message_type,
+      delivery_trigger: conversationFields.delivery_trigger,
       metadata: metaBase,
     });
     if (!errLog.ok) {

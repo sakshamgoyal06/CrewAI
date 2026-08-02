@@ -7,6 +7,7 @@
 import { logger, maskTelegramUserId } from "../logger.js";
 import { loggableError } from "../util/loggableError.js";
 import { supabase } from "./clients.js";
+import type { ChatDeliveryTrigger, ChatMessageType } from "./chatMessageTypes.js";
 
 const DEFAULT_PROFILE = {
   timezone: "UTC",
@@ -219,6 +220,8 @@ export async function recordMagnusChatMessage(input: {
   source?: string;
   intent?: string | null;
   metadata?: Record<string, unknown> | null;
+  message_type?: ChatMessageType;
+  delivery_trigger?: ChatDeliveryTrigger | null;
 }): Promise<{ ok: boolean; error?: string }> {
   const { error } = await supabase.from("magnus_chat_messages").insert({
     user_profile_id: input.user_profile_id,
@@ -228,6 +231,8 @@ export async function recordMagnusChatMessage(input: {
     source: input.source ?? "telegram",
     intent: input.intent ?? null,
     metadata: input.metadata ?? null,
+    message_type: input.message_type ?? "conversation",
+    delivery_trigger: input.delivery_trigger ?? null,
   });
 
   if (error) {
