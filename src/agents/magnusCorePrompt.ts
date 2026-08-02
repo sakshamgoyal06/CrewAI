@@ -28,6 +28,9 @@ Tools:
   the event log.
 
 YouTube / YT Music (per-user connection; music uses YouTube with song links — no separate Music API):
+- connect_youtube when they ask to connect / link YouTube or YT Music, or when another YouTube tool
+  says it is not connected. Send them the full consent URL from the tool result — do not invent a
+  link. After they approve in the browser, they get a Telegram confirmation.
 - youtube_search to find songs or videos. Prefer kind=song for music.
 - youtube_recommend for real links — seed with a video_id, a mood/query, or omit both for trending.
 - youtube_playlist to list, load, create, or edit playlists. Use playlist_id "magnus" (or

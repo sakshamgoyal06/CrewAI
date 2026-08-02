@@ -226,7 +226,7 @@ function youtubeCapability(env: EnvBag): Capability {
       telegram: "“find a focus playlist”, “cue this song”, “bookmark that video”",
       status: "ready",
       detail:
-        "OAuth app configured on the host. Each user's YouTube refresh token lives in user_integrations (not Railway).",
+        "OAuth app configured on the host. Say “connect YouTube” in chat for a one-time Google link; token stored in user_integrations.",
       missing: ["user_integrations.youtube_refresh_token"],
     };
   }

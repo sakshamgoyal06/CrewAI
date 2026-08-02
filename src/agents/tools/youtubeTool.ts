@@ -37,10 +37,10 @@ import {
 } from "../../youtube/youtubeStore.js";
 
 const NOT_CONFIGURED =
-  "YouTube is not connected for this account. Run `npm run youtube:auth`, then store the token with TELEGRAM_USER_ID=<id> npx tsx scripts/upsert-user-integrations.mts (see docs/YOUTUBE.md).";
+  "YouTube is not connected for this account. Ask me to connect YouTube and I will send a one-time Google link (or see docs/YOUTUBE.md).";
 
 const OAUTH_REQUIRED =
-  "That needs your YouTube account connected (playlists and likes). Run `npm run youtube:auth` and upsert youtube_refresh_token into user_integrations.";
+  "That needs your YouTube account connected (playlists and likes). Ask me to connect YouTube and open the link I send.";
 
 function formatItem(v: YoutubeVideoBrief, index?: number): string {
   const n = index === undefined ? "-" : `${index + 1}.`;

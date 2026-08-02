@@ -100,9 +100,10 @@ shell or `.env`.
 | `src/config/telegramRuntime.ts` | Polling vs webhook, public URL derivation, handler timeout |
 | `src/config/telegramCommands.ts` | The two registered commands (import-free, so the CLI needs no credentials) |
 | `src/config/magnusCapabilities.ts` | Env → capability report for `telegram:check` and the boot log |
-| `src/healthServer.ts` | `/health`, `/ready`, Morning Brief job route, Telegram webhook route |
+| `src/healthServer.ts` | `/health`, `/ready`, Morning Brief job route, Telegram webhook route, YouTube OAuth callback |
 | `src/integrations/googleCalendar/` | OAuth (env refresh token or local token file) + Calendar operations |
-| `src/integrations/youtube/` | OAuth / API key + YouTube Data API v3 operations (search, playlists, likes) |
+| `src/integrations/youtube/` | OAuth / API key + Data API operations + in-chat OAuth flow |
+| `src/config/publicBaseUrl.ts` | Public HTTPS base for OAuth redirect URIs |
 | `mcp/google-calendar/server.mts` | Optional stdio MCP server for Cursor — not part of the bot |
 
 ---
@@ -127,9 +128,9 @@ shell or `.env`.
    hours is rejected — Magnus must call `reschedule_event` instead. Calendar delete/update cancels or
    reschedules the linked event-log row automatically. Memory and the Morning Brief read commitments
    around today plus per-activity adherence from `magnus_event_activity_stats`.
-10. **YouTube** — Per-user connection (`user_integrations.youtube_refresh_token`). Magnus tools
-    `youtube_search`, `youtube_recommend`, `youtube_playlist`, `youtube_bookmark`, `youtube_cue`.
-    Bookmarks and cue live in Supabase; playlists use YouTube Data API (no official YT Music API).
+10. **YouTube** — Per-user connection (`user_integrations.youtube_refresh_token`). In chat:
+    “connect YouTube” → `connect_youtube` sends a Google consent link; `GET /oauth/youtube/callback`
+    stores the token and confirms on Telegram. Also: search, playlists, bookmarks, cue.
 
 ---
 
@@ -215,4 +216,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-02 (YouTube as per-user connection in user_integrations; playlists, bookmarks, cue)
+**Last updated:** 2026-08-02 (YouTube connect-in-chat OAuth onboarding via Telegram link + callback)
