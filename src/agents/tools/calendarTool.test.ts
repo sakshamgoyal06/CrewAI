@@ -19,6 +19,11 @@ vi.mock("../../integrations/googleCalendar/operations.js", () => ({
   deleteEvent: deleteEventMock,
 }));
 
+vi.mock("../../events/calendarEventSync.js", () => ({
+  syncEventLogAfterCalendarDelete: vi.fn().mockResolvedValue(null),
+  syncEventLogAfterCalendarUpdate: vi.fn().mockResolvedValue(null),
+}));
+
 import {
   createCalendarEvent,
   deleteCalendarEvent,

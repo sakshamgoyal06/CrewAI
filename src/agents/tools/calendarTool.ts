@@ -11,6 +11,10 @@
  */
 import { googleCalendarConfigured } from "../../integrations/googleCalendar/auth.js";
 import {
+  syncEventLogAfterCalendarDelete,
+  syncEventLogAfterCalendarUpdate,
+} from "../../events/calendarEventSync.js";
+import {
   createEvent,
   deleteEvent,
   getEvent,
@@ -130,6 +134,7 @@ export async function updateCalendarEvent(input: {
   description?: string;
   location?: string;
   timeZone: string;
+  userProfileId?: string;
 }): Promise<string> {
   if (!googleCalendarConfigured()) {
     return NOT_CONFIGURED;
@@ -170,13 +175,28 @@ export async function updateCalendarEvent(input: {
     timeZone: input.timeZone,
   });
 
-  return `Updated "${updated.summary}" — now ${formatWhen(updated, input.timeZone)}.`;
+  let syncNote = "";
+  if (input.userProfileId?.trim() && input.startIso?.trim()) {
+    const synced = await syncEventLogAfterCalendarUpdate({
+      userProfileId: input.userProfileId.trim(),
+      googleEventId: input.eventId.trim(),
+      newStartIso: input.startIso.trim(),
+      newEndIso: endIso,
+      timeZone: input.timeZone,
+    });
+    if (synced) {
+      syncNote = ` ${synced}`;
+    }
+  }
+
+  return `Updated "${updated.summary}" — now ${formatWhen(updated, input.timeZone)}.${syncNote}`;
 }
 
 /** Deletes by id, and reports what was removed so a wrong deletion is obvious immediately. */
 export async function deleteCalendarEvent(input: {
   eventId: string;
   timeZone: string;
+  userProfileId?: string;
 }): Promise<string> {
   if (!googleCalendarConfigured()) {
     return NOT_CONFIGURED;
@@ -191,5 +211,18 @@ export async function deleteCalendarEvent(input: {
   }
 
   await deleteEvent({ eventId: input.eventId.trim() });
-  return `Deleted "${existing.summary}" (was ${formatWhen(existing, input.timeZone)}).`;
+
+  let syncNote = "";
+  if (input.userProfileId?.trim()) {
+    const synced = await syncEventLogAfterCalendarDelete({
+      userProfileId: input.userProfileId.trim(),
+      googleEventId: input.eventId.trim(),
+      timeZone: input.timeZone,
+    });
+    if (synced) {
+      syncNote = ` ${synced}`;
+    }
+  }
+
+  return `Deleted "${existing.summary}" (was ${formatWhen(existing, input.timeZone)}).${syncNote}`;
 }

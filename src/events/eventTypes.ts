@@ -122,6 +122,40 @@ export function normalizePillar(value: string | null | undefined): EventPillar {
   return PILLAR_SYNONYMS[key] ?? "magnus";
 }
 
+/** Strong content signals beat a missing or generic pillar from the model. */
+const WISDOM_CONTENT =
+  /\b(ai[\s-]?session|ai work|learning|study(?:ing)?|reading|ship\b|magnus|code(?:ing)?|dev session)\b/i;
+const HEALTH_CONTENT = /\b(gym|workout|cardio|meal|sleep|training|hevy)\b/i;
+const JOY_CONTENT = /\b(play|guitar|movie|friends|shopping|rest)\b/i;
+
+/**
+ * Picks the pillar for an event. "AI session" is wisdom even if the model said wealth;
+ * explicit pillars still win when they are not the generic magnus default.
+ */
+export function inferPillarForEvent(input: {
+  explicitPillar?: string | null;
+  title: string;
+  activity?: string | null;
+  details?: string | null;
+}): EventPillar {
+  const blob = `${input.activity ?? ""} ${input.title} ${input.details ?? ""}`;
+  const explicit = input.explicitPillar?.trim() ? normalizePillar(input.explicitPillar) : null;
+
+  if (WISDOM_CONTENT.test(blob)) {
+    return "wisdom";
+  }
+  if (HEALTH_CONTENT.test(blob)) {
+    return "health";
+  }
+  if (JOY_CONTENT.test(blob)) {
+    return "joy";
+  }
+  if (explicit && explicit !== "magnus") {
+    return explicit;
+  }
+  return explicit ?? "magnus";
+}
+
 const STATUS_SYNONYMS: Record<string, EventStatus> = {
   plan: "planned",
   planned: "planned",
