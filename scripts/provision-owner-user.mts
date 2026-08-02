@@ -45,6 +45,7 @@ const TABLES_BY_USER = [
   "magnus_daily_logs",
   "magnus_events",
   "meal_logs",
+  "memory_summaries",
   "user_health_profile",
   "user_program_memory",
   "user_integrations",

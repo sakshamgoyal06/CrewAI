@@ -127,17 +127,19 @@ shell or `.env`.
 ## Database
 
 **Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`,
-`user_health_profile`, `user_program_memory`, `user_integrations`.
+`user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries` (Phases 2–3:
+rolling summary + semantic facts).
 
-**Read only:** `workouts`, `goals`, `memory_summaries`, `daily_scores`, `happiness_reserve`,
+**Read only:** `workouts`, `goals`, `daily_scores`, `happiness_reserve`,
 `patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans`,
 `magnus_events_open`, `magnus_event_activity_stats`.
 
 Public tables use RLS with a `service_role_only` policy; the service role key bypasses it. The new
 Supabase `sb_secret_…` key format works as service role.
 
-`supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`, and
-`magnus_events` — older schema was applied directly to the project before those migrations existed.
+`supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`,
+`magnus_events`, and `memory_summaries` — older schema was applied directly to the project before
+those migrations existed.
 
 ---
 
@@ -164,7 +166,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npm test` | Vitest unit tests |
 | `npm run telegram:check` | Capability report + current Telegram config (`-- --json`, `-- --probe-conflict`) |
 | `npm run telegram:setup` | Apply Telegram config: webhook, commands, menu button, description |
-| `npm run test:supabase` | Supabase insert/delete smoke test |
+| `npm run test:supabase` | Supabase insert/delete smoke test (+ `memory_summaries` reachable) |
+| `npm run db:apply -- supabase/migrations/<file>.sql` | Apply a migration via direct Postgres (`SUPABASE_DB_PASSWORD`) |
 | `npm run google-calendar:auth` | One-time OAuth; prints the refresh token for the host |
 | `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
 | `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
@@ -188,8 +191,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 ## Not built yet
 
 - **Memory reads tables nothing writes.** Fifteen read-only tables can produce `gaps` every turn when
-  `MAGNUS_MEMORY_INCLUDE_GAPS=true` (default off). Semantic + conversation summaries now write to
-  `memory_summaries` when Phases 2–3 are enabled.
+  `MAGNUS_MEMORY_INCLUDE_GAPS=true` (default off). Phases 2–3 write to `memory_summaries` after each
+  turn when enabled (requires the `memory_summaries` migration applied).
 - **Schema not reproducible** from `supabase/migrations/` for tables predating April 2026 migrations.
 - **Semantic recall** — no embeddings; memory is recent-window plus structured reads.
 - **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data.
@@ -200,4 +203,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-02 (Multi-user core/personalised context; event-log corrections; calendar ↔ log sync)
+**Last updated:** 2026-08-02 (memory_summaries migration; multi-user context; per-user integrations)
