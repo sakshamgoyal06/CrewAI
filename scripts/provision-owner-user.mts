@@ -138,6 +138,7 @@ for (const section of PROGRAM_MEMORY_SECTIONS) {
 const integrations = await upsertUserIntegrations({
   userProfileId: profileId,
   googleCalendarRefreshToken: process.env.GOOGLE_CALENDAR_REFRESH_TOKEN?.trim(),
+  googleYoutubeRefreshToken: process.env.GOOGLE_YOUTUBE_REFRESH_TOKEN?.trim(),
   hevyApiKey:
     process.env.HEVY_API_KEY?.trim() || process.env.MAGNUS_HEVY_API_KEY?.trim(),
   notionToken:

@@ -3,10 +3,10 @@
  *
  * Pillar specialists handle depth (health, wealth, happiness, wisdom). Magnus keeps everything
  * that spans them or belongs to no one: the day, the calendar, journaling and logging, reminders,
- * and ordinary conversation.
+ * YouTube / YT Music, and ordinary conversation.
  *
  * This is the only agent with tools, because these are Magnus's own responsibilities rather than
- * any pillar's: reading and writing Google Calendar, and logging a note to Supabase and Notion.
+ * any pillar's: reading and writing Google Calendar, logging notes, the event log, and YouTube.
  */
 import type {
   Message,
@@ -32,12 +32,19 @@ import {
   updateEventStatus,
 } from "./tools/eventLogTool.js";
 import { logNote } from "./tools/logNoteTool.js";
+import {
+  youtubeBookmarkTool,
+  youtubeCueTool,
+  youtubePlaylistTool,
+  youtubeRecommendTool,
+  youtubeSearchTool,
+} from "./tools/youtubeTool.js";
 import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
 
 const MODEL = "claude-sonnet-4-6";
-// A single turn can reasonably read the log, move something, and journal it: room for all three.
-const MAX_TOOL_ROUNDS = 6;
+// Calendar + event log + YouTube in one turn needs a little headroom.
+const MAX_TOOL_ROUNDS = 8;
 
 /** @deprecated Use buildMagnusSystem(ctx) — core prompt is user-agnostic. */
 export const MAGNUS_SYSTEM = MAGNUS_CORE_SYSTEM;
@@ -280,6 +287,121 @@ const TOOLS: Tool[] = [
       required: [],
     },
   },
+  {
+    name: "youtube_search",
+    description:
+      "Search YouTube / YT Music for songs or videos. Returns titles, channels, durations, and openable links.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "What to search for." },
+        kind: {
+          type: "string",
+          enum: ["song", "video", "all"],
+          description: "Prefer song for music. Defaults to all.",
+        },
+        max_results: { type: "number", description: "How many results, default 8." },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "youtube_recommend",
+    description:
+      "Recommend songs or videos with real links. Seed with a video_id, pass a mood/query, or omit both for trending.",
+    input_schema: {
+      type: "object",
+      properties: {
+        seed_video_id: {
+          type: "string",
+          description: "Video id to recommend similar items from.",
+        },
+        query: { type: "string", description: "Mood, artist, genre, or topic." },
+        kind: { type: "string", enum: ["song", "video", "all"] },
+        max_results: { type: "number" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "youtube_playlist",
+    description:
+      "Manage YouTube playlists: list, load, create, add, remove, ensure_magnus (default Magnus playlist).",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["list", "load", "create", "add", "remove", "ensure_magnus"],
+        },
+        playlist_id: {
+          type: "string",
+          description: "Playlist id, or 'magnus' for the default Magnus playlist.",
+        },
+        title: { type: "string", description: "For create." },
+        description: { type: "string", description: "For create." },
+        privacy_status: {
+          type: "string",
+          enum: ["private", "unlisted", "public"],
+          description: "For create. Defaults to private.",
+        },
+        video_id: { type: "string", description: "For add." },
+        url: { type: "string", description: "For add — YouTube URL instead of video_id." },
+        query: { type: "string", description: "For add — search and take the top hit." },
+        playlist_item_id: {
+          type: "string",
+          description: "For remove — from a prior load.",
+        },
+        max_results: { type: "number" },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "youtube_bookmark",
+    description:
+      "Magnus shortlist of songs/videos (also likes on YouTube when connected). Actions: add, list, remove, liked.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["add", "list", "remove", "liked"] },
+        video_id: { type: "string" },
+        url: { type: "string" },
+        query: { type: "string", description: "Search and bookmark the top hit." },
+        kind: { type: "string", enum: ["song", "video", "all"] },
+        note: { type: "string", description: "Why he wants this saved." },
+        bookmark_id: { type: "string", description: "For remove." },
+        also_like: {
+          type: "boolean",
+          description: "Also like on YouTube when adding. Defaults to true.",
+        },
+        max_results: { type: "number" },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "youtube_cue",
+    description:
+      "Up-next cue queue for songs/videos. Actions: add, list, next, skip, remove, clear.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["add", "list", "next", "skip", "remove", "clear"],
+        },
+        video_id: { type: "string" },
+        url: { type: "string" },
+        query: { type: "string", description: "Search and cue the top hit." },
+        kind: { type: "string", enum: ["song", "video", "all"] },
+        note: { type: "string" },
+        cue_id: { type: "string", description: "For remove." },
+        max_results: { type: "number" },
+      },
+      required: ["action"],
+    },
+  },
 ];
 
 function textFromMessage(msg: Message): string {
@@ -427,6 +549,58 @@ async function runTool(
           includeStats: input.include_stats === true,
           includeUnscheduled: input.include_unscheduled === true,
           limit: num(input.limit),
+        });
+      case "youtube_search":
+        return await youtubeSearchTool({
+          query: String(input.query ?? ""),
+          kind: str(input.kind),
+          maxResults: num(input.max_results),
+        });
+      case "youtube_recommend":
+        return await youtubeRecommendTool({
+          seedVideoId: str(input.seed_video_id),
+          query: str(input.query),
+          kind: str(input.kind),
+          maxResults: num(input.max_results),
+        });
+      case "youtube_playlist":
+        return await youtubePlaylistTool({
+          action: String(input.action ?? ""),
+          userProfileId: ctx.userProfileId,
+          playlistId: str(input.playlist_id),
+          title: str(input.title),
+          description: str(input.description),
+          videoId: str(input.video_id),
+          url: str(input.url),
+          query: str(input.query),
+          playlistItemId: str(input.playlist_item_id),
+          privacyStatus: str(input.privacy_status),
+          maxResults: num(input.max_results),
+        });
+      case "youtube_bookmark":
+        return await youtubeBookmarkTool({
+          action: String(input.action ?? ""),
+          userProfileId: ctx.userProfileId,
+          videoId: str(input.video_id),
+          url: str(input.url),
+          query: str(input.query),
+          kind: str(input.kind),
+          note: str(input.note),
+          bookmarkId: str(input.bookmark_id),
+          alsoLike: input.also_like === false ? false : undefined,
+          maxResults: num(input.max_results),
+        });
+      case "youtube_cue":
+        return await youtubeCueTool({
+          action: String(input.action ?? ""),
+          userProfileId: ctx.userProfileId,
+          videoId: str(input.video_id),
+          url: str(input.url),
+          query: str(input.query),
+          kind: str(input.kind),
+          note: str(input.note),
+          cueId: str(input.cue_id),
+          maxResults: num(input.max_results),
         });
       default:
         return `Unknown tool: ${name}`;

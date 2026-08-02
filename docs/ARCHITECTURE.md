@@ -8,7 +8,7 @@ used — there are no department commands, no lane picker, and no "handing this 
 specialist" notice.
 
 Companion docs: `magnus.md` (tracker), `docs/TELEGRAM_SETUP.md` (setup and hosting),
-`docs/GOOGLE_CALENDAR.md` (calendar).
+`docs/GOOGLE_CALENDAR.md` (calendar), `docs/YOUTUBE.md` (YouTube / YT Music).
 
 ---
 
@@ -26,7 +26,9 @@ Telegram message
       │
       ├─ GENERAL ──────────────────►  MAGNUS himself (has tools)
       │                                 • Google Calendar: read, create, update, delete
+      │                                 • YouTube / YT Music: search, playlists, bookmarks, cue
       │                                 • log_note: Supabase + Notion
+      │                                 • event log: plan, update, reschedule, list
       │
       ├─ HEALTH ───────────────────►  Health composite (deep: sub-router + external data)
       ├─ WEALTH ───────────────────►  Wealth agent
@@ -62,6 +64,7 @@ when a pillar earns it.
 | **Upstash Redis** | Boot | Rate limit, update dedupe | Nothing runs |
 | **Anthropic** | Boot | Classifier and every agent | Nothing runs |
 | **Google Calendar** | Optional | Magnus (read, create, update, delete) | Magnus says it is not connected |
+| **YouTube / YT Music** | Optional | Magnus (search, playlists, bookmarks, cue, recommend) | Magnus says it is not connected |
 | **Hevy** | Optional | Health (read sessions, write routines) | Coaching from Supabase `workouts` only |
 | **Notion** | Optional | Magnus `log_note`, Morning Brief page | Notes still save to Supabase |
 | **Anthropic `web_search`** | Optional, default on | Meal estimates | Falls through to USDA / CalorieNinjas |
@@ -91,7 +94,8 @@ image) plus journals in `magnus_daily_logs`.
 | Telegram | `tools/telegram.ts`, `telegramWatchdog.ts`, `rateLimit.ts`, `config/telegramRuntime.ts`, `config/telegramCommands.ts` |
 | Presentation | `magnus/telegramIntro.ts`, `telegramFormat.ts`, `telegramChunk.ts` |
 | Routing | `intent.ts`, `agents/orchestratorIntent.ts`, `agents/magnusOrchestrator.ts`, `agents/registry.ts`, `routing/intentToPillarRoute.ts` |
-| Magnus's tools | `agents/tools/calendarTool.ts`, `agents/tools/logNoteTool.ts` |
+| Magnus's tools | `agents/tools/calendarTool.ts`, `agents/tools/logNoteTool.ts`, `agents/tools/eventLogTool.ts`, `agents/tools/youtubeTool.ts` |
+| YouTube | `integrations/youtube/`, `youtube/youtubeStore.ts` |
 | Memory | `agents/memory/{memoryAgent,format,types}.ts` |
 | Persistence | `tools/chatLog.ts`, `tools/dailyLog.ts` |
 | Morning Brief | `jobs/*.ts` — Magnus's optional proactive daily push (`MAGNUS_MORNING_BRIEF_CRON_ENABLED`) |
@@ -103,7 +107,7 @@ image) plus journals in `magnus_daily_logs`.
 
 | Written | Read only |
 |---|---|
-| `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `meal_logs`, `user_health_profile` | `workouts`, `goals`, `memory_summaries`, `daily_scores`, `happiness_reserve`, `patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans` |
+| `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `meal_logs`, `user_health_profile`, `magnus_events`, `magnus_youtube_bookmarks`, `magnus_youtube_cues`, `magnus_youtube_state` | `workouts`, `goals`, `memory_summaries`, `daily_scores`, `happiness_reserve`, `patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans` |
 
 The read-only set feeds memory context and the Morning Brief. Nothing writes to it, so it stays
 empty and shows up as `gaps` on every turn — the largest remaining gap in the design. Either write

@@ -29,6 +29,7 @@ if (profileErr || !profile) {
 const result = await upsertUserIntegrations({
   userProfileId: profile.id,
   googleCalendarRefreshToken: process.env.GOOGLE_CALENDAR_REFRESH_TOKEN?.trim(),
+  googleYoutubeRefreshToken: process.env.GOOGLE_YOUTUBE_REFRESH_TOKEN?.trim(),
   hevyApiKey:
     process.env.HEVY_API_KEY?.trim() || process.env.MAGNUS_HEVY_API_KEY?.trim(),
   notionToken:
@@ -48,7 +49,7 @@ if (!result.ok) {
 
 console.log("Updated user_integrations for:", profile);
 console.log("Stored keys present:");
-console.log("  google_calendar_refresh_token:", Boolean(process.env.GOOGLE_CALENDAR_REFRESH_TOKEN?.trim()));
+console.log("  google_youtube_refresh_token:", Boolean(process.env.GOOGLE_YOUTUBE_REFRESH_TOKEN?.trim()));
 console.log("  hevy_api_key:", Boolean(process.env.HEVY_API_KEY?.trim() || process.env.MAGNUS_HEVY_API_KEY?.trim()));
 console.log("  notion_token:", Boolean(process.env.NOTION_TOKEN?.trim()));
 console.log("  notion_daily_log_parent_page_id:", Boolean(process.env.NOTION_DAILY_LOG_PARENT_PAGE_ID?.trim()));

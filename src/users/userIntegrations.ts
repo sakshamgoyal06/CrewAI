@@ -8,6 +8,7 @@ import { supabase as defaultClient } from "../tools/clients.js";
 
 export type UserIntegrations = {
   googleCalendarRefreshToken?: string;
+  googleYoutubeRefreshToken?: string;
   hevyApiKey?: string;
   notionToken?: string;
   notionDailyLogParentPageId?: string;
@@ -17,7 +18,7 @@ export type UserIntegrations = {
 };
 
 const INTEGRATION_COLUMNS =
-  "google_calendar_refresh_token, hevy_api_key, notion_token, notion_daily_log_parent_page_id, notion_morning_brief_parent_page_id, notion_goals_database_id, notion_daily_checkins_database_id";
+  "google_calendar_refresh_token, google_youtube_refresh_token, hevy_api_key, notion_token, notion_daily_log_parent_page_id, notion_morning_brief_parent_page_id, notion_goals_database_id, notion_daily_checkins_database_id";
 
 function trimOrUndefined(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -26,6 +27,7 @@ function trimOrUndefined(value: unknown): string | undefined {
 function rowToIntegrations(data: Record<string, unknown>): UserIntegrations {
   return {
     googleCalendarRefreshToken: trimOrUndefined(data.google_calendar_refresh_token),
+    googleYoutubeRefreshToken: trimOrUndefined(data.google_youtube_refresh_token),
     hevyApiKey: trimOrUndefined(data.hevy_api_key),
     notionToken: trimOrUndefined(data.notion_token),
     notionDailyLogParentPageId: trimOrUndefined(data.notion_daily_log_parent_page_id),
@@ -64,6 +66,7 @@ export async function upsertUserIntegrations(
     {
       user_profile_id: input.userProfileId,
       google_calendar_refresh_token: input.googleCalendarRefreshToken ?? null,
+      google_youtube_refresh_token: input.googleYoutubeRefreshToken ?? null,
       hevy_api_key: input.hevyApiKey ?? null,
       notion_token: input.notionToken ?? null,
       notion_daily_log_parent_page_id: input.notionDailyLogParentPageId ?? null,

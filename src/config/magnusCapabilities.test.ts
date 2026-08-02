@@ -133,6 +133,26 @@ describe("describeCapabilities — Google Calendar", () => {
   });
 });
 
+describe("describeCapabilities — YouTube", () => {
+  it("is off without platform OAuth or API key", () => {
+    const none = capability(CORE_ENV, "youtube");
+    expect(none.status).toBe("off");
+    expect(none.missing).toContain("GOOGLE_CLIENT_ID");
+  });
+
+  it("is partial with platform OAuth or API key only", () => {
+    const partialKey = capability({ ...CORE_ENV, YOUTUBE_API_KEY: "key" }, "youtube");
+    expect(partialKey.status).toBe("partial");
+
+    const partialOauth = capability(
+      { ...CORE_ENV, GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret" },
+      "youtube",
+    );
+    expect(partialOauth.status).toBe("partial");
+    expect(partialOauth.missing).toContain("user_integrations.google_youtube_refresh_token");
+  });
+});
+
 describe("describeCapabilities — update delivery", () => {
   it("is partial while long polling and ready on a webhook host", () => {
     expect(capability(CORE_ENV, "delivery").status).toBe("partial");

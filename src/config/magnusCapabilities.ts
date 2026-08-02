@@ -67,6 +67,7 @@ function isFalsy(env: EnvBag, name: string): boolean {
 const REDIS_URL_VARS = ["UPSTASH_REDIS_REST_URL", "REDIS_URL"] as const;
 const REDIS_TOKEN_VARS = ["UPSTASH_REDIS_REST_TOKEN", "REDIS_TOKEN"] as const;
 const GOOGLE_CALENDAR_PLATFORM_VARS = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] as const;
+const YOUTUBE_API_KEY_VARS = ["YOUTUBE_API_KEY", "GOOGLE_YOUTUBE_API_KEY"] as const;
 
 function coreRequirements(env: EnvBag, production: boolean): CoreRequirement[] {
   const serviceRole = val(env, "SUPABASE_SERVICE_ROLE_KEY");
@@ -216,6 +217,45 @@ function calendarCapability(env: EnvBag): Capability {
   };
 }
 
+function youtubeCapability(env: EnvBag): Capability {
+  const platformOk = GOOGLE_CALENDAR_PLATFORM_VARS.every((name) => Boolean(val(env, name)));
+  const hasApiKey = Boolean(firstSet(env, YOUTUBE_API_KEY_VARS));
+
+  if (platformOk) {
+    return {
+      id: "youtube",
+      title: "YouTube / YT Music",
+      telegram: "“find a focus playlist”, “cue this song”, “bookmark that video”",
+      status: "partial",
+      detail:
+        "OAuth app on host. Per-user refresh token in user_integrations (google_youtube_refresh_token). Optional YOUTUBE_API_KEY on host for search-only.",
+      missing: ["user_integrations.google_youtube_refresh_token"],
+    };
+  }
+
+  if (hasApiKey) {
+    return {
+      id: "youtube",
+      title: "YouTube / YT Music",
+      telegram: "“search YouTube for …”, “recommend something to watch”",
+      status: "partial",
+      detail:
+        "API key only — search and recommend work; playlists and likes need per-user OAuth in user_integrations.",
+      missing: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+    };
+  }
+
+  return {
+    id: "youtube",
+    title: "YouTube / YT Music",
+    telegram: "“find a song on YouTube”",
+    status: "off",
+    detail:
+      "Set GOOGLE_CLIENT_ID/SECRET on host and per-user tokens via upsert-user-integrations.mts, or YOUTUBE_API_KEY for search-only.",
+    missing: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+  };
+}
+
 function workoutsCapability(): Capability {
   return {
     id: "workouts",
@@ -304,6 +344,7 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
     morningBriefCapability(env),
     notionCapability(),
     calendarCapability(env),
+    youtubeCapability(env),
     proactiveCapability(),
     accessCapability(env),
     deliveryCapability(env),
