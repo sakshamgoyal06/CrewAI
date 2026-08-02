@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   activityKeyFor,
+  inferPillarForEvent,
   normalizePillar,
   normalizeRescheduleKind,
   normalizeStatus,
@@ -42,6 +43,27 @@ describe("normalizeRescheduleKind", () => {
     expect(normalizeRescheduleKind("delayed")).toBe("postponed");
     expect(normalizeRescheduleKind("moved")).toBe("rescheduled");
     expect(normalizeRescheduleKind("done")).toBeNull();
+  });
+});
+
+describe("inferPillarForEvent", () => {
+  it("classifies AI sessions as wisdom even when the model says wealth", () => {
+    expect(
+      inferPillarForEvent({
+        explicitPillar: "wealth",
+        title: "AI session",
+        activity: "ai session",
+      }),
+    ).toBe("wisdom");
+  });
+
+  it("keeps an explicit non-generic pillar when content is ambiguous", () => {
+    expect(
+      inferPillarForEvent({
+        explicitPillar: "wealth",
+        title: "Budget review",
+      }),
+    ).toBe("wealth");
   });
 });
 

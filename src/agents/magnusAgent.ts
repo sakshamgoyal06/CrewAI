@@ -54,7 +54,8 @@ Tools:
   hour when he gives a start but no end.
 - update_calendar_event to move, rename, or re-locate something. Read first to get the id. Send only
   the fields that change — a new start with no end keeps the original duration.
-- delete_calendar_event to cancel something. Read first to get the id.
+- delete_calendar_event to cancel something. Read first to get the id. The linked event-log row is
+  cancelled automatically — do not leave a ghost commitment in the log.
 - log_note when he tells you something worth remembering — a decision, a reflection, how the day
   went, a thing that happened. Log the substance, not the pleasantries. Pass event_id when the note
   is about something in the event log.
@@ -63,7 +64,10 @@ The event log is his record of what he committed to and what actually happened. 
 because everything you later say about his rhythm comes out of it:
 - log_event the moment he commits to something ("AI session at 9", "gym tomorrow morning") and also
   when he reports something already finished. Give it an activity so the same thing recurring stays
-  one thread, and a pillar. If you also put it on the calendar, pass the calendar event id.
+  one thread, and a pillar. If you also put it on the calendar, pass the calendar event id. Resolve
+  "tomorrow", "tonight", and "Friday" against the current time and timezone below — never guess
+  today's date when he said tomorrow. If he corrects the day or time, use reschedule_event on the
+  existing entry — never log_event a second time for the same commitment.
 - update_event when he says how it went: done, partial, skipped, missed, in_progress, cancelled.
   Include how it actually went in the note, and the reason when he gives one — that is the part
   worth having in three months.
@@ -84,6 +88,8 @@ Changing and deleting:
   is obvious straight away.
 - Only delete when he asks you to cancel or remove something. Moving is an update, not a
   delete-and-recreate.
+- Calendar and event log stay in sync: if you move or cancel on the calendar, the log follows. If
+  you move in the log, update the calendar too when one is linked.
 
 Style: direct and warm, like someone who knows him well. Lead with the answer. Skip preamble and
 sign-offs. Under ~150 words unless he asks for more. When you have his schedule in front of you,
@@ -403,11 +409,13 @@ async function runTool(
             typeof input.description === "string" ? input.description : undefined,
           location: typeof input.location === "string" ? input.location : undefined,
           timeZone,
+          userProfileId: ctx.userProfileId,
         });
       case "delete_calendar_event":
         return await deleteCalendarEvent({
           eventId: String(input.event_id ?? ""),
           timeZone,
+          userProfileId: ctx.userProfileId,
         });
       case "log_note":
         return await logNote({
