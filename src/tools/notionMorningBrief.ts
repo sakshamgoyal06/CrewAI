@@ -1,8 +1,9 @@
 /**
  * Optional Notion surface for Morning Brief (create child page under a parent).
- * Requires `NOTION_TOKEN` and `NOTION_MORNING_BRIEF_PARENT_PAGE_ID`.
+ * Requires per-user `notion_token` and `notion_morning_brief_parent_page_id` in `user_integrations`.
  */
 import { logger } from "../logger.js";
+import { loadNotionUserConfig } from "./notionUser.js";
 
 const NOTION_VERSION = "2022-06-28";
 
@@ -29,14 +30,16 @@ function splitBodyToBlocks(body: string): Array<{ object: "block"; type: "paragr
 }
 
 /**
- * Creates a subpage under the configured parent. Returns page id or null if skipped / failed.
+ * Creates a subpage under the user's configured parent. Returns page id or null if skipped / failed.
  */
 export async function createMorningBriefNotionPage(input: {
+  userProfileId: string;
   title: string;
   body: string;
 }): Promise<string | null> {
-  const token = process.env.NOTION_TOKEN?.trim();
-  const parentPage = process.env.NOTION_MORNING_BRIEF_PARENT_PAGE_ID?.trim();
+  const config = await loadNotionUserConfig(input.userProfileId);
+  const parentPage = config?.morningBriefParentPageId;
+  const token = config?.token;
   if (!token || !parentPage) {
     return null;
   }

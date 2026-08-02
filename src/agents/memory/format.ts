@@ -46,6 +46,9 @@ export function formatMemoryBlockForSystem(
   const maxChars = profile?.memoryBlockMaxChars ?? config.memoryBlockMaxChars;
   const parts: string[] = [];
 
+  if (ctx.profile?.displayName?.trim()) {
+    parts.push(`User: ${ctx.profile.displayName.trim().slice(0, 80)}`);
+  }
   if (ctx.profile?.northStarGoal?.trim()) {
     parts.push(`North star: ${ctx.profile.northStarGoal.trim().slice(0, 400)}`);
   }

@@ -66,23 +66,8 @@ function isFalsy(env: EnvBag, name: string): boolean {
 
 const REDIS_URL_VARS = ["UPSTASH_REDIS_REST_URL", "REDIS_URL"] as const;
 const REDIS_TOKEN_VARS = ["UPSTASH_REDIS_REST_TOKEN", "REDIS_TOKEN"] as const;
-const NOTION_TOKEN_VARS = [
-  "NOTION_TOKEN",
-  "NOTION_API_KEY",
-  "NOTION_INTEGRATION_TOKEN",
-] as const;
-const GOOGLE_CALENDAR_VARS = [
-  "GOOGLE_CLIENT_ID",
-  "GOOGLE_CLIENT_SECRET",
-  "GOOGLE_CALENDAR_REFRESH_TOKEN",
-] as const;
-const GOOGLE_YOUTUBE_OAUTH_VARS = [
-  "GOOGLE_CLIENT_ID",
-  "GOOGLE_CLIENT_SECRET",
-  "GOOGLE_YOUTUBE_REFRESH_TOKEN",
-] as const;
-const YOUTUBE_API_KEY_VARS = ["YOUTUBE_API_KEY", "GOOGLE_YOUTUBE_API_KEY"] as const;
-const HEVY_VARS = ["HEVY_API_KEY", "MAGNUS_HEVY_API_KEY"] as const;
+const GOOGLE_CALENDAR_PLATFORM_VARS = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] as const;
+const GOOGLE_YOUTUBE_PLATFORM_VARS = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] as const;
 
 function coreRequirements(env: EnvBag, production: boolean): CoreRequirement[] {
   const serviceRole = val(env, "SUPABASE_SERVICE_ROLE_KEY");
@@ -196,50 +181,28 @@ function morningBriefCapability(env: EnvBag): Capability {
   };
 }
 
-function notionCapability(env: EnvBag): Capability {
-  const token = firstSet(env, NOTION_TOKEN_VARS);
-  const targets = [
-    "NOTION_DAILY_LOG_PARENT_PAGE_ID",
-    "NOTION_GOALS_DATABASE_ID",
-    "NOTION_DAILY_CHECKINS_DATABASE_ID",
-  ].filter((name) => Boolean(val(env, name)));
-
-  if (!token) {
-    return {
-      id: "notion",
-      title: "Notion journal mirror",
-      telegram: "“log …”",
-      status: "off",
-      detail: "No Notion token — notes are still saved to Supabase, just not mirrored.",
-      missing: ["NOTION_TOKEN"],
-    };
-  }
-
+function notionCapability(): Capability {
   return {
     id: "notion",
     title: "Notion journal mirror",
     telegram: "“log …”",
-    status: targets.length > 0 ? "ready" : "partial",
+    status: "partial",
     detail:
-      targets.length > 0
-        ? `Token set; targets configured: ${targets.length}.`
-        : "Token set but no parent page — notes save to Supabase only.",
-    missing:
-      targets.length > 0
-        ? []
-        : ["NOTION_DAILY_LOG_PARENT_PAGE_ID", "NOTION_GOALS_DATABASE_ID"],
+      "Per-user: set notion_token and page ids in Supabase user_integrations (see scripts/upsert-user-integrations.mts). Notes always save to Supabase.",
+    missing: ["user_integrations.notion_token"],
   };
 }
 
 function calendarCapability(env: EnvBag): Capability {
-  const missing = GOOGLE_CALENDAR_VARS.filter((name) => !val(env, name));
+  const missing = GOOGLE_CALENDAR_PLATFORM_VARS.filter((name) => !val(env, name));
   if (missing.length === 0) {
     return {
       id: "calendar",
       title: "Google Calendar",
       telegram: "“what's on today?”, “book gym 7am”",
       status: "ready",
-      detail: "Magnus reads your schedule and creates events.",
+      detail:
+        "OAuth app configured on the host. Each user's refresh token lives in user_integrations.",
       missing: [],
     };
   }
@@ -249,61 +212,44 @@ function calendarCapability(env: EnvBag): Capability {
     telegram: "“what's on today?”",
     status: "off",
     detail:
-      "Not connected — Magnus will say so rather than guess. Run `npm run google-calendar:auth` locally, then set these on the host.",
+      "Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on the host; per-user refresh tokens go in user_integrations.",
     missing,
   };
 }
 
 function youtubeCapability(env: EnvBag): Capability {
-  const oauthMissing = GOOGLE_YOUTUBE_OAUTH_VARS.filter((name) => !val(env, name));
-  const hasApiKey = Boolean(firstSet(env, YOUTUBE_API_KEY_VARS));
-
-  if (oauthMissing.length === 0) {
+  const missing = GOOGLE_YOUTUBE_PLATFORM_VARS.filter((name) => !val(env, name));
+  if (missing.length === 0) {
     return {
       id: "youtube",
       title: "YouTube / YT Music",
       telegram: "“find a focus playlist”, “cue this song”, “bookmark that video”",
       status: "ready",
       detail:
-        "Search, recommend, playlists, bookmarks, and cue queue against your YouTube account.",
-      missing: [],
+        "OAuth app configured on the host. Each user's YouTube refresh token lives in user_integrations (not Railway).",
+      missing: ["user_integrations.youtube_refresh_token"],
     };
   }
-
-  if (hasApiKey) {
-    return {
-      id: "youtube",
-      title: "YouTube / YT Music",
-      telegram: "“search YouTube for …”, “recommend something to watch”",
-      status: "partial",
-      detail:
-        "API key only — search and recommend work; playlists, likes, and account library need OAuth. Run `npm run youtube:auth`.",
-      missing: oauthMissing,
-    };
-  }
-
   return {
     id: "youtube",
     title: "YouTube / YT Music",
     telegram: "“find a song on YouTube”",
     status: "off",
     detail:
-      "Not connected — Magnus will say so. Run `npm run youtube:auth` (and enable YouTube Data API v3), or set YOUTUBE_API_KEY for search-only.",
-    missing: [...oauthMissing],
+      "Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on the host; per-user youtube_refresh_token goes in user_integrations via youtube:auth + upsert-user-integrations.",
+    missing,
   };
 }
 
-function workoutsCapability(env: EnvBag): Capability {
-  const hevy = Boolean(firstSet(env, HEVY_VARS));
+function workoutsCapability(): Capability {
   return {
     id: "workouts",
     title: "Workouts (Hevy)",
     telegram: "“should I train today?”",
-    status: hevy ? "ready" : "partial",
-    detail: hevy
-      ? "Reads recent Hevy sessions and routines; can create routines and log workouts."
-      : "Coaching only — falls back to the Supabase `workouts` table, no Hevy reads or writes.",
-    missing: hevy ? [] : ["HEVY_API_KEY"],
+    status: "partial",
+    detail:
+      "Per-user Hevy API key in user_integrations. Without it, coaching falls back to Supabase workouts only.",
+    missing: ["user_integrations.hevy_api_key"],
   };
 }
 
@@ -344,17 +290,15 @@ function accessCapability(env: EnvBag): Capability {
   };
 }
 
-function proactiveCapability(env: EnvBag): Capability {
-  const chatId = Boolean(val(env, "TELEGRAM_CHAT_ID"));
+function proactiveCapability(): Capability {
   return {
     id: "proactive",
     title: "Proactive messages",
     telegram: "bot-initiated sends",
-    status: chatId ? "ready" : "partial",
-    detail: chatId
-      ? "Default chat set for Morning Brief pushes and sendMessage without an explicit chat."
-      : "Replies work; scheduled pushes need a default chat id.",
-    missing: chatId ? [] : ["TELEGRAM_CHAT_ID"],
+    status: "ready",
+    detail:
+      "Morning Brief and other pushes use each user's telegram_chat_id from user_profile (no TELEGRAM_CHAT_ID env needed).",
+    missing: [],
   };
 }
 
@@ -372,7 +316,7 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
         "Magnus answers everything; health, wealth, happiness and wisdom are routed silently.",
       missing: [],
     },
-    workoutsCapability(env),
+    workoutsCapability(),
     mealCapability(env),
     {
       id: "journal",
@@ -383,10 +327,10 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
       missing: [],
     },
     morningBriefCapability(env),
-    notionCapability(env),
+    notionCapability(),
     calendarCapability(env),
     youtubeCapability(env),
-    proactiveCapability(env),
+    proactiveCapability(),
     accessCapability(env),
     deliveryCapability(env),
   ];

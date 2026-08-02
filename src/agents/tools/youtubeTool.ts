@@ -6,8 +6,8 @@
  */
 import {
   youtubeApiKeyConfigured,
-  youtubeConfigured,
-  youtubeOauthConfigured,
+  youtubeOauthReadyForUser,
+  youtubeReadyForUser,
 } from "../../integrations/youtube/auth.js";
 import {
   addToPlaylist,
@@ -37,10 +37,10 @@ import {
 } from "../../youtube/youtubeStore.js";
 
 const NOT_CONFIGURED =
-  "YouTube is not connected. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_YOUTUBE_REFRESH_TOKEN (see docs/YOUTUBE.md), or at least YOUTUBE_API_KEY for search.";
+  "YouTube is not connected for this account. Run `npm run youtube:auth`, then store the token with TELEGRAM_USER_ID=<id> npx tsx scripts/upsert-user-integrations.mts (see docs/YOUTUBE.md).";
 
 const OAUTH_REQUIRED =
-  "That needs YouTube account access. Run `npm run youtube:auth` and set GOOGLE_YOUTUBE_REFRESH_TOKEN on the host (YOUTUBE_API_KEY alone can only search).";
+  "That needs your YouTube account connected (playlists and likes). Run `npm run youtube:auth` and upsert youtube_refresh_token into user_integrations.";
 
 function formatItem(v: YoutubeVideoBrief, index?: number): string {
   const n = index === undefined ? "-" : `${index + 1}.`;
@@ -84,10 +84,11 @@ async function resolveVideo(input: {
   url?: string;
   query?: string;
   kind?: YoutubeItemKind | "all";
+  userProfileId?: string;
 }): Promise<{ video?: YoutubeVideoBrief; error?: string }> {
   const fromId = input.videoId?.trim() || (input.url ? extractVideoId(input.url) : null);
   if (fromId) {
-    const video = await getVideo(fromId);
+    const video = await getVideo(fromId, input.userProfileId);
     if (!video) {
       return { error: `No YouTube video found for id ${fromId}.` };
     }
@@ -98,6 +99,7 @@ async function resolveVideo(input: {
       query: input.query.trim(),
       kind: input.kind ?? "all",
       maxResults: 1,
+      userProfileId: input.userProfileId,
     });
     if (hits.length === 0) {
       return { error: `Nothing matched "${input.query.trim()}".` };
@@ -115,7 +117,7 @@ async function ensureMagnusPlaylist(userProfileId: string): Promise<
     return { ok: false, error: state.error };
   }
   if (state.data?.magnus_playlist_id) {
-    const existing = await getPlaylist(state.data.magnus_playlist_id);
+    const existing = await getPlaylist(state.data.magnus_playlist_id, userProfileId);
     if (existing) {
       return {
         ok: true,
@@ -134,6 +136,7 @@ async function ensureMagnusPlaylist(userProfileId: string): Promise<
     title,
     description: "Managed by Magnus — songs and videos queued from chat.",
     privacyStatus: "private",
+    userProfileId,
   });
   const saved = await setMagnusPlaylistId({
     userProfileId,
@@ -150,8 +153,9 @@ export async function youtubeSearchTool(input: {
   query: string;
   kind?: string;
   maxResults?: number;
+  userProfileId: string;
 }): Promise<string> {
-  if (!youtubeConfigured()) {
+  if (!(await youtubeReadyForUser(input.userProfileId))) {
     return NOT_CONFIGURED;
   }
   const query = input.query.trim();
@@ -163,6 +167,7 @@ export async function youtubeSearchTool(input: {
     query,
     kind,
     maxResults: input.maxResults,
+    userProfileId: input.userProfileId,
   });
   if (items.length === 0) {
     return `No results for "${query}".`;
@@ -175,8 +180,9 @@ export async function youtubeRecommendTool(input: {
   query?: string;
   kind?: string;
   maxResults?: number;
+  userProfileId: string;
 }): Promise<string> {
-  if (!youtubeConfigured()) {
+  if (!(await youtubeReadyForUser(input.userProfileId))) {
     return NOT_CONFIGURED;
   }
   const kind = parseKind(input.kind) ?? "all";
@@ -185,6 +191,7 @@ export async function youtubeRecommendTool(input: {
     query: input.query,
     kind,
     maxResults: input.maxResults,
+    userProfileId: input.userProfileId,
   });
   if (items.length === 0) {
     return "No recommendations came back — try a different seed or mood.";
@@ -210,10 +217,10 @@ export async function youtubePlaylistTool(input: {
   privacyStatus?: string;
   maxResults?: number;
 }): Promise<string> {
-  if (!youtubeConfigured()) {
+  if (!(await youtubeReadyForUser(input.userProfileId))) {
     return NOT_CONFIGURED;
   }
-  if (!youtubeOauthConfigured()) {
+  if (!(await youtubeOauthReadyForUser(input.userProfileId))) {
     return OAUTH_REQUIRED;
   }
 
@@ -221,7 +228,10 @@ export async function youtubePlaylistTool(input: {
 
   switch (action) {
     case "list": {
-      const playlists = await listPlaylists({ maxResults: input.maxResults });
+      const playlists = await listPlaylists({
+        maxResults: input.maxResults,
+        userProfileId: input.userProfileId,
+      });
       if (playlists.length === 0) {
         return "No playlists on this YouTube account yet.";
       }
@@ -252,10 +262,11 @@ export async function youtubePlaylistTool(input: {
         }
         playlistId = ensured.playlistId;
       }
-      const meta = await getPlaylist(playlistId);
+      const meta = await getPlaylist(playlistId, input.userProfileId);
       const items = await loadPlaylistItems({
         playlistId,
         maxResults: input.maxResults,
+        userProfileId: input.userProfileId,
       });
       const title = meta?.title ?? playlistId;
       if (items.length === 0) {
@@ -281,6 +292,7 @@ export async function youtubePlaylistTool(input: {
         title,
         description: input.description,
         privacyStatus: privacy,
+        userProfileId: input.userProfileId,
       });
       return `Created playlist "${created.title}" (${created.privacyStatus}) ${created.url} [playlist_id: ${created.playlistId}].`;
     }
@@ -297,6 +309,7 @@ export async function youtubePlaylistTool(input: {
         videoId: input.videoId,
         url: input.url,
         query: input.query,
+        userProfileId: input.userProfileId,
       });
       if (resolved.error || !resolved.video) {
         return resolved.error ?? "Could not resolve video.";
@@ -304,6 +317,7 @@ export async function youtubePlaylistTool(input: {
       const added = await addToPlaylist({
         playlistId,
         videoId: resolved.video.videoId,
+        userProfileId: input.userProfileId,
       });
       return `Added "${added.title}" to playlist [playlist_id: ${playlistId}] [video_id: ${added.videoId}].`;
     }
@@ -311,7 +325,10 @@ export async function youtubePlaylistTool(input: {
       if (!input.playlistItemId?.trim()) {
         return "Removing needs playlist_item_id from a prior load.";
       }
-      await removeFromPlaylist({ playlistItemId: input.playlistItemId.trim() });
+      await removeFromPlaylist({
+        playlistItemId: input.playlistItemId.trim(),
+        userProfileId: input.userProfileId,
+      });
       return "Removed that item from the playlist.";
     }
     default:
@@ -331,7 +348,7 @@ export async function youtubeBookmarkTool(input: {
   alsoLike?: boolean;
   maxResults?: number;
 }): Promise<string> {
-  if (!youtubeConfigured()) {
+  if (!(await youtubeReadyForUser(input.userProfileId))) {
     return NOT_CONFIGURED;
   }
 
@@ -379,6 +396,7 @@ export async function youtubeBookmarkTool(input: {
       url: input.url,
       query: input.query,
       kind: parseKind(input.kind) ?? "all",
+      userProfileId: input.userProfileId,
     });
     if (resolved.error || !resolved.video) {
       return resolved.error ?? "Could not resolve video.";
@@ -399,9 +417,13 @@ export async function youtubeBookmarkTool(input: {
     }
 
     let likeNote = "";
-    if (input.alsoLike !== false && youtubeOauthConfigured()) {
+    if (input.alsoLike !== false && (await youtubeOauthReadyForUser(input.userProfileId))) {
       try {
-        await rateVideo({ videoId: v.videoId, rating: "like" });
+        await rateVideo({
+          videoId: v.videoId,
+          rating: "like",
+          userProfileId: input.userProfileId,
+        });
         likeNote = " Also liked on YouTube.";
       } catch {
         likeNote = " (Could not like on YouTube — bookmark saved in Magnus anyway.)";
@@ -412,10 +434,13 @@ export async function youtubeBookmarkTool(input: {
   }
 
   if (action === "liked") {
-    if (!youtubeOauthConfigured()) {
+    if (!(await youtubeOauthReadyForUser(input.userProfileId))) {
       return OAUTH_REQUIRED;
     }
-    const liked = await listLikedVideos({ maxResults: input.maxResults ?? 15 });
+    const liked = await listLikedVideos({
+      maxResults: input.maxResults ?? 15,
+      userProfileId: input.userProfileId,
+    });
     if (liked.length === 0) {
       return "No liked videos on this YouTube account (or the LL playlist is empty).";
     }
@@ -436,7 +461,7 @@ export async function youtubeCueTool(input: {
   cueId?: string;
   maxResults?: number;
 }): Promise<string> {
-  if (!youtubeConfigured()) {
+  if (!(await youtubeReadyForUser(input.userProfileId))) {
     return NOT_CONFIGURED;
   }
 
@@ -467,6 +492,7 @@ export async function youtubeCueTool(input: {
       url: input.url,
       query: input.query,
       kind: parseKind(input.kind) ?? "all",
+      userProfileId: input.userProfileId,
     });
     if (resolved.error || !resolved.video) {
       return resolved.error ?? "Could not resolve video.";

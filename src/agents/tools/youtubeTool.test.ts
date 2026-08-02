@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const configured = vi.hoisted(() => ({
-  youtubeConfigured: true,
-  youtubeOauthConfigured: true,
+  youtubeReadyForUser: true,
+  youtubeOauthReadyForUser: true,
   youtubeApiKeyConfigured: false,
 }));
 
 vi.mock("../../integrations/youtube/auth.js", () => ({
-  youtubeConfigured: () => configured.youtubeConfigured,
-  youtubeOauthConfigured: () => configured.youtubeOauthConfigured,
+  youtubeReadyForUser: async () => configured.youtubeReadyForUser,
+  youtubeOauthReadyForUser: async () => configured.youtubeOauthReadyForUser,
   youtubeApiKeyConfigured: () => configured.youtubeApiKeyConfigured,
 }));
 
@@ -83,24 +83,24 @@ const sampleVideo = {
 describe("youtube tools — configuration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    configured.youtubeConfigured = true;
-    configured.youtubeOauthConfigured = true;
+    configured.youtubeReadyForUser = true;
+    configured.youtubeOauthReadyForUser = true;
   });
 
-  it("explains when YouTube is not connected", async () => {
-    configured.youtubeConfigured = false;
-    const out = await youtubeSearchTool({ query: "lofi" });
-    expect(out).toContain("YouTube is not connected");
+  it("explains when YouTube is not connected for the user", async () => {
+    configured.youtubeReadyForUser = false;
+    const out = await youtubeSearchTool({ query: "lofi", userProfileId: "user-1" });
+    expect(out).toContain("not connected");
     expect(searchVideos).not.toHaveBeenCalled();
   });
 
-  it("requires OAuth for playlists when only an API key would exist", async () => {
-    configured.youtubeOauthConfigured = false;
+  it("requires OAuth for playlists when the user has no YouTube token", async () => {
+    configured.youtubeOauthReadyForUser = false;
     const out = await youtubePlaylistTool({
       action: "list",
       userProfileId: "user-1",
     });
-    expect(out).toContain("account access");
+    expect(out).toMatch(/account connected|YouTube account/i);
     expect(listPlaylists).not.toHaveBeenCalled();
   });
 });
@@ -108,13 +108,17 @@ describe("youtube tools — configuration", () => {
 describe("youtube_search / recommend", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    configured.youtubeConfigured = true;
-    configured.youtubeOauthConfigured = true;
+    configured.youtubeReadyForUser = true;
+    configured.youtubeOauthReadyForUser = true;
   });
 
   it("formats search hits with links and ids", async () => {
     searchVideos.mockResolvedValue([sampleVideo]);
-    const out = await youtubeSearchTool({ query: "rick astley", kind: "song" });
+    const out = await youtubeSearchTool({
+      query: "rick astley",
+      kind: "song",
+      userProfileId: "user-1",
+    });
     expect(searchVideos).toHaveBeenCalledWith(
       expect.objectContaining({ query: "rick astley", kind: "song" }),
     );
@@ -128,7 +132,10 @@ describe("youtube_search / recommend", () => {
       seed: sampleVideo,
       items: [{ ...sampleVideo, videoId: "abcdef12345", title: "Together Forever" }],
     });
-    const out = await youtubeRecommendTool({ seedVideoId: "dQw4w9WgXcQ" });
+    const out = await youtubeRecommendTool({
+      seedVideoId: "dQw4w9WgXcQ",
+      userProfileId: "user-1",
+    });
     expect(out).toContain('Because you liked "Never Gonna Give You Up"');
     expect(out).toContain("Together Forever");
   });
@@ -137,8 +144,8 @@ describe("youtube_search / recommend", () => {
 describe("youtube_playlist", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    configured.youtubeConfigured = true;
-    configured.youtubeOauthConfigured = true;
+    configured.youtubeReadyForUser = true;
+    configured.youtubeOauthReadyForUser = true;
   });
 
   it("creates the Magnus playlist when missing", async () => {
@@ -167,8 +174,8 @@ describe("youtube_playlist", () => {
 describe("youtube_bookmark / cue", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    configured.youtubeConfigured = true;
-    configured.youtubeOauthConfigured = true;
+    configured.youtubeReadyForUser = true;
+    configured.youtubeOauthReadyForUser = true;
   });
 
   it("bookmarks by url and likes on YouTube", async () => {
@@ -184,7 +191,11 @@ describe("youtube_bookmark / cue", () => {
     expect(upsertBookmark).toHaveBeenCalledWith(
       expect.objectContaining({ videoId: "dQw4w9WgXcQ", userProfileId: "user-1" }),
     );
-    expect(rateVideo).toHaveBeenCalledWith({ videoId: "dQw4w9WgXcQ", rating: "like" });
+    expect(rateVideo).toHaveBeenCalledWith({
+      videoId: "dQw4w9WgXcQ",
+      rating: "like",
+      userProfileId: "user-1",
+    });
     expect(out).toContain("Bookmarked");
   });
 

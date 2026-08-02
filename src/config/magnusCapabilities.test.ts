@@ -80,20 +80,16 @@ describe("describeCapabilities — meals", () => {
 });
 
 describe("describeCapabilities — optional lanes", () => {
-  it("marks Hevy partial without a key and ready with one", () => {
+  it("marks Hevy as per-user in Supabase", () => {
     expect(capability(CORE_ENV, "workouts").status).toBe("partial");
-    expect(capability({ ...CORE_ENV, HEVY_API_KEY: "k" }, "workouts").status).toBe("ready");
+    expect(capability({ ...CORE_ENV, HEVY_API_KEY: "k" }, "workouts").status).toBe("partial");
+    expect(capability(CORE_ENV, "workouts").missing).toContain("user_integrations.hevy_api_key");
   });
 
-  it("treats a Notion token without targets as partial", () => {
-    expect(capability(CORE_ENV, "notion").status).toBe("off");
+  it("marks Notion as per-user in Supabase", () => {
+    expect(capability(CORE_ENV, "notion").status).toBe("partial");
     expect(capability({ ...CORE_ENV, NOTION_TOKEN: "t" }, "notion").status).toBe("partial");
-    expect(
-      capability(
-        { ...CORE_ENV, NOTION_TOKEN: "t", NOTION_GOALS_DATABASE_ID: "db" },
-        "notion",
-      ).status,
-    ).toBe("ready");
+    expect(capability(CORE_ENV, "notion").missing).toContain("user_integrations.notion_token");
   });
 
   it("reports the Morning Brief cron separately from the on-demand command", () => {
@@ -119,28 +115,16 @@ describe("describeCapabilities — optional lanes", () => {
 });
 
 describe("describeCapabilities — Google Calendar", () => {
-  it("is off until all three OAuth values are present, and names the missing ones", () => {
+  it("is off until platform OAuth app ids are present", () => {
     const none = capability(CORE_ENV, "calendar");
     expect(none.status).toBe("off");
-    expect(none.missing).toEqual([
-      "GOOGLE_CLIENT_ID",
-      "GOOGLE_CLIENT_SECRET",
-      "GOOGLE_CALENDAR_REFRESH_TOKEN",
-    ]);
-
-    const partial = capability(
-      { ...CORE_ENV, GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret" },
-      "calendar",
-    );
-    expect(partial.status).toBe("off");
-    expect(partial.missing).toEqual(["GOOGLE_CALENDAR_REFRESH_TOKEN"]);
+    expect(none.missing).toEqual(["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]);
 
     const ready = capability(
       {
         ...CORE_ENV,
         GOOGLE_CLIENT_ID: "id",
         GOOGLE_CLIENT_SECRET: "secret",
-        GOOGLE_CALENDAR_REFRESH_TOKEN: "refresh",
       },
       "calendar",
     );
@@ -150,32 +134,24 @@ describe("describeCapabilities — Google Calendar", () => {
 });
 
 describe("describeCapabilities — YouTube", () => {
-  it("is off until OAuth or an API key is present", () => {
+  it("is off until platform OAuth app ids are present", () => {
     const none = capability(CORE_ENV, "youtube");
     expect(none.status).toBe("off");
-    expect(none.missing).toEqual([
-      "GOOGLE_CLIENT_ID",
-      "GOOGLE_CLIENT_SECRET",
-      "GOOGLE_YOUTUBE_REFRESH_TOKEN",
-    ]);
+    expect(none.missing).toEqual(["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]);
   });
 
-  it("is partial with API key only, ready with full OAuth", () => {
-    const partial = capability({ ...CORE_ENV, YOUTUBE_API_KEY: "key" }, "youtube");
-    expect(partial.status).toBe("partial");
-    expect(partial.missing).toContain("GOOGLE_YOUTUBE_REFRESH_TOKEN");
-
+  it("is ready with platform OAuth and points at user_integrations for the token", () => {
     const ready = capability(
       {
         ...CORE_ENV,
         GOOGLE_CLIENT_ID: "id",
         GOOGLE_CLIENT_SECRET: "secret",
-        GOOGLE_YOUTUBE_REFRESH_TOKEN: "yt-refresh",
       },
       "youtube",
     );
     expect(ready.status).toBe("ready");
-    expect(ready.missing).toEqual([]);
+    expect(ready.missing).toContain("user_integrations.youtube_refresh_token");
+    expect(ready.detail).toMatch(/user_integrations/i);
   });
 });
 
@@ -200,6 +176,6 @@ describe("capabilityLogFields", () => {
     const fields = capabilityLogFields(describeCapabilities(CORE_ENV));
     expect(fields.coreOk).toBe(true);
     expect(fields.ready).toContain("chat");
-    expect(fields.off).toContain("notion");
+    expect(fields.partial).toContain("notion");
   });
 });

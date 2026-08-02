@@ -119,7 +119,7 @@ describe("routeHealthMessage", () => {
     );
     expect(createMock).toHaveBeenCalledTimes(1);
     expect(createMock.mock.calls[0][0]).toMatchObject({
-      system: FITNESS_SYSTEM,
+      system: expect.stringContaining(FITNESS_SYSTEM.slice(0, 40)),
     });
   });
 
@@ -141,7 +141,7 @@ describe("routeHealthMessage", () => {
     await routeHealthMessage(ctx("HRV is low and I'm wiped — recovery tips?"));
     expect(createMock).toHaveBeenCalledTimes(2);
     expect(createMock.mock.calls[1][0]).toMatchObject({
-      system: ENERGY_SYSTEM,
+      system: expect.stringContaining(ENERGY_SYSTEM.slice(0, 40)),
     });
   });
 

@@ -163,6 +163,20 @@ export async function logEvent(input: LogEventInput): Promise<string> {
   });
 
   if (!saved.ok) {
+    const correction = saved.error.match(/^correction_use_reschedule:(.+)$/);
+    if (correction) {
+      const existing = await getEvent({
+        userProfileId: input.userProfileId,
+        eventId: correction[1],
+      });
+      const when = existing.ok && existing.data
+        ? describeEvent(existing.data, timeZone)
+        : "the open entry you just logged";
+      return (
+        `You already logged this commitment as ${when}. ` +
+        `Do not log it again — use reschedule_event on id ${correction[1]} to move it to the new time.`
+      );
+    }
     return `Could not save that to the event log: ${saved.error}.`;
   }
   if (saved.data.duplicate) {

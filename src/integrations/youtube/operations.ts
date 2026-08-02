@@ -10,7 +10,7 @@ import type { youtube_v3 } from "googleapis";
 import {
   getApiKeyYoutubeClient,
   getAuthenticatedYoutubeClient,
-  youtubeOauthConfigured,
+  youtubeOauthReadyForUser,
 } from "./auth.js";
 import { YOUTUBE_MUSIC_CATEGORY_ID } from "./paths.js";
 import {
@@ -26,11 +26,12 @@ import {
 } from "./types.js";
 
 async function youtubeClient(
+  userProfileId?: string,
   preferOauth = false,
 ): Promise<youtube_v3.Youtube> {
-  if (preferOauth || youtubeOauthConfigured()) {
-    if (youtubeOauthConfigured()) {
-      const { youtube } = await getAuthenticatedYoutubeClient();
+  if (preferOauth || (await youtubeOauthReadyForUser(userProfileId))) {
+    if (await youtubeOauthReadyForUser(userProfileId)) {
+      const { youtube } = await getAuthenticatedYoutubeClient(userProfileId);
       return youtube;
     }
   }
@@ -72,12 +73,15 @@ function briefFromVideo(v: youtube_v3.Schema$Video): YoutubeVideoBrief | null {
   };
 }
 
-export async function getVideos(videoIds: string[]): Promise<YoutubeVideoBrief[]> {
+export async function getVideos(
+  videoIds: string[],
+  userProfileId?: string,
+): Promise<YoutubeVideoBrief[]> {
   const ids = [...new Set(videoIds.map((id) => id.trim()).filter(Boolean))];
   if (ids.length === 0) {
     return [];
   }
-  const youtube = await youtubeClient();
+  const youtube = await youtubeClient(userProfileId);
   const res = await youtube.videos.list({
     part: ["snippet", "contentDetails", "statistics"],
     id: ids,
@@ -88,8 +92,11 @@ export async function getVideos(videoIds: string[]): Promise<YoutubeVideoBrief[]
     .filter((v): v is YoutubeVideoBrief => v !== null);
 }
 
-export async function getVideo(videoId: string): Promise<YoutubeVideoBrief | null> {
-  const [v] = await getVideos([videoId]);
+export async function getVideo(
+  videoId: string,
+  userProfileId?: string,
+): Promise<YoutubeVideoBrief | null> {
+  const [v] = await getVideos([videoId], userProfileId);
   return v ?? null;
 }
 
@@ -97,13 +104,14 @@ export async function searchVideos(input: {
   query: string;
   kind?: YoutubeItemKind | "all";
   maxResults?: number;
+  userProfileId?: string;
 }): Promise<YoutubeVideoBrief[]> {
   const q = input.query.trim();
   if (!q) {
     return [];
   }
   const maxResults = Math.min(Math.max(input.maxResults ?? 8, 1), 25);
-  const youtube = await youtubeClient();
+  const youtube = await youtubeClient(input.userProfileId);
   const kind = input.kind ?? "all";
 
   const res = await youtube.search.list({
@@ -120,7 +128,7 @@ export async function searchVideos(input: {
     .map((item) => item.id?.videoId)
     .filter((id): id is string => Boolean(id));
 
-  const videos = await getVideos(ids);
+  const videos = await getVideos(ids, input.userProfileId);
   if (kind === "video") {
     return videos.filter((v) => v.kind === "video");
   }
@@ -140,6 +148,7 @@ export async function recommendVideos(input: {
   query?: string;
   kind?: YoutubeItemKind | "all";
   maxResults?: number;
+  userProfileId?: string;
 }): Promise<{ seed?: YoutubeVideoBrief; items: YoutubeVideoBrief[] }> {
   const maxResults = Math.min(Math.max(input.maxResults ?? 8, 1), 15);
   const kind = input.kind ?? "all";
@@ -148,7 +157,7 @@ export async function recommendVideos(input: {
   let query = input.query?.trim() ?? "";
 
   if (input.seedVideoId?.trim()) {
-    seed = (await getVideo(input.seedVideoId.trim())) ?? undefined;
+    seed = (await getVideo(input.seedVideoId.trim(), input.userProfileId)) ?? undefined;
     if (seed) {
       // Strip common trailer/noise suffixes; keep artist + title signal.
       const cleaned = seed.title
@@ -161,7 +170,7 @@ export async function recommendVideos(input: {
   }
 
   if (!query) {
-    const youtube = await youtubeClient();
+    const youtube = await youtubeClient(input.userProfileId);
     const chart = await youtube.videos.list({
       part: ["snippet", "contentDetails", "statistics"],
       chart: "mostPopular",
@@ -175,7 +184,12 @@ export async function recommendVideos(input: {
     return { items };
   }
 
-  const items = await searchVideos({ query, kind, maxResults });
+  const items = await searchVideos({
+    query,
+    kind,
+    maxResults,
+    userProfileId: input.userProfileId,
+  });
   const filtered = seed
     ? items.filter((v) => v.videoId !== seed.videoId)
     : items;
@@ -184,8 +198,9 @@ export async function recommendVideos(input: {
 
 export async function listPlaylists(input?: {
   maxResults?: number;
+  userProfileId?: string;
 }): Promise<YoutubePlaylistBrief[]> {
-  const youtube = await youtubeClient(true);
+  const youtube = await youtubeClient(input?.userProfileId, true);
   const maxResults = Math.min(Math.max(input?.maxResults ?? 25, 1), 50);
   const res = await youtube.playlists.list({
     part: ["snippet", "contentDetails", "status"],
@@ -204,8 +219,11 @@ export async function listPlaylists(input?: {
     }));
 }
 
-export async function getPlaylist(playlistId: string): Promise<YoutubePlaylistBrief | null> {
-  const youtube = await youtubeClient(true);
+export async function getPlaylist(
+  playlistId: string,
+  userProfileId?: string,
+): Promise<YoutubePlaylistBrief | null> {
+  const youtube = await youtubeClient(userProfileId, true);
   const res = await youtube.playlists.list({
     part: ["snippet", "contentDetails", "status"],
     id: [playlistId],
@@ -229,8 +247,9 @@ export async function createPlaylist(input: {
   title: string;
   description?: string;
   privacyStatus?: "private" | "public" | "unlisted";
+  userProfileId?: string;
 }): Promise<YoutubePlaylistBrief> {
-  const youtube = await youtubeClient(true);
+  const youtube = await youtubeClient(input.userProfileId, true);
   const title = input.title.trim();
   if (!title) {
     throw new Error("A playlist needs a title.");
@@ -264,8 +283,9 @@ export async function createPlaylist(input: {
 export async function loadPlaylistItems(input: {
   playlistId: string;
   maxResults?: number;
+  userProfileId?: string;
 }): Promise<YoutubePlaylistItemBrief[]> {
-  const youtube = await youtubeClient(true);
+  const youtube = await youtubeClient(input.userProfileId, true);
   const maxResults = Math.min(Math.max(input.maxResults ?? 50, 1), 50);
   const res = await youtube.playlistItems.list({
     part: ["snippet", "contentDetails"],
@@ -277,7 +297,7 @@ export async function loadPlaylistItems(input: {
   const videoIds = items
     .map((i) => i.contentDetails?.videoId ?? i.snippet?.resourceId?.videoId)
     .filter((id): id is string => Boolean(id));
-  const details = await getVideos(videoIds);
+  const details = await getVideos(videoIds, input.userProfileId);
   const byId = new Map(details.map((v) => [v.videoId, v]));
 
   return items
@@ -311,8 +331,9 @@ export async function loadPlaylistItems(input: {
 export async function addToPlaylist(input: {
   playlistId: string;
   videoId: string;
+  userProfileId?: string;
 }): Promise<YoutubePlaylistItemBrief> {
-  const youtube = await youtubeClient(true);
+  const youtube = await youtubeClient(input.userProfileId, true);
   const videoId = input.videoId.trim();
   const playlistId = input.playlistId.trim();
   if (!videoId || !playlistId) {
@@ -332,7 +353,7 @@ export async function addToPlaylist(input: {
     },
   });
 
-  const video = await getVideo(videoId);
+  const video = await getVideo(videoId, input.userProfileId);
   const kind = video?.kind ?? "video";
   return {
     playlistItemId: res.data.id ?? "",
@@ -347,8 +368,9 @@ export async function addToPlaylist(input: {
 
 export async function removeFromPlaylist(input: {
   playlistItemId: string;
+  userProfileId?: string;
 }): Promise<void> {
-  const youtube = await youtubeClient(true);
+  const youtube = await youtubeClient(input.userProfileId, true);
   const id = input.playlistItemId.trim();
   if (!id) {
     throw new Error("Removing from a playlist needs the playlist item id.");
@@ -360,8 +382,9 @@ export async function removeFromPlaylist(input: {
 export async function rateVideo(input: {
   videoId: string;
   rating: "like" | "dislike" | "none";
+  userProfileId?: string;
 }): Promise<void> {
-  const youtube = await youtubeClient(true);
+  const youtube = await youtubeClient(input.userProfileId, true);
   await youtube.videos.rate({
     id: input.videoId.trim(),
     rating: input.rating,
@@ -370,11 +393,13 @@ export async function rateVideo(input: {
 
 export async function listLikedVideos(input?: {
   maxResults?: number;
+  userProfileId?: string;
 }): Promise<YoutubeVideoBrief[]> {
   // Liked videos live in the special playlist "LL".
   const items = await loadPlaylistItems({
     playlistId: "LL",
     maxResults: input?.maxResults ?? 20,
+    userProfileId: input?.userProfileId,
   });
   return items.map((i) => ({
     videoId: i.videoId,

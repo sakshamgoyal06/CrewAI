@@ -41,10 +41,16 @@ function report(refreshToken?: string): void {
 
   const { clientId, clientSecret } = resolvedClientCredentials();
 
-  console.log("\nSet these on your host (Railway → Variables):\n");
+  console.log("\nPlatform (Railway) — shared OAuth app only:\n");
   console.log(`GOOGLE_CLIENT_ID=${clientId}`);
   console.log(`GOOGLE_CLIENT_SECRET=${clientSecret}`);
+  console.log(
+    "\nPer-user token — do NOT put this on Railway. Store it in Supabase user_integrations:\n",
+  );
+  console.log(`# in local .env (for the upsert script only)`);
   console.log(`GOOGLE_YOUTUBE_REFRESH_TOKEN=${refreshToken}`);
+  console.log(`TELEGRAM_USER_ID=<your Telegram numeric user id>`);
+  console.log(`npx tsx scripts/upsert-user-integrations.mts`);
   console.log(
     "\nIf the OAuth app is still in Testing, publish it (Google Cloud → Audience → Publish app)\n" +
       "or this refresh token stops working after 7 days.\n",

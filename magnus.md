@@ -15,7 +15,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 
 ## What Magnus is
 
-A single-user Telegram bot. The user writes plain language; Magnus answers in one voice. Each turn
+A single-user Telegram bot that supports **multiple users** when provisioned per `user_profile`. The user writes plain language; Magnus answers in one voice. Each turn
 is silently classified to one of five intents — four pillars plus Magnus's own work — and a
 specialist may write the answer, but the user is never told and cannot address one directly.
 
@@ -78,11 +78,12 @@ shell or `.env`.
 | `src/agents/magnusOrchestrator.ts` | Health onboarding gate → classify → memory → pillar specialist or Magnus |
 | `src/agents/orchestratorIntent.ts` | The five-way classifier, plus the one coercion (explicit meal log → HEALTH) |
 | `src/agents/magnusAgent.ts` | Magnus himself: calendar, YouTube, event log, journaling, reminders — tool loop |
-| `src/agents/tools/calendarTool.ts` | Google Calendar read / create / update / delete as text for the model, in the user's timezone; reads carry event ids so edits cannot act on a guess |
-| `src/agents/tools/youtubeTool.ts` | YouTube / YT Music: search, recommend, playlists, bookmarks, cue queue |
+| `src/agents/tools/calendarTool.ts` | Google Calendar; per-user tokens; delete/update sync linked `magnus_events` rows |
+| `src/agents/tools/youtubeTool.ts` | YouTube / YT Music: search, recommend, playlists, bookmarks, cue (per-user token) |
 | `src/agents/tools/eventLogTool.ts` | Event log tools: plan, update, reschedule, list (`magnus_events`) |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
-| `src/events/` | Event log domain: timezone helpers, Supabase store, formatting |
+| `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
+| `src/events/` | Event log domain: timezone helpers, Supabase store, calendar sync, formatting |
 | `src/youtube/` | Bookmarks, cue queue, and Magnus playlist state in Supabase |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
@@ -108,8 +109,7 @@ shell or `.env`.
 
 ## Behaviour
 
-1. **Identity** — Each Telegram user is keyed by `ctx.from.id`, stored in
-   `user_profile.telegram_chat_id` (legacy column name).
+1. **Identity** — Each Telegram user is keyed by `ctx.from.id` → `user_profile.telegram_chat_id` → canonical `user_profile.id`. Personalised fields: `display_name`, `timezone`, `north_star_goal`, `user_tier`, `access_flags`. New users get neutral defaults (`timezone: UTC`); owner seeding via `scripts/provision-owner-user.mts`.
 2. **Access** — `allowlisted`, `user_tier`, `access_flags` on `user_profile`. Not allowlisted means
    a fixed refusal and no chat rows.
 3. **Rate limit** — Redis fixed 60s window per user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, 0 disables).
@@ -123,20 +123,24 @@ shell or `.env`.
 8. **Replies** — One reply per turn, chunked only for Telegram's size limit, sent as HTML.
 9. **Event log** — Magnus tools `log_event`, `update_event`, `reschedule_event`, `list_events` write
    to `magnus_events`. Moving a commitment closes the old row and opens a linked replacement (never
-   edits time in place). Memory and the Morning Brief read commitments around today plus per-activity
-   adherence from `magnus_event_activity_stats`.
-10. **YouTube** — Magnus tools `youtube_search`, `youtube_recommend`, `youtube_playlist`,
-    `youtube_bookmark`, `youtube_cue`. Bookmarks and cue live in Supabase; playlists use the YouTube
-    Data API (no official YT Music API — song links open on music.youtube.com).
+   edits time in place). A second `log_event` for the same activity with a different time within two
+   hours is rejected — Magnus must call `reschedule_event` instead. Calendar delete/update cancels or
+   reschedules the linked event-log row automatically. Memory and the Morning Brief read commitments
+   around today plus per-activity adherence from `magnus_event_activity_stats`.
+10. **YouTube** — Per-user connection (`user_integrations.youtube_refresh_token`). Magnus tools
+    `youtube_search`, `youtube_recommend`, `youtube_playlist`, `youtube_bookmark`, `youtube_cue`.
+    Bookmarks and cue live in Supabase; playlists use YouTube Data API (no official YT Music API).
 
 ---
 
 ## Database
 
 **Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`,
-`user_health_profile`, `magnus_youtube_bookmarks`, `magnus_youtube_cues`, `magnus_youtube_state`.
+`user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries` (Phases 2–3:
+rolling summary + semantic facts), `magnus_youtube_bookmarks`, `magnus_youtube_cues`,
+`magnus_youtube_state`.
 
-**Read only:** `workouts`, `goals`, `memory_summaries`, `daily_scores`, `happiness_reserve`,
+**Read only:** `workouts`, `goals`, `daily_scores`, `happiness_reserve`,
 `patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans`,
 `magnus_events_open`, `magnus_event_activity_stats`.
 
@@ -144,7 +148,7 @@ Public tables use RLS with a `service_role_only` policy; the service role key by
 Supabase `sb_secret_…` key format works as service role.
 
 `supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`,
-`magnus_events`, and `magnus_youtube_*` — older schema was applied directly to the project before
+`magnus_events`, `memory_summaries`, and `magnus_youtube_*` — older schema was applied directly to the project before
 those migrations existed.
 
 ---
@@ -153,16 +157,14 @@ those migrations existed.
 
 See `.env.example`, which is grouped by purpose. Highlights beyond the six required values:
 
-- **`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_CALENDAR_REFRESH_TOKEN`** — calendar on a
-  host with no browser or disk. See `docs/GOOGLE_CALENDAR.md`.
-- **`GOOGLE_YOUTUBE_REFRESH_TOKEN`** — YouTube / YT Music (same client id/secret; separate token).
-  Optional `YOUTUBE_API_KEY` for search-only. See `docs/YOUTUBE.md`.
-- **`HEVY_API_KEY`** — real workout data for the Health pillar.
-- **`NOTION_TOKEN` + `NOTION_DAILY_LOG_PARENT_PAGE_ID`** — mirror journal notes to Notion.
-- **`USDA_FDC_API_KEY`, `CALORIENINJAS_API_KEY`** — meal macros.
+- **`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`** — shared OAuth app on the host (Railway).
+  Per-user refresh tokens live in `user_integrations`.
+- **Per-user keys** (Hevy, Notion, calendar + YouTube refresh tokens) — in Supabase
+  `user_integrations`. Seed with `npx tsx scripts/upsert-user-integrations.mts` (local `.env`),
+  not Railway. See `docs/YOUTUBE.md` / `docs/GOOGLE_CALENDAR.md`.
+- **`USDA_FDC_API_KEY`, `CALORIENINJAS_API_KEY`** — meal macros (platform-level).
 - **`MAGNUS_TELEGRAM_MODE=webhook`** — recommended on a host; no 409 on overlapping deploys.
 - **`MAGNUS_MORNING_BRIEF_CRON_ENABLED`** — the unprompted daily push (off by default).
-- **`TELEGRAM_CHAT_ID`** — default outbound chat for proactive messages.
 
 ---
 
@@ -175,11 +177,13 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npm test` | Vitest unit tests |
 | `npm run telegram:check` | Capability report + current Telegram config (`-- --json`, `-- --probe-conflict`) |
 | `npm run telegram:setup` | Apply Telegram config: webhook, commands, menu button, description |
-| `npm run test:supabase` | Supabase insert/delete smoke test |
+| `npm run test:supabase` | Supabase insert/delete smoke test (+ `memory_summaries` reachable) |
+| `npm run db:apply -- supabase/migrations/<file>.sql` | Apply a migration via direct Postgres (`SUPABASE_DB_PASSWORD`) |
 | `npm run google-calendar:auth` | One-time OAuth; prints the refresh token for the host |
-| `npm run youtube:auth` | One-time YouTube OAuth; prints `GOOGLE_YOUTUBE_REFRESH_TOKEN` |
+| `npm run youtube:auth` | One-time YouTube OAuth; prints refresh token to store in `user_integrations` |
 | `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
-| `npx tsx scripts/health/workouts/hevy/hevy-*.mts` | Hevy read/search/smoke helpers |
+| `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
+| `npx tsx scripts/upsert-user-integrations.mts` | Update `user_integrations` for a user without wiping data |
 
 ---
 
@@ -199,17 +203,16 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 ## Not built yet
 
 - **Memory reads tables nothing writes.** Fifteen read-only tables can produce `gaps` every turn when
-  `MAGNUS_MEMORY_INCLUDE_GAPS=true` (default off). Semantic + conversation summaries now write to
-  `memory_summaries` when Phases 2–3 are enabled.
+  `MAGNUS_MEMORY_INCLUDE_GAPS=true` (default off). Phases 2–3 write to `memory_summaries` after each
+  turn when enabled (requires the `memory_summaries` migration applied).
 - **Schema not reproducible** from `supabase/migrations/` for tables predating April 2026 migrations.
 - **Semantic recall** — no embeddings; memory is recent-window plus structured reads.
 - **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data.
 - **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables.
-- **No automatic calendar ↔ event-log sync** — link manually via `calendar_event_id` when booking.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube.
 
 **Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
 
 ---
 
-**Last updated:** 2026-08-02 (YouTube / YT Music connection: search, playlists, bookmarks, cue; Magnus tools + Supabase tables)
+**Last updated:** 2026-08-02 (YouTube as per-user connection in user_integrations; playlists, bookmarks, cue)

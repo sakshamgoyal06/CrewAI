@@ -1,17 +1,16 @@
 /**
- * YouTube OAuth for the deployed bot and local first-time setup.
+ * YouTube OAuth — platform app ids on the host, per-user refresh token in
+ * `user_integrations.youtube_refresh_token` (same pattern as Calendar).
  *
- * Same pattern as Google Calendar: host uses `GOOGLE_CLIENT_ID` /
- * `GOOGLE_CLIENT_SECRET` / `GOOGLE_YOUTUBE_REFRESH_TOKEN` (no disk). Locally the
- * auth script writes a token file and prints the refresh token to paste on the host.
- *
- * YouTube scopes are separate from Calendar, so the refresh tokens are separate too.
+ * Local first-time setup: `npm run youtube:auth` writes a token file and prints the
+ * refresh token to upsert for a Telegram user. Do not put the refresh token on Railway.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { google } from "googleapis";
 
+import { loadUserIntegrations } from "../../users/userIntegrations.js";
 import {
   GOOGLE_YOUTUBE_SCOPES,
   googleOAuthCredentialsPath,
@@ -42,8 +41,8 @@ function loadClientCredentials(): InstalledCredentials {
   if (!path) {
     throw new Error(
       "YouTube is not configured. For first-time setup set GOOGLE_OAUTH_CREDENTIALS to your " +
-        "OAuth desktop client JSON; for the deployed bot set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET " +
-        "and GOOGLE_YOUTUBE_REFRESH_TOKEN. See docs/YOUTUBE.md.",
+        "OAuth desktop client JSON; on the host set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET. " +
+        "Each user's refresh token lives in user_integrations. See docs/YOUTUBE.md.",
     );
   }
   const raw = JSON.parse(readFileSync(path, "utf8")) as {
@@ -68,13 +67,17 @@ export function resolvedClientCredentials(): { clientId: string; clientSecret: s
   return { clientId: creds.client_id, clientSecret: creds.client_secret };
 }
 
-/** True when OAuth can run without a browser (playlists, likes, private library). */
+/** Platform OAuth app is present (shared across users). */
+export function youtubePlatformConfigured(): boolean {
+  return Boolean(envValue("GOOGLE_CLIENT_ID") && envValue("GOOGLE_CLIENT_SECRET"));
+}
+
+/**
+ * True when *some* OAuth path exists (legacy env token, or local token file).
+ * Prefer `youtubeOauthReadyForUser` for bot turns.
+ */
 export function youtubeOauthConfigured(): boolean {
-  if (
-    envValue("GOOGLE_CLIENT_ID") &&
-    envValue("GOOGLE_CLIENT_SECRET") &&
-    envValue("GOOGLE_YOUTUBE_REFRESH_TOKEN")
-  ) {
+  if (youtubePlatformConfigured() && envValue("GOOGLE_YOUTUBE_REFRESH_TOKEN")) {
     return true;
   }
   return Boolean(googleOAuthCredentialsPath()) && existsSync(googleYoutubeTokenPath());
@@ -86,7 +89,34 @@ export function youtubeApiKeyConfigured(): boolean {
 }
 
 export function youtubeConfigured(): boolean {
-  return youtubeOauthConfigured() || youtubeApiKeyConfigured();
+  return youtubeOauthConfigured() || youtubeApiKeyConfigured() || youtubePlatformConfigured();
+}
+
+export async function youtubeOauthReadyForUser(userProfileId?: string): Promise<boolean> {
+  if (!youtubePlatformConfigured() && !existsSync(googleYoutubeTokenPath())) {
+    // Local token file alone is enough for auth script testing.
+    if (youtubeOauthConfigured()) {
+      return true;
+    }
+  }
+  if (!youtubePlatformConfigured() && !youtubeOauthConfigured()) {
+    return false;
+  }
+  if (userProfileId?.trim()) {
+    const integrations = await loadUserIntegrations(userProfileId);
+    if (integrations.youtubeRefreshToken) {
+      return true;
+    }
+  }
+  // Legacy / local: env refresh token or token file.
+  return youtubeOauthConfigured();
+}
+
+export async function youtubeReadyForUser(userProfileId?: string): Promise<boolean> {
+  if (await youtubeOauthReadyForUser(userProfileId)) {
+    return true;
+  }
+  return youtubeApiKeyConfigured();
 }
 
 export function youtubeApiKey(): string | undefined {
@@ -129,24 +159,21 @@ export async function exchangeCodeForToken(
   saveToken(client);
 }
 
-export async function getAuthenticatedYoutubeClient(): Promise<{
+export async function getAuthenticatedYoutubeClient(userProfileId?: string): Promise<{
   auth: OAuth2Client;
   youtube: ReturnType<typeof google.youtube>;
 }> {
-  if (!youtubeOauthConfigured()) {
-    throw new Error(
-      "YouTube OAuth is not connected. Run `npm run youtube:auth` locally, then set GOOGLE_YOUTUBE_REFRESH_TOKEN on the host.",
-    );
-  }
-
   const auth = createOAuth2Client();
-  const refreshToken = envValue("GOOGLE_YOUTUBE_REFRESH_TOKEN");
+  const integrations = await loadUserIntegrations(userProfileId);
+  const refreshToken =
+    integrations.youtubeRefreshToken || envValue("GOOGLE_YOUTUBE_REFRESH_TOKEN");
 
   if (refreshToken) {
     auth.setCredentials({ refresh_token: refreshToken });
   } else if (!loadSavedToken(auth)) {
     throw new Error(
-      "YouTube is not authenticated. Run `npm run youtube:auth` locally, then set GOOGLE_YOUTUBE_REFRESH_TOKEN on the host.",
+      "YouTube is not connected for this user. Run `npm run youtube:auth`, then store the refresh " +
+        "token with TELEGRAM_USER_ID=<id> npx tsx scripts/upsert-user-integrations.mts (see docs/YOUTUBE.md).",
     );
   } else {
     auth.on("tokens", (tokens) => {
@@ -165,7 +192,7 @@ export function getApiKeyYoutubeClient(): ReturnType<typeof google.youtube> {
   const key = youtubeApiKey();
   if (!key) {
     throw new Error(
-      "YouTube API key is not set. Set YOUTUBE_API_KEY, or connect OAuth (see docs/YOUTUBE.md).",
+      "YouTube API key is not set. Connect YouTube for this user, or set YOUTUBE_API_KEY for search-only (see docs/YOUTUBE.md).",
     );
   }
   return google.youtube({ version: "v3", auth: key });

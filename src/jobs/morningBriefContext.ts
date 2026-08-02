@@ -13,6 +13,7 @@ export type MorningBriefContextBundle = {
   /** IANA timezone used for interpretation (from profile or fallback). */
   timeZone: string;
   northStarGoal?: string;
+  displayName?: string;
   goals: unknown[];
   pillarStatus: unknown[];
   happinessReserve: unknown | null;
@@ -83,12 +84,16 @@ export async function fetchMorningBriefContext(
 ): Promise<MorningBriefContextBundle> {
   const fallbackTz = options?.fallbackTimeZone ?? "Asia/Kolkata";
 
-  const profile = await safeMaybeSingle<{ timezone?: string | null; north_star_goal?: string | null }>(
+  const profile = await safeMaybeSingle<{
+    timezone?: string | null;
+    north_star_goal?: string | null;
+    display_name?: string | null;
+  }>(
     "user_profile",
     async () =>
       await supabase
         .from("user_profile")
-        .select("timezone, north_star_goal")
+        .select("timezone, north_star_goal, display_name")
         .eq("id", userProfileId)
         .maybeSingle(),
   );
@@ -99,6 +104,8 @@ export async function fetchMorningBriefContext(
     options?.northStarGoal?.trim() ||
     (typeof profile?.north_star_goal === "string" ? profile.north_star_goal.trim() : "") ||
     undefined;
+  const displayName =
+    typeof profile?.display_name === "string" ? profile.display_name.trim() || undefined : undefined;
 
   let goals =
     (await safeList("goals", async () =>
@@ -251,6 +258,7 @@ export async function fetchMorningBriefContext(
     nowIso: now.toISOString(),
     timeZone,
     northStarGoal: northStar,
+    displayName,
     goals,
     pillarStatus,
     happinessReserve,

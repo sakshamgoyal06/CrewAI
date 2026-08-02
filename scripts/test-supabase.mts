@@ -45,5 +45,20 @@ if (dErr) {
   process.exit(1);
 }
 
-console.log("Supabase OK: user_profile readable, magnus_chat_messages insert/delete OK.");
+const { error: memTableErr } = await supabase
+  .from("memory_summaries")
+  .select("id")
+  .limit(1);
+
+if (memTableErr) {
+  console.error(
+    "memory_summaries missing or unreadable (apply supabase/migrations/20260729100000_memory_summaries.sql):",
+    memTableErr,
+  );
+  process.exit(1);
+}
+
+console.log(
+  "Supabase OK: user_profile readable, magnus_chat_messages insert/delete OK, memory_summaries reachable.",
+);
 console.log("Test row id (deleted):", inserted.id);

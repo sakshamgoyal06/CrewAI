@@ -11,38 +11,34 @@ import { recordMagnusDailyLog } from "../../tools/dailyLog.js";
 import { updateEvent } from "../../events/eventStore.js";
 import {
   appendParagraphBlocks,
-  createNotionClient,
   ensurePageForDate,
   formatDateKeyInTimeZone,
-  getNotionToken,
-  notionDailyLogParentPageId,
   notionLogTitlePrefix,
   notionPageTitlePropertyName,
 } from "../../tools/notion.js";
+import { createNotionClientForUser } from "../../tools/notionUser.js";
 
 async function mirrorToNotion(
+  userProfileId: string,
   when: Date,
   timeZone: string,
   text: string,
 ): Promise<string | null> {
-  const parentPageId = notionDailyLogParentPageId();
-  if (!getNotionToken() || !parentPageId) {
-    return null;
-  }
-  const client = createNotionClient();
-  if (!client) {
+  const notion = await createNotionClientForUser(userProfileId);
+  const parentPageId = notion?.config.dailyLogParentPageId;
+  if (!notion?.client || !parentPageId) {
     return null;
   }
   try {
     const page = await ensurePageForDate(
-      client,
+      notion.client,
       parentPageId,
       when,
       timeZone,
       notionLogTitlePrefix(),
       notionPageTitlePropertyName(),
     );
-    await appendParagraphBlocks(client, page.pageId, [text]);
+    await appendParagraphBlocks(notion.client, page.pageId, [text]);
     return page.pageId;
   } catch (e) {
     logger.warn({ err: loggableError(e) }, "notion daily log mirror failed");
@@ -91,7 +87,7 @@ export async function logNote(input: {
   const when = explicitDate ? new Date(`${explicitDate}T12:00:00Z`) : new Date();
   const dateKey = explicitDate ?? formatDateKeyInTimeZone(when, input.timeZone);
 
-  const notionPageId = await mirrorToNotion(when, input.timeZone, text);
+  const notionPageId = await mirrorToNotion(input.userProfileId, when, input.timeZone, text);
 
   const saved = await recordMagnusDailyLog({
     userProfileId: input.userProfileId,

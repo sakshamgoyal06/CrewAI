@@ -5,12 +5,9 @@
  * One agent rather than a recommender per medium. Taste carries across them.
  */
 import { runPillarSpecialist } from "../pillarSpecialist.js";
-import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
 
 export const HAPPINESS_SYSTEM = `You are the Happiness specialist inside Magnus.
-
-${SPECIALIST_USER_IDENTITY}
 
 Scope: books, films, poetry, games, creative practice, hobbies, rest and leisure, travel and trip
 ideas, and relationships — preparing for a hard conversation, keeping in touch, social energy.

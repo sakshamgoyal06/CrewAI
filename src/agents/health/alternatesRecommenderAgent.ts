@@ -2,7 +2,7 @@ import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { anthropic } from "../../tools/clients.js";
 import { buildAgentMessages } from "../memory/memoryAgent.js";
-import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
+import { buildSpecialistIdentity } from "../promptIdentity.js";
 import type { AgentContext, AgentResult } from "../types.js";
 import { HEALTH_SPECIALIST_MODEL } from "./model.js";
 
@@ -28,8 +28,6 @@ function textFromMessage(msg: Message): string {
 
 export const ALTERNATES_RECOMMENDER_SYSTEM = `You are the **Alternates Recommender** specialist for Magnus within LifeOS.
 
-${SPECIALIST_USER_IDENTITY}
-
 Scope: **Food substitutions** when the user wants something **instead of** an ingredient or food — for **dietary constraints** (e.g. vegan, keto, low FODMAP), **allergies or intolerances** (treat stated allergens as strict exclusions), or **macro targets** (e.g. more protein, fewer carbs). This is **not** meal logging, parsing, or calorie journaling; do not format replies like a food log.
 
 **Reply style:** Offer **2–4** concrete alternatives when possible, each with one short line on why it works (texture, cooking behavior, or nutrition). If critical context is missing (e.g. which allergy, or the dish), ask **one** clarifying question first, then suggest options.
@@ -45,7 +43,7 @@ export async function runAlternatesRecommenderAgent(ctx: AgentContext): Promise<
   const msg = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 896,
-    system: ALTERNATES_RECOMMENDER_SYSTEM,
+    system: `${buildSpecialistIdentity(ctx)}\n\n${ALTERNATES_RECOMMENDER_SYSTEM}`,
     messages: buildAgentMessages(
       ctx,
       `${ctx.rawMessage}${ctx.healthPreferences ?? ""}`,

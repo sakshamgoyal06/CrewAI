@@ -113,6 +113,7 @@ const BASE = {
 describe("createEvent", () => {
   it("normalises the row before writing it", async () => {
     const fake = fakeClient([
+      { data: [], error: null }, // correction lookup
       { data: [], error: null }, // dedupe lookup
       { data: ROW, error: null }, // insert
     ]);
@@ -132,7 +133,7 @@ describe("createEvent", () => {
     expect(out.ok).toBe(true);
     const [inserted] = fake.opArgs("magnus_events", "insert") as [Record<string, unknown>];
     expect(inserted.title).toBe("AI session");
-    expect(inserted.pillar).toBe("joy");
+    expect(inserted.pillar).toBe("wisdom");
     expect(inserted.activity_key).toBe("ai_session");
     expect(inserted.tags).toEqual(["deep"]);
     expect(inserted.planned_start_at).toBe("2026-07-31T15:30:00.000Z");
@@ -140,7 +141,10 @@ describe("createEvent", () => {
   });
 
   it("returns the open commitment instead of a twin", async () => {
-    const fake = fakeClient([{ data: [ROW], error: null }]);
+    const fake = fakeClient([
+      { data: [], error: null }, // correction lookup
+      { data: [ROW], error: null }, // dedupe lookup
+    ]);
 
     const out = await createEvent(
       {
@@ -155,6 +159,23 @@ describe("createEvent", () => {
     expect(fake.opArgs("magnus_events", "insert")).toBeUndefined();
   });
 
+  it("refuses a second log when the time changed — use reschedule", async () => {
+    const fake = fakeClient([{ data: [ROW], error: null }]);
+
+    const out = await createEvent(
+      {
+        ...BASE,
+        title: "AI session",
+        activity: "AI session",
+        plannedStartAt: new Date("2026-08-01T15:30:00Z"),
+      },
+      fake.deps,
+    );
+
+    expect(out).toEqual({ ok: false, error: `correction_use_reschedule:${ROW.id}` });
+    expect(fake.opArgs("magnus_events", "insert")).toBeUndefined();
+  });
+
   it("refuses an untitled event without touching the database", async () => {
     const fake = fakeClient([]);
     const out = await createEvent({ ...BASE, title: "   " }, fake.deps);
@@ -164,8 +185,9 @@ describe("createEvent", () => {
 
   it("still writes when the duplicate check fails", async () => {
     const fake = fakeClient([
-      { data: null, error: { message: "timeout" } },
-      { data: ROW, error: null },
+      { data: [], error: null }, // correction lookup
+      { data: null, error: { message: "timeout" } }, // dedupe lookup
+      { data: ROW, error: null }, // insert
     ]);
 
     const out = await createEvent(

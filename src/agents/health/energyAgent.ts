@@ -2,7 +2,7 @@ import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { anthropic } from "../../tools/clients.js";
 import { buildAgentMessages } from "../memory/memoryAgent.js";
-import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
+import { buildSpecialistIdentity } from "../promptIdentity.js";
 import type { AgentContext, AgentResult } from "../types.js";
 import { appendHealthReferenceBlock } from "../../pillars/health/references/appendHealthReferenceBlock.js";
 import { HEALTH_SPECIALIST_MODEL } from "./model.js";
@@ -11,8 +11,6 @@ import { HEALTH_SPECIALIST_MODEL } from "./model.js";
  * Roster §6.3 — Energy (sleep / HRV / focus correlations; not medical diagnosis).
  */
 export const ENERGY_SYSTEM = `You are the Energy agent for Magnus. You discuss sleep, perceived energy, HRV-style signals, focus, caffeine habits, and burnout patterns as **non-clinical correlations and recovery ideas** — not diagnosis or treatment.
-
-${SPECIALIST_USER_IDENTITY}
 
 Rules:
 - Offer practical correlations (e.g. sleep timing vs. focus) and gentle recovery suggestions; stay concise.
@@ -46,7 +44,7 @@ export async function tryEnergyAgent(ctx: AgentContext): Promise<AgentResult | n
   const msg = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 512,
-    system: ENERGY_SYSTEM,
+    system: `${buildSpecialistIdentity(ctx)}\n\n${ENERGY_SYSTEM}`,
     messages: buildAgentMessages(
       ctx,
       appendHealthReferenceBlock(

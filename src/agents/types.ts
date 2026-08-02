@@ -13,6 +13,8 @@ export type AgentContext = {
   timezone?: string;
   /** From `user_profile.north_star_goal` when loaded; optional for specialists. */
   northStarGoal?: string;
+  /** From `user_profile.display_name` when set. */
+  displayName?: string;
   rawMessage: string;
   intent: Intent;
   /**

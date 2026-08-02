@@ -19,7 +19,7 @@ import {
   EVENT_COLUMNS,
   SUPERSEDED_STATUSES,
   activityKeyFor,
-  normalizePillar,
+  inferPillarForEvent,
   type EventPillar,
   type EventRow,
   type EventStatus,
@@ -34,6 +34,8 @@ const TABLE = "magnus_events";
 const LIST_LIMIT_MAX = 100;
 /** Two commitments to the same activity minutes apart are one commitment, entered twice. */
 const DEDUPE_WINDOW_MINUTES = 15;
+/** Same commitment entered twice in one conversation — usually a correction, not a new plan. */
+const CORRECTION_WINDOW_MS = 2 * 60 * 60 * 1000;
 
 function client(deps?: EventStoreDeps): SupabaseClient {
   return deps?.client ?? defaultClient;
@@ -92,18 +94,41 @@ export async function createEvent(
     return { ok: false, error: "an event needs a title" };
   }
 
-  const pillar: EventPillar = normalizePillar(input.pillar);
+  const pillar = inferPillarForEvent({
+    explicitPillar: input.pillar,
+    title,
+    activity: input.activity,
+    details: input.details,
+  });
   const activityKey = activityKeyFor({ activity: input.activity, title });
 
-  if (input.plannedStartAt && activityKey) {
-    const existing = await findDuplicate(
+  if (input.plannedStartAt) {
+    const correction = await findRecentOpenCorrection(
       {
         userProfileId: input.userProfileId,
         activityKey,
+        title,
         plannedStartAt: input.plannedStartAt,
       },
       deps,
     );
+    if (correction.ok && correction.data) {
+      return {
+        ok: false,
+        error: `correction_use_reschedule:${correction.data.id}`,
+      };
+    }
+
+    const existing = activityKey
+      ? await findDuplicate(
+          {
+            userProfileId: input.userProfileId,
+            activityKey,
+            plannedStartAt: input.plannedStartAt,
+          },
+          deps,
+        )
+      : { ok: true as const, data: null };
     if (existing.ok && existing.data) {
       return { ok: true, data: { event: existing.data, duplicate: true } };
     }
@@ -170,6 +195,82 @@ async function findDuplicate(
   }
   const rows = (data ?? []) as unknown as EventRow[];
   return { ok: true, data: rows[0] ?? null };
+}
+
+/**
+ * A second log for the same activity with a different time, soon after the first — almost always
+ * a correction ("I said tomorrow"), not a second commitment.
+ */
+async function findRecentOpenCorrection(
+  input: {
+    userProfileId: string;
+    activityKey: string | null;
+    title: string;
+    plannedStartAt: Date;
+  },
+  deps?: EventStoreDeps,
+): Promise<StoreResult<EventRow | null>> {
+  const since = new Date(Date.now() - CORRECTION_WINDOW_MS).toISOString();
+  let query = client(deps)
+    .from(TABLE)
+    .select(EVENT_COLUMNS)
+    .eq("user_profile_id", input.userProfileId)
+    .in("status", ["planned", "in_progress"])
+    .gte("created_at", since)
+    .is("rescheduled_to", null)
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  if (input.activityKey) {
+    query = query.eq("activity_key", input.activityKey);
+  } else {
+    query = query.ilike("title", input.title.trim());
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    logger.debug({ err: loggableError(error) }, "magnus_events correction lookup skipped");
+    return { ok: true, data: null };
+  }
+
+  const dedupeMs = DEDUPE_WINDOW_MINUTES * 60 * 1000;
+  const target = input.plannedStartAt.getTime();
+  const rows = (data ?? []) as unknown as EventRow[];
+  const match = rows.find((row) => {
+    if (!row.planned_start_at) {
+      return true;
+    }
+    const existing = new Date(row.planned_start_at).getTime();
+    return Math.abs(existing - target) > dedupeMs;
+  });
+  return { ok: true, data: match ?? null };
+}
+
+/** Open event-log row linked to a Google Calendar event id, if any. */
+export async function findOpenByGoogleEventId(
+  input: { userProfileId: string; googleEventId: string },
+  deps?: EventStoreDeps,
+): Promise<StoreResult<EventRow | null>> {
+  const googleEventId = input.googleEventId.trim();
+  if (!googleEventId) {
+    return { ok: true, data: null };
+  }
+
+  const { data, error } = await client(deps)
+    .from(TABLE)
+    .select(EVENT_COLUMNS)
+    .eq("user_profile_id", input.userProfileId)
+    .eq("google_event_id", googleEventId)
+    .in("status", ["planned", "in_progress"])
+    .is("rescheduled_to", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    return fail("findOpenByGoogleEventId", error);
+  }
+  return { ok: true, data: (data as unknown as EventRow) ?? null };
 }
 
 export type ListEventsInput = {
@@ -312,6 +413,7 @@ export type UpdateEventInput = {
   remindAt?: Date | null;
   dailyLogId?: string | null;
   googleEventId?: string | null;
+  pillar?: EventPillar | null;
 };
 
 /**
@@ -379,6 +481,9 @@ export async function updateEvent(
   }
   if (input.googleEventId !== undefined) {
     patch.google_event_id = input.googleEventId?.trim() || null;
+  }
+  if (input.pillar !== undefined && input.pillar !== null) {
+    patch.pillar = input.pillar;
   }
 
   if (Object.keys(patch).length === 0) {
