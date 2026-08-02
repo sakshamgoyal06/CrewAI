@@ -74,12 +74,15 @@ function briefFromVideo(v: youtube_v3.Schema$Video): YoutubeVideoBrief | null {
   };
 }
 
-export async function getVideos(videoIds: string[]): Promise<YoutubeVideoBrief[]> {
+export async function getVideos(
+  videoIds: string[],
+  userProfileId?: string,
+): Promise<YoutubeVideoBrief[]> {
   const ids = [...new Set(videoIds.map((id) => id.trim()).filter(Boolean))];
   if (ids.length === 0) {
     return [];
   }
-  const youtube = await youtubeClient();
+  const youtube = await youtubeClient(false, userProfileId);
   const res = await youtube.videos.list({
     part: ["snippet", "contentDetails", "statistics"],
     id: ids,
@@ -90,8 +93,11 @@ export async function getVideos(videoIds: string[]): Promise<YoutubeVideoBrief[]
     .filter((v): v is YoutubeVideoBrief => v !== null);
 }
 
-export async function getVideo(videoId: string): Promise<YoutubeVideoBrief | null> {
-  const [v] = await getVideos([videoId]);
+export async function getVideo(
+  videoId: string,
+  userProfileId?: string,
+): Promise<YoutubeVideoBrief | null> {
+  const [v] = await getVideos([videoId], userProfileId);
   return v ?? null;
 }
 
@@ -99,13 +105,14 @@ export async function searchVideos(input: {
   query: string;
   kind?: YoutubeItemKind | "all";
   maxResults?: number;
+  userProfileId?: string;
 }): Promise<YoutubeVideoBrief[]> {
   const q = input.query.trim();
   if (!q) {
     return [];
   }
   const maxResults = Math.min(Math.max(input.maxResults ?? 8, 1), 25);
-  const youtube = await youtubeClient();
+  const youtube = await youtubeClient(false, input.userProfileId);
   const kind = input.kind ?? "all";
 
   const res = await youtube.search.list({
@@ -122,7 +129,7 @@ export async function searchVideos(input: {
     .map((item) => item.id?.videoId)
     .filter((id): id is string => Boolean(id));
 
-  const videos = await getVideos(ids);
+  const videos = await getVideos(ids, input.userProfileId);
   if (kind === "video") {
     return videos.filter((v) => v.kind === "video");
   }
@@ -142,6 +149,7 @@ export async function recommendVideos(input: {
   query?: string;
   kind?: YoutubeItemKind | "all";
   maxResults?: number;
+  userProfileId?: string;
 }): Promise<{ seed?: YoutubeVideoBrief; items: YoutubeVideoBrief[] }> {
   const maxResults = Math.min(Math.max(input.maxResults ?? 8, 1), 15);
   const kind = input.kind ?? "all";
@@ -150,7 +158,7 @@ export async function recommendVideos(input: {
   let query = input.query?.trim() ?? "";
 
   if (input.seedVideoId?.trim()) {
-    seed = (await getVideo(input.seedVideoId.trim())) ?? undefined;
+    seed = (await getVideo(input.seedVideoId.trim(), input.userProfileId)) ?? undefined;
     if (seed) {
       // Strip common trailer/noise suffixes; keep artist + title signal.
       const cleaned = seed.title
@@ -163,7 +171,7 @@ export async function recommendVideos(input: {
   }
 
   if (!query) {
-    const youtube = await youtubeClient();
+    const youtube = await youtubeClient(false, input.userProfileId);
     const chart = await youtube.videos.list({
       part: ["snippet", "contentDetails", "statistics"],
       chart: "mostPopular",
@@ -177,7 +185,12 @@ export async function recommendVideos(input: {
     return { items };
   }
 
-  const items = await searchVideos({ query, kind, maxResults });
+  const items = await searchVideos({
+    query,
+    kind,
+    maxResults,
+    userProfileId: input.userProfileId,
+  });
   const filtered = seed
     ? items.filter((v) => v.videoId !== seed.videoId)
     : items;
