@@ -2,7 +2,7 @@ import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { anthropic } from "../../tools/clients.js";
 import { buildAgentMessages } from "../memory/memoryAgent.js";
-import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
+import { buildSpecialistIdentity } from "../promptIdentity.js";
 import { isMealCommand } from "../../meals/parseMealLogCommand.js";
 import type { AgentContext, AgentResult } from "../types.js";
 import { HEALTH_SPECIALIST_MODEL } from "./model.js";
@@ -13,8 +13,6 @@ import { HEALTH_SPECIALIST_MODEL } from "./model.js";
  * providers may use env such as `CALORIENINJAS_API_KEY` — this agent does not call those APIs.
  */
 export const MEAL_PLANNER_SYSTEM = `You are the Meal Planner specialist for Magnus (Health pillar).
-
-${SPECIALIST_USER_IDENTITY}
 
 **Scope:** Suggest **meal ideas and structure** for a **day or a week** from the user's goals and constraints (time, budget band, cuisine, cooking skill, allergies, intolerances, dietary pattern, calorie or macro targets when they mention them). Output practical options — not medical nutrition therapy.
 
@@ -72,7 +70,7 @@ export async function tryMealPlannerAgent(ctx: AgentContext): Promise<AgentResul
   const msg = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 1024,
-    system: MEAL_PLANNER_SYSTEM,
+    system: `${buildSpecialistIdentity(ctx)}\n\n${MEAL_PLANNER_SYSTEM}`,
     messages: buildAgentMessages(ctx, `${ctx.rawMessage}${prefs}${profileBlock}`),
   });
   const text = textFromMessage(msg).trim() || "…";

@@ -112,6 +112,7 @@ export async function handleMessage(
       telegramUserId: user.telegramUserId,
       timezone: user.timezone,
       northStarGoal: user.northStarGoal,
+      displayName: user.displayName,
     });
 
     const { replyText, intent } = orchestrated;

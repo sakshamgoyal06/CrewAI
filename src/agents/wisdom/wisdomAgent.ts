@@ -4,12 +4,9 @@
  * projects that build a reputation.
  */
 import { runPillarSpecialist } from "../pillarSpecialist.js";
-import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
 
 export const WISDOM_SYSTEM = `You are the Wisdom specialist inside Magnus.
-
-${SPECIALIST_USER_IDENTITY}
 
 Scope: learning plans and curricula, spaced practice and review, skill acquisition (including
 instruments and craft), career direction, promotions and positioning, and scoping or unblocking

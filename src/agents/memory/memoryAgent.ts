@@ -104,7 +104,7 @@ export async function loadMemoryContext(input: {
     async () =>
       await sb
         .from("user_profile")
-        .select("north_star_goal, timezone, user_tier")
+        .select("north_star_goal, timezone, user_tier, display_name")
         .eq("id", input.userProfileId)
         .maybeSingle(),
   );
@@ -119,6 +119,7 @@ export async function loadMemoryContext(input: {
         typeof row.north_star_goal === "string" ? row.north_star_goal : undefined,
       timezone: typeof row.timezone === "string" ? row.timezone : undefined,
       userTier: typeof row.user_tier === "string" ? row.user_tier : undefined,
+      displayName: typeof row.display_name === "string" ? row.display_name : undefined,
     };
   } else {
     gaps.push("user_profile: no row for id");

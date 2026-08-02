@@ -15,6 +15,7 @@ import {
   summarizeEstimateForReconcile,
 } from "./mealParserAgent.js";
 import { draftMealLogTelegramIntro } from "./nutritionComposer.js";
+import { buildSpecialistIdentity } from "../promptIdentity.js";
 import { NUTRITION_SYSTEM } from "./nutritionPrompt.js";
 import { HEALTH_SPECIALIST_MODEL } from "./model.js";
 
@@ -187,7 +188,7 @@ export async function runOrchestratedNutritionAdviceTurn(ctx: AgentContext): Pro
     const msg = await anthropic.messages.create({
       model: HEALTH_SPECIALIST_MODEL,
       max_tokens: 768,
-      system: NUTRITION_ADVICE_AGENT_SYSTEM,
+      system: `${buildSpecialistIdentity(ctx)}\n\n${NUTRITION_ADVICE_AGENT_SYSTEM}`,
       tools: NUTRITION_ADVICE_TOOLS,
       messages,
     });
@@ -240,7 +241,7 @@ export async function runOrchestratedNutritionAdviceTurn(ctx: AgentContext): Pro
   const fallback = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 512,
-    system: NUTRITION_SYSTEM,
+    system: `${buildSpecialistIdentity(ctx)}\n\n${NUTRITION_SYSTEM}`,
     messages: buildAgentMessages(ctx, userBlock),
   });
   const text = textFromMessage(fallback).trim() || "…";

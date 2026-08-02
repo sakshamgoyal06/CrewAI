@@ -49,8 +49,9 @@ export async function listEvents(input: {
   timeMax?: string;
   maxResults?: number;
   query?: string;
+  userProfileId?: string;
 }): Promise<CalendarEventBrief[]> {
-  const { calendar } = await getAuthenticatedCalendarClient();
+  const { calendar } = await getAuthenticatedCalendarClient(input.userProfileId);
   const calendarId = input.calendarId ?? "primary";
   const window = defaultEventWindow();
   const res = await calendar.events.list({
@@ -70,8 +71,9 @@ export async function listEvents(input: {
 export async function getEvent(input: {
   calendarId?: string;
   eventId: string;
+  userProfileId?: string;
 }): Promise<CalendarEventBrief | null> {
-  const { calendar } = await getAuthenticatedCalendarClient();
+  const { calendar } = await getAuthenticatedCalendarClient(input.userProfileId);
   const calendarId = input.calendarId ?? "primary";
   const res = await calendar.events.get({ calendarId, eventId: input.eventId });
   return formatEvent(res.data, calendarId);
@@ -110,8 +112,9 @@ export async function createEvent(input: {
   start: string;
   end: string;
   timeZone?: string;
+  userProfileId?: string;
 }): Promise<CalendarEventBrief> {
-  const { calendar } = await getAuthenticatedCalendarClient();
+  const { calendar } = await getAuthenticatedCalendarClient(input.userProfileId);
   const calendarId = input.calendarId ?? "primary";
   const tz = input.timeZone ?? "UTC";
   const res = await calendar.events.insert({
@@ -144,8 +147,9 @@ export async function updateEvent(input: {
   start?: string;
   end?: string;
   timeZone?: string;
+  userProfileId?: string;
 }): Promise<CalendarEventBrief> {
-  const { calendar } = await getAuthenticatedCalendarClient();
+  const { calendar } = await getAuthenticatedCalendarClient(input.userProfileId);
   const calendarId = input.calendarId ?? "primary";
   const tz = input.timeZone ?? "UTC";
   const body: calendar_v3.Schema$Event = {};
@@ -177,8 +181,9 @@ export async function updateEvent(input: {
 export async function deleteEvent(input: {
   calendarId?: string;
   eventId: string;
+  userProfileId?: string;
 }): Promise<{ deleted: true; eventId: string }> {
-  const { calendar } = await getAuthenticatedCalendarClient();
+  const { calendar } = await getAuthenticatedCalendarClient(input.userProfileId);
   const calendarId = input.calendarId ?? "primary";
   await calendar.events.delete({ calendarId, eventId: input.eventId });
   return { deleted: true, eventId: input.eventId };

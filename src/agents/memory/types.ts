@@ -52,6 +52,7 @@ export type MemoryContext = {
     northStarGoal?: string;
     timezone?: string;
     userTier?: string;
+    displayName?: string;
   } | null;
   recentSignals: {
     /** Chronological chat turns (may exceed verbatim window; split in memoryPackage). */

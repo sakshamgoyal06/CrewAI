@@ -5,12 +5,12 @@ import {
   fetchHevyWorkoutsPage,
   formatHevyRoutinesForPrompt,
   formatHevyWorkoutsForPrompt,
-  hevyApiKeyFromEnv,
+  hevyApiKeyForUser,
 } from "../hevy/index.js";
 import { logger } from "../../../../logger.js";
 import { anthropic, supabase } from "../../../../tools/clients.js";
 import { buildAgentMessages } from "../../../../agents/memory/memoryAgent.js";
-import { SPECIALIST_USER_IDENTITY } from "../../../../agents/promptIdentity.js";
+import { buildSpecialistIdentity } from "../../../../agents/promptIdentity.js";
 import type { AgentContext, AgentResult } from "../../../../agents/types.js";
 import {
   classifyHealthSubIntent,
@@ -24,8 +24,6 @@ import { HEALTH_SPECIALIST_MODEL } from "../../../../agents/health/model.js";
  * adapt plans to energy/schedule; no medical claims; encourage professional help for injury.
  */
 export const FITNESS_SYSTEM = `You are the Fitness specialist for Magnus within LifeOS.
-
-${SPECIALIST_USER_IDENTITY}
 
 Scope: workouts, training, movement habits, and performance (runs, gym, strength, cardio, steps). Adapt suggestions to the user's stated energy and schedule. Do not diagnose, treat, or make medical claims. If the user mentions injury, sharp pain, or anything that could need clinical care, encourage seeing a qualified professional and keep guidance general and non-alarmist.
 
@@ -89,7 +87,7 @@ async function loadWorkoutContextFromSupabase(
 async function loadWorkoutContext(
   userProfileId: string,
 ): Promise<{ summary: string; meta: Record<string, unknown> }> {
-  const hevyKey = hevyApiKeyFromEnv();
+  const hevyKey = await hevyApiKeyForUser(userProfileId);
   if (hevyKey) {
     const [wRes, rRes] = await Promise.all([
       fetchHevyWorkoutsPage(hevyKey, 1, 5),
@@ -179,7 +177,7 @@ export async function tryFitnessAgent(ctx: AgentContext): Promise<AgentResult | 
   const msg = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 768,
-    system: FITNESS_SYSTEM,
+    system: `${buildSpecialistIdentity(ctx)}\n\n${FITNESS_SYSTEM}`,
     messages: buildAgentMessages(ctx, userContent),
   });
 

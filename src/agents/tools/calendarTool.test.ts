@@ -24,6 +24,10 @@ vi.mock("../../events/calendarEventSync.js", () => ({
   syncEventLogAfterCalendarUpdate: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock("../../users/userIntegrations.js", () => ({
+  loadUserIntegrations: vi.fn().mockResolvedValue({}),
+}));
+
 import {
   createCalendarEvent,
   deleteCalendarEvent,
@@ -43,7 +47,7 @@ describe("readCalendarEvents", () => {
   it("explains what to set when Calendar is not connected", async () => {
     configuredMock.mockReturnValue(false);
     const out = await readCalendarEvents({ timeZone: IST });
-    expect(out).toContain("GOOGLE_CALENDAR_REFRESH_TOKEN");
+    expect(out).toContain("not connected");
     expect(listEventsMock).not.toHaveBeenCalled();
   });
 
@@ -291,7 +295,7 @@ describe("deleteCalendarEvent", () => {
   it("explains itself when Calendar is not connected", async () => {
     configuredMock.mockReturnValue(false);
     expect(await deleteCalendarEvent({ eventId: "evt_1", timeZone: IST })).toContain(
-      "GOOGLE_CALENDAR_REFRESH_TOKEN",
+      "not connected",
     );
     expect(getEventMock).not.toHaveBeenCalled();
   });

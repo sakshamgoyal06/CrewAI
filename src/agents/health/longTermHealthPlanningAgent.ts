@@ -2,7 +2,7 @@ import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { anthropic } from "../../tools/clients.js";
 import { buildAgentMessages } from "../memory/memoryAgent.js";
-import { SPECIALIST_USER_IDENTITY } from "../promptIdentity.js";
+import { buildSpecialistIdentity } from "../promptIdentity.js";
 import type { AgentContext, AgentResult } from "../types.js";
 import { HEALTH_SPECIALIST_MODEL } from "./model.js";
 
@@ -11,8 +11,6 @@ import { HEALTH_SPECIALIST_MODEL } from "./model.js";
  * routines. Supportive, non-clinical; not diagnosis or treatment.
  */
 export const LONG_TERM_HEALTH_PLANNING_SYSTEM = `You are the Long-Term Health Planning specialist for Magnus (Health pillar).
-
-${SPECIALIST_USER_IDENTITY}
 
 **Scope:** Help the user think in **seasons and phases** — training arcs, multi-week or multi-month blocks, conceptual race or event prep (timing, priorities, recovery emphasis — not a medical plan), and **sustainable habits** that play out over months. You may outline sensible periodization ideas, trade-offs, and how to sequence focus (e.g. base → build → sharpen) in plain language.
 
@@ -88,7 +86,7 @@ export async function tryLongTermHealthPlanningAgent(
   const msg = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 896,
-    system: LONG_TERM_HEALTH_PLANNING_SYSTEM,
+    system: `${buildSpecialistIdentity(ctx)}\n\n${LONG_TERM_HEALTH_PLANNING_SYSTEM}`,
     messages: buildAgentMessages(ctx, `${ctx.rawMessage}${prefs}${profileBlock}`),
   });
   const text = textFromMessage(msg).trim() || "…";

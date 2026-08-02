@@ -4,7 +4,7 @@
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { MORNING_BRIEF_SYSTEM } from "./morningBriefPrompt.js";
+import { buildMorningBriefSystem } from "./morningBriefPrompt.js";
 import {
   buildMorningBriefUserMessage,
   fetchMorningBriefContext,
@@ -110,7 +110,7 @@ export async function runMorningBrief(
 
   let briefText: string;
   try {
-    briefText = await invokeClaude(MORNING_BRIEF_SYSTEM, userMsg);
+    briefText = await invokeClaude(buildMorningBriefSystem({ displayName: bundle.displayName }), userMsg);
   } catch (err) {
     logger.error({ err: String(err) }, "morning brief Claude call failed");
     return {

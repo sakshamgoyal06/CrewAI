@@ -20,6 +20,59 @@
 
 ---
 
+## 0. Core vs personalised context (multi-user)
+
+Magnus is built for **many Telegram users** sharing one deployment. Behaviour splits into two layers:
+
+| Layer | What it is | Where it lives | Changes when |
+| ----- | ---------- | -------------- | ------------ |
+| **Core** | Product invariants: voice, tool rules, routing order, pillar boundaries, LifeOS constraints | Code — `src/agents/magnusCorePrompt.ts`, specialist static prompts, `orchestratorIntent.ts`, health router | You ship a code release |
+| **Personalised** | Who the user is and what Magnus knows about them | Supabase per `user_profile_id` | Each user, each turn |
+
+### Core (user-agnostic)
+
+- **Magnus system prompt** — `MAGNUS_CORE_SYSTEM` in `src/agents/magnusCorePrompt.ts`. Uses “the user” / “they”, never a hardcoded name. Composed at runtime with `buildMagnusSystem({ displayName })`.
+- **Specialist identity line** — `buildSpecialistIdentity(ctx)` in `src/agents/promptIdentity.ts`. Prepended by `runPillarSpecialist` and health agents. Without a display name, specialists address the user as “you” only.
+- **Classifier** — `CLASSIFY_SYSTEM` in `src/agents/orchestratorIntent.ts` (no user name).
+- **Routing** — Health sub-router order, meal-log bypass of onboarding, event-log invariants (reschedule chain, calendar sync when wired).
+- **Integrations (process)** — `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are deployment-level OAuth client credentials only.
+
+### Personalised (per `user_profile_id`)
+
+| Data | Table / source | Used for |
+| ---- | -------------- | -------- |
+| Identity | `user_profile.display_name`, `timezone`, `north_star_goal`, `user_tier`, `access_flags` | Prompt composition, memory block, morning brief |
+| Chat + memory | `magnus_chat_messages`, `memory_summaries` | Verbatim history, rolling summary, semantic facts |
+| Event log | `magnus_events` | Commitments, adherence, calendar link |
+| Health onboarding | `user_health_profile` | Four-question gate → `healthPreferences` on health turns |
+| Program memory | `user_program_memory` (sections: `user_context`, `weekly_schedule`, `program_learnings`, `recovery_routine`) | Health coaching context — **not** shared disk files |
+| Integrations | `user_integrations` (`google_calendar_refresh_token`, `hevy_api_key`, Notion parent ids) | Calendar, Hevy, Notion per user; env vars are owner fallback only |
+| Journal | `magnus_daily_logs` (health journal metadata) | Recent EOD entries in health context |
+
+### Turn assembly (`AgentContext`)
+
+Each turn the orchestrator builds `AgentContext` (`src/agents/types.ts`) with `userProfileId`, `displayName`, `timezone`, `northStarGoal`, `memoryPackage`, and (for health) `healthPreferences` + `healthReferenceBlock`.
+
+The model sees:
+
+1. **System** — core prompt + optional display name line.
+2. **Messages** — recent chat (verbatim + older summary) via `buildAgentMessages`.
+3. **User turn suffix** — memory block (goals, events, logs, facts) + current time / north star for Magnus tools.
+
+### Provisioning a user
+
+- **New Telegram user** — `resolveTelegramUserProfile` creates a minimal row (`timezone: UTC`, no north star) unless `MAGNUS_AUTO_ALLOWLIST_NEW_USERS=true`.
+- **Owner reset + seed** — `npx tsx scripts/provision-owner-user.mts` with `TELEGRAM_USER_ID` wipes prior data for that Telegram id, creates a fresh `user_profile`, seeds `user_program_memory` from `scripts/seed-data/owner-health-program/`, and copies integration tokens from env into `user_integrations`.
+- **Migration** — `supabase/migrations/20260802120000_user_personalization.sql` adds `display_name`, `user_program_memory`, `user_integrations`.
+
+### What must not live in core anymore
+
+- User names in system prompts (use `display_name`).
+- Owner-specific health program markdown in `.cursor/skills/health/references/` (templates only; real content in DB).
+- Default north star / timezone for all new users (defaults are neutral; owner is provisioned explicitly).
+
+---
+
 ## Status snapshot
 
 
@@ -65,18 +118,24 @@
 
 ## 2. Magnus — orchestrator (core agent)
 
-**Role:** Single agent the user talks to first. Classifies intent, delegates to specialists when implemented, synthesises one coherent reply. Runs proactive jobs later (cron): audits, reviews, cross-pillar correlation.
+**Role:** Single agent the user talks to first. Classifies intent, delegates to specialists when implemented, synthesises one coherent reply.
 
-**Status:** **Implemented** — `src/magnus.ts` (`handleMessage`: gates, chat logging), `src/agents/magnusOrchestrator.ts` (classify + general + `runOrchestratorReply`), `src/agents/registry.ts` (`dispatchToAgent`).
+**Status:** **Implemented** — `src/magnus.ts`, `src/agents/magnusOrchestrator.ts`, `src/agents/magnusAgent.ts` (GENERAL + tools), `src/agents/registry.ts`.
 
 **Scope**
 
-- **In scope:** Intent classification; **Notion keyword override** (`isNotionIntentOverride` → `NOTION` without classify); memory context per turn; short general chat; **GENERAL** research sub-route → `runResearchAgent` (`src/agents/intelligence/researchAgent.ts`); delegation to registered `DepartmentAgent`s (`NOTION` → `notionAgent`, `HEALTH` → `healthCompositeAgent`, `PLANNING` → `plannerAgent`, `LEARNING` → `researchAgent`); logging; Fitness may load recent workouts from Supabase when the `workouts` table is present.
-- **Out of scope (today):** Additional department agents beyond those registered.
+- **In scope:** Intent classification; memory per turn; **GENERAL** → `runMagnusAgent` (calendar, event log, journal tools); pillar delegation for HEALTH / WEALTH / HAPPINESS / WISDOM; health onboarding gate.
+- **Out of scope (today):** Per-user model selection; user-facing settings UI.
+
+**System prompt — Magnus (GENERAL, tools)**
+
+*Source: `src/agents/magnusCorePrompt.ts` — `MAGNUS_CORE_SYSTEM` + `buildMagnusSystem({ displayName })`.*
+
+User-agnostic core behaviour (calendar, event log, voice). Optional display name appended when `user_profile.display_name` is set.
 
 **System prompt — intent classification**
 
-*Source: `src/agents/magnusOrchestrator.ts` — `CLASSIFY_SYSTEM`*
+*Source: `src/agents/orchestratorIntent.ts` — `CLASSIFY_SYSTEM`*
 
 ```
 You are MAGNUS, a personal AI chief of staff. Classify the intent of the user message into exactly one category:
@@ -87,23 +146,11 @@ Reply with only the category name, nothing else.
 
 **Parameters:** `max_tokens: 64` for classification.
 
-**System prompt — general reply** (when intent is `GENERAL`)
-
-*Source: `src/agents/magnusOrchestrator.ts` — `GENERAL_SYSTEM`*
-
-```
-You are MAGNUS, a warm and direct personal AI chief of staff for Saksham. Keep replies under 100 words.
-```
-
-**Parameters:** `max_tokens: 512` for general replies.
-
 **Actions**
 
-- `isNotionIntentOverride(userMessage)` → if true, intent `**NOTION`** (skip classifier).
-- Else `classifyIntent(userMessage)` → `Intent`; `loadMemoryContext` + `formatMemoryBlockForSystem` for the turn.
-- If `GENERAL` and research sub-route (`isResearchSubIntent`) → `runResearchAgent` (structured Markdown + Sources).
-- Else if `GENERAL` → `answerGeneral(userMessage, memoryBlock)`.
-- Else → `dispatchToAgent` (`src/agents/registry.ts`) when registered; otherwise routing placeholder.
+- `resolveIntentNaturalLanguage` → `Intent`; `loadMemoryContext` + `buildMemoryPackage` for the turn.
+- If `GENERAL` → `runMagnusAgent(ctx)`.
+- Else → `dispatchToAgent` → pillar specialist or health composite.
 
 **LifeOS constraints for orchestrator (all replies)**
 
@@ -578,7 +625,7 @@ You are the Learning agent. Align with active Wisdom one-thing; avoid infinite n
 | 2026-04-12 | Energy specialist + `ENERGY_SYSTEM` (`energyAgent.ts`); Health stack order + generic ack (`healthRouter.ts`)                                                                |
 | 2026-04-12 | **Fitness** specialist — `fitnessAgent.ts`, `healthSubIntent.ts` (keyword + sub-classifier), wired in HEALTH stack                                                          |
 | 2026-04-12 | Build focus: Memory, Notion, Morning Brief, Research; **Trading deferred**                                                                                                  |
-| 2026-04-12 | **Notion agent** — `NOTION` intent, `src/tools/notion.ts`, `knowledge/notionAgent.ts`, keyword override + classifier; integration test optional (`SKIP_NOTION_INTEGRATION`) |
+| 2026-08-02 | §0 Core vs personalised context; user-agnostic `MAGNUS_CORE_SYSTEM`; per-user `user_program_memory` + `user_integrations`; `scripts/provision-owner-user.mts` |
 
 
 ---
