@@ -145,14 +145,13 @@ Supabase `sb_secret_…` key format works as service role.
 
 See `.env.example`, which is grouped by purpose. Highlights beyond the six required values:
 
-- **`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_CALENDAR_REFRESH_TOKEN`** — calendar on a
-  host with no browser or disk. See `docs/GOOGLE_CALENDAR.md`.
-- **`HEVY_API_KEY`** — real workout data for the Health pillar.
-- **`NOTION_TOKEN` + `NOTION_DAILY_LOG_PARENT_PAGE_ID`** — mirror journal notes to Notion.
-- **`USDA_FDC_API_KEY`, `CALORIENINJAS_API_KEY`** — meal macros.
+- **`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`** — shared OAuth app on the host (Railway).
+  Per-user refresh tokens live in `user_integrations`.
+- **Per-user keys** (Hevy, Notion, calendar refresh token) — in Supabase `user_integrations`.
+  Seed with `npx tsx scripts/upsert-user-integrations.mts` (local `.env`), not Railway.
+- **`USDA_FDC_API_KEY`, `CALORIENINJAS_API_KEY`** — meal macros (platform-level).
 - **`MAGNUS_TELEGRAM_MODE=webhook`** — recommended on a host; no 409 on overlapping deploys.
 - **`MAGNUS_MORNING_BRIEF_CRON_ENABLED`** — the unprompted daily push (off by default).
-- **`TELEGRAM_CHAT_ID`** — default outbound chat for proactive messages.
 
 ---
 
@@ -169,6 +168,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npm run google-calendar:auth` | One-time OAuth; prints the refresh token for the host |
 | `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
 | `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
+| `npx tsx scripts/upsert-user-integrations.mts` | Update `user_integrations` for a user without wiping data |
 
 ---
 

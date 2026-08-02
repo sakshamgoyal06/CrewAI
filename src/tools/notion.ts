@@ -1,6 +1,7 @@
 /**
  * Server-side Notion API — used by Magnus agents when running headless (Telegram bot).
- * Cursor MCP is IDE-only; this module uses NOTION_TOKEN + @notionhq/client.
+ * Per-user tokens and page ids live in `user_integrations`; use `notionUser.ts` at runtime.
+ * Env vars below remain for local integration tests only.
  */
 import { APIErrorCode, Client, isNotionClientError } from "@notionhq/client";
 

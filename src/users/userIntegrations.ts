@@ -1,5 +1,6 @@
 /**
- * Per-user integration credentials. Process env vars are the deploy-owner fallback only.
+ * Per-user integration credentials. Platform env holds shared OAuth app ids only
+ * (e.g. GOOGLE_CLIENT_ID); tokens and API keys live here.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -8,15 +9,29 @@ import { supabase as defaultClient } from "../tools/clients.js";
 export type UserIntegrations = {
   googleCalendarRefreshToken?: string;
   hevyApiKey?: string;
+  notionToken?: string;
   notionDailyLogParentPageId?: string;
   notionMorningBriefParentPageId?: string;
+  notionGoalsDatabaseId?: string;
+  notionDailyCheckinsDatabaseId?: string;
 };
 
-function envFallback(): UserIntegrations {
+const INTEGRATION_COLUMNS =
+  "google_calendar_refresh_token, hevy_api_key, notion_token, notion_daily_log_parent_page_id, notion_morning_brief_parent_page_id, notion_goals_database_id, notion_daily_checkins_database_id";
+
+function trimOrUndefined(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function rowToIntegrations(data: Record<string, unknown>): UserIntegrations {
   return {
-    googleCalendarRefreshToken: process.env.GOOGLE_CALENDAR_REFRESH_TOKEN?.trim() || undefined,
-    hevyApiKey:
-      process.env.HEVY_API_KEY?.trim() || process.env.MAGNUS_HEVY_API_KEY?.trim() || undefined,
+    googleCalendarRefreshToken: trimOrUndefined(data.google_calendar_refresh_token),
+    hevyApiKey: trimOrUndefined(data.hevy_api_key),
+    notionToken: trimOrUndefined(data.notion_token),
+    notionDailyLogParentPageId: trimOrUndefined(data.notion_daily_log_parent_page_id),
+    notionMorningBriefParentPageId: trimOrUndefined(data.notion_morning_brief_parent_page_id),
+    notionGoalsDatabaseId: trimOrUndefined(data.notion_goals_database_id),
+    notionDailyCheckinsDatabaseId: trimOrUndefined(data.notion_daily_checkins_database_id),
   };
 }
 
@@ -25,31 +40,20 @@ export async function loadUserIntegrations(
   client: SupabaseClient = defaultClient,
 ): Promise<UserIntegrations> {
   if (!userProfileId?.trim()) {
-    return envFallback();
+    return {};
   }
 
   const { data, error } = await client
     .from("user_integrations")
-    .select(
-      "google_calendar_refresh_token, hevy_api_key, notion_daily_log_parent_page_id, notion_morning_brief_parent_page_id",
-    )
+    .select(INTEGRATION_COLUMNS)
     .eq("user_profile_id", userProfileId)
     .maybeSingle();
 
   if (error || !data) {
-    return envFallback();
+    return {};
   }
 
-  return {
-    googleCalendarRefreshToken:
-      (data.google_calendar_refresh_token as string | null)?.trim() ||
-      envFallback().googleCalendarRefreshToken,
-    hevyApiKey: (data.hevy_api_key as string | null)?.trim() || envFallback().hevyApiKey,
-    notionDailyLogParentPageId:
-      (data.notion_daily_log_parent_page_id as string | null)?.trim() || undefined,
-    notionMorningBriefParentPageId:
-      (data.notion_morning_brief_parent_page_id as string | null)?.trim() || undefined,
-  };
+  return rowToIntegrations(data as Record<string, unknown>);
 }
 
 export async function upsertUserIntegrations(
@@ -61,8 +65,11 @@ export async function upsertUserIntegrations(
       user_profile_id: input.userProfileId,
       google_calendar_refresh_token: input.googleCalendarRefreshToken ?? null,
       hevy_api_key: input.hevyApiKey ?? null,
+      notion_token: input.notionToken ?? null,
       notion_daily_log_parent_page_id: input.notionDailyLogParentPageId ?? null,
       notion_morning_brief_parent_page_id: input.notionMorningBriefParentPageId ?? null,
+      notion_goals_database_id: input.notionGoalsDatabaseId ?? null,
+      notion_daily_checkins_database_id: input.notionDailyCheckinsDatabaseId ?? null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_profile_id" },
