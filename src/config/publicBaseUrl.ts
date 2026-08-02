@@ -13,6 +13,22 @@ function stripTrailingSlash(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
+/**
+ * OAuth redirect URIs must be origin + fixed path. If TELEGRAM_WEBHOOK_URL (or similar)
+ * accidentally includes a path, keep only https://host[:port].
+ */
+export function httpsOrigin(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") {
+      return null;
+    }
+    return stripTrailingSlash(u.origin);
+  } catch {
+    return null;
+  }
+}
+
 export type PublicBaseUrl = { base: string; source: string };
 
 export function resolvePublicBaseUrl(env: EnvBag = process.env): PublicBaseUrl | null {
@@ -22,8 +38,8 @@ export function resolvePublicBaseUrl(env: EnvBag = process.env): PublicBaseUrl |
     val(env, "TELEGRAM_WEBHOOK_URL") ||
     undefined;
   if (explicit) {
-    const base = stripTrailingSlash(explicit);
-    if (!/^https:\/\//i.test(base)) {
+    const base = httpsOrigin(explicit);
+    if (!base) {
       return null;
     }
     return {
@@ -38,12 +54,21 @@ export function resolvePublicBaseUrl(env: EnvBag = process.env): PublicBaseUrl |
 
   const railway = val(env, "RAILWAY_PUBLIC_DOMAIN");
   if (railway) {
-    return { base: `https://${stripTrailingSlash(railway)}`, source: "RAILWAY_PUBLIC_DOMAIN" };
+    const host = stripTrailingSlash(railway.replace(/^https?:\/\//i, ""));
+    const base = httpsOrigin(`https://${host}`);
+    if (!base) {
+      return null;
+    }
+    return { base, source: "RAILWAY_PUBLIC_DOMAIN" };
   }
 
   const render = val(env, "RENDER_EXTERNAL_URL");
   if (render) {
-    return { base: stripTrailingSlash(render), source: "RENDER_EXTERNAL_URL" };
+    const base = httpsOrigin(render);
+    if (!base) {
+      return null;
+    }
+    return { base, source: "RENDER_EXTERNAL_URL" };
   }
 
   const fly = val(env, "FLY_APP_NAME");

@@ -75,6 +75,26 @@ npx tsx scripts/upsert-user-integrations.mts
 
 ---
 
+## Troubleshooting: `redirect_uri_mismatch`
+
+Google shows this when the URI Magnus sends is not listed on the **same** OAuth client as
+`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+
+1. Open https://\<your-magnus-host\>/oauth/youtube — it returns the exact `redirect_uri` Magnus uses.
+2. In Google Cloud → APIs & Services → Credentials → your OAuth client:
+   - Client type must be **Web application** (Desktop clients cannot use the Railway callback).
+   - Under **Authorized redirect URIs**, paste that `redirect_uri` **exactly** (no trailing slash,
+     `https` only).
+3. Save, wait ~1 minute, ask Magnus to connect YouTube again.
+
+For this Railway host the value is normally:
+
+```
+https://crewai-production-c221.up.railway.app/oauth/youtube/callback
+```
+
+---
+
 ## Limits
 
 - Cannot remote-control the phone player.

@@ -42,7 +42,7 @@ Wealth, Happiness and Wisdom are single prompt-only agents sharing one runner
 | **Runtime** | Node.js ≥ 20, TypeScript ESM, `tsx` for dev |
 | **Entry** | `src/index.ts` |
 | **Interface** | Telegram (Telegraf) — long polling or webhook |
-| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `GET /oauth/youtube/callback`, `POST /internal/jobs/morning-brief` |
+| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `GET /oauth/youtube` (shows redirect URI), `GET /oauth/youtube/callback`, `POST /internal/jobs/morning-brief` |
 | **Model** | `claude-sonnet-4-6` for classification and every agent |
 | **Supabase project** | `xdrpjfdhduskhzryevze` (ap-northeast-1) |
 | **Logging** | pino JSON; Telegram user ids masked in production |
