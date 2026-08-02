@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import { looksLikeYoutubeAction } from "./youtubeActionDetect.js";
 
 describe("looksLikeYoutubeAction", () => {
-  it("detects connect / link YouTube", () => {
+  it("detects connect / link YouTube or Google", () => {
     expect(looksLikeYoutubeAction("connect YouTube")).toBe(true);
     expect(looksLikeYoutubeAction("link my yt music account")).toBe(true);
+    expect(looksLikeYoutubeAction("connect Google")).toBe(true);
+    expect(looksLikeYoutubeAction("connect my calendar")).toBe(true);
   });
 
   it("detects YouTube URLs", () => {

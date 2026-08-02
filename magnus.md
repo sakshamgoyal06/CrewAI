@@ -42,7 +42,7 @@ Wealth, Happiness and Wisdom are single prompt-only agents sharing one runner
 | **Runtime** | Node.js ≥ 20, TypeScript ESM, `tsx` for dev |
 | **Entry** | `src/index.ts` |
 | **Interface** | Telegram (Telegraf) — long polling or webhook |
-| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `GET /oauth/youtube` (shows redirect URI), `GET /oauth/youtube/callback`, `POST /internal/jobs/morning-brief` |
+| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `GET /oauth/google` (redirect URI), `GET /oauth/google/callback`, legacy `/oauth/youtube/*`, `POST /internal/jobs/morning-brief` |
 | **Model** | `claude-sonnet-4-6` for classification and every agent |
 | **Supabase project** | `xdrpjfdhduskhzryevze` (ap-northeast-1) |
 | **Logging** | pino JSON; Telegram user ids masked in production |
@@ -79,6 +79,7 @@ shell or `.env`.
 | `src/agents/orchestratorIntent.ts` | The five-way classifier, plus the one coercion (explicit meal log → HEALTH) |
 | `src/agents/magnusAgent.ts` | Magnus himself: calendar, YouTube, event log, journaling, reminders — tool loop |
 | `src/agents/tools/calendarTool.ts` | Google Calendar; per-user tokens; delete/update sync linked `magnus_events` rows |
+| `src/agents/tools/youtubeConnectTool.ts` | In-chat `connect_google` / aliases — Calendar + YouTube one consent |
 | `src/agents/tools/youtubeTool.ts` | YouTube / YT Music: search, recommend, playlists, bookmarks, cue (per-user token) |
 | `src/agents/tools/eventLogTool.ts` | Event log tools: plan, update, reschedule, list (`magnus_events`) |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
@@ -100,9 +101,10 @@ shell or `.env`.
 | `src/config/telegramRuntime.ts` | Polling vs webhook, public URL derivation, handler timeout |
 | `src/config/telegramCommands.ts` | The two registered commands (import-free, so the CLI needs no credentials) |
 | `src/config/magnusCapabilities.ts` | Env → capability report for `telegram:check` and the boot log |
-| `src/healthServer.ts` | `/health`, `/ready`, Morning Brief job route, Telegram webhook route, YouTube OAuth callback (`GET /oauth/youtube/callback`) |
+| `src/healthServer.ts` | `/health`, `/ready`, Morning Brief job route, Telegram webhook, unified Google OAuth (`GET /oauth/google/callback`) |
 | `src/integrations/googleCalendar/` | OAuth (env refresh token or local token file) + Calendar operations |
-| `src/integrations/youtube/` | OAuth / API key + Data API operations + in-chat OAuth flow |
+| `src/integrations/youtube/` | YouTube Data API operations + auth helpers |
+| `src/integrations/google/` | Unified in-chat OAuth (Calendar + YouTube scopes, dual-write tokens) |
 | `src/config/publicBaseUrl.ts` | Public HTTPS base for OAuth redirect URIs |
 | `mcp/google-calendar/server.mts` | Optional stdio MCP server for Cursor — not part of the bot |
 
@@ -128,9 +130,10 @@ shell or `.env`.
    hours is rejected — Magnus must call `reschedule_event` instead. Calendar delete/update cancels or
    reschedules the linked event-log row automatically. Memory and the Morning Brief read commitments
    around today plus per-activity adherence from `magnus_event_activity_stats`.
-10. **YouTube** — Per-user connection (`user_integrations.google_youtube_refresh_token`). In chat:
-    “connect YouTube” → `connect_youtube` sends a Google consent link; `GET /oauth/youtube/callback`
-    stores the token and confirms on Telegram. Also: search, playlists, bookmarks, cue.
+10. **Google (Calendar + YouTube)** — Per-user tokens in `user_integrations`. In chat: “connect
+    Google” → one consent; `GET /oauth/google/callback` stores the same refresh token on
+    `google_calendar_refresh_token` and `google_youtube_refresh_token`. Host needs a **Web**
+    OAuth client (`GOOGLE_CLIENT_ID` / `SECRET`).
 
 ---
 
@@ -216,4 +219,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-02 (YouTube connect-in-chat OAuth onboarding via Telegram link + callback)
+**Last updated:** 2026-08-02 (Unified in-chat Google OAuth: Calendar + YouTube one consent, dual-write tokens)

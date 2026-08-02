@@ -44,7 +44,7 @@ export function buildHelpMessage(): string {
     "“something short to read tonight” · “four days in Kerala, low effort — ideas?”",
     "",
     "<b>YouTube / music</b>",
-    "“connect YouTube” · “search YouTube for lo-fi beats” · “add this to my Magnus playlist” · “bookmark that song” · “cue this for later”",
+    "“connect Google” · “search YouTube for lo-fi beats” · “add this to my Magnus playlist” · “bookmark that song” · “cue this for later”",
     "",
     "<b>Anything worth remembering</b>",
     "Just tell me. “Decided to drop the side project” gets logged and comes back when it's relevant.",

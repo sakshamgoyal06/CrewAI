@@ -226,10 +226,10 @@ function youtubeCapability(env: EnvBag): Capability {
     return {
       id: "youtube",
       title: "YouTube / YT Music",
-      telegram: "“connect YouTube”, “find a focus playlist”, “cue this song”",
+      telegram: "“connect Google”, “find a focus playlist”, “cue this song”",
       status: "partial",
       detail:
-        "OAuth app on host. Say “connect YouTube” for an in-chat Google link (token → user_integrations.google_youtube_refresh_token). Optional YOUTUBE_API_KEY for search-only.",
+        "OAuth Web app on host. Say “connect Google” for one in-chat link (Calendar + YouTube tokens → user_integrations). Optional YOUTUBE_API_KEY for search-only.",
       missing: ["user_integrations.google_youtube_refresh_token"],
     };
   }
@@ -241,7 +241,7 @@ function youtubeCapability(env: EnvBag): Capability {
       telegram: "“search YouTube for …”, “recommend something to watch”",
       status: "partial",
       detail:
-        "API key only — search and recommend work; playlists and likes need per-user OAuth (connect YouTube in chat).",
+        "API key only — search and recommend work; playlists and likes need per-user OAuth (connect Google in chat).",
       missing: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
     };
   }
