@@ -298,7 +298,7 @@ export async function loadPlaylistItems(input: {
   const videoIds = items
     .map((i) => i.contentDetails?.videoId ?? i.snippet?.resourceId?.videoId)
     .filter((id): id is string => Boolean(id));
-  const details = await getVideos(videoIds);
+  const details = await getVideos(videoIds, input.userProfileId);
   const byId = new Map(details.map((v) => [v.videoId, v]));
 
   return items
@@ -354,7 +354,12 @@ export async function addToPlaylist(input: {
     },
   });
 
-  const video = await getVideo(videoId);
+  let video: YoutubeVideoBrief | null = null;
+  try {
+    video = await getVideo(videoId, input.userProfileId);
+  } catch {
+    // Insert already succeeded; metadata fetch can fail without API key if OAuth hiccups.
+  }
   const kind = video?.kind ?? "video";
   return {
     playlistItemId: res.data.id ?? "",

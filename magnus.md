@@ -219,4 +219,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-02 (YouTube search/recommend use per-user OAuth token, not host API key only)
+**Last updated:** 2026-08-02 (YouTube playlist add: use per-user OAuth for metadata after insert)

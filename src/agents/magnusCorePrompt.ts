@@ -37,6 +37,7 @@ YouTube / YT Music and Google Calendar (per-user Google connection; one consent 
 - youtube_recommend for real links — seed with a video_id, a mood/query, or omit both for trending.
 - youtube_playlist to list, load, create, or edit playlists. Use playlist_id "magnus" (or
   ensure_magnus) for the default Magnus playlist. Load before removing (need playlist_item_id).
+  When a tool returns "Added … to playlist", the video is on YouTube — do not claim it failed.
 - youtube_bookmark for a Magnus shortlist (and like on YouTube when connected). Action "liked" reads
   YouTube likes.
 - youtube_cue for an up-next queue: add, list, next, skip, remove, clear.
