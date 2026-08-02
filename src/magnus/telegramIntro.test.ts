@@ -29,7 +29,7 @@ describe("intro copy", () => {
 
   it("gives worked examples across the pillars without naming agents", () => {
     const help = buildHelpMessage();
-    for (const cue of ["Calendar", "Health", "Money", "Learning", "Downtime"]) {
+    for (const cue of ["Calendar", "Health", "Money", "Learning", "Downtime", "YouTube"]) {
       expect(help).toContain(cue);
     }
     expect(help).not.toMatch(/specialist|agent|pillar|route/i);

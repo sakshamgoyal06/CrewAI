@@ -3,10 +3,10 @@
  *
  * Pillar specialists handle depth (health, wealth, happiness, wisdom). Magnus keeps everything
  * that spans them or belongs to no one: the day, the calendar, journaling and logging, reminders,
- * and ordinary conversation.
+ * YouTube / YT Music, and ordinary conversation.
  *
  * This is the only agent with tools, because these are Magnus's own responsibilities rather than
- * any pillar's: reading and writing Google Calendar, and logging a note to Supabase and Notion.
+ * any pillar's: reading and writing Google Calendar, logging notes, the event log, and YouTube.
  */
 import type {
   Message,
@@ -32,18 +32,26 @@ import {
   updateEventStatus,
 } from "./tools/eventLogTool.js";
 import { logNote } from "./tools/logNoteTool.js";
+import {
+  youtubeBookmarkTool,
+  youtubeCueTool,
+  youtubePlaylistTool,
+  youtubeRecommendTool,
+  youtubeSearchTool,
+} from "./tools/youtubeTool.js";
 import type { AgentContext, AgentResult } from "./types.js";
 
 const MODEL = "claude-sonnet-4-6";
-// A single turn can reasonably read the log, move something, and journal it: room for all three.
-const MAX_TOOL_ROUNDS = 6;
+// Calendar + event log + YouTube in one turn needs a little headroom.
+const MAX_TOOL_ROUNDS = 8;
 
 export const MAGNUS_SYSTEM = `You are Magnus, Saksham's personal chief of staff. You speak in your
 own voice at all times — never mention specialists, routing, pillars, or how the answer was
 produced.
 
 You personally handle: the day and week (what is on, what matters, what to drop), the calendar,
-journaling and logging, reminders, and any question that spans several parts of his life.
+journaling and logging, reminders, YouTube / YT Music (search, playlists, bookmarks, cue), and any
+question that spans several parts of his life.
 
 Tools:
 - read_calendar for anything about his schedule, availability, or "what does my day look like".
@@ -73,11 +81,26 @@ because everything you later say about his rhythm comes out of it:
 - list_events before you answer anything about what he has planned, what he skipped, or when he
   usually does something. Ask it for stats when the question is about a habit or a pattern.
 
+YouTube / YT Music (there is no separate Music API — music uses YouTube with song links):
+- youtube_search to find songs or videos. Prefer kind=song for music.
+- youtube_recommend for "what should I watch/listen to" when he wants real links — seed with a
+  video_id when he named one, or a mood/query, otherwise trending.
+- youtube_playlist to list, load, create, or edit playlists. Use playlist_id "magnus" (or action
+  ensure_magnus) for his default Magnus playlist. Load before removing items (need playlist_item_id).
+- youtube_bookmark to save a shortlist in Magnus (and like on YouTube when connected). List before
+  removing. Action "liked" reads YouTube likes.
+- youtube_cue for an up-next queue: add, list, next (hand him the link), skip, remove, clear.
+  Cue is Magnus's queue, not YouTube's autoplay.
+
+When you recommend or cue something, include the openable link in your reply. Two or three strong
+picks beat a long dump. Never invent video ids or claim you added something you did not.
+
 Coaching from the log: when he is about to plan something he has missed repeatedly at that hour,
 say so plainly and suggest the time he actually keeps. One observation, not a lecture.
 
 Changing and deleting:
-- Never show him an event id. They are for you.
+- Never show him an event id, video id, playlist id, bookmark id, or cue id unless he needs it to
+  choose between lookalikes. They are for you.
 - If more than one event could be the one he means, ask which — do not pick. If exactly one matches,
   act without asking.
 - Say precisely what you changed or removed, with the old and new time where relevant, so a mistake
@@ -90,7 +113,7 @@ sign-offs. Under ~150 words unless he asks for more. When you have his schedule 
 describe it as a day — what is fixed, where the gaps are — rather than reciting a list of times.
 
 If a tool fails, say plainly what did not work and what would fix it. Never invent calendar
-entries or claim to have saved something you did not.`;
+entries, playlist changes, or bookmarks you did not make.`;
 
 const TOOLS: Tool[] = [
   {
@@ -330,6 +353,121 @@ const TOOLS: Tool[] = [
       required: [],
     },
   },
+  {
+    name: "youtube_search",
+    description:
+      "Search YouTube / YT Music for songs or videos. Returns titles, channels, durations, and openable links.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "What to search for." },
+        kind: {
+          type: "string",
+          enum: ["song", "video", "all"],
+          description: "Prefer song for music. Defaults to all.",
+        },
+        max_results: { type: "number", description: "How many results, default 8." },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "youtube_recommend",
+    description:
+      "Recommend songs or videos with real links. Seed with a video_id, pass a mood/query, or omit both for trending.",
+    input_schema: {
+      type: "object",
+      properties: {
+        seed_video_id: {
+          type: "string",
+          description: "Video id to recommend similar items from.",
+        },
+        query: { type: "string", description: "Mood, artist, genre, or topic." },
+        kind: { type: "string", enum: ["song", "video", "all"] },
+        max_results: { type: "number" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "youtube_playlist",
+    description:
+      "Manage YouTube playlists: list, load, create, add, remove, ensure_magnus (default Magnus playlist).",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["list", "load", "create", "add", "remove", "ensure_magnus"],
+        },
+        playlist_id: {
+          type: "string",
+          description: "Playlist id, or 'magnus' for the default Magnus playlist.",
+        },
+        title: { type: "string", description: "For create." },
+        description: { type: "string", description: "For create." },
+        privacy_status: {
+          type: "string",
+          enum: ["private", "unlisted", "public"],
+          description: "For create. Defaults to private.",
+        },
+        video_id: { type: "string", description: "For add." },
+        url: { type: "string", description: "For add — YouTube URL instead of video_id." },
+        query: { type: "string", description: "For add — search and take the top hit." },
+        playlist_item_id: {
+          type: "string",
+          description: "For remove — from a prior load.",
+        },
+        max_results: { type: "number" },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "youtube_bookmark",
+    description:
+      "Magnus shortlist of songs/videos (also likes on YouTube when connected). Actions: add, list, remove, liked.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["add", "list", "remove", "liked"] },
+        video_id: { type: "string" },
+        url: { type: "string" },
+        query: { type: "string", description: "Search and bookmark the top hit." },
+        kind: { type: "string", enum: ["song", "video", "all"] },
+        note: { type: "string", description: "Why he wants this saved." },
+        bookmark_id: { type: "string", description: "For remove." },
+        also_like: {
+          type: "boolean",
+          description: "Also like on YouTube when adding. Defaults to true.",
+        },
+        max_results: { type: "number" },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "youtube_cue",
+    description:
+      "Up-next cue queue for songs/videos. Actions: add, list, next, skip, remove, clear.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["add", "list", "next", "skip", "remove", "clear"],
+        },
+        video_id: { type: "string" },
+        url: { type: "string" },
+        query: { type: "string", description: "Search and cue the top hit." },
+        kind: { type: "string", enum: ["song", "video", "all"] },
+        note: { type: "string" },
+        cue_id: { type: "string", description: "For remove." },
+        max_results: { type: "number" },
+      },
+      required: ["action"],
+    },
+  },
 ];
 
 function textFromMessage(msg: Message): string {
@@ -473,6 +611,58 @@ async function runTool(
           includeStats: input.include_stats === true,
           includeUnscheduled: input.include_unscheduled === true,
           limit: num(input.limit),
+        });
+      case "youtube_search":
+        return await youtubeSearchTool({
+          query: String(input.query ?? ""),
+          kind: str(input.kind),
+          maxResults: num(input.max_results),
+        });
+      case "youtube_recommend":
+        return await youtubeRecommendTool({
+          seedVideoId: str(input.seed_video_id),
+          query: str(input.query),
+          kind: str(input.kind),
+          maxResults: num(input.max_results),
+        });
+      case "youtube_playlist":
+        return await youtubePlaylistTool({
+          action: String(input.action ?? ""),
+          userProfileId: ctx.userProfileId,
+          playlistId: str(input.playlist_id),
+          title: str(input.title),
+          description: str(input.description),
+          videoId: str(input.video_id),
+          url: str(input.url),
+          query: str(input.query),
+          playlistItemId: str(input.playlist_item_id),
+          privacyStatus: str(input.privacy_status),
+          maxResults: num(input.max_results),
+        });
+      case "youtube_bookmark":
+        return await youtubeBookmarkTool({
+          action: String(input.action ?? ""),
+          userProfileId: ctx.userProfileId,
+          videoId: str(input.video_id),
+          url: str(input.url),
+          query: str(input.query),
+          kind: str(input.kind),
+          note: str(input.note),
+          bookmarkId: str(input.bookmark_id),
+          alsoLike: input.also_like === false ? false : undefined,
+          maxResults: num(input.max_results),
+        });
+      case "youtube_cue":
+        return await youtubeCueTool({
+          action: String(input.action ?? ""),
+          userProfileId: ctx.userProfileId,
+          videoId: str(input.video_id),
+          url: str(input.url),
+          query: str(input.query),
+          kind: str(input.kind),
+          note: str(input.note),
+          cueId: str(input.cue_id),
+          maxResults: num(input.max_results),
         });
       default:
         return `Unknown tool: ${name}`;

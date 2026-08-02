@@ -8,6 +8,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/ARCHITECTURE.md`** | What the system is: Magnus, four pillars, connections, ownership |
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
 | **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
+| **`docs/YOUTUBE.md`** | YouTube / YT Music setup (search, playlists, bookmarks, cue) |
 | **`MAGNUS_CORE_CONTEXT.md`** | Product intent and philosophy |
 
 ---
@@ -23,7 +24,7 @@ call. No menu, no lane picker, no per-department commands.
 
 | Owner | Scope |
 |---|---|
-| **Magnus** (`GENERAL`) | The day and week, Google Calendar, journaling and logging, reminders, cross-pillar questions, ordinary conversation. The only agent with tools. |
+| **Magnus** (`GENERAL`) | The day and week, Google Calendar, YouTube / YT Music, journaling and logging, reminders, cross-pillar questions, ordinary conversation. The only agent with tools. |
 | **Health** | Training, workouts, meals and macros, sleep, recovery, the health journal. Deep: sub-router, Hevy, nutrition providers, program memory, onboarding gate. |
 | **Wealth** | Budgeting, spending, saving, debt, net worth, financial goals, investing philosophy. |
 | **Happiness** | Books, film, music, games, hobbies, creative practice, rest, travel, relationships. |
@@ -76,11 +77,13 @@ shell or `.env`.
 | `src/magnus.ts` | Turn handler: allowlist gate, chat persistence, typing indicator, orchestrator call. Starts the Morning Brief cron. |
 | `src/agents/magnusOrchestrator.ts` | Health onboarding gate → classify → memory → pillar specialist or Magnus |
 | `src/agents/orchestratorIntent.ts` | The five-way classifier, plus the one coercion (explicit meal log → HEALTH) |
-| `src/agents/magnusAgent.ts` | Magnus himself: calendar, event log, journaling, reminders — tool loop |
+| `src/agents/magnusAgent.ts` | Magnus himself: calendar, YouTube, event log, journaling, reminders — tool loop |
 | `src/agents/tools/calendarTool.ts` | Google Calendar read / create / update / delete as text for the model, in the user's timezone; reads carry event ids so edits cannot act on a guess |
+| `src/agents/tools/youtubeTool.ts` | YouTube / YT Music: search, recommend, playlists, bookmarks, cue queue |
 | `src/agents/tools/eventLogTool.ts` | Event log tools: plan, update, reschedule, list (`magnus_events`) |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
 | `src/events/` | Event log domain: timezone helpers, Supabase store, formatting |
+| `src/youtube/` | Bookmarks, cue queue, and Magnus playlist state in Supabase |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
 | `src/agents/health/healthRouter.ts` | Health composite: meal log → journal → Hevy write → fitness → nutrition |
@@ -98,6 +101,7 @@ shell or `.env`.
 | `src/config/magnusCapabilities.ts` | Env → capability report for `telegram:check` and the boot log |
 | `src/healthServer.ts` | `/health`, `/ready`, Morning Brief job route, Telegram webhook route |
 | `src/integrations/googleCalendar/` | OAuth (env refresh token or local token file) + Calendar operations |
+| `src/integrations/youtube/` | OAuth / API key + YouTube Data API v3 operations (search, playlists, likes) |
 | `mcp/google-calendar/server.mts` | Optional stdio MCP server for Cursor — not part of the bot |
 
 ---
@@ -111,6 +115,8 @@ shell or `.env`.
 3. **Rate limit** — Redis fixed 60s window per user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, 0 disables).
 4. **Dedupe** — `update_id` claimed in Redis for 24h, so webhook retries never double-reply.
 5. **Classification** — Five intents. `GENERAL` is Magnus's own work, not a fallback bucket.
+   Explicit meal logs coerce to `HEALTH`; YouTube / YT Music actions coerce to `GENERAL` so
+   Magnus tools run (Happiness stays taste-only).
 6. **Memory** — Loaded once per turn: recent chat as verbatim `messages[]` (configurable window), rolling summary for older turns, semantic facts from `memory_summaries`, plus structured profile/goals/logs. Tunable via `MAGNUS_MEMORY_*` in `.env.example`. Post-turn maintenance updates conversation summary and extracted facts.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
    routing in `metadata` (`delegated_agent`, `agent_metadata`).
@@ -119,13 +125,16 @@ shell or `.env`.
    to `magnus_events`. Moving a commitment closes the old row and opens a linked replacement (never
    edits time in place). Memory and the Morning Brief read commitments around today plus per-activity
    adherence from `magnus_event_activity_stats`.
+10. **YouTube** — Magnus tools `youtube_search`, `youtube_recommend`, `youtube_playlist`,
+    `youtube_bookmark`, `youtube_cue`. Bookmarks and cue live in Supabase; playlists use the YouTube
+    Data API (no official YT Music API — song links open on music.youtube.com).
 
 ---
 
 ## Database
 
 **Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`,
-`user_health_profile`.
+`user_health_profile`, `magnus_youtube_bookmarks`, `magnus_youtube_cues`, `magnus_youtube_state`.
 
 **Read only:** `workouts`, `goals`, `memory_summaries`, `daily_scores`, `happiness_reserve`,
 `patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans`,
@@ -134,8 +143,9 @@ shell or `.env`.
 Public tables use RLS with a `service_role_only` policy; the service role key bypasses it. The new
 Supabase `sb_secret_…` key format works as service role.
 
-`supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`, and
-`magnus_events` — older schema was applied directly to the project before those migrations existed.
+`supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`,
+`magnus_events`, and `magnus_youtube_*` — older schema was applied directly to the project before
+those migrations existed.
 
 ---
 
@@ -145,6 +155,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 - **`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_CALENDAR_REFRESH_TOKEN`** — calendar on a
   host with no browser or disk. See `docs/GOOGLE_CALENDAR.md`.
+- **`GOOGLE_YOUTUBE_REFRESH_TOKEN`** — YouTube / YT Music (same client id/secret; separate token).
+  Optional `YOUTUBE_API_KEY` for search-only. See `docs/YOUTUBE.md`.
 - **`HEVY_API_KEY`** — real workout data for the Health pillar.
 - **`NOTION_TOKEN` + `NOTION_DAILY_LOG_PARENT_PAGE_ID`** — mirror journal notes to Notion.
 - **`USDA_FDC_API_KEY`, `CALORIENINJAS_API_KEY`** — meal macros.
@@ -165,6 +177,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npm run telegram:setup` | Apply Telegram config: webhook, commands, menu button, description |
 | `npm run test:supabase` | Supabase insert/delete smoke test |
 | `npm run google-calendar:auth` | One-time OAuth; prints the refresh token for the host |
+| `npm run youtube:auth` | One-time YouTube OAuth; prints `GOOGLE_YOUTUBE_REFRESH_TOKEN` |
 | `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
 | `npx tsx scripts/health/workouts/hevy/hevy-*.mts` | Hevy read/search/smoke helpers |
 
@@ -193,10 +206,10 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data.
 - **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables.
 - **No automatic calendar ↔ event-log sync** — link manually via `calendar_event_id` when booking.
-- **No E2E tests** against live Telegram, Supabase, Hevy or Google.
+- **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube.
 
 **Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
 
 ---
 
-**Last updated:** 2026-08-02 (Event log: `magnus_events` table, Magnus tools, memory + Morning Brief integration; migration applied to Supabase)
+**Last updated:** 2026-08-02 (YouTube / YT Music connection: search, playlists, bookmarks, cue; Magnus tools + Supabase tables)

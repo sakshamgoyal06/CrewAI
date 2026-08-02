@@ -76,6 +76,12 @@ const GOOGLE_CALENDAR_VARS = [
   "GOOGLE_CLIENT_SECRET",
   "GOOGLE_CALENDAR_REFRESH_TOKEN",
 ] as const;
+const GOOGLE_YOUTUBE_OAUTH_VARS = [
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_YOUTUBE_REFRESH_TOKEN",
+] as const;
+const YOUTUBE_API_KEY_VARS = ["YOUTUBE_API_KEY", "GOOGLE_YOUTUBE_API_KEY"] as const;
 const HEVY_VARS = ["HEVY_API_KEY", "MAGNUS_HEVY_API_KEY"] as const;
 
 function coreRequirements(env: EnvBag, production: boolean): CoreRequirement[] {
@@ -248,6 +254,45 @@ function calendarCapability(env: EnvBag): Capability {
   };
 }
 
+function youtubeCapability(env: EnvBag): Capability {
+  const oauthMissing = GOOGLE_YOUTUBE_OAUTH_VARS.filter((name) => !val(env, name));
+  const hasApiKey = Boolean(firstSet(env, YOUTUBE_API_KEY_VARS));
+
+  if (oauthMissing.length === 0) {
+    return {
+      id: "youtube",
+      title: "YouTube / YT Music",
+      telegram: "“find a focus playlist”, “cue this song”, “bookmark that video”",
+      status: "ready",
+      detail:
+        "Search, recommend, playlists, bookmarks, and cue queue against your YouTube account.",
+      missing: [],
+    };
+  }
+
+  if (hasApiKey) {
+    return {
+      id: "youtube",
+      title: "YouTube / YT Music",
+      telegram: "“search YouTube for …”, “recommend something to watch”",
+      status: "partial",
+      detail:
+        "API key only — search and recommend work; playlists, likes, and account library need OAuth. Run `npm run youtube:auth`.",
+      missing: oauthMissing,
+    };
+  }
+
+  return {
+    id: "youtube",
+    title: "YouTube / YT Music",
+    telegram: "“find a song on YouTube”",
+    status: "off",
+    detail:
+      "Not connected — Magnus will say so. Run `npm run youtube:auth` (and enable YouTube Data API v3), or set YOUTUBE_API_KEY for search-only.",
+    missing: [...oauthMissing],
+  };
+}
+
 function workoutsCapability(env: EnvBag): Capability {
   const hevy = Boolean(firstSet(env, HEVY_VARS));
   return {
@@ -340,6 +385,7 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
     morningBriefCapability(env),
     notionCapability(env),
     calendarCapability(env),
+    youtubeCapability(env),
     proactiveCapability(env),
     accessCapability(env),
     deliveryCapability(env),
