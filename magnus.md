@@ -76,9 +76,11 @@ shell or `.env`.
 | `src/magnus.ts` | Turn handler: allowlist gate, chat persistence, typing indicator, orchestrator call. Starts the Morning Brief cron. |
 | `src/agents/magnusOrchestrator.ts` | Health onboarding gate → classify → memory → pillar specialist or Magnus |
 | `src/agents/orchestratorIntent.ts` | The five-way classifier, plus the one coercion (explicit meal log → HEALTH) |
-| `src/agents/magnusAgent.ts` | Magnus himself: tool loop over calendar read/create and `log_note` |
+| `src/agents/magnusAgent.ts` | Magnus himself: calendar, event log, journaling, reminders — tool loop |
 | `src/agents/tools/calendarTool.ts` | Google Calendar read / create / update / delete as text for the model, in the user's timezone; reads carry event ids so edits cannot act on a guess |
-| `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured |
+| `src/agents/tools/eventLogTool.ts` | Event log tools: plan, update, reschedule, list (`magnus_events`) |
+| `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
+| `src/events/` | Event log domain: timezone helpers, Supabase store, formatting |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
 | `src/agents/health/healthRouter.ts` | Health composite: meal log → journal → Hevy write → fitness → nutrition |
@@ -113,22 +115,27 @@ shell or `.env`.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
    routing in `metadata` (`delegated_agent`, `agent_metadata`).
 8. **Replies** — One reply per turn, chunked only for Telegram's size limit, sent as HTML.
+9. **Event log** — Magnus tools `log_event`, `update_event`, `reschedule_event`, `list_events` write
+   to `magnus_events`. Moving a commitment closes the old row and opens a linked replacement (never
+   edits time in place). Memory and the Morning Brief read commitments around today plus per-activity
+   adherence from `magnus_event_activity_stats`.
 
 ---
 
 ## Database
 
-**Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `meal_logs`,
+**Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`,
 `user_health_profile`.
 
 **Read only:** `workouts`, `goals`, `memory_summaries`, `daily_scores`, `happiness_reserve`,
-`patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans`.
+`patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans`,
+`magnus_events_open`, `magnus_event_activity_stats`.
 
 Public tables use RLS with a `service_role_only` policy; the service role key bypasses it. The new
 Supabase `sb_secret_…` key format works as service role.
 
-`supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile` and `meal_logs` only —
-everything else was applied directly to the project and **cannot be rebuilt from this repo**.
+`supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`, and
+`magnus_events` — older schema was applied directly to the project before those migrations existed.
 
 ---
 
@@ -181,14 +188,15 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Memory reads tables nothing writes.** Fifteen read-only tables can produce `gaps` every turn when
   `MAGNUS_MEMORY_INCLUDE_GAPS=true` (default off). Semantic + conversation summaries now write to
   `memory_summaries` when Phases 2–3 are enabled.
-- **Schema not reproducible** from `supabase/migrations/`.
+- **Schema not reproducible** from `supabase/migrations/` for tables predating April 2026 migrations.
 - **Semantic recall** — no embeddings; memory is recent-window plus structured reads.
 - **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data.
-- **Morning Brief does not read the calendar** — it predates the calendar tools.
+- **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables.
+- **No automatic calendar ↔ event-log sync** — link manually via `calendar_event_id` when booking.
 - **No E2E tests** against live Telegram, Supabase, Hevy or Google.
 
 **Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
 
 ---
 
-**Last updated:** 2026-07-28 (Phased memory: verbatim messages[], summary buffer, semantic facts, adaptive retrieval — `MAGNUS_MEMORY_*` tunables; Hevy full set detail in Fitness agent)
+**Last updated:** 2026-08-02 (Event log: `magnus_events` table, Magnus tools, memory + Morning Brief integration; migration applied to Supabase)

@@ -178,20 +178,7 @@ export function normalizeRescheduleKind(value: string | null | undefined): Resch
   return null;
 }
 
-const ACTIVITY_STOPWORDS = new Set([
-  "a",
-  "an",
-  "the",
-  "my",
-  "do",
-  "doing",
-  "some",
-  "session",
-  "at",
-  "on",
-  "for",
-  "to",
-]);
+const ACTIVITY_STOPWORDS = new Set(["a", "an", "the", "my", "some", "at", "on", "for", "to"]);
 
 /**
  * A stable slug for "the same thing again", so three months of differently-worded AI sessions still
