@@ -3,6 +3,8 @@ import type { MemoryConfig } from "./memoryConfig.js";
 
 /** Which non-chat memory slices to load for a turn (Phase 4). */
 export type MemoryRetrievalProfile = {
+  /** Commitments around today from the event log. */
+  includeEvents: boolean;
   includeDailyLogs: boolean;
   includeDailyScores: boolean;
   includeGoals: boolean;
@@ -26,6 +28,7 @@ const CALENDAR_PATTERN =
 
 function baseProfile(config: MemoryConfig): MemoryRetrievalProfile {
   return {
+    includeEvents: true,
     includeDailyLogs: true,
     includeDailyScores: true,
     includeGoals: true,

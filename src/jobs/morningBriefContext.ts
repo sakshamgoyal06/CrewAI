@@ -4,6 +4,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { startOfLocalDay } from "../events/eventTime.js";
 import { logger } from "../logger.js";
 
 export type MorningBriefContextBundle = {
@@ -20,6 +21,10 @@ export type MorningBriefContextBundle = {
   dailyPlans: unknown[];
   /** Recent free-form notes from `magnus_daily_logs` (Notion / Telegram mirror). */
   magnusDailyLogs: unknown[];
+  /** Commitments from yesterday through tonight, from `magnus_events`. */
+  events: unknown[];
+  /** Per-activity adherence from `magnus_event_activity_stats`. */
+  eventActivityStats: unknown[];
   /** Emerging+ patterns only — filtered from raw rows when possible. */
   patternRows: unknown[];
 };
@@ -188,6 +193,49 @@ export async function fetchMorningBriefContext(
         .limit(12),
     )) ?? [];
 
+  // Write off yesterday's untouched commitments before reading, so the brief talks about a log
+  // that matches reality rather than one full of stale "planned" rows.
+  try {
+    const { error } = await supabase.rpc("magnus_sweep_missed_events", {
+      p_user_profile_id: userProfileId,
+      p_grace_minutes: 180,
+      p_max_age_days: 14,
+    });
+    if (error) {
+      logger.debug({ err: String(error.message ?? error) }, "missed-event sweep skipped");
+    }
+  } catch (err) {
+    logger.debug({ err: String(err) }, "missed-event sweep failed");
+  }
+
+  const eventsFrom = startOfLocalDay(now, timeZone, -1).toISOString();
+  const eventsTo = startOfLocalDay(now, timeZone, 2).toISOString();
+  const events =
+    (await safeList("magnus_events", async () =>
+      await supabase
+        .from("magnus_events")
+        .select(
+          "id, title, details, pillar, activity_key, status, planned_start_at, planned_end_at, " +
+            "all_day, started_at, ended_at, actual_minutes, start_delay_minutes, reason, " +
+            "outcome_note, reschedule_count, reschedule_kind, time_zone",
+        )
+        .eq("user_profile_id", userProfileId)
+        .gte("planned_start_at", eventsFrom)
+        .lt("planned_start_at", eventsTo)
+        .order("planned_start_at", { ascending: true })
+        .limit(40),
+    )) ?? [];
+
+  const eventActivityStats =
+    (await safeList("magnus_event_activity_stats", async () =>
+      await supabase
+        .from("magnus_event_activity_stats")
+        .select("*")
+        .eq("user_profile_id", userProfileId)
+        .order("total", { ascending: false })
+        .limit(10),
+    )) ?? [];
+
   const rawPatterns =
     (await safeList("patterns", async () =>
       await supabase.from("patterns").select("*").eq("user_profile_id", userProfileId).limit(24),
@@ -210,6 +258,8 @@ export async function fetchMorningBriefContext(
     magnusInsights,
     dailyPlans,
     magnusDailyLogs,
+    events,
+    eventActivityStats,
     patternRows,
   };
 }
@@ -263,6 +313,8 @@ export function buildMorningBriefUserMessage(bundle: MorningBriefContextBundle):
     recentInsights: bundle.magnusInsights,
     recentDailyPlans: bundle.dailyPlans,
     recentMagnusDailyLogs: bundle.magnusDailyLogs,
+    commitmentsYesterdayAndToday: bundle.events,
+    activityAdherence: bundle.eventActivityStats,
     patternsEmergingPlus: bundle.patternRows,
   };
   return `Context JSON (stored facts only; gaps are OK):\n${JSON.stringify(payload, null, 2)}`;

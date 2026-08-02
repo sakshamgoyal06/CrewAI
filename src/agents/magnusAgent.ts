@@ -25,11 +25,18 @@ import {
   readCalendarEvents,
   updateCalendarEvent,
 } from "./tools/calendarTool.js";
+import {
+  listEventsTool,
+  logEvent,
+  rescheduleEventTool,
+  updateEventStatus,
+} from "./tools/eventLogTool.js";
 import { logNote } from "./tools/logNoteTool.js";
 import type { AgentContext, AgentResult } from "./types.js";
 
 const MODEL = "claude-sonnet-4-6";
-const MAX_TOOL_ROUNDS = 4;
+// A single turn can reasonably read the log, move something, and journal it: room for all three.
+const MAX_TOOL_ROUNDS = 6;
 
 export const MAGNUS_SYSTEM = `You are Magnus, Saksham's personal chief of staff. You speak in your
 own voice at all times — never mention specialists, routing, pillars, or how the answer was
@@ -49,7 +56,25 @@ Tools:
   the fields that change — a new start with no end keeps the original duration.
 - delete_calendar_event to cancel something. Read first to get the id.
 - log_note when he tells you something worth remembering — a decision, a reflection, how the day
-  went, a thing that happened. Log the substance, not the pleasantries.
+  went, a thing that happened. Log the substance, not the pleasantries. Pass event_id when the note
+  is about something in the event log.
+
+The event log is his record of what he committed to and what actually happened. Keep it honest,
+because everything you later say about his rhythm comes out of it:
+- log_event the moment he commits to something ("AI session at 9", "gym tomorrow morning") and also
+  when he reports something already finished. Give it an activity so the same thing recurring stays
+  one thread, and a pillar. If you also put it on the calendar, pass the calendar event id.
+- update_event when he says how it went: done, partial, skipped, missed, in_progress, cancelled.
+  Include how it actually went in the note, and the reason when he gives one — that is the part
+  worth having in three months.
+- reschedule_event when a commitment moves. Never edit the time in place and never delete and
+  re-add: the move is the data. Say why if he told you. If he pushes it with no new time, move it
+  without one.
+- list_events before you answer anything about what he has planned, what he skipped, or when he
+  usually does something. Ask it for stats when the question is about a habit or a pattern.
+
+Coaching from the log: when he is about to plan something he has missed repeatedly at that hour,
+say so plainly and suggest the time he actually keeps. One observation, not a lecture.
 
 Changing and deleting:
 - Never show him an event id. They are for you.
@@ -158,8 +183,151 @@ const TOOLS: Tool[] = [
           type: "string",
           description: "Calendar day YYYY-MM-DD. Defaults to today in the user's timezone.",
         },
+        event_id: {
+          type: "string",
+          description: "From list_events, when the note is about a logged commitment.",
+        },
       },
       required: ["text"],
+    },
+  },
+  {
+    name: "log_event",
+    description:
+      "Record a commitment in the event log: something planned, or something already done. Use whenever he locks in an activity or reports finishing one.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Short name, e.g. 'AI session'." },
+        start: {
+          type: "string",
+          description:
+            "Planned start as local time without offset (2026-07-31T21:00), or YYYY-MM-DD for a whole day. Omit if there is no time yet.",
+        },
+        end: { type: "string", description: "Planned end, same format as start." },
+        duration_minutes: {
+          type: "number",
+          description: "Used instead of end when he gives a length rather than a finish time.",
+        },
+        pillar: {
+          type: "string",
+          enum: ["health", "wealth", "wisdom", "joy", "magnus"],
+          description: "Which part of his life this belongs to. 'magnus' for admin and errands.",
+        },
+        activity: {
+          type: "string",
+          description:
+            "Stable name for the recurring thing, e.g. 'ai session', 'gym', 'reading'. Reuse the same wording every time.",
+        },
+        details: { type: "string", description: "What it involves, in his framing." },
+        status: {
+          type: "string",
+          enum: ["planned", "in_progress", "done", "partial", "skipped", "missed", "cancelled"],
+          description: "Defaults to planned. Use done when he is reporting it after the fact.",
+        },
+        actual_start: { type: "string", description: "When it really started, if known." },
+        actual_end: { type: "string", description: "When it really finished, if known." },
+        note: { type: "string", description: "How it went." },
+        reason: { type: "string", description: "Why it was skipped or missed." },
+        priority: { type: "number", description: "1 highest to 5 lowest." },
+        calendar_event_id: {
+          type: "string",
+          description: "Id from create_calendar_event, when this is also on the calendar.",
+        },
+        remind_at: { type: "string", description: "When to nudge him, local time." },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "update_event",
+    description:
+      "Say what became of a logged commitment: done, partial, skipped, missed, in progress or cancelled. Needs the id from list_events. Not for moving something to another time.",
+    input_schema: {
+      type: "object",
+      properties: {
+        event_id: { type: "string", description: "From list_events." },
+        status: {
+          type: "string",
+          enum: ["planned", "in_progress", "done", "partial", "skipped", "missed", "cancelled"],
+        },
+        note: { type: "string", description: "How it went, in his words." },
+        reason: { type: "string", description: "Why it did not happen, when it did not." },
+        actual_start: { type: "string", description: "When it really started, local time." },
+        actual_end: { type: "string", description: "When it really finished, local time." },
+        details: { type: "string", description: "Corrected or fuller description." },
+      },
+      required: ["event_id"],
+    },
+  },
+  {
+    name: "reschedule_event",
+    description:
+      "Move a logged commitment to a new time. Closes the original as postponed or preponed and opens a linked replacement, so the slip is kept. Needs the id from list_events.",
+    input_schema: {
+      type: "object",
+      properties: {
+        event_id: { type: "string", description: "From list_events." },
+        new_start: {
+          type: "string",
+          description:
+            "New start, local time without offset. Omit when he is pushing it with no new time in mind.",
+        },
+        new_end: {
+          type: "string",
+          description: "New end. Omit to keep the original length.",
+        },
+        kind: {
+          type: "string",
+          enum: ["postponed", "preponed", "rescheduled"],
+          description: "Leave empty to infer from the times.",
+        },
+        reason: { type: "string", description: "Why it moved — the useful part." },
+      },
+      required: ["event_id"],
+    },
+  },
+  {
+    name: "list_events",
+    description:
+      "Read the event log: what is planned, what happened, what slipped, and how a recurring activity actually goes. Read before answering anything about his commitments or habits.",
+    input_schema: {
+      type: "object",
+      properties: {
+        from: {
+          type: "string",
+          description: "Range start, YYYY-MM-DD or local datetime. Defaults to yesterday.",
+        },
+        to: {
+          type: "string",
+          description: "Range end, YYYY-MM-DD or local datetime. Defaults to a week out.",
+        },
+        status: {
+          type: "string",
+          description:
+            "Filter: 'open', 'closed', 'slipped', 'all', or specific statuses comma-separated.",
+        },
+        pillar: { type: "string", enum: ["health", "wealth", "wisdom", "joy", "magnus"] },
+        activity: {
+          type: "string",
+          description: "Narrow to one recurring activity, e.g. 'gym'.",
+        },
+        query: { type: "string", description: "Free-text match on the title." },
+        event_id: {
+          type: "string",
+          description: "One event and its full move history, instead of a range.",
+        },
+        include_stats: {
+          type: "boolean",
+          description: "Add completion rate, typical time of day and usual delay.",
+        },
+        include_unscheduled: {
+          type: "boolean",
+          description: "Also return commitments with no time on them yet.",
+        },
+        limit: { type: "number", description: "Max rows, default 30." },
+      },
+      required: [],
     },
   },
 ];
@@ -193,6 +361,12 @@ function contextBlock(ctx: AgentContext): string {
   }
   return parts.join("\n");
 }
+
+const str = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim() ? value : undefined;
+
+const num = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
 
 async function runTool(
   name: string,
@@ -240,7 +414,65 @@ async function runTool(
           userProfileId: ctx.userProfileId,
           text: String(input.text ?? ""),
           date: typeof input.date === "string" ? input.date : undefined,
+          eventId: typeof input.event_id === "string" ? input.event_id : undefined,
           timeZone,
+        });
+      case "log_event":
+        return await logEvent({
+          userProfileId: ctx.userProfileId,
+          timeZone,
+          title: String(input.title ?? ""),
+          start: str(input.start),
+          end: str(input.end),
+          durationMinutes: num(input.duration_minutes),
+          pillar: str(input.pillar),
+          activity: str(input.activity),
+          details: str(input.details),
+          status: str(input.status),
+          actualStart: str(input.actual_start),
+          actualEnd: str(input.actual_end),
+          note: str(input.note),
+          reason: str(input.reason),
+          priority: num(input.priority),
+          calendarEventId: str(input.calendar_event_id),
+          remindAt: str(input.remind_at),
+        });
+      case "update_event":
+        return await updateEventStatus({
+          userProfileId: ctx.userProfileId,
+          timeZone,
+          eventId: String(input.event_id ?? ""),
+          status: str(input.status),
+          note: str(input.note),
+          reason: str(input.reason),
+          actualStart: str(input.actual_start),
+          actualEnd: str(input.actual_end),
+          details: str(input.details),
+        });
+      case "reschedule_event":
+        return await rescheduleEventTool({
+          userProfileId: ctx.userProfileId,
+          timeZone,
+          eventId: String(input.event_id ?? ""),
+          newStart: str(input.new_start),
+          newEnd: str(input.new_end),
+          kind: str(input.kind),
+          reason: str(input.reason),
+        });
+      case "list_events":
+        return await listEventsTool({
+          userProfileId: ctx.userProfileId,
+          timeZone,
+          from: str(input.from),
+          to: str(input.to),
+          status: str(input.status),
+          pillar: str(input.pillar),
+          activity: str(input.activity),
+          query: str(input.query),
+          eventId: str(input.event_id),
+          includeStats: input.include_stats === true,
+          includeUnscheduled: input.include_unscheduled === true,
+          limit: num(input.limit),
         });
       default:
         return `Unknown tool: ${name}`;

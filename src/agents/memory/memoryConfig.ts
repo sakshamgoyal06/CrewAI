@@ -43,6 +43,8 @@ export type MemoryConfig = {
   /** Snippet limits inside the memory block. */
   dailyLogSnippetChars: number;
   dailyLogsInBlock: number;
+  /** Commitments from the event log to show in the memory block. */
+  eventsInBlock: number;
   rollingSummarySnippetChars: number;
   semanticFactSnippetChars: number;
 };
@@ -105,6 +107,7 @@ export function memoryConfig(): MemoryConfig {
 
     dailyLogSnippetChars: envInt("MAGNUS_MEMORY_DAILY_LOG_SNIPPET_CHARS", 400),
     dailyLogsInBlock: envInt("MAGNUS_MEMORY_DAILY_LOGS_IN_BLOCK", 6),
+    eventsInBlock: envInt("MAGNUS_MEMORY_EVENTS_IN_BLOCK", 8),
     rollingSummarySnippetChars: envInt("MAGNUS_MEMORY_ROLLING_SUMMARY_SNIPPET_CHARS", 800),
     semanticFactSnippetChars: envInt("MAGNUS_MEMORY_SEMANTIC_FACT_SNIPPET_CHARS", 200),
   };

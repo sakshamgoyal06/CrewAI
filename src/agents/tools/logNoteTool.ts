@@ -8,6 +8,7 @@
 import { logger } from "../../logger.js";
 import { loggableError } from "../../util/loggableError.js";
 import { recordMagnusDailyLog } from "../../tools/dailyLog.js";
+import { updateEvent } from "../../events/eventStore.js";
 import {
   appendParagraphBlocks,
   createNotionClient,
@@ -49,11 +50,34 @@ async function mirrorToNotion(
   }
 }
 
+/**
+ * Attaches a saved note to the commitment it is about, so "skipped the gym, back was sore" is
+ * reachable from the event as well as from the journal.
+ */
+async function linkToEvent(input: {
+  userProfileId: string;
+  eventId: string;
+  dailyLogId: string;
+}): Promise<string | null> {
+  const linked = await updateEvent({
+    userProfileId: input.userProfileId,
+    eventId: input.eventId,
+    dailyLogId: input.dailyLogId,
+  });
+  if (!linked.ok) {
+    logger.warn({ err: linked.error }, "daily log event link failed");
+    return null;
+  }
+  return linked.data.title;
+}
+
 export async function logNote(input: {
   userProfileId: string;
   text: string;
   date?: string;
   timeZone: string;
+  /** When the note is about a specific commitment from the event log. */
+  eventId?: string;
 }): Promise<string> {
   const text = input.text.trim();
   if (!text) {
@@ -81,7 +105,17 @@ export async function logNote(input: {
   if (!saved.ok) {
     return `Could not save the note: ${saved.error ?? "unknown error"}.`;
   }
-  return notionPageId
-    ? `Logged for ${dateKey} (saved and mirrored to Notion).`
-    : `Logged for ${dateKey}.`;
+
+  let linkedTitle: string | null = null;
+  if (input.eventId?.trim() && saved.id) {
+    linkedTitle = await linkToEvent({
+      userProfileId: input.userProfileId,
+      eventId: input.eventId.trim(),
+      dailyLogId: saved.id,
+    });
+  }
+
+  const where = notionPageId ? " (saved and mirrored to Notion)" : "";
+  const attached = linkedTitle ? ` Attached to "${linkedTitle}".` : "";
+  return `Logged for ${dateKey}${where}.${attached}`;
 }

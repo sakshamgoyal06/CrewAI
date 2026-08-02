@@ -27,6 +27,23 @@ export type MemoryDailyLogEntry = {
   createdAt: string;
 };
 
+/**
+ * Row from `magnus_events` — a commitment near today, so Magnus knows what is on and what slipped
+ * without spending a tool round to find out.
+ */
+export type MemoryEventEntry = {
+  title: string;
+  status: string;
+  pillar?: string;
+  /** ISO instant; absent for a commitment with no time on it yet. */
+  plannedStartAt?: string;
+  timeZone?: string;
+  allDay?: boolean;
+  /** How many times this commitment has already been moved. */
+  moves?: number;
+  reason?: string;
+};
+
 export type MemoryContext = {
   purpose: MemoryPurpose;
   loadedAt: string;
@@ -43,6 +60,8 @@ export type MemoryContext = {
     dailyScores?: Array<Record<string, unknown>>;
     /** Recent rows from `magnus_daily_logs` when present. */
     dailyLogs?: MemoryDailyLogEntry[];
+    /** Commitments from `magnus_events` in the window around today. */
+    events?: MemoryEventEntry[];
   };
   rollingSummaries: {
     summary7d?: string;

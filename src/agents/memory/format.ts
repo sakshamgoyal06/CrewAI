@@ -1,6 +1,7 @@
+import { formatInstant } from "../../events/eventTime.js";
 import type { MemoryRetrievalProfile } from "./adaptiveRetrieval.js";
 import { memoryConfig } from "./memoryConfig.js";
-import type { MemoryContext } from "./types.js";
+import type { MemoryContext, MemoryEventEntry } from "./types.js";
 
 export type FormatMemoryBlockOptions = {
   semanticFacts?: string[];
@@ -19,6 +20,18 @@ export function augmentUserWithMemory(
     return rawMessage;
   }
   return `${rawMessage.trim()}\n\n--- Magnus memory (internal context; not user text) ---\n${memoryBlock.trim()}`;
+}
+
+/** One commitment as a line: when, what, where it stands. No ids — acting on one needs a tool. */
+function eventLine(entry: MemoryEventEntry, fallbackTimeZone: string): string {
+  const tz = entry.timeZone || fallbackTimeZone || "UTC";
+  const when = entry.plannedStartAt
+    ? formatInstant(new Date(entry.plannedStartAt), tz, { dateOnly: entry.allDay })
+    : "no time set";
+  const pillar = entry.pillar ? ` [${entry.pillar}]` : "";
+  const moved = entry.moves && entry.moves > 0 ? `, moved ${entry.moves}×` : "";
+  const why = entry.reason?.trim() ? ` — ${entry.reason.trim()}` : "";
+  return `- ${when} ${entry.title}${pillar} (${entry.status}${moved})${why}`;
 }
 
 /**
@@ -43,6 +56,7 @@ export function formatMemoryBlockForSystem(
     parts.push(`Tier: ${ctx.profile.userTier.trim()}`);
   }
 
+  const includeEvents = profile?.includeEvents ?? true;
   const includeDailyScores = profile?.includeDailyScores ?? true;
   const includeDailyLogs = profile?.includeDailyLogs ?? true;
   const includeGoals = profile?.includeGoals ?? true;
@@ -52,6 +66,16 @@ export function formatMemoryBlockForSystem(
   const includeGaps = profile?.includeGaps ?? config.includeGapsInBlock;
   const includeChatSnippets =
     (profile?.includeChatSnippetsInBlock ?? false) && !options.omitChatSnippets;
+
+  if (includeEvents && ctx.recentSignals.events && ctx.recentSignals.events.length > 0) {
+    const tz = ctx.profile?.timezone?.trim() || "UTC";
+    const lines = ctx.recentSignals.events
+      .slice(0, config.eventsInBlock)
+      .map((e) => eventLine(e, tz));
+    parts.push(
+      `Commitments around today (event log — planned, done, missed, moved):\n${lines.join("\n")}`,
+    );
+  }
 
   if (includeDailyScores && ctx.recentSignals.dailyScores && ctx.recentSignals.dailyScores.length > 0) {
     parts.push(
