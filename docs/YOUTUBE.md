@@ -1,63 +1,66 @@
 # YouTube / YT Music
 
 Magnus searches YouTube, manages playlists, bookmarks songs and videos, cues an up-next
-queue, and recommends things to watch or listen to — from plain chat. There is no YouTube
-command. Just ask.
+queue, and recommends things to watch or listen to — from plain chat.
 
-There is **no official YouTube Music API**. Magnus uses the [YouTube Data API v3](https://developers.google.com/youtube/v3). Music searches use the Music category; song links open on
-`music.youtube.com`. Playlists you create here show up in YouTube Music when the items are music.
+**This is a per-user connection.** The host holds only the shared Google OAuth app
+(`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`). Each user’s refresh token lives in
+`user_integrations.google_youtube_refresh_token`.
+
+Preferred setup: **connect in chat** — say “connect YouTube” and Magnus sends a one-time Google
+link. After you approve, the bot stores the token and confirms on Telegram.
+
+There is **no official YouTube Music API**. Magnus uses [YouTube Data API v3](https://developers.google.com/youtube/v3).
 
 ---
 
-## 1. Google Cloud, once
+## 1. Google Cloud (once)
 
-1. [Google Cloud Console](https://console.cloud.google.com/) → same project as Calendar is fine.
-2. **APIs & Services → Enable APIs** → enable **YouTube Data API v3**.
-3. OAuth consent screen already set up for Calendar: add the YouTube scope when you authorize
-   (the auth script requests `youtube.force-ssl`).
-4. Reuse the same OAuth **desktop** client JSON (`GOOGLE_OAUTH_CREDENTIALS`).
+1. Enable **YouTube Data API v3**.
+2. Create (or reuse) an OAuth client. For **in-chat connect**, the client must be type
+   **Web application** with this authorized redirect URI (exact match):
 
-Quota tip: a personal bot stays well under the default daily units. Create an API key only if you
-want search-without-OAuth (`YOUTUBE_API_KEY`).
+   ```
+   https://<your-magnus-host>/oauth/youtube/callback
+   ```
 
-## 2. Publish the OAuth app
+   Example: `https://magnus.up.railway.app/oauth/youtube/callback`
 
-Same rule as Calendar: while the app is in **Testing**, refresh tokens expire after **7 days**.
-Publish the app (Audience → Publish app) for a personal bot.
+   Desktop clients only allow localhost redirects, so they cannot complete the Telegram flow.
+   The CLI `npm run youtube:auth` (loopback) still works with a Desktop client if you prefer
+   manual upsert.
 
-## 3. Authorize once, locally
+3. Publish the OAuth app if it is still in Testing (otherwise refresh tokens expire after 7 days).
+4. On Railway set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (same as Calendar is fine **only if**
+   that client is Web type with the redirect URI above — otherwise use a dedicated Web client).
+
+The public base URL is taken from `MAGNUS_PUBLIC_BASE_URL`, `TELEGRAM_WEBHOOK_URL`, or
+`RAILWAY_PUBLIC_DOMAIN` / Render / Fly.
+
+---
+
+## 2. Connect in Telegram (recommended)
+
+1. Deploy with the callback route live (`GET /oauth/youtube/callback` on the health server).
+2. Message Magnus: **“connect YouTube”** (or “link my YT Music”).
+3. Open the link he sends, approve access, close the tab.
+4. Magnus confirms in chat when the token is saved.
+
+The link expires in ~15 minutes. If Google does not return a refresh token (already granted
+before), revoke Magnus at https://myaccount.google.com/permissions and connect again.
+
+---
+
+## 3. Manual fallback (CLI)
 
 ```bash
-git pull
-export GOOGLE_OAUTH_CREDENTIALS=/absolute/path/to/client_secret.json
+export GOOGLE_OAUTH_CREDENTIALS=/path/to/client_secret.json
 npm run youtube:auth
+
+GOOGLE_YOUTUBE_REFRESH_TOKEN=1//...
+TELEGRAM_USER_ID=<your Telegram numeric id>
+npx tsx scripts/upsert-user-integrations.mts
 ```
-
-Approve YouTube access in the browser. The script saves a local token file **and prints**
-`GOOGLE_YOUTUBE_REFRESH_TOKEN` for the host.
-
-Calendar and YouTube refresh tokens are **separate** — calendar scopes do not include YouTube.
-
-Fallback: `npm run youtube:auth -- --manual`.
-
-## 4. Give the deployed bot access
-
-```
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-GOOGLE_YOUTUBE_REFRESH_TOKEN=...
-```
-
-Optional:
-
-| Variable | Purpose |
-|---|---|
-| `YOUTUBE_API_KEY` | Search / recommend without OAuth (playlists and likes still need the refresh token) |
-| `YOUTUBE_REGION_CODE` | Region for trending picks (default `US`) |
-| `YOUTUBE_MAGNUS_PLAYLIST_TITLE` | Title when creating the default Magnus playlist (default `Magnus`) |
-
-Confirm with `npm run telegram:check` — **YouTube / YT Music** should read `ready` (or `partial`
-with API key only).
 
 ---
 
@@ -65,24 +68,15 @@ with API key only).
 
 | You say | What happens |
 |---|---|
-| “search YouTube for lo-fi study beats” | Searches; returns titles + openable links |
-| “find the song Blinding Lights on YT Music” | Music-category search |
-| “recommend something like this video …” | Similar picks from a seed or mood |
-| “what should I watch tonight?” (with YouTube connected) | Recommendations with real links |
-| “create a focus playlist” / “add this to my Magnus playlist” | Creates or updates playlists |
-| “load my Magnus playlist” / “what's on my YouTube playlists?” | Lists / loads items |
-| “bookmark this song” | Saves to Magnus shortlist (+ likes on YouTube when OAuth is on) |
-| “cue this for later” / “what's up next?” | Magnus cue queue (not YouTube autoplay) |
-| “play the next one” | Pops the cue and gives you the link |
-
-Bookmarks and the cue live in Supabase (`magnus_youtube_bookmarks`, `magnus_youtube_cues`) so they
-survive across chats. The default Magnus playlist id is remembered in `magnus_youtube_state`.
+| “connect YouTube” | Sends a one-time Google consent link; stores your token on success |
+| “search YouTube for lo-fi study beats” | Search with openable links |
+| “create a focus playlist” / “add this to my Magnus playlist” | Your playlists |
+| “bookmark this song” / “cue this for later” | Shortlist + cue queue |
 
 ---
 
 ## Limits
 
-- Cannot control the YouTube or YT Music player on your phone (no remote “press play”).
-- Cannot browse unofficial YT Music-only shelves (radio, mixes) — only Data API surfaces.
-- Happiness still handles taste talk without acting on YouTube; action requests are routed to
-  Magnus so the tools run.
+- Cannot remote-control the phone player.
+- No unofficial YT Music-only shelves.
+- In-chat connect needs a public HTTPS host and a Web OAuth redirect URI.

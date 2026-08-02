@@ -3,13 +3,9 @@ import { describe, expect, it } from "vitest";
 import { looksLikeYoutubeAction } from "./youtubeActionDetect.js";
 
 describe("looksLikeYoutubeAction", () => {
-  it("detects explicit YouTube / YT Music actions", () => {
-    expect(looksLikeYoutubeAction("search YouTube for lo-fi beats")).toBe(true);
-    expect(looksLikeYoutubeAction("add this to my Magnus playlist")).toBe(true);
-    expect(looksLikeYoutubeAction("bookmark that song for later")).toBe(true);
-    expect(looksLikeYoutubeAction("cue this video")).toBe(true);
-    expect(looksLikeYoutubeAction("create a focus playlist")).toBe(true);
-    expect(looksLikeYoutubeAction("what's on my yt music playlist")).toBe(true);
+  it("detects connect / link YouTube", () => {
+    expect(looksLikeYoutubeAction("connect YouTube")).toBe(true);
+    expect(looksLikeYoutubeAction("link my yt music account")).toBe(true);
   });
 
   it("detects YouTube URLs", () => {

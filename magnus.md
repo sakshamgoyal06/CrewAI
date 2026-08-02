@@ -42,7 +42,7 @@ Wealth, Happiness and Wisdom are single prompt-only agents sharing one runner
 | **Runtime** | Node.js ≥ 20, TypeScript ESM, `tsx` for dev |
 | **Entry** | `src/index.ts` |
 | **Interface** | Telegram (Telegraf) — long polling or webhook |
-| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `POST /internal/jobs/morning-brief` |
+| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `GET /oauth/youtube/callback`, `POST /internal/jobs/morning-brief` |
 | **Model** | `claude-sonnet-4-6` for classification and every agent |
 | **Supabase project** | `xdrpjfdhduskhzryevze` (ap-northeast-1) |
 | **Logging** | pino JSON; Telegram user ids masked in production |
@@ -79,7 +79,7 @@ shell or `.env`.
 | `src/agents/orchestratorIntent.ts` | The five-way classifier, plus the one coercion (explicit meal log → HEALTH) |
 | `src/agents/magnusAgent.ts` | Magnus himself: calendar, YouTube, event log, journaling, reminders — tool loop |
 | `src/agents/tools/calendarTool.ts` | Google Calendar; per-user tokens; delete/update sync linked `magnus_events` rows |
-| `src/agents/tools/youtubeTool.ts` | YouTube / YT Music: search, recommend, playlists, bookmarks, cue queue |
+| `src/agents/tools/youtubeTool.ts` | YouTube / YT Music: search, recommend, playlists, bookmarks, cue (per-user token) |
 | `src/agents/tools/eventLogTool.ts` | Event log tools: plan, update, reschedule, list (`magnus_events`) |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
 | `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
@@ -100,9 +100,10 @@ shell or `.env`.
 | `src/config/telegramRuntime.ts` | Polling vs webhook, public URL derivation, handler timeout |
 | `src/config/telegramCommands.ts` | The two registered commands (import-free, so the CLI needs no credentials) |
 | `src/config/magnusCapabilities.ts` | Env → capability report for `telegram:check` and the boot log |
-| `src/healthServer.ts` | `/health`, `/ready`, Morning Brief job route, Telegram webhook route |
+| `src/healthServer.ts` | `/health`, `/ready`, Morning Brief job route, Telegram webhook route, YouTube OAuth callback (`GET /oauth/youtube/callback`) |
 | `src/integrations/googleCalendar/` | OAuth (env refresh token or local token file) + Calendar operations |
-| `src/integrations/youtube/` | OAuth / API key + YouTube Data API v3 operations (search, playlists, likes) |
+| `src/integrations/youtube/` | OAuth / API key + Data API operations + in-chat OAuth flow |
+| `src/config/publicBaseUrl.ts` | Public HTTPS base for OAuth redirect URIs |
 | `mcp/google-calendar/server.mts` | Optional stdio MCP server for Cursor — not part of the bot |
 
 ---
@@ -127,9 +128,9 @@ shell or `.env`.
    hours is rejected — Magnus must call `reschedule_event` instead. Calendar delete/update cancels or
    reschedules the linked event-log row automatically. Memory and the Morning Brief read commitments
    around today plus per-activity adherence from `magnus_event_activity_stats`.
-10. **YouTube** — Magnus tools `youtube_search`, `youtube_recommend`, `youtube_playlist`,
-    `youtube_bookmark`, `youtube_cue`. Bookmarks and cue live in Supabase; playlists use the YouTube
-    Data API (no official YT Music API — song links open on music.youtube.com).
+10. **YouTube** — Per-user connection (`user_integrations.google_youtube_refresh_token`). In chat:
+    “connect YouTube” → `connect_youtube` sends a Google consent link; `GET /oauth/youtube/callback`
+    stores the token and confirms on Telegram. Also: search, playlists, bookmarks, cue.
 
 ---
 
@@ -148,8 +149,8 @@ Public tables use RLS with a `service_role_only` policy; the service role key by
 Supabase `sb_secret_…` key format works as service role.
 
 `supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`,
-`magnus_events`, `memory_summaries`, and `magnus_youtube_*` — older schema was applied directly to
-the project before those migrations existed.
+`magnus_events`, `memory_summaries`, and `magnus_youtube_*` — older schema was applied directly to the project before
+those migrations existed.
 
 ---
 
@@ -158,10 +159,10 @@ the project before those migrations existed.
 See `.env.example`, which is grouped by purpose. Highlights beyond the six required values:
 
 - **`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`** — shared OAuth app on the host (Railway).
-  Per-user refresh tokens live in `user_integrations` (calendar + YouTube).
-- **Per-user keys** (Hevy, Notion, calendar/YouTube refresh tokens) — in Supabase `user_integrations`.
-  Seed with `npx tsx scripts/upsert-user-integrations.mts` (local `.env`), not Railway.
-- **Optional `YOUTUBE_API_KEY`** on host for search-only without per-user OAuth. See `docs/YOUTUBE.md`.
+  Per-user refresh tokens live in `user_integrations`.
+- **Per-user keys** (Hevy, Notion, calendar + YouTube refresh tokens) — in Supabase
+  `user_integrations`. Seed with `npx tsx scripts/upsert-user-integrations.mts` (local `.env`),
+  not Railway. See `docs/YOUTUBE.md` / `docs/GOOGLE_CALENDAR.md`.
 - **`USDA_FDC_API_KEY`, `CALORIENINJAS_API_KEY`** — meal macros (platform-level).
 - **`MAGNUS_TELEGRAM_MODE=webhook`** — recommended on a host; no 409 on overlapping deploys.
 - **`MAGNUS_MORNING_BRIEF_CRON_ENABLED`** — the unprompted daily push (off by default).
@@ -180,7 +181,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npm run test:supabase` | Supabase insert/delete smoke test (+ `memory_summaries` reachable) |
 | `npm run db:apply -- supabase/migrations/<file>.sql` | Apply a migration via direct Postgres (`SUPABASE_DB_PASSWORD`) |
 | `npm run google-calendar:auth` | One-time OAuth; prints the refresh token for the host |
-| `npm run youtube:auth` | One-time YouTube OAuth; prints `GOOGLE_YOUTUBE_REFRESH_TOKEN` |
+| `npm run youtube:auth` | One-time YouTube OAuth; prints refresh token to store in `user_integrations` |
 | `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
 | `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
 | `npx tsx scripts/upsert-user-integrations.mts` | Update `user_integrations` for a user without wiping data |
@@ -215,4 +216,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-02 (YouTube; memory_summaries; per-user integrations)
+**Last updated:** 2026-08-02 (YouTube connect-in-chat OAuth onboarding via Telegram link + callback)

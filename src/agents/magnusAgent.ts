@@ -39,6 +39,7 @@ import {
   youtubeRecommendTool,
   youtubeSearchTool,
 } from "./tools/youtubeTool.js";
+import { connectYoutubeTool } from "./tools/youtubeConnectTool.js";
 import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
 
@@ -402,6 +403,16 @@ const TOOLS: Tool[] = [
       required: ["action"],
     },
   },
+  {
+    name: "connect_youtube",
+    description:
+      "Start YouTube / YT Music onboarding for this user: returns a one-time Google consent link to send them. Use when they ask to connect YouTube, or when a YouTube tool says it is not connected.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
 ];
 
 function textFromMessage(msg: Message): string {
@@ -601,6 +612,11 @@ async function runTool(
           note: str(input.note),
           cueId: str(input.cue_id),
           maxResults: num(input.max_results),
+        });
+      case "connect_youtube":
+        return await connectYoutubeTool({
+          userProfileId: ctx.userProfileId,
+          telegramUserId: ctx.telegramUserId,
         });
       default:
         return `Unknown tool: ${name}`;

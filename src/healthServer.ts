@@ -7,6 +7,14 @@ import { logger } from "./logger.js";
 import { loggableError } from "./util/loggableError.js";
 import { redis, supabase } from "./tools/clients.js";
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export type HealthServerOptions = {
   /** Webhook mode: Telegram POSTs updates to this path on the same port as the health checks. */
   telegramWebhook?: {
@@ -66,6 +74,56 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
     } catch (err) {
       logger.warn({ err: loggableError(err) }, "readiness check failed");
       res.status(503).json({ status: "not_ready" });
+    }
+  });
+
+  /**
+   * YouTube OAuth callback — Google redirects here after the user approves in the browser.
+   * State was minted by connect_youtube and held in Redis for ~15 minutes.
+   */
+  app.get("/oauth/youtube/callback", async (req, res) => {
+    const code = typeof req.query.code === "string" ? req.query.code : null;
+    const state = typeof req.query.state === "string" ? req.query.state : null;
+    const oauthError = typeof req.query.error === "string" ? req.query.error : null;
+
+    const { completeYoutubeOauth } = await import("./integrations/youtube/oauthFlow.js");
+    const result = await completeYoutubeOauth({ code, state, error: oauthError });
+
+    if (!result.ok) {
+      res
+        .status(400)
+        .type("html")
+        .send(
+          `<!doctype html><html><body style="font-family:system-ui;padding:2rem;max-width:32rem">` +
+            `<h2>YouTube connection did not finish</h2>` +
+            `<p>${escapeHtml(result.userFacing)}</p>` +
+            `<p>You can close this tab and go back to Telegram.</p>` +
+            `</body></html>`,
+        );
+      return;
+    }
+
+    res
+      .status(200)
+      .type("html")
+      .send(
+        `<!doctype html><html><body style="font-family:system-ui;padding:2rem;max-width:32rem">` +
+          `<h2>YouTube is connected to Magnus</h2>` +
+          `<p>You can close this tab and go back to Telegram — I will confirm there.</p>` +
+          `</body></html>`,
+      );
+
+    try {
+      const { sendMessage } = await import("./tools/telegram.js");
+      await sendMessage(
+        "YouTube is connected. I can search, manage playlists, bookmark, and cue songs or videos for you now.",
+        { chatId: result.telegramChatId, telegramUserIdForLog: result.telegramChatId },
+      );
+    } catch (err) {
+      logger.warn(
+        { err: loggableError(err), chatId: result.telegramChatId },
+        "youtube oauth: connected but Telegram confirm failed",
+      );
     }
   });
 
