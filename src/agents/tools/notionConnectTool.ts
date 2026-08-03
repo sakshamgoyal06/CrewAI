@@ -140,7 +140,7 @@ export async function setupNotionTool(input: {
     case "discover":
       return discoverNotionLists(input.userProfileId);
     case "provision":
-      return provisionMagnusNotionSpace(input.userProfileId);
+      return provisionMagnusNotionSpace(input.userProfileId, { forceFreshHub: true });
     case "sync_registry":
       await syncRegistryFromLists(input.userProfileId);
       return "Synced notion_registry from your linked list rows.";

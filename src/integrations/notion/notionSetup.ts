@@ -328,6 +328,22 @@ export async function clearNotionListMirrors(userProfileId: string): Promise<voi
   }
 }
 
+/**
+ * Wipe legacy Notion wiring so OAuth reconnect provisions a fresh Magnus space —
+ * not the old LifeOS hub / seeded registry / legacy goal+checkin columns.
+ */
+export async function prepareNotionOAuthReconnect(userProfileId: string): Promise<void> {
+  await clearNotionListMirrors(userProfileId);
+  await upsertUserIntegrations({
+    userProfileId,
+    notionDailyLogParentPageId: "",
+    notionMorningBriefParentPageId: "",
+    notionGoalsDatabaseId: "",
+    notionDailyCheckinsDatabaseId: "",
+    notionRegistry: { lists: {} },
+  });
+}
+
 export async function discoverNotionLists(userProfileId: string): Promise<string> {
   const integrations = await loadUserIntegrations(userProfileId);
   if (!integrations.notionToken) {
