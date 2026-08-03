@@ -38,6 +38,10 @@ vi.mock("./notionProvision.js", () => ({
   provisionMagnusNotionSpace: provision,
 }));
 
+vi.mock("./notionListSync.js", () => ({
+  syncSupabaseToNotion: vi.fn().mockResolvedValue("Supabase ↔ Notion sync complete."),
+}));
+
 vi.mock("../../config/publicBaseUrl.js", () => ({
   notionOauthRedirectUri: () => "https://magnus.example.com/oauth/notion/callback",
   NOTION_OAUTH_CALLBACK_PATH: "/oauth/notion/callback",

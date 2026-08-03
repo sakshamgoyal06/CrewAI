@@ -40,7 +40,7 @@ import {
   youtubeSearchTool,
 } from "./tools/youtubeTool.js";
 import { connectGoogleTool } from "./tools/youtubeConnectTool.js";
-import { connectNotionTool, setupNotionTool } from "./tools/notionConnectTool.js";
+import { connectNotionTool, setupNotionTool, syncNotionTool } from "./tools/notionConnectTool.js";
 import { connectKiteTool } from "./tools/kiteConnectTool.js";
 import {
   addGoal,
@@ -624,15 +624,21 @@ const TOOLS: Tool[] = [
     input_schema: { type: "object", properties: {}, required: [] },
   },
   {
+    name: "sync_notion",
+    description:
+      "Full Supabase ↔ Notion sync for lists: create missing list databases, patch schema, push Supabase items to Notion, pull Notion-only entries. Supabase wins on conflicts. Use when the user asks to sync Supabase to Notion or sync lists.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
     name: "setup_notion",
     description:
-      "Per-user Notion setup: status, save_token, set_hub, discover, provision (create Magnus space + list DBs), sync_registry.",
+      "Per-user Notion setup: status, save_token, set_hub, discover, provision (create Magnus space + list DBs), sync_registry, sync (full Supabase ↔ Notion sync).",
     input_schema: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: ["status", "save_token", "set_hub", "discover", "provision", "sync_registry"],
+          enum: ["status", "save_token", "set_hub", "discover", "provision", "sync_registry", "sync"],
         },
         token: { type: "string", description: "Notion integration secret (save_token)." },
         hub_page: { type: "string", description: "LifeOS hub page URL or id (set_hub)." },
@@ -995,6 +1001,8 @@ async function runTool(
           userProfileId: ctx.userProfileId,
           telegramUserId: ctx.telegramUserId,
         });
+      case "sync_notion":
+        return await syncNotionTool({ userProfileId: ctx.userProfileId });
       case "setup_notion":
         return await setupNotionTool({
           userProfileId: ctx.userProfileId,

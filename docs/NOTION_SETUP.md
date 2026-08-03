@@ -55,11 +55,18 @@ Recommended flow for a **fresh workspace**:
 2. Open the OAuth link from Telegram.
 3. In the page picker, select your **Magnus** page (or any top-level page).
 4. Click **Allow access**.
-5. Magnus creates the hub, **Journal** subpage, and standard **list catalogs** (watchlist, tasks, goals, etc.) under that hub.
+5. Magnus creates the hub, **Journal** subpage, and standard **list catalogs**, then runs an initial **Supabase ↔ Notion sync** (existing Magnus items are pushed into Notion).
 
-Ensure your public connection has **Read**, **Insert**, and **Update content** capabilities (Developer portal → Configuration).
+### 5. Sync anytime
 
-You do **not** need to paste database ids.
+Say **“sync supabase to notion”** (or `setup_notion sync`). Magnus will:
+
+- Create any **missing list databases** under your Magnus hub
+- **Patch schema** (add missing Notion properties)
+- **Push** Supabase items to Notion (including items added before connect)
+- **Pull** Notion-only rows into Supabase
+
+Supabase is canonical — when both sides differ, Supabase wins.
 
 ---
 

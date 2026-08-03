@@ -8,6 +8,7 @@ import {
   platformNotionOAuthReady,
 } from "../../integrations/notion/oauthFlow.js";
 import { discoverNotionLists, getNotionSetupStatus, notionConnectInstructions, saveNotionToken, setNotionHub, syncRegistryFromLists } from "../../integrations/notion/notionSetup.js";
+import { syncSupabaseToNotion } from "../../integrations/notion/notionListSync.js";
 import { provisionMagnusNotionSpace } from "../../integrations/notion/notionProvision.js";
 
 async function beginNotionOauthMessage(input: {
@@ -106,6 +107,10 @@ export async function connectNotionTool(input: {
     .join("\n");
 }
 
+export async function syncNotionTool(input: { userProfileId: string }): Promise<string> {
+  return syncSupabaseToNotion(input.userProfileId);
+}
+
 export async function setupNotionTool(input: {
   userProfileId: string;
   action: string;
@@ -150,10 +155,12 @@ export async function setupNotionTool(input: {
     case "sync_registry":
       await syncRegistryFromLists(input.userProfileId);
       return "Synced notion_registry from your linked list rows.";
+    case "sync":
+      return syncSupabaseToNotion(input.userProfileId);
     default:
       return [
         `Unknown action "${input.action}".`,
-        "Actions: status, save_token, set_hub, discover, provision, sync_registry.",
+        "Actions: status, save_token, set_hub, discover, provision, sync_registry, sync.",
       ].join("\n");
   }
 }

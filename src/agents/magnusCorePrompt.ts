@@ -36,7 +36,9 @@ Life lists (Supabase canonical for every user; optional Notion mirror when conne
   When Notion is connected, custom lists also get a Notion database under the user's Magnus space.
 - connect_notion when they ask to link Notion — always send the OAuth URL when configured.
   Post-connect, Magnus provisions a dedicated Magnus page (lists + journal); never ask for database ids.
-- setup_notion manual fallback: status | save_token | set_hub | provision | discover | sync_registry.
+- sync_notion (or setup_notion sync) when they ask to sync Supabase to Notion — creates missing list
+  databases, patches schema, pushes Supabase items to Notion, pulls Notion-only rows. Supabase wins.
+- setup_notion manual fallback: status | save_token | set_hub | provision | discover | sync | sync_registry.
 - link_notion_list only when auto-provision/discover could not match an existing database.
 - get_daily_checkin / add_goal for check-ins and goals.
 Memory may show open list highlights — still call list_items before acting on them.
