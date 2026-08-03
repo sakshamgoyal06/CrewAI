@@ -9,6 +9,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
 | **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
 | **`docs/YOUTUBE.md`** | YouTube / YT Music setup (search, playlists, bookmarks, cue) |
+| **`docs/NOTION_LIFEOS_STRUCTURE.md`** | Notion ↔ Supabase list/log map, gaps, ideal registry layout |
 | **`MAGNUS_CORE_CONTEXT.md`** | Product intent and philosophy |
 
 ---
@@ -203,6 +204,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
 | `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
 | `npx tsx scripts/upsert-user-integrations.mts` | Update `user_integrations` for a user without wiping data |
+| `npx tsx scripts/audit-notion-lifeos.mts` | Inventory Notion pages/DBs vs configured `user_integrations` ids |
 
 ---
 
@@ -230,9 +232,10 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables.
 - **No inactivity / activity-triggered proactive messages yet** — only time-based cron jobs.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube.
+- **Notion list sync** — only journal mirror + Morning Brief page; Goals/check-ins ids stored but unused; no watch/read/music/travel list CRUD. See `docs/NOTION_LIFEOS_STRUCTURE.md`.
 
 **Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
 
 ---
 
-**Last updated:** 2026-08-02 (`magnus_chat_messages.message_type` + `delivery_trigger`)
+**Last updated:** 2026-08-03 (Notion/LifeOS structure reference + audit script)
