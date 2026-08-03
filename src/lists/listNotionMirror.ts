@@ -14,6 +14,8 @@ type PagePropertyValue = {
   select?: { name?: string } | null;
   status?: { name?: string } | null;
   number?: number | null;
+  url?: string | null;
+  date?: { start?: string } | null;
 };
 
 function buildStatusProperty(
@@ -286,4 +288,108 @@ export function formatItemLine(item: ListItemRow): string {
   }
   bits.push(`id:${item.id}`);
   return bits.join(" ");
+}
+
+function plainTitle(prop: PagePropertyValue | undefined): string | undefined {
+  if (prop?.type === "title" && prop.title?.length) {
+    return prop.title.map((t) => t.plain_text ?? "").join("").trim() || undefined;
+  }
+  return undefined;
+}
+
+function plainDate(prop: PagePropertyValue | undefined): string | undefined {
+  if (prop?.type === "date" && prop.date && "start" in prop.date && prop.date.start) {
+    return String(prop.date.start).slice(0, 10);
+  }
+  return undefined;
+}
+
+/** Parse a Notion list row into Supabase list item fields. */
+export function parseNotionListPage(
+  list: ListRow,
+  properties: Record<string, PagePropertyValue>,
+): {
+  title: string;
+  status?: string;
+  notes?: string;
+  url?: string;
+  author?: string;
+  priority?: "High" | "Medium" | "Low";
+  extra?: Record<string, unknown>;
+} | null {
+  const titleProp = properties[list.notion_title_property];
+  const title =
+    list.archetype === "checkin_log"
+      ? plainDate(titleProp) ?? plainTitle(titleProp)
+      : plainTitle(titleProp);
+  if (!title) {
+    return null;
+  }
+
+  const statusProp = list.notion_status_property
+    ? properties[list.notion_status_property]
+    : undefined;
+  const status = plainSelect(statusProp);
+
+  const notes = plainText(properties.Notes);
+  const urlProp = properties.URL;
+  const url = urlProp?.type === "url" && urlProp.url ? String(urlProp.url) : undefined;
+
+  let author: string | undefined;
+  if (list.archetype === "reading_queue") {
+    author = plainText(properties.Author);
+  } else if (list.archetype === "music_queue") {
+    author = plainText(properties.Artist);
+  }
+
+  const priorityRaw = plainSelect(properties.Priority);
+  const priority =
+    priorityRaw === "High" || priorityRaw === "Medium" || priorityRaw === "Low"
+      ? priorityRaw
+      : undefined;
+
+  const extra: Record<string, unknown> = {};
+  if (list.archetype === "goal_queue") {
+    const pillar = plainSelect(properties.Pillar);
+    if (pillar) {
+      const reverse: Record<string, string> = {
+        "🏃 Health": "health",
+        "💰 Wealth": "wealth",
+        "📚 Wisdom": "wisdom",
+        "🌟 Joy": "joy",
+      };
+      extra.pillar = reverse[pillar] ?? pillar;
+    }
+  }
+
+  if (list.archetype === "checkin_log") {
+    for (const key of [
+      "Day Rating",
+      "Health Score",
+      "Wealth Score",
+      "Wisdom Score",
+      "Joy Score",
+      "How Are You Feeling",
+      "Pattern Flags",
+    ]) {
+      const p = properties[key];
+      const sel = plainSelect(p);
+      const txt = plainText(p);
+      const num = p?.type === "number" ? p.number : undefined;
+      const val = sel ?? (num != null ? String(num) : txt);
+      if (val) {
+        extra[key] = val;
+      }
+    }
+  }
+
+  return {
+    title,
+    status: status ?? list.default_status ?? undefined,
+    notes,
+    url,
+    author,
+    priority,
+    extra: Object.keys(extra).length > 0 ? extra : undefined,
+  };
 }

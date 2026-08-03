@@ -261,6 +261,21 @@ export async function completeNotionOauth(input: {
         "Notion authorized but Magnus could not create your workspace page. Say setup_notion provision to retry.";
     }
 
+    let syncSummary: string | undefined;
+    try {
+      const { syncSupabaseToNotion } = await import("./notionListSync.js");
+      syncSummary = await syncSupabaseToNotion(payload.userProfileId);
+    } catch (e) {
+      logger.warn({ err: loggableError(e) }, "notion oauth: post-connect sync failed");
+      syncSummary = "Notion connected but initial sync failed — say sync supabase to notion to retry.";
+    }
+
+    if (discoverSummary && syncSummary) {
+      discoverSummary = `${discoverSummary}\n\n${syncSummary}`;
+    } else if (syncSummary) {
+      discoverSummary = syncSummary;
+    }
+
     logger.info(
       { userProfileId: payload.userProfileId, workspace: tokens.workspace_name },
       "notion oauth: stored access token for user",

@@ -216,6 +216,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
 | `npx tsx scripts/upsert-user-integrations.mts` | Update `user_integrations` for a user without wiping data |
 | `npx tsx scripts/reset-user-notion-lists.mts` | Reset list architecture + re-sync notion_registry for a user |
+| `npx tsx scripts/audit-notion-lifeos.mts` | Inventory LifeOS hub + accessible Notion databases |
+| `npx tsx scripts/cleanup-notion-lifeos.mts` | Archive duplicate provisioned list DBs + old Morning Brief pages |
 
 ---
 
@@ -252,4 +254,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-03 (added list recommendation schema TODO)
+**Last updated:** 2026-08-03 (Notion OAuth page-picker flow + provision fallback)
