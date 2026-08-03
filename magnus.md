@@ -142,10 +142,16 @@ shell or `.env`.
    hours is rejected — Magnus must call `reschedule_event` instead. Calendar delete/update cancels or
    reschedules the linked event-log row automatically. Memory and the Morning Brief read commitments
    around today plus per-activity adherence from `magnus_event_activity_stats`.
-10. **Google (Calendar + YouTube)** — Per-user tokens in `user_integrations`. In chat: “connect
+11. **Google (Calendar + YouTube)** — Per-user tokens in `user_integrations`. In chat: “connect
     Google” → one consent; `GET /oauth/google/callback` stores the same refresh token on
     `google_calendar_refresh_token` and `google_youtube_refresh_token`. Host needs a **Web**
-    OAuth client (`GOOGLE_CLIENT_ID` / `SECRET`).
+    OAuth client (`GOOGLE_CLIENT_ID` / `SECRET`). YouTube playlists resolve by pillar name
+    (`wisdom`, `wealth`, `magnus`, …) or `PL…` id; aliases cached in `magnus_youtube_state.playlist_aliases`.
+    Bulk actions: `clear` (empty playlist), `dedupe` (remove duplicate videos).
+12. **Intent routing** — YouTube actions and short continuations after a YouTube tool turn coerce to
+    `GENERAL` (Magnus tools). Pillar specialists are prompt-only and must not claim tool actions.
+13. **Gym schedule** — Fitness turns inject today's session from locked `weekly_schedule` program memory
+    (Mon-first table) before Hevy history.
 
 ---
 
@@ -154,7 +160,7 @@ shell or `.env`.
 **Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`,
 `user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries` (Phases 2–3:
 rolling summary + semantic facts), `magnus_youtube_bookmarks`, `magnus_youtube_cues`,
-`magnus_youtube_state`.
+`magnus_youtube_state` (includes `playlist_aliases` JSONB for pillar playlist ids).
 
 **Read only:** `workouts`, `goals`, `daily_scores`, `happiness_reserve`,
 `patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans`,
@@ -164,7 +170,7 @@ Public tables use RLS with a `service_role_only` policy; the service role key by
 Supabase `sb_secret_…` key format works as service role.
 
 `supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`,
-`magnus_events`, `memory_summaries`, `magnus_youtube_*`, and `magnus_chat_messages` type columns;
+`magnus_events`, `memory_summaries`, `magnus_youtube_*` (incl. `playlist_aliases`), and `magnus_chat_messages` type columns;
 older schema was applied directly to the project before those migrations existed.
 
 ---
@@ -182,8 +188,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **`MAGNUS_TELEGRAM_MODE=webhook`** — recommended on a host; no 409 on overlapping deploys.
 - **`MAGNUS_PROACTIVE_CRON_ENABLED`** — scheduled Magnus-initiated Telegram (default on). Set
   `MAGNUS_MORNING_BRIEF_CRON_ENABLED=false` to skip only the brief job.
-- **`MAGNUS_MORNING_BRIEF_CRON_ENABLED`** — legacy; when false, morning brief is not scheduled
-  (manual `morning brief` still works).
+- **`MAGNUS_MAX_TOOL_ROUNDS`** — Magnus agent tool loop cap (default 12).
 
 ---
 
@@ -227,7 +232,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Schema not reproducible** from `supabase/migrations/` for tables predating April 2026 migrations.
 - **Semantic recall** — no embeddings; memory is recent-window plus structured reads.
 - **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data.
-- **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables.
+- **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables; empty
+  LifeOS sections are omitted when `dataAvailability` flags are false (no “unknown” filler).
 - **No inactivity / activity-triggered proactive messages yet** — only time-based cron jobs.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube.
 
@@ -235,4 +241,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-02 (`magnus_chat_messages.message_type` + `delivery_trigger`)
+**Last updated:** 2026-08-03 (playlist aliases, routing fixes, gym schedule, morning brief)

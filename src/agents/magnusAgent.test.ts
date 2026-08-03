@@ -196,6 +196,6 @@ describe("runMagnusAgent", () => {
     const out = await runMagnusAgent(CTX);
 
     expect(out.metadata.tool_limit).toBe(true);
-    expect(out.text).toContain("one thing at a time");
+    expect(out.text).toContain("step limit");
   });
 });

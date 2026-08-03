@@ -8,6 +8,10 @@ import { parseIntent, type Intent } from "../intent.js";
 import { anthropic } from "../tools/clients.js";
 import { parseMealLogCommand } from "../meals/parseMealLogCommand.js";
 import { looksLikeYoutubeAction } from "./tools/youtubeActionDetect.js";
+import {
+  looksLikeMagnusToolContinuation,
+  type RoutingChatTurn,
+} from "./routing/magnusToolContinuation.js";
 
 const MODEL = "claude-sonnet-4-6";
 
@@ -52,8 +56,12 @@ async function classifyIntent(userMessage: string): Promise<Intent> {
  * Classify, then apply deterministic corrections worth having:
  * - explicit meal log → HEALTH (even when the classifier reads it as small talk about food)
  * - YouTube / YT Music actions → GENERAL (Magnus has the tools; Happiness does not)
+ * - short continuations after a YouTube tool turn → GENERAL (pillar specialists have no tools)
  */
-export async function resolveIntentNaturalLanguage(userMessage: string): Promise<Intent> {
+export async function resolveIntentNaturalLanguage(
+  userMessage: string,
+  options?: { recentTurns?: RoutingChatTurn[] },
+): Promise<Intent> {
   const intent = await classifyIntent(userMessage);
 
   if (intent !== "HEALTH" && parseMealLogCommand(userMessage).kind === "meal") {
@@ -61,6 +69,13 @@ export async function resolveIntentNaturalLanguage(userMessage: string): Promise
   }
 
   if (intent !== "GENERAL" && looksLikeYoutubeAction(userMessage)) {
+    return "GENERAL";
+  }
+
+  if (
+    intent !== "GENERAL" &&
+    looksLikeMagnusToolContinuation(userMessage, options?.recentTurns ?? [])
+  ) {
     return "GENERAL";
   }
 
