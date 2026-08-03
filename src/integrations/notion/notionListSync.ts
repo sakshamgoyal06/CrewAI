@@ -151,6 +151,17 @@ async function queryAllNotionPages(
   return out;
 }
 
+async function notionPageAccessible(client: Client, pageId: string): Promise<boolean> {
+  try {
+    const page = await withNotionRetry("pages.retrieve.sync", () =>
+      client.pages.retrieve({ page_id: pageId }),
+    );
+    return !("archived" in page && page.archived);
+  } catch {
+    return false;
+  }
+}
+
 async function syncListItems(
   userProfileId: string,
   list: ListRow,
@@ -193,16 +204,20 @@ async function syncListItems(
 
   for (const item of items.data) {
     if (item.notion_page_id) {
-      seenNotionIds.add(item.notion_page_id);
-      const updated = await mirrorUpdateItem(userProfileId, list, item.notion_page_id, {
-        title: item.title,
-        status: item.status ?? undefined,
-        notes: item.notes ?? undefined,
-      });
-      if (updated) {
-        stats.updatedInNotion++;
+      const accessible = await notionPageAccessible(client, item.notion_page_id);
+      if (accessible) {
+        seenNotionIds.add(item.notion_page_id);
+        const updated = await mirrorUpdateItem(userProfileId, list, item.notion_page_id, {
+          title: item.title,
+          status: item.status ?? undefined,
+          notes: item.notes ?? undefined,
+        });
+        if (updated) {
+          stats.updatedInNotion++;
+        }
+        continue;
       }
-      continue;
+      await updateListItem(item.id, { notionPageId: null });
     }
 
     const notionPageId = await mirrorCreateItem(userProfileId, list, {
