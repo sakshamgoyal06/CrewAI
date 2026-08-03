@@ -26,11 +26,11 @@ call. No menu, no lane picker, no per-department commands.
 |---|---|
 | **Magnus** (`GENERAL`) | The day and week, Google Calendar, YouTube / YT Music, journaling and logging, reminders, cross-pillar questions, ordinary conversation. The only agent with tools. |
 | **Health** | Training, workouts, meals and macros, sleep, recovery, the health journal. Deep: sub-router, Hevy, nutrition providers, program memory, onboarding gate. |
-| **Wealth** | Budgeting, spending, saving, debt, net worth, financial goals, investing philosophy. **Fi Money (MCP)** read-only: net worth, banks, credit — see `docs/FI.md`. **Zerodha (Kite Connect)** read-only: holdings, Coin MF, SIPs — see `docs/ZERODHA.md`. |
+| **Wealth** | Budgeting, spending, saving, debt, net worth, financial goals, investing philosophy. **Fi Money** read-only: net worth, banks, credit — see `docs/FI.md`. **Zerodha (Kite Connect)** read-only: holdings, Coin MF, SIPs — see `docs/ZERODHA.md`. |
 | **Happiness** | Books, film, music, games, hobbies, creative practice, rest, travel, relationships. |
 | **Wisdom** | Learning plans, skills and craft, career direction and growth, shipping projects. |
 
-Wealth has **Fi Money** (MCP: net worth, banks, credit) and **Zerodha** (Kite Connect OAuth, read-only portfolio context). Happiness and Wisdom remain single prompt-only agents sharing one runner
+Wealth has **Fi Money** (net worth, banks, credit) and **Zerodha** (Kite Connect OAuth, read-only portfolio context). Happiness and Wisdom remain single prompt-only agents sharing one runner
 (`src/agents/pillarSpecialist.ts`) — intentionally shallow until a pillar earns depth.
 
 ---
@@ -242,4 +242,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-03 (Fi Money MCP integration; Kite write long-term todo)
+**Last updated:** 2026-08-03 (Fi Money integration; Kite write long-term todo)

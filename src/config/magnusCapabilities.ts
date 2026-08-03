@@ -280,7 +280,7 @@ function fiCapability(env: EnvBag): Capability {
   if (isFalsy(env, "MAGNUS_FI_MCP_ENABLED")) {
     return {
       id: "fi",
-      title: "Fi Money (MCP)",
+      title: "Fi Money",
       telegram: "“connect Fi”",
       status: "off",
       detail:
@@ -295,8 +295,8 @@ function fiCapability(env: EnvBag): Capability {
     telegram: "“connect Fi”, “what is my net worth?”",
     status: redisOk ? "partial" : "off",
     detail:
-      "Fi MCP — net worth, bank txns, credit report. Each user: browser login + passcode (~30 min session in Redis). Complements Zerodha.",
-    missing: redisOk ? ["user fi mcp session (in-chat connect)"] : ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"],
+      "Fi Money — net worth, bank txns, credit report. Each user: browser login + passcode (~30 min session in Redis). Complements Zerodha.",
+    missing: redisOk ? ["user Fi session (in-chat connect)"] : ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"],
   };
 }
 

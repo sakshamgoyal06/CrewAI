@@ -7,7 +7,7 @@ function inr(n: number): string {
 
 /** Compact Fi wealth block for the wealth agent system context. */
 export function formatFiWealthForPrompt(snapshot: FiWealthSnapshot): string {
-  const lines: string[] = ["Fi Money (banks, cards, loans, investments — read-only via Fi MCP):"];
+  const lines: string[] = ["Fi Money (banks, cards, loans, investments — read-only):"];
 
   const total = snapshot.netWorth?.totalNetWorth
     ? fiMoneyToInr(snapshot.netWorth.totalNetWorth)

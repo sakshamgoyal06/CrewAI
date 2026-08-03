@@ -1,5 +1,5 @@
 /**
- * Magnus tool + wealth fast-path: connect Fi Money MCP (banks, cards, net worth).
+ * Magnus tool + wealth fast-path: connect Fi Money (banks, cards, net worth).
  */
 import { beginFiMcpConnect, clearFiMcpSession, fetchFiWealthSnapshot, fiMcpEnabled } from "../../pillars/wealth/fi/index.js";
 
@@ -30,7 +30,7 @@ export async function connectFiTool(input: { userProfileId: string }): Promise<s
 
   const started = await beginFiMcpConnect(input.userProfileId);
   if (!started.ok) {
-    return `Could not reach Fi MCP: ${started.error}. Try again in a few minutes.`;
+    return `Could not reach Fi Money: ${started.error}. Try again in a few minutes.`;
   }
 
   if (started.alreadyConnected) {

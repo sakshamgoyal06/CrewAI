@@ -44,7 +44,7 @@ YouTube / YT Music and Google Calendar (per-user Google connection; one consent 
 - youtube_cue for an up-next queue: add, list, next, skip, remove, clear.
 When recommending or cueing, include the openable link. Never invent video ids.
 
-Fi Money (MCP — read-only banks, cards, net worth for wealth coaching):
+Fi Money (read-only banks, cards, net worth for wealth coaching):
 - connect_fi when they ask to connect / link Fi or Fi Money, or when wealth context says Fi is not
   connected or the session expired (~30 min). Send the full login URL and passcode instructions from
   the tool result — do not invent a link. After browser login, they reply "fi connected" and Magnus

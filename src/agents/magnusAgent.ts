@@ -461,7 +461,7 @@ const TOOLS: Tool[] = [
   {
     name: "connect_fi",
     description:
-      "Start Fi Money MCP onboarding for read-only net worth, bank transactions, and credit report. Use when they ask to connect Fi, Fi Money, or when wealth context says Fi is not connected or session expired (~30 min).",
+      "Start Fi Money onboarding for read-only net worth, bank transactions, and credit report. Use when they ask to connect Fi or Fi Money, or when wealth context says Fi is not connected or session expired (~30 min).",
     input_schema: {
       type: "object",
       properties: {},
