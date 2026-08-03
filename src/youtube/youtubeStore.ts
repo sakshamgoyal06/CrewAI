@@ -46,10 +46,16 @@ export type CueRow = {
   played_at: string | null;
 };
 
+export type PlaylistAliasEntry = {
+  playlist_id: string;
+  title?: string;
+};
+
 export type YoutubeStateRow = {
   user_profile_id: string;
   magnus_playlist_id: string | null;
   magnus_playlist_title: string;
+  playlist_aliases: Record<string, PlaylistAliasEntry>;
   updated_at: string;
 };
 
@@ -338,7 +344,11 @@ export async function getYoutubeState(
   if (error) {
     return fail("getYoutubeState", error);
   }
-  return { ok: true, data: (data as YoutubeStateRow | null) ?? null };
+  const row = data as YoutubeStateRow | null;
+  if (row && !row.playlist_aliases) {
+    row.playlist_aliases = {};
+  }
+  return { ok: true, data: row };
 }
 
 export async function setMagnusPlaylistId(
@@ -349,6 +359,8 @@ export async function setMagnusPlaylistId(
   },
   deps?: YoutubeStoreDeps,
 ): Promise<StoreResult<YoutubeStateRow>> {
+  const existing = await getYoutubeState(input.userProfileId, deps);
+  const aliases = existing.ok ? (existing.data?.playlist_aliases ?? {}) : {};
   const { data, error } = await client(deps)
     .from(STATE)
     .upsert(
@@ -356,6 +368,10 @@ export async function setMagnusPlaylistId(
         user_profile_id: input.userProfileId,
         magnus_playlist_id: input.playlistId,
         magnus_playlist_title: input.playlistTitle ?? "Magnus",
+        playlist_aliases: {
+          ...aliases,
+          magnus: { playlist_id: input.playlistId, title: input.playlistTitle ?? "Magnus" },
+        },
       },
       { onConflict: "user_profile_id" },
     )
@@ -363,6 +379,47 @@ export async function setMagnusPlaylistId(
     .single();
   if (error || !data) {
     return fail("setMagnusPlaylistId", error ?? new Error("no row"));
+  }
+  return { ok: true, data: data as YoutubeStateRow };
+}
+
+export async function setPlaylistAlias(
+  input: {
+    userProfileId: string;
+    alias: string;
+    playlistId: string;
+    title?: string;
+  },
+  deps?: YoutubeStoreDeps,
+): Promise<StoreResult<YoutubeStateRow>> {
+  const alias = input.alias.trim().toLowerCase();
+  if (!alias) {
+    return { ok: false, error: "Playlist alias is required." };
+  }
+
+  const existing = await getYoutubeState(input.userProfileId, deps);
+  const aliases = existing.ok ? { ...(existing.data?.playlist_aliases ?? {}) } : {};
+  aliases[alias] = {
+    playlist_id: input.playlistId,
+    title: input.title,
+  };
+
+  const row: Record<string, unknown> = {
+    user_profile_id: input.userProfileId,
+    playlist_aliases: aliases,
+  };
+  if (alias === "magnus") {
+    row.magnus_playlist_id = input.playlistId;
+    row.magnus_playlist_title = input.title ?? "Magnus";
+  }
+
+  const { data, error } = await client(deps)
+    .from(STATE)
+    .upsert(row, { onConflict: "user_profile_id" })
+    .select("*")
+    .single();
+  if (error || !data) {
+    return fail("setPlaylistAlias", error ?? new Error("no row"));
   }
   return { ok: true, data: data as YoutubeStateRow };
 }

@@ -28,6 +28,16 @@ export type MorningBriefContextBundle = {
   eventActivityStats: unknown[];
   /** Emerging+ patterns only — filtered from raw rows when possible. */
   patternRows: unknown[];
+  /** Which LifeOS domains have real rows (omit empty sections in the brief). */
+  dataAvailability: {
+    goals: boolean;
+    pillarStatus: boolean;
+    happinessReserve: boolean;
+    kpiReadings: boolean;
+    patterns: boolean;
+    dailyPlans: boolean;
+    magnusInsights: boolean;
+  };
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST row shape varies
@@ -254,6 +264,16 @@ export async function fetchMorningBriefContext(
 
   const patternRows = filterEmergingPlusPatterns(rawPatterns ?? []);
 
+  const dataAvailability = {
+    goals: goals.length > 0,
+    pillarStatus: pillarStatus.length > 0,
+    happinessReserve: happinessReserve != null,
+    kpiReadings: kpiReadings.length > 0,
+    patterns: patternRows.length > 0,
+    dailyPlans: dailyPlans.length > 0,
+    magnusInsights: magnusInsights.length > 0,
+  };
+
   return {
     nowIso: now.toISOString(),
     timeZone,
@@ -269,6 +289,7 @@ export async function fetchMorningBriefContext(
     events,
     eventActivityStats,
     patternRows,
+    dataAvailability,
   };
 }
 
@@ -314,6 +335,13 @@ export function buildMorningBriefUserMessage(bundle: MorningBriefContextBundle):
     now: bundle.nowIso,
     timeZone: bundle.timeZone,
     northStarGoal: bundle.northStarGoal ?? null,
+    dataAvailability: bundle.dataAvailability,
+    briefingRules: {
+      omitEmptyLifeOSSections:
+        "When dataAvailability is false for a domain, omit that section entirely — do not say 'unknown' or 'no data'.",
+      commitments:
+        "Use commitmentsYesterdayAndToday and activityAdherence when present; these are wired.",
+    },
     activeGoals: bundle.goals,
     pillarStatus: bundle.pillarStatus,
     happinessReserve: bundle.happinessReserve,
@@ -325,5 +353,5 @@ export function buildMorningBriefUserMessage(bundle: MorningBriefContextBundle):
     activityAdherence: bundle.eventActivityStats,
     patternsEmergingPlus: bundle.patternRows,
   };
-  return `Context JSON (stored facts only; gaps are OK):\n${JSON.stringify(payload, null, 2)}`;
+  return `Context JSON (stored facts only; respect dataAvailability):\n${JSON.stringify(payload, null, 2)}`;
 }

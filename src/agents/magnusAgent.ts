@@ -41,6 +41,7 @@ import {
 } from "./tools/youtubeTool.js";
 import { connectGoogleTool } from "./tools/youtubeConnectTool.js";
 import { connectNotionTool, setupNotionTool } from "./tools/notionConnectTool.js";
+import { connectKiteTool } from "./tools/kiteConnectTool.js";
 import {
   addGoal,
   getDailyCheckin,
@@ -59,8 +60,11 @@ import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
 
 const MODEL = "claude-sonnet-4-6";
-// Calendar + event log + YouTube in one turn needs a little headroom.
-const MAX_TOOL_ROUNDS = 8;
+// Calendar + event log + YouTube bulk ops in one turn needs headroom (env override).
+const MAX_TOOL_ROUNDS = Math.min(
+  Math.max(Number.parseInt(process.env.MAGNUS_MAX_TOOL_ROUNDS ?? "12", 10) || 12, 4),
+  24,
+);
 
 /** @deprecated Use buildMagnusSystem(ctx) — core prompt is user-agnostic. */
 export const MAGNUS_SYSTEM = MAGNUS_CORE_SYSTEM;
@@ -342,17 +346,18 @@ const TOOLS: Tool[] = [
   {
     name: "youtube_playlist",
     description:
-      "Manage YouTube playlists: list, load, create, add, remove, ensure_magnus (default Magnus playlist).",
+      "Manage YouTube playlists: list, load, create, add, remove, clear (empty all), dedupe (remove duplicate videos), ensure_magnus. playlist_id: magnus, wisdom, wealth, happiness, health, or PL…",
     input_schema: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: ["list", "load", "create", "add", "remove", "ensure_magnus"],
+          enum: ["list", "load", "create", "add", "remove", "clear", "dedupe", "ensure_magnus"],
         },
         playlist_id: {
           type: "string",
-          description: "Playlist id, or 'magnus' for the default Magnus playlist.",
+          description:
+            "Pillar name (magnus, wisdom, wealth, happiness, health) or YouTube playlist id (PL…).",
         },
         title: { type: "string", description: "For create." },
         description: { type: "string", description: "For create." },
@@ -659,6 +664,25 @@ const TOOLS: Tool[] = [
     name: "connect_calendar",
     description:
       "Alias for connect_google — same one-time Google consent link covering Calendar and YouTube.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "connect_zerodha",
+    description:
+      "Start Zerodha (Kite Connect) onboarding for read-only portfolio: equity holdings, Coin mutual funds, SIPs. Use when they ask to connect Zerodha, Kite, or Coin, or when wealth context says token expired or not connected.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "connect_kite",
+    description: "Alias for connect_zerodha — same Kite Connect login link.",
     input_schema: {
       type: "object",
       properties: {},
@@ -985,6 +1009,12 @@ async function runTool(
           userProfileId: ctx.userProfileId,
           telegramUserId: ctx.telegramUserId,
         });
+      case "connect_zerodha":
+      case "connect_kite":
+        return await connectKiteTool({
+          userProfileId: ctx.userProfileId,
+          telegramUserId: ctx.telegramUserId,
+        });
       default:
         return `Unknown tool: ${name}`;
     }
@@ -1041,9 +1071,11 @@ export async function runMagnusAgent(ctx: AgentContext): Promise<AgentResult> {
     messages.push({ role: "user", content: results });
   }
 
-  logger.warn({ toolsUsed }, "magnus agent hit the tool round limit");
+  logger.warn({ toolsUsed, rounds: MAX_TOOL_ROUNDS }, "magnus agent hit the tool round limit");
   return {
-    text: "I got stuck working through that one. Try asking for one thing at a time.",
-    metadata: { specialist: "Magnus", pillar: "magnus", tool_limit: true },
+    text:
+      `I hit the step limit after ${toolsUsed.length} tool call(s) on that request. ` +
+      `Say "continue" and I'll pick up where I left off — or ask for one smaller step at a time.`,
+    metadata: { specialist: "Magnus", pillar: "magnus", tool_limit: true, tools_used: toolsUsed },
   };
 }

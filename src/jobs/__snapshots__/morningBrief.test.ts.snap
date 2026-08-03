@@ -1,11 +1,24 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`buildMorningBriefUserMessage > matches snapshot (fixed now, no wall-clock flake) 1`] = `
-"Context JSON (stored facts only; gaps are OK):
+"Context JSON (stored facts only; respect dataAvailability):
 {
   "now": "2026-04-12T02:30:00.000Z",
   "timeZone": "Asia/Kolkata",
   "northStarGoal": "Build with intention",
+  "dataAvailability": {
+    "goals": true,
+    "pillarStatus": true,
+    "happinessReserve": true,
+    "kpiReadings": true,
+    "patterns": true,
+    "dailyPlans": true,
+    "magnusInsights": true
+  },
+  "briefingRules": {
+    "omitEmptyLifeOSSections": "When dataAvailability is false for a domain, omit that section entirely — do not say 'unknown' or 'no data'.",
+    "commitments": "Use commitmentsYesterdayAndToday and activityAdherence when present; these are wired."
+  },
   "activeGoals": [
     {
       "pillar": "health",
@@ -45,6 +58,8 @@ exports[`buildMorningBriefUserMessage > matches snapshot (fixed now, no wall-clo
       "source": "notion"
     }
   ],
+  "commitmentsYesterdayAndToday": [],
+  "activityAdherence": [],
   "patternsEmergingPlus": [
     {
       "status": "emerging",

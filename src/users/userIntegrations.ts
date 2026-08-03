@@ -1,6 +1,6 @@
 /**
  * Per-user integration credentials. Platform env holds shared OAuth app ids only
- * (e.g. GOOGLE_CLIENT_ID); tokens and API keys live here.
+ * (e.g. GOOGLE_CLIENT_ID); tokens, API keys, and Kite app secrets live here.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -10,6 +10,11 @@ export type UserIntegrations = {
   googleCalendarRefreshToken?: string;
   googleYoutubeRefreshToken?: string;
   hevyApiKey?: string;
+  kiteApiKey?: string;
+  kiteApiSecret?: string;
+  kiteAccessToken?: string;
+  kiteUserId?: string;
+  kiteTokenObtainedAt?: string;
   notionToken?: string;
   notionDailyLogParentPageId?: string;
   notionMorningBriefParentPageId?: string;
@@ -19,7 +24,7 @@ export type UserIntegrations = {
 };
 
 const INTEGRATION_COLUMNS =
-  "google_calendar_refresh_token, google_youtube_refresh_token, hevy_api_key, notion_token, notion_daily_log_parent_page_id, notion_morning_brief_parent_page_id, notion_goals_database_id, notion_daily_checkins_database_id, notion_registry";
+  "google_calendar_refresh_token, google_youtube_refresh_token, hevy_api_key, kite_api_key, kite_api_secret, kite_access_token, kite_user_id, kite_token_obtained_at, notion_token, notion_daily_log_parent_page_id, notion_morning_brief_parent_page_id, notion_goals_database_id, notion_daily_checkins_database_id, notion_registry";
 
 function trimOrUndefined(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -30,6 +35,11 @@ function rowToIntegrations(data: Record<string, unknown>): UserIntegrations {
     googleCalendarRefreshToken: trimOrUndefined(data.google_calendar_refresh_token),
     googleYoutubeRefreshToken: trimOrUndefined(data.google_youtube_refresh_token),
     hevyApiKey: trimOrUndefined(data.hevy_api_key),
+    kiteApiKey: trimOrUndefined(data.kite_api_key),
+    kiteApiSecret: trimOrUndefined(data.kite_api_secret),
+    kiteAccessToken: trimOrUndefined(data.kite_access_token),
+    kiteUserId: trimOrUndefined(data.kite_user_id),
+    kiteTokenObtainedAt: trimOrUndefined(data.kite_token_obtained_at),
     notionToken: trimOrUndefined(data.notion_token),
     notionDailyLogParentPageId: trimOrUndefined(data.notion_daily_log_parent_page_id),
     notionMorningBriefParentPageId: trimOrUndefined(data.notion_morning_brief_parent_page_id),
@@ -83,6 +93,21 @@ export async function upsertUserIntegrations(
   }
   if (input.hevyApiKey !== undefined) {
     row.hevy_api_key = input.hevyApiKey || null;
+  }
+  if (input.kiteApiKey !== undefined) {
+    row.kite_api_key = input.kiteApiKey || null;
+  }
+  if (input.kiteApiSecret !== undefined) {
+    row.kite_api_secret = input.kiteApiSecret || null;
+  }
+  if (input.kiteAccessToken !== undefined) {
+    row.kite_access_token = input.kiteAccessToken || null;
+  }
+  if (input.kiteUserId !== undefined) {
+    row.kite_user_id = input.kiteUserId || null;
+  }
+  if (input.kiteTokenObtainedAt !== undefined) {
+    row.kite_token_obtained_at = input.kiteTokenObtainedAt || null;
   }
   if (input.notionToken !== undefined) {
     row.notion_token = input.notionToken || null;

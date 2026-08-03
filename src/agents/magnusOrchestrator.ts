@@ -24,6 +24,7 @@ import { isMealCommand } from "../meals/parseMealLogCommand.js";
 import { dispatchToAgent } from "./registry.js";
 import { intentToPillarRoute } from "./routing/intentToPillarRoute.js";
 import type { AgentContext } from "./types.js";
+import { fetchRecentRoutingTurns } from "../tools/routingContext.js";
 
 export type OrchestratorReply = {
   replyText: string;
@@ -72,7 +73,11 @@ export async function runOrchestratorReply(input: {
     };
   }
 
-  const intent = await resolveIntentNaturalLanguage(input.userMessage);
+  const recentTurns = await fetchRecentRoutingTurns(
+    input.userProfileId,
+    input.telegramUserId,
+  );
+  const intent = await resolveIntentNaturalLanguage(input.userMessage, { recentTurns });
 
   if (intent === "HEALTH" && !healthProfile && !isMealCommand(input.userMessage)) {
     const started = await startHealthOnboarding({

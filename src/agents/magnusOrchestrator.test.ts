@@ -69,6 +69,19 @@ vi.mock("./memory/memoryAgent.js", () => ({
   intentToMemoryPurpose: () => "chat" as const,
 }));
 
+vi.mock("../tools/routingContext.js", () => ({
+  fetchRecentRoutingTurns: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("../pillars/wealth/zerodha/index.js", () => ({
+  fetchKitePortfolioSnapshot: vi.fn().mockResolvedValue({
+    ok: false,
+    error: "not_connected",
+    meta: { kite: "not_connected" },
+  }),
+  formatKitePortfolioForPrompt: vi.fn().mockReturnValue(""),
+}));
+
 import { loadMemoryContext } from "./memory/memoryAgent.js";
 import { runOrchestratorReply } from "./magnusOrchestrator.js";
 

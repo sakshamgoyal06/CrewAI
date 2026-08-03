@@ -28,11 +28,11 @@ call. No menu, no lane picker, no per-department commands.
 |---|---|
 | **Magnus** (`GENERAL`) | The day and week, Google Calendar, YouTube / YT Music, journaling and logging, reminders, cross-pillar questions, ordinary conversation. The only agent with tools. |
 | **Health** | Training, workouts, meals and macros, sleep, recovery, the health journal. Deep: sub-router, Hevy, nutrition providers, program memory, onboarding gate. |
-| **Wealth** | Budgeting, spending, saving, debt, net worth, financial goals, investing philosophy. |
+| **Wealth** | Budgeting, spending, saving, debt, net worth, financial goals, investing philosophy. **Zerodha (Kite Connect)** read-only: holdings, Coin MF, SIPs — see `docs/ZERODHA.md`. |
 | **Happiness** | Books, film, music, games, hobbies, creative practice, rest, travel, relationships. |
 | **Wisdom** | Learning plans, skills and craft, career direction and growth, shipping projects. |
 
-Wealth, Happiness and Wisdom are single prompt-only agents sharing one runner
+Wealth has **Zerodha integration** (Kite Connect OAuth, read-only portfolio context). Happiness and Wisdom remain single prompt-only agents sharing one runner
 (`src/agents/pillarSpecialist.ts`) — intentionally shallow until a pillar earns depth.
 
 ---
@@ -44,7 +44,7 @@ Wealth, Happiness and Wisdom are single prompt-only agents sharing one runner
 | **Runtime** | Node.js ≥ 20, TypeScript ESM, `tsx` for dev |
 | **Entry** | `src/index.ts` |
 | **Interface** | Telegram (Telegraf) — long polling or webhook |
-| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `GET /oauth/google`, `GET /oauth/notion`, `GET /oauth/google/callback`, `GET /oauth/notion/callback`, legacy `/oauth/youtube/*`, `POST /internal/jobs/morning-brief` |
+| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `GET /oauth/google`, `GET /oauth/notion`, `GET /oauth/kite`, `GET /oauth/google/callback`, `GET /oauth/notion/callback`, `GET /oauth/kite/callback`, legacy `/oauth/youtube/*`, `POST /internal/jobs/morning-brief` |
 | **Model** | `claude-sonnet-4-6` for classification and every agent |
 | **Supabase project** | `xdrpjfdhduskhzryevze` (ap-northeast-1) |
 | **Logging** | pino JSON; Telegram user ids masked in production |
@@ -148,10 +148,16 @@ shell or `.env`.
    hours is rejected — Magnus must call `reschedule_event` instead. Calendar delete/update cancels or
    reschedules the linked event-log row automatically. Memory and the Morning Brief read commitments
    around today plus per-activity adherence from `magnus_event_activity_stats`.
-10. **Google (Calendar + YouTube)** — Per-user tokens in `user_integrations`. In chat: “connect
+11. **Google (Calendar + YouTube)** — Per-user tokens in `user_integrations`. In chat: “connect
     Google” → one consent; `GET /oauth/google/callback` stores the same refresh token on
     `google_calendar_refresh_token` and `google_youtube_refresh_token`. Host needs a **Web**
-    OAuth client (`GOOGLE_CLIENT_ID` / `SECRET`).
+    OAuth client (`GOOGLE_CLIENT_ID` / `SECRET`). YouTube playlists resolve by pillar name
+    (`wisdom`, `wealth`, `magnus`, …) or `PL…` id; aliases cached in `magnus_youtube_state.playlist_aliases`.
+    Bulk actions: `clear` (empty playlist), `dedupe` (remove duplicate videos).
+12. **Intent routing** — YouTube actions and short continuations after a YouTube tool turn coerce to
+    `GENERAL` (Magnus tools). Pillar specialists are prompt-only and must not claim tool actions.
+13. **Gym schedule** — Fitness turns inject today's session from locked `weekly_schedule` program memory
+    (Mon-first table) before Hevy history.
 
 ---
 
@@ -160,7 +166,7 @@ shell or `.env`.
 **Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`,
 `user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries` (Phases 2–3:
 rolling summary + semantic facts), `magnus_youtube_bookmarks`, `magnus_youtube_cues`,
-`magnus_youtube_state`.
+`magnus_youtube_state` (includes `playlist_aliases` JSONB for pillar playlist ids).
 
 **Read only:** `workouts`, `goals`, `daily_scores`, `happiness_reserve`,
 `patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans`,
@@ -170,7 +176,7 @@ Public tables use RLS with a `service_role_only` policy; the service role key by
 Supabase `sb_secret_…` key format works as service role.
 
 `supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`,
-`magnus_events`, `memory_summaries`, `magnus_youtube_*`, and `magnus_chat_messages` type columns;
+`magnus_events`, `memory_summaries`, `magnus_youtube_*` (incl. `playlist_aliases`), and `magnus_chat_messages` type columns;
 older schema was applied directly to the project before those migrations existed.
 
 ---
@@ -188,8 +194,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **`MAGNUS_TELEGRAM_MODE=webhook`** — recommended on a host; no 409 on overlapping deploys.
 - **`MAGNUS_PROACTIVE_CRON_ENABLED`** — scheduled Magnus-initiated Telegram (default on). Set
   `MAGNUS_MORNING_BRIEF_CRON_ENABLED=false` to skip only the brief job.
-- **`MAGNUS_MORNING_BRIEF_CRON_ENABLED`** — legacy; when false, morning brief is not scheduled
-  (manual `morning brief` still works).
+- **`MAGNUS_MAX_TOOL_ROUNDS`** — Magnus agent tool loop cap (default 12).
 
 ---
 
@@ -233,8 +238,10 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
   turn when enabled (requires the `memory_summaries` migration applied).
 - **Schema not reproducible** from `supabase/migrations/` for tables predating April 2026 migrations.
 - **Semantic recall** — no embeddings; memory is recent-window plus structured reads.
-- **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data.
-- **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables.
+- **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data (Wealth has read-only Zerodha context today; see below).
+- **Kite write (long-term)** — equity order placement/cancel via Kite Connect, behind `MAGNUS_KITE_ORDERS_ENABLED`, static IP on the developer console, and a Telegram **CONFIRM** flow separate from wealth coaching. Probe script: `npm run kite:test-write` (`scripts/wealth/kite/test-write-endpoints.mts`). **Live probe (2026-08-03):** Coin MF writes (`POST/DELETE /mf/orders`, `/mf/sips`) return **403 Insufficient permission** — not available on this app/plan; equity `POST /orders/regular` blocked until **static IP** is configured; equity cancel auth works (404 on fake id). Do not build MF execution in Magnus unless Zerodha opens those APIs.
+- **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables; empty
+  LifeOS sections are omitted when `dataAvailability` flags are false (no “unknown” filler).
 - **No inactivity / activity-triggered proactive messages yet** — only time-based cron jobs.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube.
 - **Notion list mirror** — Supabase `magnus_user_lists` / `magnus_list_items` are canonical for every user; Notion mirrors when linked. Bidirectional sync and proactive stale-list nudges still TODO. See `docs/NOTION_LIFEOS_STRUCTURE.md`.
@@ -243,4 +250,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-03 (Notion OAuth in-chat connect + list memory)
+**Last updated:** 2026-08-03 (Notion lists + OAuth; merged with Kite/Zerodha on main)

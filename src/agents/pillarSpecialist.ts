@@ -44,10 +44,15 @@ export async function runPillarSpecialist(input: {
   pillar: string;
   maxTokens?: number;
 }): Promise<AgentResult> {
+  const noToolsGuard =
+    "\n\n**You have no tools.** Never claim to have added, removed, or changed YouTube playlists, " +
+    "videos, calendars, or other external data. If the user asks for those actions, tell them to " +
+    "ask Magnus in one direct message (e.g. \"add X to wisdom playlist\") — do not pretend it is done.";
+
   const msg = await anthropic.messages.create({
     model: PILLAR_MODEL,
     max_tokens: input.maxTokens ?? 768,
-    system: `${buildSpecialistIdentity(input.ctx)}\n\n${input.system}`,
+    system: `${buildSpecialistIdentity(input.ctx)}\n\n${input.system}${noToolsGuard}`,
     messages: buildAgentMessages(
       input.ctx,
       `${input.ctx.rawMessage}${optionalProfileBlock(input.ctx)}`,
@@ -59,6 +64,7 @@ export async function runPillarSpecialist(input: {
     metadata: {
       specialist: input.specialist,
       pillar: input.pillar,
+      prompt_only: true,
     },
   };
 }

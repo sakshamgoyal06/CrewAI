@@ -1,6 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { mkdirSync, writeFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../tools/clients.js", () => ({
   supabase: {
@@ -18,32 +16,28 @@ vi.mock("../../../tools/clients.js", () => ({
   },
 }));
 
+vi.mock("../../../users/userProgramMemory.js", () => ({
+  loadUserProgramMemory: vi.fn().mockResolvedValue([
+    { section: "user_context", body: "Push A routine id abc." },
+    { section: "recovery_routine", body: "Max 3 gym days." },
+  ]),
+  SECTION_HEADINGS: {
+    user_context: "user-context.md",
+    weekly_schedule: "weekly-schedule.md",
+    program_learnings: "program-learnings.md",
+    recovery_routine: "recovery-routine.md",
+  },
+}));
+
 import { loadHealthReferenceBlock } from "./loadHealthReferences.js";
 
-const FIXTURE = join(process.cwd(), ".tmp-health-refs-test");
-
 describe("loadHealthReferenceBlock", () => {
-  beforeEach(() => {
-    rmSync(FIXTURE, { recursive: true, force: true });
-    mkdirSync(join(FIXTURE, "journal"), { recursive: true });
-    writeFileSync(join(FIXTURE, "user-context.md"), "# User\nPush A routine id abc.");
-    writeFileSync(join(FIXTURE, "recovery-routine.md"), "# Recovery\nMax 3 gym days.");
-    writeFileSync(join(FIXTURE, "journal", "2026-07-16.md"), "# Rest day");
-    process.env.MAGNUS_HEALTH_REFERENCES_DIR = FIXTURE;
-  });
-
-  afterEach(() => {
-    delete process.env.MAGNUS_HEALTH_REFERENCES_DIR;
-    rmSync(FIXTURE, { recursive: true, force: true });
-  });
-
-  it("loads committed health memory files into one block", async () => {
-    const { block, sources } = await loadHealthReferenceBlock();
+  it("loads program memory from Supabase into one block", async () => {
+    const { block, sources } = await loadHealthReferenceBlock("user-1");
     expect(block).toContain("Health program memory");
     expect(block).toContain("Push A routine id abc");
     expect(block).toContain("Max 3 gym days");
-    expect(block).toContain("Rest day");
-    expect(sources).toContain("file:user-context.md");
-    expect(sources).toContain("file:recovery-routine.md");
+    expect(sources).toContain("db:user_context");
+    expect(sources).toContain("db:recovery_routine");
   });
 });
