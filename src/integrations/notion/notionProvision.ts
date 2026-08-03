@@ -46,7 +46,8 @@ export function notionPropertiesForTemplate(template: ListTemplate): PropertySch
   const props: PropertySchema = {};
 
   if (template.archetype === "checkin_log") {
-    props[template.notionTitleProperty] = { date: {} };
+    // Notion requires a title property on every database; store YYYY-MM-DD in Date.
+    props[template.notionTitleProperty] = { title: {} };
     props.Notes = { rich_text: {} };
     return props;
   }
