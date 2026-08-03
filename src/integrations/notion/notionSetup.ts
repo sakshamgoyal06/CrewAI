@@ -390,13 +390,16 @@ export function notionConnectInstructions(): string {
   return [
     "To connect Notion to Magnus (your token stays on your account only):",
     "",
-    "1. Open https://www.notion.so/my-integrations and create an internal integration.",
-    "2. Copy the **Internal Integration Secret** (starts with secret_ or ntn_).",
-    "3. Paste it here — I'll call setup_notion with action save_token.",
-    "4. In Notion, open your LifeOS hub → ⋯ → Connections → add your integration.",
-    "5. Send the hub page URL — setup_notion set_hub.",
-    "6. setup_notion discover — I'll match your list databases by title.",
+    "**Preferred:** say connect Notion — if OAuth is configured on the host, I'll send a one-click link.",
+    "In Notion's page picker, select your LifeOS hub and list databases.",
     "",
-    "Lists work in Magnus without Notion; connecting adds a human-readable mirror in your workspace.",
+    "**Manual fallback:**",
+    "1. Open https://www.notion.so/my-integrations and create an internal integration.",
+    "2. Copy the Internal Integration Secret (starts with secret_ or ntn_).",
+    "3. setup_notion action save_token with the secret.",
+    "4. Share hub + list DBs with the integration → setup_notion set_hub → discover.",
+    "",
+    "Lists work in Magnus without Notion; connecting adds a mirror in your workspace.",
+    "See docs/NOTION_SETUP.md for OAuth redirect URI setup.",
   ].join("\n");
 }

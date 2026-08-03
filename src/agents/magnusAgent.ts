@@ -967,7 +967,10 @@ async function runTool(
           status: str(input.status),
         });
       case "connect_notion":
-        return await connectNotionTool({ userProfileId: ctx.userProfileId });
+        return await connectNotionTool({
+          userProfileId: ctx.userProfileId,
+          telegramUserId: ctx.telegramUserId,
+        });
       case "setup_notion":
         return await setupNotionTool({
           userProfileId: ctx.userProfileId,

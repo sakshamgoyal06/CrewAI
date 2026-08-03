@@ -189,15 +189,20 @@ function morningBriefCapability(env: EnvBag): Capability {
   };
 }
 
-function notionCapability(): Capability {
+function notionCapability(env: EnvBag = process.env): Capability {
+  const oauthReady = Boolean(
+    (val(env, "NOTION_OAUTH_CLIENT_ID") || val(env, "NOTION_CLIENT_ID")) &&
+      (val(env, "NOTION_OAUTH_CLIENT_SECRET") || val(env, "NOTION_CLIENT_SECRET")),
+  );
   return {
     id: "notion",
-    title: "Notion (journal + LifeOS lists)",
-    telegram: "“log …”, “add Dune to watchlist”, “what’s on my readlist?”",
+    title: "Notion (journal + lists)",
+    telegram: "“connect Notion”, “add Dune to watchlist”, “what’s on my readlist?”",
     status: "partial",
-    detail:
-      "Lists work in Supabase for every user (auto-provisioned). Optional Notion mirror: notion_token + link_notion_list or notion_registry. Journal and Morning Brief also use Notion when configured.",
-    missing: ["user_integrations.notion_token"],
+    detail: oauthReady
+      ? "OAuth ready on host — connect_notion sends a consent link. Lists work in Supabase for every user; Notion mirror after connect."
+      : "Lists work in Supabase for every user. Set NOTION_OAUTH_CLIENT_ID/SECRET + public base URL for in-chat OAuth, or use setup_notion save_token.",
+    missing: oauthReady ? [] : ["NOTION_OAUTH_CLIENT_ID", "NOTION_OAUTH_CLIENT_SECRET"],
   };
 }
 
@@ -360,7 +365,7 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
       missing: [],
     },
     morningBriefCapability(env),
-    notionCapability(),
+    notionCapability(env),
     calendarCapability(env),
     youtubeCapability(env),
     proactiveCapability(env),

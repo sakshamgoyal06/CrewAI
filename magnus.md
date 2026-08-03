@@ -9,6 +9,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
 | **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
 | **`docs/YOUTUBE.md`** | YouTube / YT Music setup (search, playlists, bookmarks, cue) |
+| **`docs/NOTION_SETUP.md`** | Notion OAuth redirect URI + in-chat connect flow |
 | **`docs/NOTION_LIFEOS_STRUCTURE.md`** | Notion ↔ Supabase list/log map, gaps, ideal registry layout |
 | **`MAGNUS_CORE_CONTEXT.md`** | Product intent and philosophy |
 
@@ -43,7 +44,7 @@ Wealth, Happiness and Wisdom are single prompt-only agents sharing one runner
 | **Runtime** | Node.js ≥ 20, TypeScript ESM, `tsx` for dev |
 | **Entry** | `src/index.ts` |
 | **Interface** | Telegram (Telegraf) — long polling or webhook |
-| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `GET /oauth/google` (redirect URI), `GET /oauth/google/callback`, legacy `/oauth/youtube/*`, `POST /internal/jobs/morning-brief` |
+| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `GET /oauth/google`, `GET /oauth/notion`, `GET /oauth/google/callback`, `GET /oauth/notion/callback`, legacy `/oauth/youtube/*`, `POST /internal/jobs/morning-brief` |
 | **Model** | `claude-sonnet-4-6` for classification and every agent |
 | **Supabase project** | `xdrpjfdhduskhzryevze` (ap-northeast-1) |
 | **Logging** | pino JSON; Telegram user ids masked in production |
@@ -85,6 +86,7 @@ shell or `.env`.
 | `src/agents/tools/eventLogTool.ts` | Event log tools: plan, update, reschedule, list (`magnus_events`) |
 | `src/integrations/notion/` | Per-user Notion onboarding: token, hub, database discovery |
 | `src/agents/tools/notionConnectTool.ts` | `connect_notion`, `setup_notion` Magnus tools |
+| `src/agents/tools/listTool.ts` | User lists: catalog, read/add/update items, create custom list, link Notion mirror |
 | `src/lists/` | List catalog templates, Supabase store, service orchestration, optional Notion mirror |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
 | `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
@@ -241,4 +243,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-03 (Notion user onboarding + list memory context)
+**Last updated:** 2026-08-03 (Notion OAuth in-chat connect + list memory)

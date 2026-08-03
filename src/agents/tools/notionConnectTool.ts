@@ -1,6 +1,12 @@
 /**
- * Magnus tools for per-user Notion onboarding.
+ * Magnus tools for per-user Notion onboarding (OAuth link or manual token).
  */
+import {
+  beginNotionOauth,
+  notionOauthLinkAvailable,
+  notionOauthRedirectConfigured,
+  platformNotionOAuthReady,
+} from "../../integrations/notion/oauthFlow.js";
 import {
   discoverNotionLists,
   getNotionSetupStatus,
@@ -10,7 +16,10 @@ import {
   syncRegistryFromLists,
 } from "../../integrations/notion/notionSetup.js";
 
-export async function connectNotionTool(input: { userProfileId: string }): Promise<string> {
+export async function connectNotionTool(input: {
+  userProfileId: string;
+  telegramUserId: string;
+}): Promise<string> {
   const status = await getNotionSetupStatus(input.userProfileId);
 
   if (status.tokenConnected && status.missingSteps.length === 0) {
@@ -24,7 +33,7 @@ export async function connectNotionTool(input: { userProfileId: string }): Promi
 
   if (status.tokenConnected) {
     const parts = [
-      "Notion token is connected. Remaining setup:",
+      "Notion is connected. Remaining setup:",
       ...status.missingSteps.map((s) => `- ${s}`),
       "",
       "Use setup_notion with action set_hub or discover.",
@@ -32,7 +41,42 @@ export async function connectNotionTool(input: { userProfileId: string }): Promi
     return parts.join("\n");
   }
 
-  return notionConnectInstructions();
+  if (notionOauthLinkAvailable()) {
+    const started = await beginNotionOauth({
+      userProfileId: input.userProfileId,
+      telegramChatId: input.telegramUserId,
+    });
+    if (!started.ok) {
+      return started.error;
+    }
+
+    return [
+      "Open this link to connect Notion to Magnus (pick your LifeOS hub and list pages in the page picker; expires in about 15 minutes):",
+      started.authUrl,
+      "",
+      "After you approve, I will save the connection for your account, auto-discover list databases, and confirm here.",
+      `Register this redirect URI exactly in your Notion public connection: ${started.redirectUri}`,
+    ].join("\n");
+  }
+
+  if (!platformNotionOAuthReady()) {
+    return [
+      notionConnectInstructions(),
+      "",
+      "OAuth shortcut (recommended): set NOTION_OAUTH_CLIENT_ID and NOTION_OAUTH_CLIENT_SECRET on the host, plus a public HTTPS base URL — then ask me to connect Notion again for a one-click link.",
+    ].join("\n");
+  }
+
+  const redirect = notionOauthRedirectConfigured();
+  return [
+    "I cannot build a Notion connect link without a public HTTPS callback URL.",
+    "Set MAGNUS_PUBLIC_BASE_URL (or deploy with RAILWAY_PUBLIC_DOMAIN).",
+    redirect ? `Expected redirect: ${redirect}` : "",
+    "",
+    "Or paste an internal integration token and I will use setup_notion save_token.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export async function setupNotionTool(input: {
@@ -52,6 +96,7 @@ export async function setupNotionTool(input: {
         `Journal parent: ${status.dailyLogParent ?? "not set"}`,
         `Morning brief parent: ${status.morningBriefParent ?? "not set"}`,
         `Lists: ${status.listsProvisioned} provisioned, ${status.listsNotionLinked} Notion-linked`,
+        `OAuth on host: ${notionOauthLinkAvailable() ? "ready" : "off"}`,
       ];
       if (status.missingSteps.length > 0) {
         lines.push("", "Remaining:", ...status.missingSteps.map((s) => `- ${s}`));
@@ -62,7 +107,7 @@ export async function setupNotionTool(input: {
     }
     case "save_token":
       if (!input.token?.trim()) {
-        return "Provide token (your Notion integration secret).";
+        return "Provide token (internal integration secret). Prefer connect_notion for OAuth.";
       }
       return saveNotionToken(input.userProfileId, input.token);
     case "set_hub":

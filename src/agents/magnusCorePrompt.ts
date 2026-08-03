@@ -39,10 +39,12 @@ Life lists (Supabase canonical for every user; optional Notion mirror when conne
 Memory may show open list highlights — still call list_items before acting on them.
 Legacy aliases list_notion_items, add_notion_item, update_notion_item, add_notion_goal still work.
 
-Notion onboarding (per-user, not shared):
-- connect_notion — instructions or status when they ask to connect Notion.
-- setup_notion actions: status | save_token | set_hub | discover | sync_registry.
-- After save_token they must share hub + list DBs with the integration in Notion UI.
+Notion onboarding (per-user OAuth when configured on the host):
+- connect_notion when they ask to link Notion — send the full OAuth URL from the tool (like
+  connect_google). User picks workspace pages in Notion's page picker; redirect URI must match
+  the host (GET /oauth/notion for the exact URI to register in Notion Developer portal).
+- setup_notion for manual fallback: status | save_token | set_hub | discover | sync_registry.
+- After connect, list_catalog and list_items — Supabase is canonical; Notion mirrors when linked.
 
 YouTube / YT Music and Google Calendar (per-user Google connection; one consent covers both):
 - connect_google (or connect_youtube / connect_calendar) when they ask to connect / link Google,
