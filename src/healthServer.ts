@@ -178,6 +178,101 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
   });
 
   /**
+   * Ops helper: exact redirect_uri Magnus sends for Kite Connect (Zerodha).
+   */
+  app.get("/oauth/kite", async (_req, res) => {
+    try {
+      const { kiteOauthRedirectUri, resolvePublicBaseUrl } = await import(
+        "./config/publicBaseUrl.js"
+      );
+      const redirectUri = kiteOauthRedirectUri();
+      const base = resolvePublicBaseUrl();
+      if (!redirectUri || !base) {
+        res.status(503).json({
+          ok: false,
+          error:
+            "No public HTTPS base URL. Set MAGNUS_PUBLIC_BASE_URL or deploy with RAILWAY_PUBLIC_DOMAIN.",
+        });
+        return;
+      }
+      res.status(200).json({
+        ok: true,
+        redirect_uri: redirectUri,
+        base_url: base.base,
+        source: base.source,
+        credentials_location: "host env: KITE_API_KEY + KITE_API_SECRET (one Magnus app; per-user access tokens in user_integrations)",
+        kite_console_hint:
+          "Create a Kite Connect app at developers.kite.trade. Paste redirect_uri exactly. Store api key/secret via upsert-user-integrations.mts. Personal (free) plan covers portfolio read; tokens expire daily ~6 AM IST.",
+      });
+    } catch (err) {
+      logger.warn({ err: loggableError(err) }, "oauth kite diagnostic failed");
+      res.status(500).json({ ok: false, error: "diagnostic_failed" });
+    }
+  });
+
+  const handleKiteOauthCallback = async (
+    req: express.Request,
+    res: express.Response,
+  ): Promise<void> => {
+    const requestToken =
+      typeof req.query.request_token === "string" ? req.query.request_token : null;
+    const state = typeof req.query.state === "string" ? req.query.state : null;
+    const status = typeof req.query.status === "string" ? req.query.status : null;
+    const oauthError = typeof req.query.error === "string" ? req.query.error : null;
+
+    const { completeKiteOauth } = await import("./integrations/zerodha/oauthFlow.js");
+    const result = await completeKiteOauth({
+      requestToken,
+      state,
+      status,
+      error: oauthError,
+    });
+
+    if (!result.ok) {
+      res
+        .status(400)
+        .type("html")
+        .send(
+          `<!doctype html><html><body style="font-family:system-ui;padding:2rem;max-width:32rem">` +
+            `<h2>Zerodha connection did not finish</h2>` +
+            `<p>${escapeHtml(result.userFacing)}</p>` +
+            `<p>You can close this tab and go back to Telegram.</p>` +
+            `</body></html>`,
+        );
+      return;
+    }
+
+    res
+      .status(200)
+      .type("html")
+      .send(
+        `<!doctype html><html><body style="font-family:system-ui;padding:2rem;max-width:32rem">` +
+          `<h2>Zerodha is connected to Magnus</h2>` +
+          `<p>Portfolio read access is ready. You can close this tab — I will confirm in Telegram.</p>` +
+          `<p><small>Token expires daily (~6 AM IST). Say "connect Zerodha" to refresh.</small></p>` +
+          `</body></html>`,
+      );
+
+    try {
+      const { sendMessage } = await import("./tools/telegram.js");
+      const who = result.zerodhaUserId ? ` (${result.zerodhaUserId})` : "";
+      await sendMessage(
+        `Zerodha is connected${who} — I can read your holdings, Coin MFs, and SIPs for wealth coaching. Token expires daily ~6 AM IST; say "connect Zerodha" to refresh.`,
+        { chatId: result.telegramChatId, telegramUserIdForLog: result.telegramChatId },
+      );
+    } catch (err) {
+      logger.warn(
+        { err: loggableError(err), chatId: result.telegramChatId },
+        "kite oauth: connected but Telegram confirm failed",
+      );
+    }
+  };
+
+  app.get("/oauth/kite/callback", (req, res) => {
+    void handleKiteOauthCallback(req, res);
+  });
+
+  /**
    * Internal trigger for schedulers (e.g. Kubernetes CronJob, Railway cron, n8n).
    * Auth: `Authorization: Bearer <MAGNUS_INTERNAL_JOB_SECRET>` or `X-Magnus-Job-Secret`.
    */

@@ -26,11 +26,11 @@ call. No menu, no lane picker, no per-department commands.
 |---|---|
 | **Magnus** (`GENERAL`) | The day and week, Google Calendar, YouTube / YT Music, journaling and logging, reminders, cross-pillar questions, ordinary conversation. The only agent with tools. |
 | **Health** | Training, workouts, meals and macros, sleep, recovery, the health journal. Deep: sub-router, Hevy, nutrition providers, program memory, onboarding gate. |
-| **Wealth** | Budgeting, spending, saving, debt, net worth, financial goals, investing philosophy. |
+| **Wealth** | Budgeting, spending, saving, debt, net worth, financial goals, investing philosophy. **Zerodha (Kite Connect)** read-only: holdings, Coin MF, SIPs — see `docs/ZERODHA.md`. |
 | **Happiness** | Books, film, music, games, hobbies, creative practice, rest, travel, relationships. |
 | **Wisdom** | Learning plans, skills and craft, career direction and growth, shipping projects. |
 
-Wealth, Happiness and Wisdom are single prompt-only agents sharing one runner
+Wealth has **Zerodha integration** (Kite Connect OAuth, read-only portfolio context). Happiness and Wisdom remain single prompt-only agents sharing one runner
 (`src/agents/pillarSpecialist.ts`) — intentionally shallow until a pillar earns depth.
 
 ---
@@ -42,7 +42,7 @@ Wealth, Happiness and Wisdom are single prompt-only agents sharing one runner
 | **Runtime** | Node.js ≥ 20, TypeScript ESM, `tsx` for dev |
 | **Entry** | `src/index.ts` |
 | **Interface** | Telegram (Telegraf) — long polling or webhook |
-| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `GET /oauth/google` (redirect URI), `GET /oauth/google/callback`, legacy `/oauth/youtube/*`, `POST /internal/jobs/morning-brief` |
+| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `GET /oauth/google` (redirect URI), `GET /oauth/google/callback`, `GET /oauth/kite`, `GET /oauth/kite/callback`, legacy `/oauth/youtube/*`, `POST /internal/jobs/morning-brief` |
 | **Model** | `claude-sonnet-4-6` for classification and every agent |
 | **Supabase project** | `xdrpjfdhduskhzryevze` (ap-northeast-1) |
 | **Logging** | pino JSON; Telegram user ids masked in production |

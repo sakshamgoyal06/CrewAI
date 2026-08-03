@@ -276,6 +276,32 @@ function workoutsCapability(): Capability {
   };
 }
 
+function zerodhaCapability(env: EnvBag): Capability {
+  const platformOk = Boolean(
+    val(env, "KITE_API_KEY") && val(env, "KITE_API_SECRET"),
+  );
+  if (platformOk) {
+    return {
+      id: "zerodha",
+      title: "Zerodha (Kite Connect)",
+      telegram: "“connect Zerodha”, “what are my holdings?”",
+      status: "partial",
+      detail:
+        "Magnus Kite app on host. Each user: say “connect Zerodha” → OAuth → access token in user_integrations. Read-only portfolio today; orders gated by MAGNUS_KITE_ORDERS_ENABLED (future).",
+      missing: ["user_integrations.kite_access_token"],
+    };
+  }
+  return {
+    id: "zerodha",
+    title: "Zerodha (Kite Connect)",
+    telegram: "“connect Zerodha”",
+    status: "off",
+    detail:
+      "Set KITE_API_KEY + KITE_API_SECRET on the host (developers.kite.trade). Users only OAuth-login — no per-user developer signup.",
+    missing: ["KITE_API_KEY", "KITE_API_SECRET"],
+  };
+}
+
 function deliveryCapability(env: EnvBag): Capability {
   const runtime = resolveTelegramRuntime(env);
   if (runtime.mode === "webhook") {
@@ -350,6 +376,7 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
       missing: [],
     },
     workoutsCapability(),
+    zerodhaCapability(env),
     mealCapability(env),
     {
       id: "journal",
