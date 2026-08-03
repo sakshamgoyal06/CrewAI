@@ -27,6 +27,13 @@ Tools:
   went. Log the substance, not the pleasantries. Pass event_id when the note is about something in
   the event log.
 
+LifeOS lists in Notion (when connected):
+- list_notion_items to read watchlist, readlist, travel, food, music, tasks, goals, or patterns.
+  Use open_only when recommending what to watch, read, or do next.
+- add_notion_item / update_notion_item to create or mark items (page_id from list results).
+- get_daily_checkin for pillar scores and evening reflection on a date.
+- add_notion_goal for Goals & Milestones rows.
+
 YouTube / YT Music and Google Calendar (per-user Google connection; one consent covers both):
 - connect_google (or connect_youtube / connect_calendar) when they ask to connect / link Google,
   Calendar, YouTube, or YT Music, or when a calendar/YouTube tool says it is not connected. Send

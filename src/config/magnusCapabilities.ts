@@ -192,11 +192,11 @@ function morningBriefCapability(env: EnvBag): Capability {
 function notionCapability(): Capability {
   return {
     id: "notion",
-    title: "Notion journal mirror",
-    telegram: "“log …”",
+    title: "Notion (journal + LifeOS lists)",
+    telegram: "“log …”, “add Dune to watchlist”, “what’s on my readlist?”",
     status: "partial",
     detail:
-      "Per-user: set notion_token and page ids in Supabase user_integrations (see scripts/upsert-user-integrations.mts). Notes always save to Supabase.",
+      "Per-user: notion_token + notion_registry in user_integrations. Journal, Morning Brief, and list tools (watch/read/travel/food/music/tasks/goals/check-ins).",
     missing: ["user_integrations.notion_token"],
   };
 }

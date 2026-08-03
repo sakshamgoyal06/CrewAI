@@ -4,7 +4,7 @@
 
 **Related:** `magnus.md`, `MAGNUS_CORE_CONTEXT.md`, `docs/ARCHITECTURE.md`
 
-**Last updated:** 2026-08-03
+**Last updated:** 2026-08-03 (live Notion inventory + Magnus list tools wired)
 
 ---
 
@@ -24,31 +24,47 @@
 
 ### 2.1 Notion connection (configured in Supabase)
 
-| Field | Value (configured) | Used at runtime? |
-|-------|-------------------|------------------|
-| `notion_token` | Yes | Yes — API auth |
-| `notion_daily_log_parent_page_id` | LifeOS hub (`32cb455a-f233-811b-9e29-fcd84f710759`) | Yes — `log_note` mirror |
-| `notion_morning_brief_parent_page_id` | Same LifeOS hub | Yes — Morning Brief subpage |
-| `notion_goals_database_id` | `29414966-cd2f-4f56-9933-ccf0010933d8` | **No** — id stored, no tool calls it |
-| `notion_daily_checkins_database_id` | `418daa9b-ff95-4947-925a-e53d9b3a59c6` | **No** — id stored, no tool calls it |
+| Field | Value | Used at runtime? |
+|-------|-------|------------------|
+| `notion_token` | Yes | Yes |
+| `notion_daily_log_parent_page_id` | LifeOS hub | Yes — `log_note` |
+| `notion_morning_brief_parent_page_id` | LifeOS hub | Yes — Morning Brief |
+| `notion_goals_database_id` | `29414966-cd2f-4f56-9933-ccf0010933d8` | Yes — `add_notion_goal` |
+| `notion_daily_checkins_database_id` | `418daa9b-ff95-4947-925a-e53d9b3a59c6` | Yes — `get_daily_checkin` |
+| `notion_registry` | Full LifeOS list map (JSONB) | Yes — list tools |
 
-**Not wired in code or integrations:** watchlist, readlist, music list, travel list, patterns log, tasks DB, contacts DB, experiences DB.
+### 2.2 Live Notion databases (LifeOS hub)
 
-### 2.2 What Magnus can do with Notion today
+| List | Database | Collection ID | Magnus tool |
+|------|----------|---------------|-------------|
+| Goals | 🎯 Goals & Milestones | `29414966-cd2f-4f56-9933-ccf0010933d8` | `add_notion_goal`, `list_notion_items` |
+| Daily check-ins | 🌙 Daily Check-ins | `418daa9b-ff95-4947-925a-e53d9b3a59c6` | `get_daily_checkin` |
+| Patterns | 🔍 Patterns Log | `211a6cfd-9075-4aca-92ae-7809d79186a8` | `list_notion_items` |
+| Watchlist | 🎬 Movies & Shows Watchlist | `26368f0c-5991-4bf1-a1b0-e702a2c3de7a` | `list/add/update_notion_item` |
+| Readlist | 📚 Reading List | `c8a178a5-9e21-4cca-99e4-ec303b1365df` | same |
+| Travel | ✈️ Travel Wishlist | `596ab223-1df0-4d3e-85ee-e542b6bb5652` | same |
+| Food | 🍜 Food Wishlist | `6a120f77-b45f-4497-b993-74c3cd24c600` | same |
+| Music | 🎵 Music List *(new)* | `a284eca4-f036-4c2c-bd03-9b5b647d33ef` | same |
+| Tasks | ✅ Life Tasks *(new)* | `8cb24979-1f75-4831-a9a6-1556870db217` | same |
+| Daily log | 📅 Daily Log | `5f2850b7-b27e-443c-9a02-fcd260bcd009` | not wired yet |
+| Build tasks | 📋 Task Tracker (Build Master) | `afff5599-86bf-4770-a3dc-29997a1c5875` | dev-only, not in registry |
+
+Hub page: https://www.notion.so/32cb455af233811b9e29fcd84f710759
+
+### 2.3 What Magnus can do with Notion today
 
 | Action | How | Status |
 |--------|-----|--------|
-| Append journal line to dated page | Magnus `log_note` tool → `magnus_daily_logs` + Notion child page `Magnus Log — YYYY-MM-DD` | **Working** |
-| Create Morning Brief page | Cron/manual brief → child page under morning-brief parent | **Working** (when parent configured) |
-| Query daily check-in | `queryDatabaseByDateProperty()` in `notion.ts` | **Library only** — no agent/tool |
-| Create goal row | `createGoalPage()` in `notion.ts` | **Library only** — no agent/tool |
-| Full list CRUD (watch/read/music/travel/todo) | — | **Not built** |
-| Read Notion for recommendations | — | **Not built** |
-| Nudge from Notion due dates | — | **Not built** |
+| Append journal line | `log_note` → dated Magnus Log page | **Working** |
+| Morning Brief page | Cron/manual brief | **Working** |
+| List items (watch/read/travel/food/music/tasks/goals/patterns) | `list_notion_items` | **Working** |
+| Add list item | `add_notion_item` | **Working** |
+| Update list item (status, notes) | `update_notion_item` | **Working** |
+| Read daily check-in | `get_daily_checkin` | **Working** |
+| Add goal | `add_notion_goal` | **Working** |
+| Bidirectional sync / Notion-initiated nudges | — | **Not built** |
 
-The old **`notionAgent`** and **`NOTION` intent** described in older docs (`docs/AGENT_ROSTER.md`, `docs/EXISTING_TO_PILLAR_MAP.md`) are **removed**. Notion is no longer a routing destination — only Magnus's `log_note` and Morning Brief touch Notion.
-
-### 2.3 Supabase list/log tables (Magnus-side)
+### 2.4 Supabase list/log tables (secondary mirror — not yet synced from Notion)
 
 Most LifeOS tables exist in Supabase but **nothing in the bot writes to them** (0 rows). Memory and Morning Brief **read** them and report `gaps`.
 
@@ -58,8 +74,8 @@ Most LifeOS tables exist in Supabase but **nothing in the bot writes to them** (
 | **Goals** | `goals` | 0 | No | Also has Notion Goals DB id (unused) |
 | **Watchlist (film/TV)** | `happiness_activities` (`category`) | 0 | No | Schema fits joy/media; default status `unwatched` |
 | **Readlist (books)** | `happiness_activities` | 0 | No | Same table, different `category` |
-| **Music list** | `magnus_youtube_bookmarks` | 3 | Yes (YouTube tools) | Supabase only — no Notion mirror |
-| **Travel list** | — | — | No | No dedicated table; could use `happiness_activities` or new `travel_plans` |
+| **Music list** | `magnus_youtube_bookmarks` | 3 | Yes (YouTube tools) | Notion Music List now primary for curation |
+| **Travel list** | — | — | No | Notion Travel Wishlist is primary |
 | **Happiness events / experiences** | `happiness_activities` + `activity_logs` | 0 | No | `activity_logs` tracks suggest/complete/mood |
 | **Happiness meta-metric** | `happiness_reserve`, `mood_logs`, `emotional_events` | 0 | No | Joy tank model |
 | **Stock watchlist** | `watchlist` | 0 | No | **Wealth/trading** — NSE symbols, not film |
@@ -69,9 +85,7 @@ Most LifeOS tables exist in Supabase but **nothing in the bot writes to them** (
 | **Contacts / relationships** | `contacts`, `relationship_logs`, `occasions` | 0 | No | Social CRM schema ready |
 | **Learning** | `learning_goals`, `learning_logs` | 0 | No | Wisdom pillar |
 
-### 2.4 Notion workspace (external — manual inventory)
-
-Known pages from product docs (content lives in Notion, not this repo):
+### 2.5 Architecture pages (Notion)
 
 | Page | URL |
 |------|-----|
@@ -92,10 +106,10 @@ flowchart TB
     TG[Telegram user]
     M[Magnus GENERAL]
     SB[(Supabase)]
-    N[Notion API]
+    N[Notion LifeOS lists]
     TG --> M
     M -->|log_note, events, youtube| SB
-    M -->|mirror journal + brief only| N
+    M -->|list CRUD, check-ins, goals| N
   end
 
   subgraph target [Target]
@@ -111,13 +125,13 @@ flowchart TB
 
 | Capability you asked for | Today |
 |--------------------------|-------|
-| Read lists | Partial — YouTube bookmarks, event log; not Notion lists |
-| Write / create / edit lists | Event log + journal + YouTube only |
-| Maintain / pick / share | No list picker; no Notion share flow |
-| Recommend from lists | Happiness agent is prompt-only, no list data |
-| Log and monitor | `magnus_events`, meal_logs, chat — not joy lists |
-| Review and share feedback | Morning Brief reads empty LifeOS tables |
-| Nudge and notify | Event reminders only — not list-based |
+| Read lists | **Yes** — `list_notion_items` on all LifeOS DBs |
+| Write / create / edit lists | **Yes** — `add_notion_item`, `update_notion_item`, `add_notion_goal` |
+| Maintain / pick / share | Pick via Telegram; share still manual in Notion UI |
+| Recommend from lists | **Yes** — `open_only=true` on list_notion_items |
+| Log and monitor | Journal + events + check-ins; Supabase mirror TODO |
+| Review and share feedback | Morning Brief + check-in read |
+| Nudge and notify | Event reminders only — list stale nudges TODO |
 
 ---
 

@@ -232,7 +232,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables.
 - **No inactivity / activity-triggered proactive messages yet** — only time-based cron jobs.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube.
-- **Notion list sync** — only journal mirror + Morning Brief page; Goals/check-ins ids stored but unused; no watch/read/music/travel list CRUD. See `docs/NOTION_LIFEOS_STRUCTURE.md`.
+- **Notion list sync** — Magnus tools read/write LifeOS list DBs via `notion_registry`; Supabase `happiness_activities` mirror and proactive nudges still TODO. See `docs/NOTION_LIFEOS_STRUCTURE.md`.
 
 **Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
 

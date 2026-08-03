@@ -40,6 +40,13 @@ import {
   youtubeSearchTool,
 } from "./tools/youtubeTool.js";
 import { connectGoogleTool } from "./tools/youtubeConnectTool.js";
+import {
+  addNotionGoal,
+  getNotionCheckin,
+  notionAddItem,
+  notionListItems,
+  notionUpdateItem,
+} from "./tools/notionListTool.js";
 import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
 
@@ -404,6 +411,84 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "list_notion_items",
+    description:
+      "Read a LifeOS list in Notion: watchlist, readlist, travel, food, music, tasks, goals, or patterns. Use open_only for queued items to recommend from.",
+    input_schema: {
+      type: "object",
+      properties: {
+        list: {
+          type: "string",
+          description: "watchlist | readlist | travel | food | music | tasks | goals | patterns",
+        },
+        status: { type: "string", description: "Optional exact status filter." },
+        open_only: { type: "boolean", description: "Only queued / in-progress items." },
+        limit: { type: "number", description: "Max rows, default 15." },
+      },
+      required: ["list"],
+    },
+  },
+  {
+    name: "add_notion_item",
+    description: "Add a row to a LifeOS Notion list.",
+    input_schema: {
+      type: "object",
+      properties: {
+        list: { type: "string" },
+        title: { type: "string" },
+        status: { type: "string" },
+        notes: { type: "string" },
+        url: { type: "string" },
+        author: { type: "string", description: "Book author or music artist." },
+        priority: { type: "string", enum: ["High", "Medium", "Low"] },
+      },
+      required: ["list", "title"],
+    },
+  },
+  {
+    name: "update_notion_item",
+    description:
+      "Update a Notion list row by page id (from list_notion_items): status, notes, or title.",
+    input_schema: {
+      type: "object",
+      properties: {
+        list: { type: "string" },
+        page_id: { type: "string" },
+        status: { type: "string" },
+        notes: { type: "string" },
+        title: { type: "string" },
+      },
+      required: ["list", "page_id"],
+    },
+  },
+  {
+    name: "get_daily_checkin",
+    description: "Read the Daily Check-ins row for a date (pillar scores and reflection).",
+    input_schema: {
+      type: "object",
+      properties: {
+        date: { type: "string", description: "YYYY-MM-DD. Defaults to today." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "add_notion_goal",
+    description: "Create a row in Goals & Milestones (Notion).",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        pillar: {
+          type: "string",
+          enum: ["health", "wealth", "wisdom", "joy", "happiness"],
+        },
+        status: { type: "string" },
+      },
+      required: ["title"],
+    },
+  },
+  {
     name: "connect_google",
     description:
       "Start unified Google onboarding (Calendar + YouTube / YT Music) for this user: returns a one-time consent link. Use when they ask to connect Google, Calendar, or YouTube, or when a calendar/YouTube tool says it is not connected.",
@@ -634,6 +719,46 @@ async function runTool(
           note: str(input.note),
           cueId: str(input.cue_id),
           maxResults: num(input.max_results),
+        });
+      case "list_notion_items":
+        return await notionListItems({
+          userProfileId: ctx.userProfileId,
+          list: String(input.list ?? ""),
+          status: str(input.status),
+          openOnly: input.open_only === true,
+          limit: num(input.limit),
+        });
+      case "add_notion_item":
+        return await notionAddItem({
+          userProfileId: ctx.userProfileId,
+          list: String(input.list ?? ""),
+          title: String(input.title ?? ""),
+          status: str(input.status),
+          notes: str(input.notes),
+          url: str(input.url),
+          author: str(input.author),
+          priority: str(input.priority),
+        });
+      case "update_notion_item":
+        return await notionUpdateItem({
+          userProfileId: ctx.userProfileId,
+          list: String(input.list ?? ""),
+          pageId: String(input.page_id ?? ""),
+          status: str(input.status),
+          notes: str(input.notes),
+          title: str(input.title),
+        });
+      case "get_daily_checkin":
+        return await getNotionCheckin({
+          userProfileId: ctx.userProfileId,
+          date: str(input.date),
+        });
+      case "add_notion_goal":
+        return await addNotionGoal({
+          userProfileId: ctx.userProfileId,
+          title: String(input.title ?? ""),
+          pillar: str(input.pillar),
+          status: str(input.status),
         });
       case "connect_google":
       case "connect_calendar":
