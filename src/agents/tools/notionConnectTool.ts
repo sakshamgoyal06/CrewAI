@@ -7,14 +7,8 @@ import {
   notionOauthRedirectConfigured,
   platformNotionOAuthReady,
 } from "../../integrations/notion/oauthFlow.js";
-import {
-  discoverNotionLists,
-  getNotionSetupStatus,
-  notionConnectInstructions,
-  saveNotionToken,
-  setNotionHub,
-  syncRegistryFromLists,
-} from "../../integrations/notion/notionSetup.js";
+import { discoverNotionLists, getNotionSetupStatus, notionConnectInstructions, saveNotionToken, setNotionHub, syncRegistryFromLists } from "../../integrations/notion/notionSetup.js";
+import { provisionMagnusNotionSpace } from "../../integrations/notion/notionProvision.js";
 
 async function beginNotionOauthMessage(input: {
   userProfileId: string;
@@ -30,14 +24,14 @@ async function beginNotionOauthMessage(input: {
   }
 
   const intro = input.replacingExisting
-    ? "You already have a Notion connection saved (likely a legacy manual token). Open this link to reconnect via OAuth — pick your LifeOS hub and list databases in Notion's page picker. Magnus will replace the old connection and auto-link list databases (no database ids needed from you):"
-    : "Open this link to connect Notion to Magnus (pick your LifeOS hub and list databases in the page picker; expires in about 15 minutes):";
+    ? "You already have a Notion connection saved. Open this link to reconnect via OAuth — Magnus will create or refresh your dedicated Magnus space in Notion (hub, list catalogs, journal). No database ids needed:"
+    : "Open this link to connect Notion to Magnus (Magnus creates a dedicated Magnus page with all list catalogs and a journal; expires in about 15 minutes):";
 
   return [
     intro,
     started.authUrl,
     "",
-    "After you approve, I save the token for your account only, auto-discover list databases, and confirm here.",
+    "After you approve, Magnus provisions your Notion space and confirms here.",
     `Register this redirect URI exactly in your Notion public connection: ${started.redirectUri}`,
   ].join("\n");
 }
@@ -145,13 +139,15 @@ export async function setupNotionTool(input: {
       return setNotionHub(input.userProfileId, input.hub_page);
     case "discover":
       return discoverNotionLists(input.userProfileId);
+    case "provision":
+      return provisionMagnusNotionSpace(input.userProfileId);
     case "sync_registry":
       await syncRegistryFromLists(input.userProfileId);
       return "Synced notion_registry from your linked list rows.";
     default:
       return [
         `Unknown action "${input.action}".`,
-        "Actions: status, save_token, set_hub, discover, sync_registry.",
+        "Actions: status, save_token, set_hub, discover, provision, sync_registry.",
       ].join("\n");
   }
 }

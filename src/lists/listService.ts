@@ -363,7 +363,20 @@ export async function createCustomList(input: {
     return `Could not create list: ${inserted.error}`;
   }
 
-  return `Created list "${slug}" (${inserted.data.display_name}). Add items with add_list_item.`;
+  const { provisionNotionDatabaseForCustomList } = await import(
+    "../integrations/notion/notionProvision.js"
+  );
+  const notionDbId = await provisionNotionDatabaseForCustomList({
+    userProfileId: input.userProfileId,
+    slug,
+    displayName: inserted.data.display_name,
+  });
+
+  const notionNote = notionDbId
+    ? " Notion database created under your Magnus space."
+    : "";
+
+  return `Created list "${slug}" (${inserted.data.display_name}). Add items with add_list_item.${notionNote}`;
 }
 
 export async function linkNotionList(input: {

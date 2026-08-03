@@ -8,6 +8,7 @@ import { notionOauthRedirectUri } from "../../config/publicBaseUrl.js";
 import { logger } from "../../logger.js";
 import { ensureUserLists } from "../../lists/listService.js";
 import { discoverNotionLists, clearNotionListMirrors } from "./notionSetup.js";
+import { provisionMagnusNotionSpace } from "./notionProvision.js";
 import { redis } from "../../tools/clients.js";
 import { loggableError } from "../../util/loggableError.js";
 import { loadUserIntegrations, upsertUserIntegrations } from "../../users/userIntegrations.js";
@@ -265,9 +266,14 @@ export async function completeNotionOauth(input: {
 
     let discoverSummary: string | undefined;
     try {
-      discoverSummary = await discoverNotionLists(payload.userProfileId);
+      discoverSummary = await provisionMagnusNotionSpace(payload.userProfileId);
     } catch (e) {
-      logger.warn({ err: loggableError(e) }, "notion oauth: auto-discover failed");
+      logger.warn({ err: loggableError(e) }, "notion oauth: provision failed; trying discover");
+      try {
+        discoverSummary = await discoverNotionLists(payload.userProfileId);
+      } catch (e2) {
+        logger.warn({ err: loggableError(e2) }, "notion oauth: auto-discover failed");
+      }
     }
 
     logger.info(

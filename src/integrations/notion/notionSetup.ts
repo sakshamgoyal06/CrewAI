@@ -142,9 +142,15 @@ export async function saveNotionToken(
 
   let discoverSummary = "";
   try {
-    discoverSummary = await discoverNotionLists(userProfileId);
+    const { provisionMagnusNotionSpace } = await import("./notionProvision.js");
+    discoverSummary = await provisionMagnusNotionSpace(userProfileId);
   } catch (e) {
-    logger.warn({ err: loggableError(e) }, "notion save_token: auto-discover failed");
+    logger.warn({ err: loggableError(e) }, "notion save_token: provision failed");
+    try {
+      discoverSummary = await discoverNotionLists(userProfileId);
+    } catch (e2) {
+      logger.warn({ err: loggableError(e2) }, "notion save_token: auto-discover failed");
+    }
   }
 
   const who = validated.workspaceName ? ` (${validated.workspaceName})` : "";
@@ -201,9 +207,15 @@ export async function setNotionHub(
 
   let discoverSummary = "";
   try {
-    discoverSummary = await discoverNotionLists(userProfileId);
+    const { provisionMagnusNotionSpace } = await import("./notionProvision.js");
+    discoverSummary = await provisionMagnusNotionSpace(userProfileId);
   } catch (e) {
-    logger.warn({ err: loggableError(e) }, "notion set_hub: auto-discover failed");
+    logger.warn({ err: loggableError(e) }, "notion set_hub: provision failed");
+    try {
+      discoverSummary = await discoverNotionLists(userProfileId);
+    } catch (e2) {
+      logger.warn({ err: loggableError(e2) }, "notion set_hub: auto-discover failed");
+    }
   }
 
   const parts = [
@@ -463,14 +475,13 @@ export function notionConnectInstructions(): string {
   return [
     "To connect Notion to Magnus (your token stays on your account only):",
     "",
-    "**Preferred:** say connect Notion — if OAuth is configured on the host, I'll send a one-click link.",
-    "In Notion's page picker, select your LifeOS hub and list databases.",
+    "**Preferred:** say connect Notion — OAuth link; Magnus creates a dedicated Magnus page with list catalogs and journal.",
     "",
     "**Manual fallback:**",
     "1. Open https://www.notion.so/my-integrations and create an internal integration.",
     "2. Copy the Internal Integration Secret (starts with secret_ or ntn_).",
     "3. setup_notion action save_token with the secret.",
-    "4. Share hub + list DBs with the integration → setup_notion set_hub → discover.",
+    "4. setup_notion action provision to create the Magnus space and list databases.",
     "",
     "Lists work in Magnus without Notion; connecting adds a mirror in your workspace.",
     "See docs/NOTION_SETUP.md for OAuth redirect URI setup.",

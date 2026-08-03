@@ -84,7 +84,7 @@ shell or `.env`.
 | `src/agents/tools/youtubeConnectTool.ts` | In-chat `connect_google` / aliases — Calendar + YouTube one consent |
 | `src/agents/tools/youtubeTool.ts` | YouTube / YT Music: search, recommend, playlists, bookmarks, cue (per-user token) |
 | `src/agents/tools/eventLogTool.ts` | Event log tools: plan, update, reschedule, list (`magnus_events`) |
-| `src/integrations/notion/` | Per-user Notion onboarding: token, hub, database discovery |
+| `src/integrations/notion/notionProvision.ts` | Post-OAuth: create Magnus hub, Journal, standard list databases in Notion |
 | `src/agents/tools/notionConnectTool.ts` | `connect_notion`, `setup_notion` Magnus tools |
 | `src/agents/tools/listTool.ts` | User lists: catalog, read/add/update items, create custom list, link Notion mirror |
 | `src/lists/` | List catalog templates, Supabase store, service orchestration, optional Notion mirror |
@@ -250,4 +250,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-03 (Notion connect always OAuth when configured; auto-discover on onboarding)
+**Last updated:** 2026-08-03 (Notion auto-provisions dedicated Magnus space + list DBs on connect)

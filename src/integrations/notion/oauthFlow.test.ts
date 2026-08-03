@@ -8,6 +8,7 @@ const loadIntegrations = vi.hoisted(() => vi.fn());
 const ensureLists = vi.hoisted(() => vi.fn());
 const discover = vi.hoisted(() => vi.fn());
 const clearMirrors = vi.hoisted(() => vi.fn());
+const provision = vi.hoisted(() => vi.fn());
 const fetchMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../../tools/clients.js", () => ({
@@ -32,6 +33,10 @@ vi.mock("./notionSetup.js", () => ({
   clearNotionListMirrors: clearMirrors,
 }));
 
+vi.mock("./notionProvision.js", () => ({
+  provisionMagnusNotionSpace: provision,
+}));
+
 vi.mock("../../config/publicBaseUrl.js", () => ({
   notionOauthRedirectUri: () => "https://magnus.example.com/oauth/notion/callback",
   NOTION_OAUTH_CALLBACK_PATH: "/oauth/notion/callback",
@@ -48,6 +53,7 @@ describe("notion oauth flow", () => {
     loadIntegrations.mockResolvedValue({});
     ensureLists.mockResolvedValue([]);
     discover.mockResolvedValue("Discovered 2 list database(s):");
+    provision.mockResolvedValue("Magnus Notion space ready.");
     clearMirrors.mockResolvedValue(undefined);
   });
 
@@ -100,7 +106,7 @@ describe("notion oauth flow", () => {
         notionToken: "secret_notion_access",
       }),
     );
-    expect(discover).toHaveBeenCalledWith("user-1");
+    expect(provision).toHaveBeenCalledWith("user-1");
     expect(clearMirrors).toHaveBeenCalledWith("user-1");
   });
 });
