@@ -26,11 +26,11 @@ call. No menu, no lane picker, no per-department commands.
 |---|---|
 | **Magnus** (`GENERAL`) | The day and week, Google Calendar, YouTube / YT Music, journaling and logging, reminders, cross-pillar questions, ordinary conversation. The only agent with tools. |
 | **Health** | Training, workouts, meals and macros, sleep, recovery, the health journal. Deep: sub-router, Hevy, nutrition providers, program memory, onboarding gate. |
-| **Wealth** | Budgeting, spending, saving, debt, net worth, financial goals, investing philosophy. **Zerodha (Kite Connect)** read-only: holdings, Coin MF, SIPs — see `docs/ZERODHA.md`. |
+| **Wealth** | Budgeting, spending, saving, debt, net worth, financial goals, investing philosophy. **Fi Money** read-only: net worth, banks, credit — see `docs/FI.md`. **Zerodha (Kite Connect)** read-only: holdings, Coin MF, SIPs — see `docs/ZERODHA.md`. |
 | **Happiness** | Books, film, music, games, hobbies, creative practice, rest, travel, relationships. |
 | **Wisdom** | Learning plans, skills and craft, career direction and growth, shipping projects. |
 
-Wealth has **Zerodha integration** (Kite Connect OAuth, read-only portfolio context). Happiness and Wisdom remain single prompt-only agents sharing one runner
+Wealth has **Fi Money** (net worth, banks, credit) and **Zerodha** (Kite Connect OAuth, read-only portfolio context). Happiness and Wisdom remain single prompt-only agents sharing one runner
 (`src/agents/pillarSpecialist.ts`) — intentionally shallow until a pillar earns depth.
 
 ---
@@ -231,7 +231,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
   turn when enabled (requires the `memory_summaries` migration applied).
 - **Schema not reproducible** from `supabase/migrations/` for tables predating April 2026 migrations.
 - **Semantic recall** — no embeddings; memory is recent-window plus structured reads.
-- **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data.
+- **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data (Wealth has read-only Fi + Zerodha context today; see below).
+- **Kite write (long-term)** — equity order placement/cancel via Kite Connect, behind `MAGNUS_KITE_ORDERS_ENABLED`, static IP on the developer console, and a Telegram **CONFIRM** flow separate from wealth coaching. Probe script: `npm run kite:test-write` (`scripts/wealth/kite/test-write-endpoints.mts`). **Live probe (2026-08-03):** Coin MF writes (`POST/DELETE /mf/orders`, `/mf/sips`) return **403 Insufficient permission** — not available on this app/plan; equity `POST /orders/regular` blocked until **static IP** is configured; equity cancel auth works (404 on fake id). Do not build MF execution in Magnus unless Zerodha opens those APIs.
 - **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables; empty
   LifeOS sections are omitted when `dataAvailability` flags are false (no “unknown” filler).
 - **No inactivity / activity-triggered proactive messages yet** — only time-based cron jobs.
@@ -241,4 +242,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-03 (playlist aliases, routing fixes, gym schedule, morning brief)
+**Last updated:** 2026-08-03 (Fi Money integration; Kite write long-term todo)

@@ -276,6 +276,30 @@ function workoutsCapability(): Capability {
   };
 }
 
+function fiCapability(env: EnvBag): Capability {
+  if (isFalsy(env, "MAGNUS_FI_MCP_ENABLED")) {
+    return {
+      id: "fi",
+      title: "Fi Money",
+      telegram: "“connect Fi”",
+      status: "off",
+      detail:
+        "Set MAGNUS_FI_MCP_ENABLED=true (default on). No API keys — per-user browser login + passcode.",
+      missing: ["MAGNUS_FI_MCP_ENABLED"],
+    };
+  }
+  const redisOk = Boolean(val(env, "UPSTASH_REDIS_REST_URL") && val(env, "UPSTASH_REDIS_REST_TOKEN"));
+  return {
+    id: "fi",
+    title: "Fi Money",
+    telegram: "“connect Fi”, “what is my net worth?”",
+    status: redisOk ? "partial" : "off",
+    detail:
+      "Fi Money — net worth, bank txns, credit report. Each user: browser login + passcode (~30 min session in Redis). Complements Zerodha.",
+    missing: redisOk ? ["user Fi session (in-chat connect)"] : ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"],
+  };
+}
+
 function zerodhaCapability(env: EnvBag): Capability {
   const platformOk = Boolean(
     val(env, "KITE_API_KEY") && val(env, "KITE_API_SECRET"),
@@ -377,6 +401,7 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
     },
     workoutsCapability(),
     zerodhaCapability(env),
+    fiCapability(env),
     mealCapability(env),
     {
       id: "journal",

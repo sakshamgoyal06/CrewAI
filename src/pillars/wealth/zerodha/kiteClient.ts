@@ -1,22 +1,39 @@
 import { kiteApiBaseUrl, kiteFetchTimeoutMs } from "./kiteEnv.js";
 import type {
   KiteEnvelope,
+  KiteEquityOrderPlaceResult,
   KiteHolding,
   KiteMargins,
   KiteMfHolding,
+  KiteMfOrder,
+  KiteMfOrderPlaceResult,
   KiteMfSip,
+  KiteMfSipPlaceResult,
   KitePortfolioSnapshot,
   KiteSessionData,
   KiteUserProfile,
 } from "./types.js";
 
 type KiteCreds = { apiKey: string; accessToken: string };
+type KiteHttpMethod = "GET" | "POST" | "PUT" | "DELETE";
+
+function kiteAuthHeaders(creds: KiteCreds, method: KiteHttpMethod): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "X-Kite-Version": "3",
+    Authorization: `token ${creds.apiKey}:${creds.accessToken}`,
+  };
+  if (method !== "GET") {
+    headers["Content-Type"] = "application/x-www-form-urlencoded";
+  }
+  return headers;
+}
 
 async function kiteRequest<T>(
   path: string,
   creds: { apiKey: string; accessToken: string },
   options: {
-    method?: "GET" | "POST";
+    method?: KiteHttpMethod;
     body?: URLSearchParams;
     fetchImpl?: typeof fetch;
     timeoutMs?: number;
@@ -34,13 +51,7 @@ async function kiteRequest<T>(
     const res = await fetchFn(url, {
       method,
       signal: ac.signal,
-      headers: {
-        Accept: "application/json",
-        "X-Kite-Version": "3",
-        ...(method === "GET"
-          ? { Authorization: `token ${creds.apiKey}:${creds.accessToken}` }
-          : { "Content-Type": "application/x-www-form-urlencoded" }),
-      },
+      headers: kiteAuthHeaders(creds, method),
       ...(options.body ? { body: options.body.toString() } : {}),
     });
     const text = await res.text();
@@ -186,6 +197,209 @@ export async function fetchKiteMargins(
     return res;
   }
   return { ok: true, margins: res.data ?? {} };
+}
+
+/** Probe / write: place Coin MF order (may be disabled by Zerodha — see docs). */
+export async function placeKiteMfOrder(
+  creds: KiteCreds,
+  input: {
+    tradingsymbol: string;
+    transactionType: "BUY" | "SELL";
+    amount?: number;
+    quantity?: number;
+    tag?: string;
+  },
+  options?: { fetchImpl?: typeof fetch },
+): Promise<
+  { ok: true; order: KiteMfOrderPlaceResult } | { ok: false; error: string; status?: number }
+> {
+  const body = new URLSearchParams({
+    tradingsymbol: input.tradingsymbol,
+    transaction_type: input.transactionType,
+  });
+  if (input.amount != null) {
+    body.set("amount", String(input.amount));
+  }
+  if (input.quantity != null) {
+    body.set("quantity", String(input.quantity));
+  }
+  if (input.tag?.trim()) {
+    body.set("tag", input.tag.trim());
+  }
+
+  const res = await kiteRequest<KiteMfOrderPlaceResult>("/mf/orders", creds, {
+    ...options,
+    method: "POST",
+    body,
+  });
+  if (!res.ok) {
+    return res;
+  }
+  return { ok: true, order: res.data };
+}
+
+/** Probe / write: cancel Coin MF order. */
+export async function cancelKiteMfOrder(
+  creds: KiteCreds,
+  orderId: string,
+  options?: { fetchImpl?: typeof fetch },
+): Promise<{ ok: true; orderId: string } | { ok: false; error: string; status?: number }> {
+  const res = await kiteRequest<{ order_id?: string }>(
+    `/mf/orders/${encodeURIComponent(orderId)}`,
+    creds,
+    { ...options, method: "DELETE" },
+  );
+  if (!res.ok) {
+    return res;
+  }
+  return { ok: true, orderId: res.data?.order_id ?? orderId };
+}
+
+/** Probe / write: create Coin MF SIP (may be disabled by Zerodha — see docs). */
+export async function placeKiteMfSip(
+  creds: KiteCreds,
+  input: {
+    tradingsymbol: string;
+    amount: number;
+    frequency: "weekly" | "monthly" | "quarterly";
+    instalments?: number;
+    instalmentDay?: number;
+    initialAmount?: number;
+    tag?: string;
+  },
+  options?: { fetchImpl?: typeof fetch },
+): Promise<
+  { ok: true; sip: KiteMfSipPlaceResult } | { ok: false; error: string; status?: number }
+> {
+  const body = new URLSearchParams({
+    tradingsymbol: input.tradingsymbol,
+    amount: String(input.amount),
+    frequency: input.frequency,
+  });
+  if (input.instalments != null) {
+    body.set("instalments", String(input.instalments));
+  }
+  if (input.instalmentDay != null) {
+    body.set("instalment_day", String(input.instalmentDay));
+  }
+  if (input.initialAmount != null) {
+    body.set("initial_amount", String(input.initialAmount));
+  }
+  if (input.tag?.trim()) {
+    body.set("tag", input.tag.trim());
+  }
+
+  const res = await kiteRequest<KiteMfSipPlaceResult>("/mf/sips", creds, {
+    ...options,
+    method: "POST",
+    body,
+  });
+  if (!res.ok) {
+    return res;
+  }
+  return { ok: true, sip: res.data };
+}
+
+/** Probe / write: cancel Coin MF SIP. */
+export async function cancelKiteMfSip(
+  creds: KiteCreds,
+  sipId: string,
+  options?: { fetchImpl?: typeof fetch },
+): Promise<{ ok: true; sipId: string } | { ok: false; error: string; status?: number }> {
+  const res = await kiteRequest<{ sip_id?: string }>(
+    `/mf/sips/${encodeURIComponent(sipId)}`,
+    creds,
+    { ...options, method: "DELETE" },
+  );
+  if (!res.ok) {
+    return res;
+  }
+  return { ok: true, sipId: res.data?.sip_id ?? sipId };
+}
+
+/** Probe / write: place Kite equity/F&O order. Use with extreme care. */
+export async function placeKiteEquityOrder(
+  creds: KiteCreds,
+  input: {
+    variety?: string;
+    tradingsymbol: string;
+    exchange: string;
+    transactionType: "BUY" | "SELL";
+    orderType: string;
+    quantity: number;
+    product: string;
+    validity?: string;
+    price?: number;
+    triggerPrice?: number;
+    tag?: string;
+    marketProtection?: number;
+  },
+  options?: { fetchImpl?: typeof fetch },
+): Promise<
+  { ok: true; order: KiteEquityOrderPlaceResult } | { ok: false; error: string; status?: number }
+> {
+  const variety = input.variety ?? "regular";
+  const body = new URLSearchParams({
+    tradingsymbol: input.tradingsymbol,
+    exchange: input.exchange,
+    transaction_type: input.transactionType,
+    order_type: input.orderType,
+    quantity: String(input.quantity),
+    product: input.product,
+    validity: input.validity ?? "DAY",
+  });
+  if (input.price != null) {
+    body.set("price", String(input.price));
+  }
+  if (input.triggerPrice != null) {
+    body.set("trigger_price", String(input.triggerPrice));
+  }
+  if (input.tag?.trim()) {
+    body.set("tag", input.tag.trim());
+  }
+  if (input.marketProtection != null) {
+    body.set("market_protection", String(input.marketProtection));
+  }
+
+  const res = await kiteRequest<KiteEquityOrderPlaceResult>(`/orders/${variety}`, creds, {
+    ...options,
+    method: "POST",
+    body,
+  });
+  if (!res.ok) {
+    return res;
+  }
+  return { ok: true, order: res.data };
+}
+
+/** Probe / write: cancel Kite equity/F&O order. */
+export async function cancelKiteEquityOrder(
+  creds: KiteCreds,
+  input: { variety?: string; orderId: string },
+  options?: { fetchImpl?: typeof fetch },
+): Promise<{ ok: true; orderId: string } | { ok: false; error: string; status?: number }> {
+  const variety = input.variety ?? "regular";
+  const res = await kiteRequest<{ order_id?: string }>(
+    `/orders/${variety}/${encodeURIComponent(input.orderId)}`,
+    creds,
+    { ...options, method: "DELETE" },
+  );
+  if (!res.ok) {
+    return res;
+  }
+  return { ok: true, orderId: res.data?.order_id ?? input.orderId };
+}
+
+/** Read MF orders from the last 7 days. */
+export async function fetchKiteMfOrders(
+  creds: KiteCreds,
+  options?: { fetchImpl?: typeof fetch },
+): Promise<{ ok: true; orders: KiteMfOrder[] } | { ok: false; error: string }> {
+  const res = await kiteRequest<KiteMfOrder[]>("/mf/orders", creds, options);
+  if (!res.ok) {
+    return res;
+  }
+  return { ok: true, orders: res.data ?? [] };
 }
 
 /** Read-only portfolio snapshot for wealth agent context. */

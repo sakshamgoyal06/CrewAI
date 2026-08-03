@@ -7,7 +7,6 @@
  *
  * https://kite.trade/docs/connect/v3/
  */
-import { loadUserIntegrations } from "../../../users/userIntegrations.js";
 
 export type KiteAppCredentials = {
   apiKey: string;
@@ -60,6 +59,7 @@ export async function kiteAppCredentialsForUser(
     return platform;
   }
   if (userProfileId?.trim()) {
+    const { loadUserIntegrations } = await import("../../../users/userIntegrations.js");
     const integrations = await loadUserIntegrations(userProfileId);
     const apiKey = integrations.kiteApiKey;
     const apiSecret = integrations.kiteApiSecret;
@@ -80,6 +80,7 @@ export async function kiteAccessTokenForUser(
   if (!userProfileId?.trim()) {
     return undefined;
   }
+  const { loadUserIntegrations } = await import("../../../users/userIntegrations.js");
   const integrations = await loadUserIntegrations(userProfileId);
   return integrations.kiteAccessToken;
 }
