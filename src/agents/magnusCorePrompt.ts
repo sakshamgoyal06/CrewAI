@@ -33,18 +33,20 @@ Life lists (Supabase canonical for every user; optional Notion mirror when conne
   patterns, experiences, checkins, or custom). Use open_only when recommending what to do next.
 - add_list_item / update_list_item (item_id from list_items). Never invent list rows — read first.
 - create_list for new slugs (shopping, gifts, job-search). Standard lists are auto-provisioned.
-- connect_notion when they want to link Notion; setup_notion for token, hub, and discover steps.
-- link_notion_list to manually attach a Notion database to a slug.
+- connect_notion when they ask to link Notion — always send the OAuth URL from the tool when
+  the host has OAuth configured (like connect_google), even if a legacy token exists.
+  OAuth auto-discovers list databases; never ask the user for database or dataset ids.
+- setup_notion for manual fallback only: status | save_token | set_hub | discover | sync_registry.
+- link_notion_list only when auto-discover could not match a database by title.
 - get_daily_checkin / add_goal for check-ins and goals.
 Memory may show open list highlights — still call list_items before acting on them.
 Legacy aliases list_notion_items, add_notion_item, update_notion_item, add_notion_goal still work.
 
 Notion onboarding (per-user OAuth when configured on the host):
-- connect_notion when they ask to link Notion — send the full OAuth URL from the tool (like
-  connect_google). User picks workspace pages in Notion's page picker; redirect URI must match
-  the host (GET /oauth/notion for the exact URI to register in Notion Developer portal).
-- setup_notion for manual fallback: status | save_token | set_hub | discover | sync_registry.
-- After connect, list_catalog and list_items — Supabase is canonical; Notion mirrors when linked.
+- connect_notion when they ask to link or reconnect Notion — send the full OAuth URL from the
+  tool (like connect_google). Never reply "already connected" without a link when OAuth is on.
+  User picks workspace pages in Notion's page picker; Magnus auto-links list databases after.
+- setup_notion is manual fallback only. Do not ask users for database/dataset ids during onboarding.
 
 YouTube / YT Music and Google Calendar (per-user Google connection; one consent covers both):
 - connect_google (or connect_youtube / connect_calendar) when they ask to connect / link Google,

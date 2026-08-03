@@ -7,6 +7,7 @@ const upsert = vi.hoisted(() => vi.fn());
 const loadIntegrations = vi.hoisted(() => vi.fn());
 const ensureLists = vi.hoisted(() => vi.fn());
 const discover = vi.hoisted(() => vi.fn());
+const clearMirrors = vi.hoisted(() => vi.fn());
 const fetchMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../../tools/clients.js", () => ({
@@ -28,6 +29,7 @@ vi.mock("../../lists/listService.js", () => ({
 
 vi.mock("./notionSetup.js", () => ({
   discoverNotionLists: discover,
+  clearNotionListMirrors: clearMirrors,
 }));
 
 vi.mock("../../config/publicBaseUrl.js", () => ({
@@ -46,6 +48,7 @@ describe("notion oauth flow", () => {
     loadIntegrations.mockResolvedValue({});
     ensureLists.mockResolvedValue([]);
     discover.mockResolvedValue("Discovered 2 list database(s):");
+    clearMirrors.mockResolvedValue(undefined);
   });
 
   it("mints a state and Notion authorize URL", async () => {
@@ -98,5 +101,6 @@ describe("notion oauth flow", () => {
       }),
     );
     expect(discover).toHaveBeenCalledWith("user-1");
+    expect(clearMirrors).toHaveBeenCalledWith("user-1");
   });
 });

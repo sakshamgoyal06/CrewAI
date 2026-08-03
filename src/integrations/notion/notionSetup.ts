@@ -6,7 +6,11 @@ import type { Client } from "@notionhq/client";
 import { logger } from "../../logger.js";
 import { ensureUserLists, linkNotionList } from "../../lists/listService.js";
 import { getStandardTemplate, STANDARD_LIST_TEMPLATES } from "../../lists/listCatalog.js";
-import { fetchUserLists } from "../../lists/listStore.js";
+import {
+  fetchUserLists,
+  updateList,
+  type ListRow,
+} from "../../lists/listStore.js";
 import { createNotionClient } from "../../tools/notion.js";
 import type { NotionRegistry } from "../../tools/notionRegistry.js";
 import { loadUserIntegrations, upsertUserIntegrations } from "../../users/userIntegrations.js";
@@ -15,8 +19,12 @@ import { parseNotionId } from "./notionId.js";
 
 export { parseNotionId } from "./notionId.js";
 
+export type NotionConnectionKind = "oauth" | "manual" | "none";
+
 export type NotionSetupStatus = {
   tokenConnected: boolean;
+  tokenValid: boolean;
+  connectionKind: NotionConnectionKind;
   workspaceName?: string;
   hubPageId?: string;
   dailyLogParent?: string;
@@ -25,6 +33,21 @@ export type NotionSetupStatus = {
   listsNotionLinked: number;
   missingSteps: string[];
 };
+
+export function notionConnectionKind(registry: unknown): NotionConnectionKind {
+  if (!registry || typeof registry !== "object") {
+    return "none";
+  }
+  const oauth = (registry as Record<string, unknown>).oauth;
+  if (
+    oauth &&
+    typeof oauth === "object" &&
+    typeof (oauth as { connectedAt?: string }).connectedAt === "string"
+  ) {
+    return "oauth";
+  }
+  return "none";
+}
 
 export async function validateNotionToken(
   token: string,
@@ -55,18 +78,36 @@ export async function getNotionSetupStatus(userProfileId: string): Promise<Notio
   const registry = integrations.notionRegistry as NotionRegistry | undefined;
 
   const missingSteps: string[] = [];
+  let tokenValid = false;
+  let connectionKind: NotionConnectionKind = "none";
+
   if (!integrations.notionToken) {
-    missingSteps.push("Save your Notion integration token (setup_notion action save_token).");
+    missingSteps.push("Connect Notion (say connect Notion for OAuth, or setup_notion save_token).");
+  } else {
+    const validated = await validateNotionToken(integrations.notionToken);
+    tokenValid = validated.ok;
+    if (!validated.ok) {
+      missingSteps.push(
+        "Notion token is invalid or expired — say connect Notion to reconnect.",
+      );
+    }
+    connectionKind = notionConnectionKind(integrations.notionRegistry);
+    if (connectionKind === "none") {
+      connectionKind = "manual";
+    }
   }
-  if (!registry?.hubPageId && !integrations.notionDailyLogParentPageId) {
-    missingSteps.push("Set your LifeOS hub page (setup_notion action set_hub).");
+
+  if (tokenValid && !registry?.hubPageId && !integrations.notionDailyLogParentPageId) {
+    missingSteps.push("Set your LifeOS hub page (OAuth page picker or setup_notion set_hub).");
   }
-  if (listRows.filter((l) => l.notion_data_source_id).length === 0) {
-    missingSteps.push("Discover or link list databases (setup_notion action discover).");
+  if (tokenValid && listRows.filter((l) => l.notion_data_source_id).length === 0) {
+    missingSteps.push("List databases not linked yet — connect Notion runs auto-discover.");
   }
 
   return {
     tokenConnected: Boolean(integrations.notionToken),
+    tokenValid,
+    connectionKind,
     hubPageId: registry?.hubPageId ?? integrations.notionDailyLogParentPageId,
     dailyLogParent: integrations.notionDailyLogParentPageId,
     morningBriefParent: integrations.notionMorningBriefParentPageId,
@@ -100,15 +141,23 @@ export async function saveNotionToken(
 
   await ensureUserLists(userProfileId);
 
+  let discoverSummary = "";
+  try {
+    discoverSummary = await discoverNotionLists(userProfileId);
+  } catch (e) {
+    logger.warn({ err: loggableError(e) }, "notion save_token: auto-discover failed");
+  }
+
   const who = validated.workspaceName ? ` (${validated.workspaceName})` : "";
-  return [
+  const parts = [
     `Notion connected${who}. Token saved for your account only.`,
     "",
-    "Next steps:",
-    "1. In Notion, share your LifeOS hub page with this integration (⋯ → Connections).",
-    "2. Send the hub page link — I'll run setup_notion set_hub.",
-    "3. Then setup_notion discover to auto-link your list databases.",
-  ].join("\n");
+    "Share your LifeOS hub and list databases with this integration in Notion, then send the hub page link if journal mirroring needs a parent page.",
+  ];
+  if (discoverSummary) {
+    parts.push("", discoverSummary);
+  }
+  return parts.join("\n");
 }
 
 export async function setNotionHub(
@@ -151,11 +200,23 @@ export async function setNotionHub(
 
   await ensureUserLists(userProfileId);
 
-  return [
+  let discoverSummary = "";
+  try {
+    discoverSummary = await discoverNotionLists(userProfileId);
+  } catch (e) {
+    logger.warn({ err: loggableError(e) }, "notion set_hub: auto-discover failed");
+  }
+
+  const parts = [
     `LifeOS hub set (${hubId}).`,
     "Journal and Morning Brief pages will be created under this hub.",
-    "Run setup_notion discover to link list databases, or link them one at a time with link_notion_list.",
-  ].join("\n");
+  ];
+  if (discoverSummary) {
+    parts.push("", discoverSummary);
+  } else {
+    parts.push("List databases will auto-link when you connect Notion or run setup_notion discover.");
+  }
+  return parts.join("\n");
 }
 
 type DiscoveredDatabase = { id: string; title: string };
@@ -241,6 +302,19 @@ function inferStatusProperty(props: Record<string, unknown>): {
     }
   }
   return { kind: "select" };
+}
+
+/** Clear per-list Notion mirror ids before OAuth reconnect + rediscover. */
+export async function clearNotionListMirrors(userProfileId: string): Promise<void> {
+  const lists = await fetchUserLists(userProfileId);
+  if (!lists.ok) {
+    return;
+  }
+  for (const list of lists.data) {
+    if (list.notion_data_source_id) {
+      await updateList(list.id, { notionDataSourceId: null });
+    }
+  }
 }
 
 export async function discoverNotionLists(userProfileId: string): Promise<string> {

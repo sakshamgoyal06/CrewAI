@@ -16,46 +16,73 @@ import {
   syncRegistryFromLists,
 } from "../../integrations/notion/notionSetup.js";
 
+async function beginNotionOauthMessage(input: {
+  userProfileId: string;
+  telegramUserId: string;
+  replacingExisting: boolean;
+}): Promise<string> {
+  const started = await beginNotionOauth({
+    userProfileId: input.userProfileId,
+    telegramChatId: input.telegramUserId,
+  });
+  if (!started.ok) {
+    return started.error;
+  }
+
+  const intro = input.replacingExisting
+    ? "You already have a Notion connection saved (likely a legacy manual token). Open this link to reconnect via OAuth — pick your LifeOS hub and list databases in Notion's page picker. Magnus will replace the old connection and auto-link list databases (no database ids needed from you):"
+    : "Open this link to connect Notion to Magnus (pick your LifeOS hub and list databases in the page picker; expires in about 15 minutes):";
+
+  return [
+    intro,
+    started.authUrl,
+    "",
+    "After you approve, I save the token for your account only, auto-discover list databases, and confirm here.",
+    `Register this redirect URI exactly in your Notion public connection: ${started.redirectUri}`,
+  ].join("\n");
+}
+
 export async function connectNotionTool(input: {
   userProfileId: string;
   telegramUserId: string;
 }): Promise<string> {
   const status = await getNotionSetupStatus(input.userProfileId);
 
-  if (status.tokenConnected && status.missingSteps.length === 0) {
+  // When OAuth is configured, "connect Notion" always means send a fresh consent link —
+  // same as connect_google. Do not short-circuit on a stale manual token or seeded registry.
+  if (notionOauthLinkAvailable()) {
+    return beginNotionOauthMessage({
+      ...input,
+      replacingExisting: status.tokenConnected,
+    });
+  }
+
+  if (status.tokenConnected && status.tokenValid && status.missingSteps.length === 0) {
+    const kind =
+      status.connectionKind === "oauth" ? "OAuth" : "manual integration token";
     return [
       "Notion is fully set up for your account.",
+      `Connection: ${kind}`,
       `Hub: ${status.hubPageId ?? "not set"}`,
       `Lists: ${status.listsProvisioned} provisioned, ${status.listsNotionLinked} linked to Notion.`,
       "Use list_catalog / list_items anytime. setup_notion status for details.",
     ].join("\n");
   }
 
-  if (status.tokenConnected) {
-    const parts = [
-      "Notion is connected. Remaining setup:",
-      ...status.missingSteps.map((s) => `- ${s}`),
-      "",
-      "Use setup_notion with action set_hub or discover.",
-    ];
-    return parts.join("\n");
-  }
-
-  if (notionOauthLinkAvailable()) {
-    const started = await beginNotionOauth({
-      userProfileId: input.userProfileId,
-      telegramChatId: input.telegramUserId,
-    });
-    if (!started.ok) {
-      return started.error;
+  if (status.tokenConnected && status.tokenValid) {
+    if (
+      status.listsNotionLinked === 0 ||
+      status.missingSteps.some((s) => s.includes("not linked"))
+    ) {
+      const discover = await discoverNotionLists(input.userProfileId);
+      return ["Notion is connected. Auto-linked your list databases:", "", discover].join("\n");
     }
 
     return [
-      "Open this link to connect Notion to Magnus (pick your LifeOS hub and list pages in the page picker; expires in about 15 minutes):",
-      started.authUrl,
+      "Notion is connected. Remaining setup:",
+      ...status.missingSteps.map((s) => `- ${s}`),
       "",
-      "After you approve, I will save the connection for your account, auto-discover list databases, and confirm here.",
-      `Register this redirect URI exactly in your Notion public connection: ${started.redirectUri}`,
+      "Try setup_notion discover or send your LifeOS hub page for set_hub.",
     ].join("\n");
   }
 
@@ -91,7 +118,8 @@ export async function setupNotionTool(input: {
     case "status": {
       const status = await getNotionSetupStatus(input.userProfileId);
       const lines = [
-        `Token: ${status.tokenConnected ? "connected" : "missing"}`,
+        `Token: ${status.tokenConnected ? (status.tokenValid ? "connected" : "invalid/expired") : "missing"}`,
+        `Connection: ${status.connectionKind}`,
         `Hub: ${status.hubPageId ?? "not set"}`,
         `Journal parent: ${status.dailyLogParent ?? "not set"}`,
         `Morning brief parent: ${status.morningBriefParent ?? "not set"}`,

@@ -7,7 +7,7 @@ import { randomBytes } from "node:crypto";
 import { notionOauthRedirectUri } from "../../config/publicBaseUrl.js";
 import { logger } from "../../logger.js";
 import { ensureUserLists } from "../../lists/listService.js";
-import { discoverNotionLists } from "./notionSetup.js";
+import { discoverNotionLists, clearNotionListMirrors } from "./notionSetup.js";
 import { redis } from "../../tools/clients.js";
 import { loggableError } from "../../util/loggableError.js";
 import { loadUserIntegrations, upsertUserIntegrations } from "../../users/userIntegrations.js";
@@ -212,25 +212,28 @@ export async function completeNotionOauth(input: {
   try {
     const tokens = await exchangeNotionCode(code, redirectUri);
     const integrations = await loadUserIntegrations(payload.userProfileId);
-    const registry =
+    const priorRegistry =
       integrations.notionRegistry && typeof integrations.notionRegistry === "object"
-        ? { ...(integrations.notionRegistry as Record<string, unknown>) }
+        ? (integrations.notionRegistry as Record<string, unknown>)
         : {};
 
-    registry.oauth = {
-      refreshToken: tokens.refresh_token ?? null,
-      botId: tokens.bot_id ?? null,
-      workspaceId: tokens.workspace_id ?? null,
-      workspaceName: tokens.workspace_name ?? null,
-      connectedAt: new Date().toISOString(),
+    const registry: Record<string, unknown> = {
+      lists: {},
+      oauth: {
+        refreshToken: tokens.refresh_token ?? null,
+        botId: tokens.bot_id ?? null,
+        workspaceId: tokens.workspace_id ?? null,
+        workspaceName: tokens.workspace_name ?? null,
+        connectedAt: new Date().toISOString(),
+      },
     };
 
     const hubPageId =
       tokens.duplicated_template_id?.trim() ||
-      (typeof registry.hubPageId === "string" ? registry.hubPageId : undefined);
+      (typeof priorRegistry.hubPageId === "string" ? priorRegistry.hubPageId : undefined);
 
-    if (tokens.duplicated_template_id) {
-      registry.hubPageId = tokens.duplicated_template_id;
+    if (hubPageId) {
+      registry.hubPageId = hubPageId;
     }
 
     const saved = await upsertUserIntegrations({
@@ -258,6 +261,7 @@ export async function completeNotionOauth(input: {
     }
 
     await ensureUserLists(payload.userProfileId);
+    await clearNotionListMirrors(payload.userProfileId);
 
     let discoverSummary: string | undefined;
     try {
