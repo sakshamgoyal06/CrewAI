@@ -245,7 +245,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
   LifeOS sections are omitted when `dataAvailability` flags are false (no “unknown” filler).
 - **No inactivity / activity-triggered proactive messages yet** — only time-based cron jobs.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube.
-- **Notion list mirror** — Supabase `magnus_user_lists` / `magnus_list_items` are canonical for every user; Notion mirrors when linked. `connect_notion` always sends OAuth when configured (never short-circuits on legacy manual tokens). OAuth callback clears stale list ids and auto-discovers databases — users should not paste dataset ids. Bidirectional sync still TODO. See `docs/NOTION_LIFEOS_STRUCTURE.md`.
+- **Notion list mirror** — Supabase canonical; OAuth reconnect now wipes legacy LifeOS hub/registry and provisions a fresh **Magnus** page (no discover fallback to old DBs). Say connect Notion again after deploy if relink stuck on old LifeOS.
 - **List recommendation schemas** — default lists are title + queue status only; no genre/rating/runtime/rewatch filters yet. Planned: archetype field schemas, done-status lifecycle, `recommend_list_items` tool, richer Notion DB columns. See **`docs/TODO_LIST_RECOMMENDATION_SCHEMAS.md`**.
 
 **Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.

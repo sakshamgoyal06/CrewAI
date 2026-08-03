@@ -7,11 +7,11 @@ import { randomBytes } from "node:crypto";
 import { notionOauthRedirectUri } from "../../config/publicBaseUrl.js";
 import { logger } from "../../logger.js";
 import { ensureUserLists } from "../../lists/listService.js";
-import { discoverNotionLists, clearNotionListMirrors } from "./notionSetup.js";
+import { prepareNotionOAuthReconnect } from "./notionSetup.js";
 import { provisionMagnusNotionSpace } from "./notionProvision.js";
 import { redis } from "../../tools/clients.js";
 import { loggableError } from "../../util/loggableError.js";
-import { loadUserIntegrations, upsertUserIntegrations } from "../../users/userIntegrations.js";
+import { upsertUserIntegrations } from "../../users/userIntegrations.js";
 
 const STATE_TTL_SEC = 15 * 60;
 const STATE_KEY_PREFIX = "magnus:notion_oauth:";
@@ -212,11 +212,6 @@ export async function completeNotionOauth(input: {
 
   try {
     const tokens = await exchangeNotionCode(code, redirectUri);
-    const integrations = await loadUserIntegrations(payload.userProfileId);
-    const priorRegistry =
-      integrations.notionRegistry && typeof integrations.notionRegistry === "object"
-        ? (integrations.notionRegistry as Record<string, unknown>)
-        : {};
 
     const registry: Record<string, unknown> = {
       lists: {},
@@ -229,24 +224,16 @@ export async function completeNotionOauth(input: {
       },
     };
 
-    const hubPageId =
-      tokens.duplicated_template_id?.trim() ||
-      (typeof priorRegistry.hubPageId === "string" ? priorRegistry.hubPageId : undefined);
-
-    if (hubPageId) {
-      registry.hubPageId = hubPageId;
+    if (tokens.duplicated_template_id?.trim()) {
+      registry.hubPageId = tokens.duplicated_template_id.trim();
     }
+
+    await prepareNotionOAuthReconnect(payload.userProfileId);
 
     const saved = await upsertUserIntegrations({
       userProfileId: payload.userProfileId,
       notionToken: tokens.access_token.trim(),
       notionRegistry: registry,
-      ...(hubPageId
-        ? {
-            notionDailyLogParentPageId: hubPageId,
-            notionMorningBriefParentPageId: hubPageId,
-          }
-        : {}),
     });
 
     if (!saved.ok) {
@@ -262,18 +249,16 @@ export async function completeNotionOauth(input: {
     }
 
     await ensureUserLists(payload.userProfileId);
-    await clearNotionListMirrors(payload.userProfileId);
 
     let discoverSummary: string | undefined;
     try {
-      discoverSummary = await provisionMagnusNotionSpace(payload.userProfileId);
+      discoverSummary = await provisionMagnusNotionSpace(payload.userProfileId, {
+        forceFreshHub: !tokens.duplicated_template_id?.trim(),
+      });
     } catch (e) {
-      logger.warn({ err: loggableError(e) }, "notion oauth: provision failed; trying discover");
-      try {
-        discoverSummary = await discoverNotionLists(payload.userProfileId);
-      } catch (e2) {
-        logger.warn({ err: loggableError(e2) }, "notion oauth: auto-discover failed");
-      }
+      logger.warn({ err: loggableError(e) }, "notion oauth: provision failed");
+      discoverSummary =
+        "Notion authorized but Magnus could not create your workspace page. Say setup_notion provision to retry.";
     }
 
     logger.info(

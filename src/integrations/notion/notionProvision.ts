@@ -295,7 +295,10 @@ export type ProvisionResult = {
 /**
  * Create or complete the Magnus Notion space: hub page, Journal subpage, and standard list databases.
  */
-export async function provisionMagnusNotionSpace(userProfileId: string): Promise<string> {
+export async function provisionMagnusNotionSpace(
+  userProfileId: string,
+  options?: { forceFreshHub?: boolean },
+): Promise<string> {
   const integrations = await loadUserIntegrations(userProfileId);
   const token = integrations.notionToken?.trim();
   if (!token) {
@@ -310,10 +313,9 @@ export async function provisionMagnusNotionSpace(userProfileId: string): Promise
   await ensureUserLists(userProfileId);
 
   const registry = (integrations.notionRegistry as NotionRegistry | undefined) ?? { lists: {} };
-  const existingHub =
-    registry.hubPageId ??
-    integrations.notionDailyLogParentPageId ??
-    undefined;
+  const existingHub = options?.forceFreshHub
+    ? registry.hubPageId
+    : registry.hubPageId ?? integrations.notionDailyLogParentPageId ?? undefined;
 
   const hubPageId = await resolveOrCreateHub(client, token, existingHub);
   if (!hubPageId) {

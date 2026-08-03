@@ -7,7 +7,7 @@ const upsert = vi.hoisted(() => vi.fn());
 const loadIntegrations = vi.hoisted(() => vi.fn());
 const ensureLists = vi.hoisted(() => vi.fn());
 const discover = vi.hoisted(() => vi.fn());
-const clearMirrors = vi.hoisted(() => vi.fn());
+const prepareReconnect = vi.hoisted(() => vi.fn());
 const provision = vi.hoisted(() => vi.fn());
 const fetchMock = vi.hoisted(() => vi.fn());
 
@@ -30,7 +30,8 @@ vi.mock("../../lists/listService.js", () => ({
 
 vi.mock("./notionSetup.js", () => ({
   discoverNotionLists: discover,
-  clearNotionListMirrors: clearMirrors,
+  clearNotionListMirrors: vi.fn(),
+  prepareNotionOAuthReconnect: prepareReconnect,
 }));
 
 vi.mock("./notionProvision.js", () => ({
@@ -54,7 +55,7 @@ describe("notion oauth flow", () => {
     ensureLists.mockResolvedValue([]);
     discover.mockResolvedValue("Discovered 2 list database(s):");
     provision.mockResolvedValue("Magnus Notion space ready.");
-    clearMirrors.mockResolvedValue(undefined);
+    prepareReconnect.mockResolvedValue(undefined);
   });
 
   it("mints a state and Notion authorize URL", async () => {
@@ -106,7 +107,7 @@ describe("notion oauth flow", () => {
         notionToken: "secret_notion_access",
       }),
     );
-    expect(provision).toHaveBeenCalledWith("user-1");
-    expect(clearMirrors).toHaveBeenCalledWith("user-1");
+    expect(prepareReconnect).toHaveBeenCalledWith("user-1");
+    expect(provision).toHaveBeenCalledWith("user-1", { forceFreshHub: true });
   });
 });
