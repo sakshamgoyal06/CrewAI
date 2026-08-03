@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { STANDARD_LIST_TEMPLATES } from "../../lists/listCatalog.js";
-import { notionPropertiesForTemplate } from "./notionProvision.js";
+import { notionPropertiesForTemplate, pickGrantedHubPage } from "./notionProvision.js";
 
 describe("notionPropertiesForTemplate", () => {
   it("uses title + select status for watchlist", () => {
@@ -24,5 +24,19 @@ describe("notionPropertiesForTemplate", () => {
     const props = notionPropertiesForTemplate(template);
     expect(props).toHaveProperty("Date");
     expect((props.Date as { date?: unknown }).date).toBeDefined();
+  });
+});
+
+describe("pickGrantedHubPage", () => {
+  it("prefers a granted page titled Magnus", () => {
+    const id = pickGrantedHubPage([
+      { id: "a", title: "LifeOS" },
+      { id: "b", title: "Magnus" },
+    ]);
+    expect(id).toBe("b");
+  });
+
+  it("returns null when no hub title matches", () => {
+    expect(pickGrantedHubPage([{ id: "a", title: "Shopping" }])).toBeNull();
   });
 });

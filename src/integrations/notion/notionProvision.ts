@@ -15,7 +15,8 @@ import { loggableError } from "../../util/loggableError.js";
 import { syncRegistryFromLists } from "./notionSetup.js";
 
 const NOTION_API = "https://api.notion.com/v1";
-const NOTION_VERSION = "2022-06-28";
+/** Workspace-level page create needs a recent Notion-Version (2022-06-28 rejects parent.workspace). */
+const NOTION_PROVISION_VERSION = "2026-03-11";
 const HUB_TITLES = ["Magnus", "Magnus — LifeOS", "Magnus - LifeOS"];
 const JOURNAL_PAGE_TITLE = "Journal";
 
@@ -102,35 +103,55 @@ function emojiForSlug(slug: string): string {
 }
 
 async function createWorkspacePage(token: string, title: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${NOTION_API}/pages`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Notion-Version": NOTION_VERSION,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        parent: { workspace: true },
-        properties: {
-          title: {
-            title: [{ type: "text", text: { content: title.slice(0, 2000) } }],
-          },
+  const bodies = [
+    {
+      parent: { workspace: true },
+      properties: {
+        title: {
+          title: [{ type: "text", text: { content: title.slice(0, 2000) } }],
         },
-        icon: { type: "emoji", emoji: "🧭" },
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      logger.warn({ status: res.status, body: body.slice(0, 300) }, "notion: workspace page create failed");
-      return null;
+      },
+      icon: { type: "emoji", emoji: "🧭" },
+    },
+    // Newer API also accepts omitting parent for workspace-level private pages.
+    {
+      properties: {
+        title: {
+          title: [{ type: "text", text: { content: title.slice(0, 2000) } }],
+        },
+      },
+      icon: { type: "emoji", emoji: "🧭" },
+    },
+  ];
+
+  for (const body of bodies) {
+    try {
+      const res = await fetch(`${NOTION_API}/pages`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Notion-Version": NOTION_PROVISION_VERSION,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const errBody = await res.text();
+        logger.warn(
+          { status: res.status, body: errBody.slice(0, 300) },
+          "notion: workspace page create attempt failed",
+        );
+        continue;
+      }
+      const data = (await res.json()) as { id?: string };
+      if (data.id) {
+        return data.id;
+      }
+    } catch (e) {
+      logger.warn({ err: loggableError(e) }, "notion: workspace page create error");
     }
-    const data = (await res.json()) as { id?: string };
-    return data.id ?? null;
-  } catch (e) {
-    logger.warn({ err: loggableError(e) }, "notion: workspace page create error");
-    return null;
   }
+  return null;
 }
 
 async function createChildPage(
@@ -245,43 +266,109 @@ async function hubPageAccessible(client: Client, hubPageId: string): Promise<boo
   }
 }
 
+type AccessiblePage = { id: string; title: string };
+
+function pageTitleFromProperties(properties: Record<string, unknown>): string {
+  for (const val of Object.values(properties)) {
+    if (val && typeof val === "object" && (val as { type?: string }).type === "title") {
+      const title = (val as { title?: Array<{ plain_text?: string }> }).title ?? [];
+      return title.map((t) => t.plain_text ?? "").join("");
+    }
+  }
+  return "";
+}
+
+/** Prefer an OAuth-granted page titled Magnus; otherwise null. */
+export function pickGrantedHubPage(pages: AccessiblePage[]): string | null {
+  for (const hubTitle of HUB_TITLES) {
+    const match = pages.find((p) => p.title.trim() === hubTitle);
+    if (match) {
+      return match.id;
+    }
+  }
+  return null;
+}
+
+async function searchAccessiblePages(client: Client): Promise<AccessiblePage[]> {
+  try {
+    const res = await client.search({
+      filter: { property: "object", value: "page" },
+      page_size: 25,
+    });
+    const out: AccessiblePage[] = [];
+    for (const item of res.results) {
+      if (item.object !== "page" || !("properties" in item)) {
+        continue;
+      }
+      out.push({
+        id: item.id,
+        title: pageTitleFromProperties(item.properties as Record<string, unknown>),
+      });
+    }
+    return out;
+  } catch (e) {
+    logger.warn({ err: loggableError(e) }, "notion: search accessible pages failed");
+    return [];
+  }
+}
+
 async function resolveOrCreateHub(
   client: Client,
   token: string,
   existingHubId?: string,
+  options?: { forceFresh?: boolean },
 ): Promise<string | null> {
   if (existingHubId && (await hubPageAccessible(client, existingHubId))) {
     return existingHubId;
   }
 
-  for (const title of HUB_TITLES) {
-    try {
-      const res = await client.search({
-        query: title,
-        filter: { property: "object", value: "page" },
-        page_size: 5,
-      });
-      for (const item of res.results) {
-        if (item.object !== "page") {
-          continue;
+  if (!options?.forceFresh) {
+    for (const title of HUB_TITLES) {
+      try {
+        const res = await client.search({
+          query: title,
+          filter: { property: "object", value: "page" },
+          page_size: 5,
+        });
+        for (const item of res.results) {
+          if (item.object !== "page") {
+            continue;
+          }
+          const pageTitle =
+            "properties" in item
+              ? pageTitleFromProperties(item.properties as Record<string, unknown>)
+              : "";
+          if (pageTitle.trim() === title) {
+            return item.id;
+          }
         }
-        const pageTitle =
-          "properties" in item &&
-          item.properties &&
-          "title" in item.properties &&
-          Array.isArray(item.properties.title)
-            ? item.properties.title.map((t) => ("plain_text" in t ? t.plain_text : "")).join("")
-            : "";
-        if (pageTitle.trim() === title) {
-          return item.id;
-        }
+      } catch {
+        // continue
       }
-    } catch {
-      // continue
     }
   }
 
-  return createWorkspacePage(token, HUB_TITLES[0]!);
+  const workspaceHub = await createWorkspacePage(token, HUB_TITLES[0]!);
+  if (workspaceHub) {
+    return workspaceHub;
+  }
+
+  // OAuth page picker grants specific pages — workspace create may be blocked.
+  // Use a granted "Magnus" page, or create Magnus under the first granted page.
+  const accessible = await searchAccessiblePages(client);
+  const grantedHub = pickGrantedHubPage(accessible);
+  if (grantedHub) {
+    return grantedHub;
+  }
+  if (accessible.length > 0) {
+    const child = await createChildPage(client, accessible[0]!.id, HUB_TITLES[0]!);
+    if (child) {
+      return child;
+    }
+    return accessible[0]!.id;
+  }
+
+  return null;
 }
 
 export type ProvisionResult = {
@@ -317,9 +404,22 @@ export async function provisionMagnusNotionSpace(
     ? registry.hubPageId
     : registry.hubPageId ?? integrations.notionDailyLogParentPageId ?? undefined;
 
-  const hubPageId = await resolveOrCreateHub(client, token, existingHub);
+  const hubPageId = await resolveOrCreateHub(client, token, existingHub, {
+    forceFresh: Boolean(options?.forceFreshHub),
+  });
   if (!hubPageId) {
-    return "Could not create Magnus hub page in Notion. Ensure OAuth completed and try connect Notion again.";
+    return [
+      "Could not create Magnus hub page in Notion.",
+      "",
+      "During OAuth, Notion asks which pages to share — Magnus creates databases after you approve, not before.",
+      "Try again:",
+      "1. In Notion, create an empty page called Magnus.",
+      "2. Say connect Notion and select that Magnus page in the picker (or any top-level page).",
+      "3. Click Allow access.",
+      "",
+      "Ensure your Notion public connection has Insert content enabled (Developer portal → Capabilities).",
+      "Then: setup_notion provision",
+    ].join("\n");
   }
 
   let journalPageId =

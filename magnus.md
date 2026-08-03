@@ -254,4 +254,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-03 (added list recommendation schema TODO)
+**Last updated:** 2026-08-03 (Notion OAuth page-picker flow + provision fallback)

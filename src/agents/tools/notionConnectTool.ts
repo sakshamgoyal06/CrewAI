@@ -24,14 +24,20 @@ async function beginNotionOauthMessage(input: {
   }
 
   const intro = input.replacingExisting
-    ? "You already have a Notion connection saved. Open this link to reconnect via OAuth — Magnus will create or refresh your dedicated Magnus space in Notion (hub, list catalogs, journal). No database ids needed:"
-    : "Open this link to connect Notion to Magnus (Magnus creates a dedicated Magnus page with all list catalogs and a journal; expires in about 15 minutes):";
+    ? "You already have a Notion connection saved. Open this link to reconnect via OAuth:"
+    : "Open this link to connect Notion to Magnus (expires in about 15 minutes):";
 
   return [
     intro,
     started.authUrl,
     "",
-    "After you approve, Magnus provisions your Notion space and confirms here.",
+    "What to expect in Notion:",
+    "• Notion will ask which pages Magnus can access — this is normal.",
+    "• Magnus databases are created AFTER you click Allow access, not during the picker.",
+    "• Before you open the link: create an empty page called Magnus in your workspace.",
+    "• In the page picker, select that Magnus page (or any top-level page you want catalogs under).",
+    "",
+    "After you approve, Magnus creates the Magnus hub, Journal, and list databases automatically.",
     `Register this redirect URI exactly in your Notion public connection: ${started.redirectUri}`,
   ].join("\n");
 }
