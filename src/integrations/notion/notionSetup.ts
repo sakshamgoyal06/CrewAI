@@ -9,7 +9,6 @@ import { getStandardTemplate, STANDARD_LIST_TEMPLATES } from "../../lists/listCa
 import {
   fetchUserLists,
   updateList,
-  type ListRow,
 } from "../../lists/listStore.js";
 import { createNotionClient } from "../../tools/notion.js";
 import type { NotionRegistry } from "../../tools/notionRegistry.js";
