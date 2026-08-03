@@ -65,3 +65,28 @@ export type KiteSessionData = {
   user_id?: string;
   user_name?: string;
 };
+
+/** Coin MF order (read or write response). */
+export type KiteMfOrder = {
+  order_id: string;
+  tradingsymbol: string;
+  fund?: string;
+  transaction_type: "BUY" | "SELL" | string;
+  amount?: number;
+  quantity?: number;
+  status?: string;
+  status_message?: string;
+};
+
+export type KiteMfOrderPlaceResult = {
+  order_id: string;
+};
+
+export type KiteMfSipPlaceResult = {
+  sip_id: string;
+  order_id?: string;
+};
+
+export type KiteEquityOrderPlaceResult = {
+  order_id: string;
+};
