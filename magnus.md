@@ -231,7 +231,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
   turn when enabled (requires the `memory_summaries` migration applied).
 - **Schema not reproducible** from `supabase/migrations/` for tables predating April 2026 migrations.
 - **Semantic recall** — no embeddings; memory is recent-window plus structured reads.
-- **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data.
+- **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data (Wealth has read-only Zerodha context today; see below).
+- **Kite write (long-term)** — equity order placement/cancel via Kite Connect, behind `MAGNUS_KITE_ORDERS_ENABLED`, static IP on the developer console, and a Telegram **CONFIRM** flow separate from wealth coaching. Probe script: `npm run kite:test-write` (`scripts/wealth/kite/test-write-endpoints.mts`). **Live probe (2026-08-03):** Coin MF writes (`POST/DELETE /mf/orders`, `/mf/sips`) return **403 Insufficient permission** — not available on this app/plan; equity `POST /orders/regular` blocked until **static IP** is configured; equity cancel auth works (404 on fake id). Do not build MF execution in Magnus unless Zerodha opens those APIs.
 - **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables; empty
   LifeOS sections are omitted when `dataAvailability` flags are false (no “unknown” filler).
 - **No inactivity / activity-triggered proactive messages yet** — only time-based cron jobs.
@@ -241,4 +242,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-03 (playlist aliases, routing fixes, gym schedule, morning brief)
+**Last updated:** 2026-08-03 (Kite write long-term todo; write-endpoint probe results)

@@ -68,17 +68,32 @@ Wealth agent fetches:
 
 No order APIs are called. `kiteOrdersEnabled()` returns false unless `MAGNUS_KITE_ORDERS_ENABLED=true`.
 
-## Future: trading + MF orders
+### Probe write endpoints (dev)
+
+Official Kite docs state **Coin MF order placement is not supported via API** (bank payment required). Equity order APIs exist but need care.
+
+```bash
+# Safe probes (invalid ISIN/symbol — nothing should execute)
+TELEGRAM_USER_ID=7174221900 npx tsx scripts/wealth/kite/test-write-endpoints.mts
+# or: KITE_API_KEY=... KITE_ACCESS_TOKEN=... npm run kite:test-write
+```
+
+Probes: `POST/DELETE /mf/orders`, `POST/DELETE /mf/sips`, `POST/DELETE /orders/regular`.
+
+## Future: trading + MF orders (long-term)
+
+Tracked in `magnus.md` → **Not built yet** → **Kite write (long-term)**.
 
 Planned behind explicit flags and user consent (not wired yet):
 
-| Capability | Kite API | Extra requirements |
-|------------|----------|-------------------|
-| Equity orders | `place_order`, GTT | Static IP on developer console (SEBI, from Apr 2026); `MAGNUS_KITE_ORDERS_ENABLED=true` |
-| MF buy/sell | `/mf/orders` | Bank payment authorization per order; same order gate |
-| MF SIP create/modify | `/mf/sips` | User confirmation flow in Telegram |
+| Capability | Kite API | Extra requirements | Probe result (2026-08-03) |
+|------------|----------|-------------------|---------------------------|
+| Equity orders | `POST /orders/regular`, GTT | Static IP on developer console (SEBI, from Apr 2026); `MAGNUS_KITE_ORDERS_ENABLED=true`; Telegram CONFIRM | **403** until static IP added |
+| Equity cancel | `DELETE /orders/regular/:id` | Same gate + audit log | Auth OK; **404** on unknown order id |
+| MF buy/sell | `POST /mf/orders` | Bank payment authorization per order | **403 Insufficient permission** — blocked on current app |
+| MF SIP create/modify | `POST/DELETE /mf/sips` | User confirmation flow in Telegram | **403 Insufficient permission** — blocked on current app |
 
-Code hook: `kiteOrdersEnabled()` in `src/pillars/wealth/zerodha/kiteEnv.ts` — order client methods will no-op until this is true.
+Code hook: `kiteOrdersEnabled()` in `src/pillars/wealth/zerodha/kiteEnv.ts` — wealth agent must not call write helpers until this is true. Write helpers and probe script already exist in `kiteClient.ts` / `scripts/wealth/kite/test-write-endpoints.mts`.
 
 **Safety defaults (keep when orders ship):**
 - No orders from wealth coaching prompts alone — dedicated confirm step
