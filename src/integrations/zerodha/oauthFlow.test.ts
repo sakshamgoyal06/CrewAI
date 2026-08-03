@@ -68,7 +68,7 @@ describe("kite oauth flow", () => {
     if (out.ok) {
       return;
     }
-    expect(out.error).toMatch(/user_integrations/i);
+    expect(out.error).toMatch(/host/i);
   });
 
   it("stores access token on successful callback", async () => {

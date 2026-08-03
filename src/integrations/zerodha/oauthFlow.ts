@@ -75,7 +75,7 @@ export async function beginKiteOauth(input: {
     return {
       ok: false,
       error:
-        "Your Kite Connect app is not configured yet. Add kite_api_key and kite_api_secret to user_integrations (see docs/ZERODHA.md — same pattern as Hevy: local .env + upsert-user-integrations.mts).",
+        "Kite Connect is not configured on the host. Set KITE_API_KEY and KITE_API_SECRET (one Magnus app for all users — see docs/ZERODHA.md).",
     };
   }
 
@@ -157,7 +157,7 @@ export async function completeKiteOauth(input: {
       ok: false,
       error: "user_app_not_configured",
       userFacing:
-        "Kite app credentials missing for this account. Run upsert-user-integrations with KITE_API_KEY and KITE_API_SECRET, then try again.",
+        "Kite app credentials missing on the host. Set KITE_API_KEY and KITE_API_SECRET on Railway, then try again.",
     };
   }
 

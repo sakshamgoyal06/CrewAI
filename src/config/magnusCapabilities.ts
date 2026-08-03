@@ -276,19 +276,29 @@ function workoutsCapability(): Capability {
   };
 }
 
-function zerodhaCapability(): Capability {
+function zerodhaCapability(env: EnvBag): Capability {
+  const platformOk = Boolean(
+    val(env, "KITE_API_KEY") && val(env, "KITE_API_SECRET"),
+  );
+  if (platformOk) {
+    return {
+      id: "zerodha",
+      title: "Zerodha (Kite Connect)",
+      telegram: "“connect Zerodha”, “what are my holdings?”",
+      status: "partial",
+      detail:
+        "Magnus Kite app on host. Each user: say “connect Zerodha” → OAuth → access token in user_integrations. Read-only portfolio today; orders gated by MAGNUS_KITE_ORDERS_ENABLED (future).",
+      missing: ["user_integrations.kite_access_token"],
+    };
+  }
   return {
     id: "zerodha",
     title: "Zerodha (Kite Connect)",
-    telegram: "“connect Zerodha”, “what are my holdings?”",
-    status: "partial",
+    telegram: "“connect Zerodha”",
+    status: "off",
     detail:
-      "Per-user: kite_api_key + kite_api_secret + access token in user_integrations (not on Railway). Say “connect Zerodha” after upsert. Read-only: equity, Coin MF, SIPs. Token expires daily ~6 AM IST.",
-    missing: [
-      "user_integrations.kite_api_key",
-      "user_integrations.kite_api_secret",
-      "user_integrations.kite_access_token",
-    ],
+      "Set KITE_API_KEY + KITE_API_SECRET on the host (developers.kite.trade). Users only OAuth-login — no per-user developer signup.",
+    missing: ["KITE_API_KEY", "KITE_API_SECRET"],
   };
 }
 
@@ -366,7 +376,7 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
       missing: [],
     },
     workoutsCapability(),
-    zerodhaCapability(),
+    zerodhaCapability(env),
     mealCapability(env),
     {
       id: "journal",

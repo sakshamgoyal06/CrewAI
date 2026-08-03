@@ -21,9 +21,9 @@ vi.mock("../../users/userIntegrations.js", () => ({
 import { connectKiteTool, isKiteConnectRequest } from "./kiteConnectTool.js";
 
 describe("isKiteConnectRequest", () => {
-  it("detects connect zerodha phrases", () => {
+  it("detects connect and reconnect zerodha phrases", () => {
     expect(isKiteConnectRequest("connect zerodha")).toBe(true);
-    expect(isKiteConnectRequest("link my kite account")).toBe(true);
+    expect(isKiteConnectRequest("reconnect kite")).toBe(true);
     expect(isKiteConnectRequest("what are my holdings")).toBe(false);
   });
 });
@@ -35,21 +35,15 @@ describe("connectKiteTool", () => {
     appCreds.mockResolvedValue({ apiKey: "key", apiSecret: "secret" });
   });
 
-  it("returns already connected when token exists", async () => {
-    loadUserIntegrations.mockResolvedValue({ kiteAccessToken: "tok", kiteUserId: "AB1234" });
-    const out = await connectKiteTool({ userProfileId: "u1", telegramUserId: "123" });
-    expect(out).toMatch(/already connected/i);
-    expect(beginKiteOauth).not.toHaveBeenCalled();
-  });
-
-  it("prompts upsert when app credentials missing", async () => {
+  it("prompts host setup when platform app credentials missing", async () => {
     appCreds.mockResolvedValue(undefined);
     const out = await connectKiteTool({ userProfileId: "u1", telegramUserId: "123" });
-    expect(out).toMatch(/user_integrations/i);
+    expect(out).toMatch(/KITE_API_KEY/i);
+    expect(out).toMatch(/do not register/i);
     expect(beginKiteOauth).not.toHaveBeenCalled();
   });
 
-  it("returns login URL when app creds exist but not connected", async () => {
+  it("returns login URL for new connect", async () => {
     beginKiteOauth.mockResolvedValue({
       ok: true,
       authUrl: "https://kite.zerodha.com/connect/login?v=3&api_key=x",
@@ -57,9 +51,22 @@ describe("connectKiteTool", () => {
     });
     const out = await connectKiteTool({ userProfileId: "u1", telegramUserId: "123" });
     expect(out).toContain("kite.zerodha.com");
+    expect(out).toContain("connect Zerodha");
     expect(beginKiteOauth).toHaveBeenCalledWith({
       userProfileId: "u1",
       telegramChatId: "123",
     });
+  });
+
+  it("returns refresh link when user already has a token", async () => {
+    loadUserIntegrations.mockResolvedValue({ kiteAccessToken: "tok", kiteUserId: "AB1234" });
+    beginKiteOauth.mockResolvedValue({
+      ok: true,
+      authUrl: "https://kite.zerodha.com/connect/login?v=3&api_key=x",
+      redirectUri: "https://magnus.example.com/oauth/kite/callback",
+    });
+    const out = await connectKiteTool({ userProfileId: "u1", telegramUserId: "123" });
+    expect(out).toMatch(/refresh/i);
+    expect(beginKiteOauth).toHaveBeenCalled();
   });
 });

@@ -1,6 +1,10 @@
 /**
- * Kite Connect credentials — per-user app key/secret + access token in Supabase.
- * Env vars (KITE_API_KEY / KITE_API_SECRET) are owner fallback for local scripts only.
+ * Kite Connect credentials — multi-user model (like Google OAuth).
+ *
+ * - **Platform:** KITE_API_KEY + KITE_API_SECRET on the host — one Magnus Kite app for all users.
+ * - **Per user:** access_token (+ zerodha user id) in user_integrations after OAuth login.
+ * - **Optional override:** per-user kite_api_key/secret in DB for dev only (ignored when platform is set).
+ *
  * https://kite.trade/docs/connect/v3/
  */
 import { loadUserIntegrations } from "../../../users/userIntegrations.js";
@@ -9,6 +13,12 @@ export type KiteAppCredentials = {
   apiKey: string;
   apiSecret: string;
 };
+
+/** Read-only today. Set MAGNUS_KITE_ORDERS_ENABLED=true to allow order APIs (future phase). */
+export function kiteOrdersEnabled(): boolean {
+  const v = process.env.MAGNUS_KITE_ORDERS_ENABLED?.trim().toLowerCase();
+  return v === "true" || v === "1";
+}
 
 export function kiteApiKeyFromEnv(): string | undefined {
   const k =
@@ -33,17 +43,22 @@ export function kiteAppCredentialsFromEnv(): KiteAppCredentials | undefined {
   return { apiKey, apiSecret };
 }
 
-/** True when env fallback has both app credentials (scripts / single-owner dev). */
+/** True when the Magnus Kite app is configured on the host (required for multi-user). */
 export function kitePlatformReady(): boolean {
   return Boolean(kiteAppCredentialsFromEnv());
 }
 
 /**
- * Resolve Kite app credentials for a user: DB first, then env fallback (Hevy pattern).
+ * Resolve Kite app credentials: platform env first (multi-user), optional per-user DB override
+ * when platform env is unset (local dev / single-user experiments only).
  */
 export async function kiteAppCredentialsForUser(
   userProfileId?: string,
 ): Promise<KiteAppCredentials | undefined> {
+  const platform = kiteAppCredentialsFromEnv();
+  if (platform) {
+    return platform;
+  }
   if (userProfileId?.trim()) {
     const integrations = await loadUserIntegrations(userProfileId);
     const apiKey = integrations.kiteApiKey;
@@ -52,7 +67,7 @@ export async function kiteAppCredentialsForUser(
       return { apiKey, apiSecret };
     }
   }
-  return kiteAppCredentialsFromEnv();
+  return undefined;
 }
 
 export async function kiteUserHasAppCredentials(userProfileId?: string): Promise<boolean> {

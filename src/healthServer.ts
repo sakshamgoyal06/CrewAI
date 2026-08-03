@@ -200,7 +200,7 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
         redirect_uri: redirectUri,
         base_url: base.base,
         source: base.source,
-        credentials_location: "user_integrations.kite_api_key + kite_api_secret (per user; not on host)",
+        credentials_location: "host env: KITE_API_KEY + KITE_API_SECRET (one Magnus app; per-user access tokens in user_integrations)",
         kite_console_hint:
           "Create a Kite Connect app at developers.kite.trade. Paste redirect_uri exactly. Store api key/secret via upsert-user-integrations.mts. Personal (free) plan covers portfolio read; tokens expire daily ~6 AM IST.",
       });
