@@ -185,10 +185,8 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
       const { kiteOauthRedirectUri, resolvePublicBaseUrl } = await import(
         "./config/publicBaseUrl.js"
       );
-      const { kitePlatformReady } = await import("./pillars/wealth/zerodha/kiteEnv.js");
       const redirectUri = kiteOauthRedirectUri();
       const base = resolvePublicBaseUrl();
-      const apiKey = process.env.KITE_API_KEY?.trim() || process.env.MAGNUS_KITE_API_KEY?.trim() || null;
       if (!redirectUri || !base) {
         res.status(503).json({
           ok: false,
@@ -202,10 +200,9 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
         redirect_uri: redirectUri,
         base_url: base.base,
         source: base.source,
-        api_key_configured: Boolean(apiKey),
-        platform_ready: kitePlatformReady(),
+        credentials_location: "user_integrations.kite_api_key + kite_api_secret (per user; not on host)",
         kite_console_hint:
-          "Create a Kite Connect app at developers.kite.trade. Paste redirect_uri exactly. Personal (free) plan covers portfolio read; tokens expire daily ~6 AM IST.",
+          "Create a Kite Connect app at developers.kite.trade. Paste redirect_uri exactly. Store api key/secret via upsert-user-integrations.mts. Personal (free) plan covers portfolio read; tokens expire daily ~6 AM IST.",
       });
     } catch (err) {
       logger.warn({ err: loggableError(err) }, "oauth kite diagnostic failed");

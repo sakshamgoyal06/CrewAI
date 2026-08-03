@@ -2,6 +2,7 @@
  * In-chat Kite Connect OAuth: Magnus sends a login link; Zerodha redirects to the health
  * server; we exchange request_token for access_token and store it per user.
  *
+ * App credentials (api key + secret) live in user_integrations per user — not on the host.
  * Kite access tokens expire daily (~6 AM IST) — user must reconnect after expiry.
  * https://kite.trade/docs/connect/v3/user/
  */
@@ -11,10 +12,8 @@ import { kiteOauthRedirectUri } from "../../config/publicBaseUrl.js";
 import { logger } from "../../logger.js";
 import { exchangeKiteRequestToken } from "../../pillars/wealth/zerodha/kiteClient.js";
 import {
-  kiteApiKeyFromEnv,
-  kiteApiSecretFromEnv,
+  kiteAppCredentialsForUser,
   kiteLoginBaseUrl,
-  kitePlatformReady,
 } from "../../pillars/wealth/zerodha/kiteEnv.js";
 import { redis } from "../../tools/clients.js";
 import { loggableError } from "../../util/loggableError.js";
@@ -29,8 +28,9 @@ export type KiteOauthState = {
   createdAt: string;
 };
 
-export function kiteOauthLinkAvailable(): boolean {
-  return kitePlatformReady() && Boolean(kiteOauthRedirectUri());
+export async function kiteOauthLinkAvailableForUser(userProfileId: string): Promise<boolean> {
+  const app = await kiteAppCredentialsForUser(userProfileId);
+  return Boolean(app && kiteOauthRedirectUri());
 }
 
 export function kiteOauthRedirectConfigured(): string | null {
@@ -70,13 +70,12 @@ export async function beginKiteOauth(input: {
   userProfileId: string;
   telegramChatId: string;
 }): Promise<{ ok: true; authUrl: string; redirectUri: string } | { ok: false; error: string }> {
-  const apiKey = kiteApiKeyFromEnv();
-  const apiSecret = kiteApiSecretFromEnv();
-  if (!apiKey || !apiSecret) {
+  const app = await kiteAppCredentialsForUser(input.userProfileId);
+  if (!app) {
     return {
       ok: false,
       error:
-        "Kite Connect is not on the host. Set KITE_API_KEY and KITE_API_SECRET from developers.kite.trade (see docs/ZERODHA.md).",
+        "Your Kite Connect app is not configured yet. Add kite_api_key and kite_api_secret to user_integrations (see docs/ZERODHA.md — same pattern as Hevy: local .env + upsert-user-integrations.mts).",
     };
   }
 
@@ -98,7 +97,7 @@ export async function beginKiteOauth(input: {
 
   return {
     ok: true,
-    authUrl: buildKiteLoginUrl(apiKey, state),
+    authUrl: buildKiteLoginUrl(app.apiKey, state),
     redirectUri,
   };
 }
@@ -152,20 +151,20 @@ export async function completeKiteOauth(input: {
     };
   }
 
-  const apiKey = kiteApiKeyFromEnv();
-  const apiSecret = kiteApiSecretFromEnv();
-  if (!apiKey || !apiSecret) {
+  const app = await kiteAppCredentialsForUser(payload.userProfileId);
+  if (!app) {
     return {
       ok: false,
-      error: "platform_not_configured",
-      userFacing: "Kite Connect is misconfigured on the host. Check KITE_API_KEY / KITE_API_SECRET.",
+      error: "user_app_not_configured",
+      userFacing:
+        "Kite app credentials missing for this account. Run upsert-user-integrations with KITE_API_KEY and KITE_API_SECRET, then try again.",
     };
   }
 
   try {
     const exchanged = await exchangeKiteRequestToken({
-      apiKey,
-      apiSecret,
+      apiKey: app.apiKey,
+      apiSecret: app.apiSecret,
       requestToken,
     });
     if (!exchanged.ok) {

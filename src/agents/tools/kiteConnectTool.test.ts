@@ -2,15 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const beginKiteOauth = vi.hoisted(() => vi.fn());
 const loadUserIntegrations = vi.hoisted(() => vi.fn());
+const appCreds = vi.hoisted(() => vi.fn());
 
 vi.mock("../../integrations/zerodha/oauthFlow.js", () => ({
   beginKiteOauth,
-  kiteOauthLinkAvailable: () => true,
+  kiteOauthLinkAvailableForUser: vi.fn(async () => true),
   kiteOauthRedirectConfigured: () => "https://magnus.example.com/oauth/kite/callback",
 }));
 
 vi.mock("../../pillars/wealth/zerodha/kiteEnv.js", () => ({
-  kitePlatformReady: () => true,
+  kiteAppCredentialsForUser: appCreds,
 }));
 
 vi.mock("../../users/userIntegrations.js", () => ({
@@ -31,6 +32,7 @@ describe("connectKiteTool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     loadUserIntegrations.mockResolvedValue({});
+    appCreds.mockResolvedValue({ apiKey: "key", apiSecret: "secret" });
   });
 
   it("returns already connected when token exists", async () => {
@@ -40,7 +42,14 @@ describe("connectKiteTool", () => {
     expect(beginKiteOauth).not.toHaveBeenCalled();
   });
 
-  it("returns login URL when not connected", async () => {
+  it("prompts upsert when app credentials missing", async () => {
+    appCreds.mockResolvedValue(undefined);
+    const out = await connectKiteTool({ userProfileId: "u1", telegramUserId: "123" });
+    expect(out).toMatch(/user_integrations/i);
+    expect(beginKiteOauth).not.toHaveBeenCalled();
+  });
+
+  it("returns login URL when app creds exist but not connected", async () => {
     beginKiteOauth.mockResolvedValue({
       ok: true,
       authUrl: "https://kite.zerodha.com/connect/login?v=3&api_key=x",

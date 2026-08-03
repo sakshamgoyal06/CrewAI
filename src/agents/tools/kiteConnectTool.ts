@@ -4,10 +4,10 @@
 import { loadUserIntegrations } from "../../users/userIntegrations.js";
 import {
   beginKiteOauth,
-  kiteOauthLinkAvailable,
+  kiteOauthLinkAvailableForUser,
   kiteOauthRedirectConfigured,
 } from "../../integrations/zerodha/oauthFlow.js";
-import { kitePlatformReady } from "../../pillars/wealth/zerodha/kiteEnv.js";
+import { kiteAppCredentialsForUser } from "../../pillars/wealth/zerodha/kiteEnv.js";
 
 const CONNECT_PATTERN =
   /\b(connect|link|login|sign in to|sign-in to)\b.*\b(zerodha|kite|coin)\b|\b(zerodha|kite)\b.*\b(connect|link)\b/i;
@@ -32,15 +32,20 @@ export async function connectKiteTool(input: {
     );
   }
 
-  if (!kitePlatformReady()) {
-    return "Zerodha cannot be connected yet — the host is missing KITE_API_KEY / KITE_API_SECRET (from developers.kite.trade).";
+  const app = await kiteAppCredentialsForUser(input.userProfileId);
+  if (!app) {
+    return (
+      "Your Kite Connect app is not set up yet. Add your API key and secret to user_integrations " +
+      "(same as Hevy): put KITE_API_KEY and KITE_API_SECRET in local .env, then run " +
+      "TELEGRAM_USER_ID=<id> npx tsx scripts/upsert-user-integrations.mts. See docs/ZERODHA.md."
+    );
   }
 
-  if (!kiteOauthLinkAvailable()) {
+  if (!(await kiteOauthLinkAvailableForUser(input.userProfileId))) {
     const redirect = kiteOauthRedirectConfigured();
     return (
       "I cannot build a Zerodha connect link without a public HTTPS URL for the callback. " +
-      "Set MAGNUS_PUBLIC_BASE_URL (or deploy with RAILWAY_PUBLIC_DOMAIN). " +
+      "Set MAGNUS_PUBLIC_BASE_URL on the host (or deploy with RAILWAY_PUBLIC_DOMAIN). " +
       (redirect ? `Expected redirect: ${redirect}` : "")
     );
   }

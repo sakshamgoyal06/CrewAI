@@ -12,10 +12,13 @@ export {
   kiteApiKeyFromEnv,
   kiteApiSecretFromEnv,
   kiteApiBaseUrl,
+  kiteAppCredentialsForUser,
+  kiteAppCredentialsFromEnv,
   kiteCredentialsForUser,
   kiteFetchTimeoutMs,
   kiteLoginBaseUrl,
   kitePlatformReady,
+  kiteUserHasAppCredentials,
 } from "./kiteEnv.js";
 export { formatKitePortfolioForPrompt, summarizeKiteSips } from "./formatKiteContext.js";
 export type {
