@@ -291,7 +291,7 @@ function fiCapability(env: EnvBag): Capability {
   const redisOk = Boolean(val(env, "UPSTASH_REDIS_REST_URL") && val(env, "UPSTASH_REDIS_REST_TOKEN"));
   return {
     id: "fi",
-    title: "Fi Money (MCP)",
+    title: "Fi Money",
     telegram: "“connect Fi”, “what is my net worth?”",
     status: redisOk ? "partial" : "off",
     detail:
