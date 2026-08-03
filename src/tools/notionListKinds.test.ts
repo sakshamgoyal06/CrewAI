@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeListKind } from "./notionListKinds.js";
+import { normalizeSlug } from "../lists/listSlug.js";
 
-describe("normalizeListKind", () => {
+describe("normalizeListKind (via listSlug)", () => {
   it("maps common aliases", () => {
-    expect(normalizeListKind("watchlist")).toBe("watchlist");
-    expect(normalizeListKind("read")).toBe("readlist");
-    expect(normalizeListKind("todo")).toBe("tasks");
-    expect(normalizeListKind("song")).toBe("music");
+    expect(normalizeSlug("watchlist")).toBe("watchlist");
+    expect(normalizeSlug("read")).toBe("readlist");
+    expect(normalizeSlug("todo")).toBe("tasks");
+    expect(normalizeSlug("song")).toBe("music");
   });
 
   it("returns null for unknown lists", () => {
-    expect(normalizeListKind("shopping")).toBeNull();
+    expect(normalizeSlug("!!!")).toBeNull();
   });
 });

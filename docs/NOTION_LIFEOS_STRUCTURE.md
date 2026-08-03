@@ -4,7 +4,24 @@
 
 **Related:** `magnus.md`, `MAGNUS_CORE_CONTEXT.md`, `docs/ARCHITECTURE.md`
 
-**Last updated:** 2026-08-03 (live Notion inventory + Magnus list tools wired)
+**Last updated:** 2026-08-03 (user-agnostic lists: Supabase canonical + optional per-user Notion mirror)
+
+---
+
+## 2.5 User-agnostic list architecture (shipped)
+
+| Layer | Role |
+|-------|------|
+| **`magnus_user_lists`** | Per-user list catalog — standard slugs auto-provisioned; custom slugs via `create_list` |
+| **`magnus_list_items`** | Canonical rows — Magnus always reads/writes here first |
+| **`user_integrations.notion_registry`** | Optional per-user Notion database ids; synced into list rows for that user only |
+| **Notion** | Optional mirror when `notion_token` + list has `notion_data_source_id` |
+
+**Standard slugs (every user):** watchlist, readlist, travel, food, music, tasks, goals, patterns, experiences, checkins.
+
+**Magnus tools:** `list_catalog`, `list_items`, `add_list_item`, `update_list_item`, `create_list`, `link_notion_list`, `get_daily_checkin`, `add_goal`. Legacy `list_notion_*` aliases remain.
+
+**No app-level Notion ids at runtime** — owner workspace ids live in `OWNER_NOTION_REGISTRY_REFERENCE` for audit scripts only.
 
 ---
 

@@ -27,12 +27,16 @@ Tools:
   went. Log the substance, not the pleasantries. Pass event_id when the note is about something in
   the event log.
 
-LifeOS lists in Notion (when connected):
-- list_notion_items to read watchlist, readlist, travel, food, music, tasks, goals, or patterns.
-  Use open_only when recommending what to watch, read, or do next.
-- add_notion_item / update_notion_item to create or mark items (page_id from list results).
+Life lists (Supabase canonical; optional Notion mirror when the user links a database):
+- list_catalog to see standard + custom list slugs for this user.
+- list_items to read any list (watchlist, readlist, travel, food, music, tasks, goals,
+  patterns, experiences, checkins, or a custom slug). Use open_only when recommending next.
+- add_list_item / update_list_item to create or update items (item_id from list_items).
+- create_list when the user needs a new list slug (shopping, gifts, job-search, etc.).
+- link_notion_list when they want a list mirrored to their Notion database.
 - get_daily_checkin for pillar scores and evening reflection on a date.
-- add_notion_goal for Goals & Milestones rows.
+- add_goal for the goals list.
+Legacy aliases list_notion_items, add_notion_item, update_notion_item, add_notion_goal still work.
 
 YouTube / YT Music and Google Calendar (per-user Google connection; one consent covers both):
 - connect_google (or connect_youtube / connect_calendar) when they ask to connect / link Google,

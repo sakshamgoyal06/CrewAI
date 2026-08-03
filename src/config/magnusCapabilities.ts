@@ -196,7 +196,7 @@ function notionCapability(): Capability {
     telegram: "“log …”, “add Dune to watchlist”, “what’s on my readlist?”",
     status: "partial",
     detail:
-      "Per-user: notion_token + notion_registry in user_integrations. Journal, Morning Brief, and list tools (watch/read/travel/food/music/tasks/goals/check-ins).",
+      "Lists work in Supabase for every user (auto-provisioned). Optional Notion mirror: notion_token + link_notion_list or notion_registry. Journal and Morning Brief also use Notion when configured.",
     missing: ["user_integrations.notion_token"],
   };
 }

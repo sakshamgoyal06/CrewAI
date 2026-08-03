@@ -41,12 +41,19 @@ import {
 } from "./tools/youtubeTool.js";
 import { connectGoogleTool } from "./tools/youtubeConnectTool.js";
 import {
-  addNotionGoal,
-  getNotionCheckin,
+  addGoal,
+  getDailyCheckin,
+  magnusAddListItem,
+  magnusCreateList,
+  magnusLinkNotionList,
+  magnusListCatalog,
+  magnusListItems,
+  magnusUpdateListItem,
   notionAddItem,
   notionListItems,
   notionUpdateItem,
-} from "./tools/notionListTool.js";
+  addNotionGoal,
+} from "./tools/listTool.js";
 import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
 
@@ -411,16 +418,19 @@ const TOOLS: Tool[] = [
     },
   },
   {
-    name: "list_notion_items",
+    name: "list_catalog",
     description:
-      "Read a LifeOS list in Notion: watchlist, readlist, travel, food, music, tasks, goals, or patterns. Use open_only for queued items to recommend from.",
+      "Show the user's list catalog (standard + custom). Works without Notion. Use before assuming a list exists.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "list_items",
+    description:
+      "Read items from any user list (watchlist, readlist, travel, food, music, tasks, goals, patterns, experiences, checkins, or a custom slug). Supabase is canonical; Notion mirrors when linked.",
     input_schema: {
       type: "object",
       properties: {
-        list: {
-          type: "string",
-          description: "watchlist | readlist | travel | food | music | tasks | goals | patterns",
-        },
+        list: { type: "string", description: "List slug or alias." },
         status: { type: "string", description: "Optional exact status filter." },
         open_only: { type: "boolean", description: "Only queued / in-progress items." },
         limit: { type: "number", description: "Max rows, default 15." },
@@ -429,8 +439,8 @@ const TOOLS: Tool[] = [
     },
   },
   {
-    name: "add_notion_item",
-    description: "Add a row to a LifeOS Notion list.",
+    name: "add_list_item",
+    description: "Add an item to any user list. Mirrors to Notion when that list is linked.",
     input_schema: {
       type: "object",
       properties: {
@@ -441,14 +451,138 @@ const TOOLS: Tool[] = [
         url: { type: "string" },
         author: { type: "string", description: "Book author or music artist." },
         priority: { type: "string", enum: ["High", "Medium", "Low"] },
+        pillar: {
+          type: "string",
+          enum: ["health", "wealth", "wisdom", "joy", "happiness"],
+          description: "For goals list.",
+        },
+      },
+      required: ["list", "title"],
+    },
+  },
+  {
+    name: "update_list_item",
+    description:
+      "Update a list item by id (from list_items). Accepts Supabase id or legacy Notion page id.",
+    input_schema: {
+      type: "object",
+      properties: {
+        list: { type: "string" },
+        item_id: { type: "string" },
+        status: { type: "string" },
+        notes: { type: "string" },
+        title: { type: "string" },
+      },
+      required: ["list", "item_id"],
+    },
+  },
+  {
+    name: "create_list",
+    description:
+      "Create a custom list slug for this user (e.g. shopping, gift-ideas). Standard lists are auto-provisioned.",
+    input_schema: {
+      type: "object",
+      properties: {
+        slug: { type: "string", description: "Lowercase slug, e.g. gift-ideas." },
+        display_name: { type: "string" },
+        description: { type: "string" },
+        archetype: {
+          type: "string",
+          enum: [
+            "generic_queue",
+            "media_queue",
+            "reading_queue",
+            "place_queue",
+            "food_queue",
+            "music_queue",
+            "task_queue",
+            "goal_queue",
+            "experience_queue",
+            "pattern_log",
+          ],
+        },
+        pillar: { type: "string" },
+      },
+      required: ["slug", "display_name"],
+    },
+  },
+  {
+    name: "link_notion_list",
+    description:
+      "Link a Notion database to one of the user's list slugs for optional mirroring.",
+    input_schema: {
+      type: "object",
+      properties: {
+        slug: { type: "string" },
+        notion_database_id: { type: "string" },
+        title_property: { type: "string" },
+        status_property: { type: "string" },
+        status_kind: { type: "string", enum: ["select", "status"] },
+      },
+      required: ["slug", "notion_database_id"],
+    },
+  },
+  {
+    name: "get_daily_checkin",
+    description: "Read the daily check-in for a date (pillar scores and reflection).",
+    input_schema: {
+      type: "object",
+      properties: {
+        date: { type: "string", description: "YYYY-MM-DD. Defaults to today." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "add_goal",
+    description: "Add a goal to the user's goals list.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        pillar: {
+          type: "string",
+          enum: ["health", "wealth", "wisdom", "joy", "happiness"],
+        },
+        status: { type: "string" },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "list_notion_items",
+    description: "Alias for list_items (backward compatible).",
+    input_schema: {
+      type: "object",
+      properties: {
+        list: { type: "string" },
+        status: { type: "string" },
+        open_only: { type: "boolean" },
+        limit: { type: "number" },
+      },
+      required: ["list"],
+    },
+  },
+  {
+    name: "add_notion_item",
+    description: "Alias for add_list_item (backward compatible).",
+    input_schema: {
+      type: "object",
+      properties: {
+        list: { type: "string" },
+        title: { type: "string" },
+        status: { type: "string" },
+        notes: { type: "string" },
+        url: { type: "string" },
+        author: { type: "string" },
+        priority: { type: "string", enum: ["High", "Medium", "Low"] },
       },
       required: ["list", "title"],
     },
   },
   {
     name: "update_notion_item",
-    description:
-      "Update a Notion list row by page id (from list_notion_items): status, notes, or title.",
+    description: "Alias for update_list_item (backward compatible).",
     input_schema: {
       type: "object",
       properties: {
@@ -462,19 +596,8 @@ const TOOLS: Tool[] = [
     },
   },
   {
-    name: "get_daily_checkin",
-    description: "Read the Daily Check-ins row for a date (pillar scores and reflection).",
-    input_schema: {
-      type: "object",
-      properties: {
-        date: { type: "string", description: "YYYY-MM-DD. Defaults to today." },
-      },
-      required: [],
-    },
-  },
-  {
     name: "add_notion_goal",
-    description: "Create a row in Goals & Milestones (Notion).",
+    description: "Alias for add_goal (backward compatible).",
     input_schema: {
       type: "object",
       properties: {
@@ -720,6 +843,70 @@ async function runTool(
           cueId: str(input.cue_id),
           maxResults: num(input.max_results),
         });
+      case "list_catalog":
+        return await magnusListCatalog({ userProfileId: ctx.userProfileId });
+      case "list_items":
+        return await magnusListItems({
+          userProfileId: ctx.userProfileId,
+          list: String(input.list ?? ""),
+          status: str(input.status),
+          openOnly: input.open_only === true,
+          limit: num(input.limit),
+        });
+      case "add_list_item":
+        return await magnusAddListItem({
+          userProfileId: ctx.userProfileId,
+          list: String(input.list ?? ""),
+          title: String(input.title ?? ""),
+          status: str(input.status),
+          notes: str(input.notes),
+          url: str(input.url),
+          author: str(input.author),
+          priority: str(input.priority),
+          pillar: str(input.pillar),
+        });
+      case "update_list_item":
+        return await magnusUpdateListItem({
+          userProfileId: ctx.userProfileId,
+          list: String(input.list ?? ""),
+          itemId: String(input.item_id ?? ""),
+          status: str(input.status),
+          notes: str(input.notes),
+          title: str(input.title),
+        });
+      case "create_list":
+        return await magnusCreateList({
+          userProfileId: ctx.userProfileId,
+          slug: String(input.slug ?? ""),
+          displayName: String(input.display_name ?? ""),
+          archetype: str(input.archetype),
+          description: str(input.description),
+          pillar: str(input.pillar),
+        });
+      case "link_notion_list":
+        return await magnusLinkNotionList({
+          userProfileId: ctx.userProfileId,
+          slug: String(input.slug ?? ""),
+          notionDatabaseId: String(input.notion_database_id ?? ""),
+          titleProperty: str(input.title_property),
+          statusProperty: str(input.status_property),
+          statusKind:
+            input.status_kind === "select" || input.status_kind === "status"
+              ? input.status_kind
+              : undefined,
+        });
+      case "get_daily_checkin":
+        return await getDailyCheckin({
+          userProfileId: ctx.userProfileId,
+          date: str(input.date),
+        });
+      case "add_goal":
+        return await addGoal({
+          userProfileId: ctx.userProfileId,
+          title: String(input.title ?? ""),
+          pillar: str(input.pillar),
+          status: str(input.status),
+        });
       case "list_notion_items":
         return await notionListItems({
           userProfileId: ctx.userProfileId,
@@ -743,15 +930,10 @@ async function runTool(
         return await notionUpdateItem({
           userProfileId: ctx.userProfileId,
           list: String(input.list ?? ""),
-          pageId: String(input.page_id ?? ""),
+          itemId: String(input.page_id ?? ""),
           status: str(input.status),
           notes: str(input.notes),
           title: str(input.title),
-        });
-      case "get_daily_checkin":
-        return await getNotionCheckin({
-          userProfileId: ctx.userProfileId,
-          date: str(input.date),
         });
       case "add_notion_goal":
         return await addNotionGoal({

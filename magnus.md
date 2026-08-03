@@ -83,6 +83,8 @@ shell or `.env`.
 | `src/agents/tools/youtubeConnectTool.ts` | In-chat `connect_google` / aliases — Calendar + YouTube one consent |
 | `src/agents/tools/youtubeTool.ts` | YouTube / YT Music: search, recommend, playlists, bookmarks, cue (per-user token) |
 | `src/agents/tools/eventLogTool.ts` | Event log tools: plan, update, reschedule, list (`magnus_events`) |
+| `src/agents/tools/listTool.ts` | User lists: catalog, read/add/update items, create custom list, link Notion mirror |
+| `src/lists/` | List catalog templates, Supabase store, service orchestration, optional Notion mirror |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
 | `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
 | `src/events/` | Event log domain: timezone helpers, Supabase store, calendar sync, formatting |
@@ -232,10 +234,10 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables.
 - **No inactivity / activity-triggered proactive messages yet** — only time-based cron jobs.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube.
-- **Notion list sync** — Magnus tools read/write LifeOS list DBs via `notion_registry`; Supabase `happiness_activities` mirror and proactive nudges still TODO. See `docs/NOTION_LIFEOS_STRUCTURE.md`.
+- **Notion list mirror** — Supabase `magnus_user_lists` / `magnus_list_items` are canonical for every user; Notion mirrors when linked. Bidirectional sync and proactive stale-list nudges still TODO. See `docs/NOTION_LIFEOS_STRUCTURE.md`.
 
 **Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
 
 ---
 
-**Last updated:** 2026-08-03 (Notion/LifeOS structure reference + audit script)
+**Last updated:** 2026-08-03 (user-agnostic list architecture: magnus_user_lists + optional Notion mirror)

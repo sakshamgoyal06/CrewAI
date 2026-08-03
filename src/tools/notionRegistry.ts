@@ -1,28 +1,88 @@
 /**
- * LifeOS Notion database registry — defaults from the workspace hub, overridable per user.
+ * Per-user Notion database registry — loaded from user_integrations only.
+ * No app-level or owner defaults at runtime.
  */
 import { loadUserIntegrations } from "../users/userIntegrations.js";
 
-import type { NotionListKind } from "./notionListKinds.js";
-export type { NotionListKind } from "./notionListKinds.js";
-export { normalizeListKind } from "./notionListKinds.js";
+/** Standard list slugs that may appear in notion_registry.lists */
+export type NotionListKind =
+  | "watchlist"
+  | "readlist"
+  | "travel"
+  | "food"
+  | "music"
+  | "tasks"
+  | "goals"
+  | "checkins"
+  | "patterns"
+  | "experiences";
 
 export type NotionListConfig = {
   dataSourceId: string;
   titleProperty: string;
   statusProperty?: string;
   defaultStatus?: string;
-  /** Status values treated as open / queued when filtering recommendations. */
   openStatuses?: string[];
 };
 
 export type NotionRegistry = {
   hubPageId?: string;
-  lists: Partial<Record<NotionListKind, NotionListConfig>>;
+  lists: Partial<Record<NotionListKind | string, NotionListConfig>>;
 };
 
-/** Canonical LifeOS hub registry (Aug 2026). */
-export const DEFAULT_NOTION_REGISTRY: NotionRegistry = {
+export { normalizeSlug as normalizeListKind } from "../lists/listSlug.js";
+
+function emptyRegistry(): NotionRegistry {
+  return { lists: {} };
+}
+
+function mergeRegistry(base: NotionRegistry, override?: NotionRegistry | null): NotionRegistry {
+  if (!override) {
+    return base;
+  }
+  return {
+    hubPageId: override.hubPageId ?? base.hubPageId,
+    lists: { ...base.lists, ...override.lists },
+  };
+}
+
+/** Load the user's Notion registry — never falls back to another user's ids. */
+export async function loadNotionRegistry(userProfileId: string): Promise<NotionRegistry> {
+  const integrations = await loadUserIntegrations(userProfileId);
+  const fromDb = integrations.notionRegistry as NotionRegistry | undefined;
+
+  const legacy: NotionRegistry = { lists: {} };
+  if (integrations.notionGoalsDatabaseId) {
+    legacy.lists!.goals = {
+      dataSourceId: integrations.notionGoalsDatabaseId,
+      titleProperty: "Goal Name",
+      statusProperty: "Status",
+      defaultStatus: "Not Started",
+      openStatuses: ["Not Started", "In Progress", "On Track", "Behind"],
+    };
+  }
+  if (integrations.notionDailyCheckinsDatabaseId) {
+    legacy.lists!.checkins = {
+      dataSourceId: integrations.notionDailyCheckinsDatabaseId,
+      titleProperty: "Date",
+    };
+  }
+
+  return mergeRegistry(mergeRegistry(emptyRegistry(), legacy), fromDb ?? null);
+}
+
+export function getListConfig(
+  registry: NotionRegistry,
+  kind: NotionListKind | string,
+): NotionListConfig | null {
+  return registry.lists[kind] ?? null;
+}
+
+/**
+ * Owner workspace reference for audit scripts only — not used at runtime.
+ * See scripts/audit-notion-lifeos.mts
+ */
+export const OWNER_NOTION_REGISTRY_REFERENCE: NotionRegistry = {
   hubPageId: "32cb455a-f233-811b-9e29-fcd84f710759",
   lists: {
     goals: {
@@ -86,44 +146,3 @@ export const DEFAULT_NOTION_REGISTRY: NotionRegistry = {
     },
   },
 };
-
-function mergeRegistry(base: NotionRegistry, override?: NotionRegistry | null): NotionRegistry {
-  if (!override) {
-    return base;
-  }
-  return {
-    hubPageId: override.hubPageId ?? base.hubPageId,
-    lists: { ...base.lists, ...override.lists },
-  };
-}
-
-export async function loadNotionRegistry(userProfileId: string): Promise<NotionRegistry> {
-  const integrations = await loadUserIntegrations(userProfileId);
-  const fromDb = integrations.notionRegistry as NotionRegistry | undefined;
-
-  const legacy: NotionRegistry = { lists: {} };
-  if (integrations.notionGoalsDatabaseId) {
-    legacy.lists!.goals = {
-      ...DEFAULT_NOTION_REGISTRY.lists.goals!,
-      dataSourceId: integrations.notionGoalsDatabaseId,
-    };
-  }
-  if (integrations.notionDailyCheckinsDatabaseId) {
-    legacy.lists!.checkins = {
-      ...DEFAULT_NOTION_REGISTRY.lists.checkins!,
-      dataSourceId: integrations.notionDailyCheckinsDatabaseId,
-    };
-  }
-
-  return mergeRegistry(
-    mergeRegistry(DEFAULT_NOTION_REGISTRY, legacy),
-    fromDb ?? null,
-  );
-}
-
-export function getListConfig(
-  registry: NotionRegistry,
-  kind: NotionListKind,
-): NotionListConfig | null {
-  return registry.lists[kind] ?? null;
-}
