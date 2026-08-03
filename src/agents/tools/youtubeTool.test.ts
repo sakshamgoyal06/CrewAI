@@ -49,6 +49,7 @@ const removeCueItem = vi.hoisted(() => vi.fn());
 const clearCue = vi.hoisted(() => vi.fn());
 const getYoutubeState = vi.hoisted(() => vi.fn());
 const setMagnusPlaylistId = vi.hoisted(() => vi.fn());
+const setPlaylistAlias = vi.hoisted(() => vi.fn());
 
 vi.mock("../../youtube/youtubeStore.js", () => ({
   upsertBookmark,
@@ -61,6 +62,7 @@ vi.mock("../../youtube/youtubeStore.js", () => ({
   clearCue,
   getYoutubeState,
   setMagnusPlaylistId,
+  setPlaylistAlias,
 }));
 
 import {
@@ -151,7 +153,7 @@ describe("youtube_playlist", () => {
     configured.youtubeOauthConfigured = true;
   });
 
-  it("creates the Magnus playlist when missing", async () => {
+  it("ensures the Magnus playlist when missing", async () => {
     getYoutubeState.mockResolvedValue({ ok: true, data: null });
     createPlaylist.mockResolvedValue({
       playlistId: "PLmagnus",
@@ -163,14 +165,58 @@ describe("youtube_playlist", () => {
       ok: true,
       data: { magnus_playlist_id: "PLmagnus" },
     });
+    setPlaylistAlias.mockResolvedValue({ ok: true, data: {} });
 
     const out = await youtubePlaylistTool({
       action: "ensure_magnus",
       userProfileId: "user-1",
     });
     expect(createPlaylist).toHaveBeenCalled();
-    expect(out).toContain("Created private playlist");
+    expect(out).toContain("Magnus playlist ready");
     expect(out).toContain("PLmagnus");
+  });
+
+  it("resolves wisdom alias and dedupes", async () => {
+    getYoutubeState.mockResolvedValue({
+      ok: true,
+      data: {
+        magnus_playlist_id: null,
+        magnus_playlist_title: "Magnus",
+        playlist_aliases: {
+          wisdom: { playlist_id: "PLwisdom", title: "Wisdom" },
+        },
+      },
+    });
+    getPlaylist.mockResolvedValue({ playlistId: "PLwisdom", title: "Wisdom" });
+    loadPlaylistItems.mockResolvedValue([
+      {
+        playlistItemId: "pi1",
+        videoId: "vidA",
+        title: "A",
+        channelTitle: "Ch",
+        kind: "video",
+        url: "https://youtube.com/watch?v=vidA",
+      },
+      {
+        playlistItemId: "pi2",
+        videoId: "vidA",
+        title: "A duplicate",
+        channelTitle: "Ch",
+        kind: "video",
+        url: "https://youtube.com/watch?v=vidA",
+      },
+    ]);
+
+    const out = await youtubePlaylistTool({
+      action: "dedupe",
+      playlistId: "wisdom",
+      userProfileId: "user-1",
+    });
+    expect(removeFromPlaylist).toHaveBeenCalledWith({
+      playlistItemId: "pi2",
+      userProfileId: "user-1",
+    });
+    expect(out).toContain("Removed 1 duplicate");
   });
 });
 

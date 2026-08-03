@@ -26,15 +26,14 @@ import type { YoutubeItemKind, YoutubeVideoBrief } from "../../integrations/yout
 import {
   clearCue,
   enqueueCue,
-  getYoutubeState,
   listBookmarks,
   listCue,
   popCue,
   removeBookmark,
   removeCueItem,
-  setMagnusPlaylistId,
   upsertBookmark,
 } from "../../youtube/youtubeStore.js";
+import { resolvePlaylistRef } from "../../youtube/playlistResolve.js";
 
 const NOT_CONFIGURED =
   "YouTube is not connected for this user. Ask me to connect Google (one link covers Calendar and YouTube), or set YOUTUBE_API_KEY on the host for search-only. See docs/YOUTUBE.md.";
@@ -116,44 +115,67 @@ async function resolveVideo(input: {
   return { error: "Need a video_id, url, or search query." };
 }
 
-async function ensureMagnusPlaylist(userProfileId: string): Promise<
-  { ok: true; playlistId: string; title: string; created: boolean } | { ok: false; error: string }
-> {
-  const state = await getYoutubeState(userProfileId);
-  if (!state.ok) {
-    return { ok: false, error: state.error };
+async function resolvePlaylistForTool(
+  userProfileId: string,
+  playlistId?: string,
+): Promise<{ playlistId: string; title: string } | { error: string }> {
+  const resolved = await resolvePlaylistRef(userProfileId, playlistId);
+  if ("error" in resolved) {
+    return resolved;
   }
-  if (state.data?.magnus_playlist_id) {
-    const existing = await getPlaylist(state.data.magnus_playlist_id, userProfileId);
-    if (existing) {
-      return {
-        ok: true,
-        playlistId: existing.playlistId,
-        title: existing.title,
-        created: false,
-      };
+  return { playlistId: resolved.playlistId, title: resolved.title };
+}
+
+async function clearPlaylistItems(input: {
+  playlistId: string;
+  userProfileId: string;
+  maxResults?: number;
+}): Promise<string> {
+  const items = await loadPlaylistItems({
+    playlistId: input.playlistId,
+    maxResults: input.maxResults ?? 200,
+    userProfileId: input.userProfileId,
+  });
+  if (items.length === 0) {
+    return "Playlist is already empty.";
+  }
+  let removed = 0;
+  for (const item of items) {
+    await removeFromPlaylist({
+      playlistItemId: item.playlistItemId,
+      userProfileId: input.userProfileId,
+    });
+    removed += 1;
+  }
+  return `Cleared ${removed} item(s) from playlist [playlist_id: ${input.playlistId}].`;
+}
+
+async function dedupePlaylistItems(input: {
+  playlistId: string;
+  userProfileId: string;
+  maxResults?: number;
+}): Promise<string> {
+  const items = await loadPlaylistItems({
+    playlistId: input.playlistId,
+    maxResults: input.maxResults ?? 200,
+    userProfileId: input.userProfileId,
+  });
+  const seen = new Set<string>();
+  const toRemove: string[] = [];
+  for (const item of items) {
+    if (seen.has(item.videoId)) {
+      toRemove.push(item.playlistItemId);
+    } else {
+      seen.add(item.videoId);
     }
   }
-
-  const title =
-    process.env.YOUTUBE_MAGNUS_PLAYLIST_TITLE?.trim() ||
-    state.data?.magnus_playlist_title ||
-    "Magnus";
-  const created = await createPlaylist({
-    title,
-    description: "Managed by Magnus — songs and videos queued from chat.",
-    privacyStatus: "private",
-    userProfileId,
-  });
-  const saved = await setMagnusPlaylistId({
-    userProfileId,
-    playlistId: created.playlistId,
-    playlistTitle: created.title,
-  });
-  if (!saved.ok) {
-    return { ok: false, error: saved.error };
+  if (toRemove.length === 0) {
+    return `No duplicates found (${items.length} items, all unique). [playlist_id: ${input.playlistId}]`;
   }
-  return { ok: true, playlistId: created.playlistId, title: created.title, created: true };
+  for (const playlistItemId of toRemove) {
+    await removeFromPlaylist({ playlistItemId, userProfileId: input.userProfileId });
+  }
+  return `Removed ${toRemove.length} duplicate(s). ${items.length - toRemove.length} unique items remain. [playlist_id: ${input.playlistId}]`;
 }
 
 export async function youtubeSearchTool(input: {
@@ -249,31 +271,26 @@ export async function youtubePlaylistTool(input: {
     }
     case "ensure_magnus":
     case "ensure": {
-      const ensured = await ensureMagnusPlaylist(input.userProfileId);
-      if (!ensured.ok) {
-        return `Could not ensure Magnus playlist: ${ensured.error}`;
+      const resolved = await resolvePlaylistForTool(uid, "magnus");
+      if ("error" in resolved) {
+        return `Could not ensure Magnus playlist: ${resolved.error}`;
       }
-      return ensured.created
-        ? `Created private playlist "${ensured.title}" [playlist_id: ${ensured.playlistId}].`
-        : `Magnus playlist ready: "${ensured.title}" [playlist_id: ${ensured.playlistId}].`;
+      return `Magnus playlist ready: "${resolved.title}" [playlist_id: ${resolved.playlistId}].`;
     }
     case "load":
     case "get": {
-      let playlistId = input.playlistId?.trim();
-      if (!playlistId || playlistId === "magnus") {
-        const ensured = await ensureMagnusPlaylist(input.userProfileId);
-        if (!ensured.ok) {
-          return `Could not resolve Magnus playlist: ${ensured.error}`;
-        }
-        playlistId = ensured.playlistId;
+      const resolved = await resolvePlaylistForTool(uid, input.playlistId);
+      if ("error" in resolved) {
+        return `Could not resolve playlist: ${resolved.error}`;
       }
+      const { playlistId, title: resolvedTitle } = resolved;
       const meta = await getPlaylist(playlistId, uid);
       const items = await loadPlaylistItems({
         playlistId,
         maxResults: input.maxResults,
         userProfileId: uid,
       });
-      const title = meta?.title ?? playlistId;
+      const title = meta?.title ?? resolvedTitle;
       if (items.length === 0) {
         return `Playlist "${title}" is empty. [playlist_id: ${playlistId}]`;
       }
@@ -302,29 +319,50 @@ export async function youtubePlaylistTool(input: {
       return `Created playlist "${created.title}" (${created.privacyStatus}) ${created.url} [playlist_id: ${created.playlistId}].`;
     }
     case "add": {
-      let playlistId = input.playlistId?.trim();
-      if (!playlistId || playlistId === "magnus") {
-        const ensured = await ensureMagnusPlaylist(input.userProfileId);
-        if (!ensured.ok) {
-          return `Could not resolve playlist: ${ensured.error}`;
-        }
-        playlistId = ensured.playlistId;
+      const resolved = await resolvePlaylistForTool(uid, input.playlistId);
+      if ("error" in resolved) {
+        return `Could not resolve playlist: ${resolved.error}`;
       }
-      const resolved = await resolveVideo({
+      const playlistId = resolved.playlistId;
+      const resolvedVideo = await resolveVideo({
         videoId: input.videoId,
         url: input.url,
         query: input.query,
         userProfileId: uid,
       });
-      if (resolved.error || !resolved.video) {
-        return resolved.error ?? "Could not resolve video.";
+      if (resolvedVideo.error || !resolvedVideo.video) {
+        return resolvedVideo.error ?? "Could not resolve video.";
       }
       const added = await addToPlaylist({
         playlistId,
-        videoId: resolved.video.videoId,
+        videoId: resolvedVideo.video.videoId,
         userProfileId: uid,
       });
-      return `Added "${added.title}" to playlist [playlist_id: ${playlistId}] [video_id: ${added.videoId}].`;
+      return `Added "${added.title}" to playlist "${resolved.title}" [playlist_id: ${playlistId}] [video_id: ${added.videoId}].`;
+    }
+    case "clear":
+    case "empty": {
+      const resolved = await resolvePlaylistForTool(uid, input.playlistId);
+      if ("error" in resolved) {
+        return `Could not resolve playlist: ${resolved.error}`;
+      }
+      return clearPlaylistItems({
+        playlistId: resolved.playlistId,
+        userProfileId: uid,
+        maxResults: input.maxResults,
+      });
+    }
+    case "dedupe":
+    case "dedup": {
+      const resolved = await resolvePlaylistForTool(uid, input.playlistId);
+      if ("error" in resolved) {
+        return `Could not resolve playlist: ${resolved.error}`;
+      }
+      return dedupePlaylistItems({
+        playlistId: resolved.playlistId,
+        userProfileId: uid,
+        maxResults: input.maxResults,
+      });
     }
     case "remove": {
       if (!input.playlistItemId?.trim()) {
@@ -337,7 +375,7 @@ export async function youtubePlaylistTool(input: {
       return "Removed that item from the playlist.";
     }
     default:
-      return `Unknown playlist action "${input.action}". Use list, load, create, add, remove, or ensure_magnus.`;
+      return `Unknown playlist action "${input.action}". Use list, load, create, add, remove, clear, dedupe, or ensure_magnus.`;
   }
 }
 

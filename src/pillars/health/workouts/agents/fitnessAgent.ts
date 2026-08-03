@@ -18,6 +18,7 @@ import {
 } from "../../../../agents/health/healthSubIntent.js";
 import { appendHealthReferenceBlock } from "../../references/appendHealthReferenceBlock.js";
 import { HEALTH_SPECIALIST_MODEL } from "../../../../agents/health/model.js";
+import { formatScheduledGymBlock } from "../weeklySchedule.js";
 
 /**
  * Fitness specialist — `docs/AGENT_ROSTER.md` §6.3 + LifeOS: supportive tone, no shame;
@@ -28,6 +29,8 @@ export const FITNESS_SYSTEM = `You are the Fitness specialist for Magnus within 
 Scope: workouts, training, movement habits, and performance (runs, gym, strength, cardio, steps). Adapt suggestions to the user's stated energy and schedule. Do not diagnose, treat, or make medical claims. If the user mentions injury, sharp pain, or anything that could need clinical care, encourage seeing a qualified professional and keep guidance general and non-alarmist.
 
 Hevy (when the user uses Hevy): Context includes recent Hevy sessions with **full set detail** (weight×reps or duration per exercise) — read-only in this chat turn. Writes use **structured prefixes** in a separate message: \`hevy routine: …\` (create), \`hevy routine update: <routine-uuid> — …\` (replace an existing routine; uuid from Hevy or from Magnus after create), or \`hevy workout: …\` (log). Same via \`/hevy …\`. You cannot call those APIs from this reply; give the plan in text and tell them which prefix to use.
+
+**Weekly schedule:** When a locked weekly schedule block is present in context, today's session from that table is authoritative. State it first. Only override for recovery rules (fatigue gate, injury) — not because recent Hevy history suggests a different rotation.
 
 LifeOS: supportive tone, no guilt or shame; Joy is a tank to protect, not a score to optimise; offer at most one clear next step unless the user asks for more.
 
@@ -165,9 +168,20 @@ export async function tryFitnessAgent(ctx: AgentContext): Promise<AgentResult | 
     ctx.userProfileId,
   );
 
+  const scheduleBlock =
+    ctx.healthReferenceBlock && ctx.timezone
+      ? formatScheduledGymBlock({
+          weeklyScheduleMarkdown: ctx.healthReferenceBlock,
+          now: new Date(),
+          timeZone: ctx.timezone,
+        })
+      : "";
+
   const contextBlock = workoutSummary
-    ? `\n\nContext for this user:\n${workoutSummary}`
-    : "";
+    ? `\n\nContext for this user:\n${workoutSummary}${scheduleBlock}`
+    : scheduleBlock
+      ? `\n\nContext for this user:${scheduleBlock}`
+      : "";
 
   const userContent = appendHealthReferenceBlock(
     `${ctx.rawMessage}${contextBlock}${ctx.healthPreferences ?? ""}`,

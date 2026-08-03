@@ -69,6 +69,10 @@ vi.mock("./memory/memoryAgent.js", () => ({
   intentToMemoryPurpose: () => "chat" as const,
 }));
 
+vi.mock("../tools/routingContext.js", () => ({
+  fetchRecentRoutingTurns: vi.fn().mockResolvedValue([]),
+}));
+
 import { loadMemoryContext } from "./memory/memoryAgent.js";
 import { runOrchestratorReply } from "./magnusOrchestrator.js";
 

@@ -44,8 +44,11 @@ import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
 
 const MODEL = "claude-sonnet-4-6";
-// Calendar + event log + YouTube in one turn needs a little headroom.
-const MAX_TOOL_ROUNDS = 8;
+// Calendar + event log + YouTube bulk ops in one turn needs headroom (env override).
+const MAX_TOOL_ROUNDS = Math.min(
+  Math.max(Number.parseInt(process.env.MAGNUS_MAX_TOOL_ROUNDS ?? "12", 10) || 12, 4),
+  24,
+);
 
 /** @deprecated Use buildMagnusSystem(ctx) — core prompt is user-agnostic. */
 export const MAGNUS_SYSTEM = MAGNUS_CORE_SYSTEM;
@@ -327,17 +330,18 @@ const TOOLS: Tool[] = [
   {
     name: "youtube_playlist",
     description:
-      "Manage YouTube playlists: list, load, create, add, remove, ensure_magnus (default Magnus playlist).",
+      "Manage YouTube playlists: list, load, create, add, remove, clear (empty all), dedupe (remove duplicate videos), ensure_magnus. playlist_id: magnus, wisdom, wealth, happiness, health, or PL…",
     input_schema: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: ["list", "load", "create", "add", "remove", "ensure_magnus"],
+          enum: ["list", "load", "create", "add", "remove", "clear", "dedupe", "ensure_magnus"],
         },
         playlist_id: {
           type: "string",
-          description: "Playlist id, or 'magnus' for the default Magnus playlist.",
+          description:
+            "Pillar name (magnus, wisdom, wealth, happiness, health) or YouTube playlist id (PL…).",
         },
         title: { type: "string", description: "For create." },
         description: { type: "string", description: "For create." },
@@ -698,9 +702,11 @@ export async function runMagnusAgent(ctx: AgentContext): Promise<AgentResult> {
     messages.push({ role: "user", content: results });
   }
 
-  logger.warn({ toolsUsed }, "magnus agent hit the tool round limit");
+  logger.warn({ toolsUsed, rounds: MAX_TOOL_ROUNDS }, "magnus agent hit the tool round limit");
   return {
-    text: "I got stuck working through that one. Try asking for one thing at a time.",
-    metadata: { specialist: "Magnus", pillar: "magnus", tool_limit: true },
+    text:
+      `I hit the step limit after ${toolsUsed.length} tool call(s) on that request. ` +
+      `Say "continue" and I'll pick up where I left off — or ask for one smaller step at a time.`,
+    metadata: { specialist: "Magnus", pillar: "magnus", tool_limit: true, tools_used: toolsUsed },
   };
 }

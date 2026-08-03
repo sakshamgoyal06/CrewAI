@@ -18,6 +18,12 @@ describe("looksLikeYoutubeAction", () => {
     expect(looksLikeYoutubeAction("https://music.youtube.com/watch?v=abc")).toBe(true);
   });
 
+  it("detects pillar playlist names and maintenance", () => {
+    expect(looksLikeYoutubeAction("add to wisdom playlist")).toBe(true);
+    expect(looksLikeYoutubeAction("empty the wisdom playlist")).toBe(true);
+    expect(looksLikeYoutubeAction("dedupe wealth playlist")).toBe(true);
+  });
+
   it("leaves ordinary taste talk alone", () => {
     expect(looksLikeYoutubeAction("what should I read tonight?")).toBe(false);
     expect(looksLikeYoutubeAction("recommend a film that feels like Arrival")).toBe(false);

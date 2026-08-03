@@ -57,9 +57,9 @@ describe("tryAlternatesRecommenderAgent", () => {
       intent: "HEALTH",
     });
     expect(createMock).toHaveBeenCalledTimes(1);
-    expect(createMock.mock.calls[0]![0]).toMatchObject({
-      system: ALTERNATES_RECOMMENDER_SYSTEM,
-    });
+    expect(String(createMock.mock.calls[0]![0].system)).toContain(
+      ALTERNATES_RECOMMENDER_SYSTEM.slice(0, 40),
+    );
     expect(out).toMatchObject({
       text: "mock alternates reply",
       metadata: {

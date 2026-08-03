@@ -49,6 +49,21 @@ describe("resolveIntentNaturalLanguage", () => {
     await expect(resolveIntentNaturalLanguage("bookmark that song")).resolves.toBe("GENERAL");
   });
 
+  it("forces tool continuations to GENERAL after a YouTube turn", async () => {
+    classifiedAs("WISDOM");
+    await expect(
+      resolveIntentNaturalLanguage("Yes, add RAG and vector databases", {
+        recentTurns: [
+          {
+            role: "assistant",
+            content: "Want me to add RAG videos?",
+            metadata: { tools_used: ["youtube_search"] },
+          },
+        ],
+      }),
+    ).resolves.toBe("GENERAL");
+  });
+
   it("leaves ordinary talk about food to the classifier", async () => {
     classifiedAs("HAPPINESS");
     await expect(

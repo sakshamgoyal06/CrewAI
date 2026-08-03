@@ -79,7 +79,7 @@ describe("mealPlannerAgent", () => {
     });
     expect(messagesCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: MEAL_PLANNER_SYSTEM,
+        system: expect.stringContaining(MEAL_PLANNER_SYSTEM.slice(0, 40)),
       }),
     );
   });
