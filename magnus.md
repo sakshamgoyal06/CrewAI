@@ -11,6 +11,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/YOUTUBE.md`** | YouTube / YT Music setup (search, playlists, bookmarks, cue) |
 | **`docs/NOTION_SETUP.md`** | Notion OAuth redirect URI + in-chat connect flow |
 | **`docs/NOTION_LIFEOS_STRUCTURE.md`** | Notion ↔ Supabase list/log map, gaps, ideal registry layout |
+| **`docs/TODO_LIST_RECOMMENDATION_SCHEMAS.md`** | TODO: rich list schemas + recommend filters for all default lists |
 | **`MAGNUS_CORE_CONTEXT.md`** | Product intent and philosophy |
 
 ---
@@ -245,9 +246,10 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **No inactivity / activity-triggered proactive messages yet** — only time-based cron jobs.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube.
 - **Notion list mirror** — Supabase `magnus_user_lists` / `magnus_list_items` are canonical for every user; Notion mirrors when linked. `connect_notion` always sends OAuth when configured (never short-circuits on legacy manual tokens). OAuth callback clears stale list ids and auto-discovers databases — users should not paste dataset ids. Bidirectional sync still TODO. See `docs/NOTION_LIFEOS_STRUCTURE.md`.
+- **List recommendation schemas** — default lists are title + queue status only; no genre/rating/runtime/rewatch filters yet. Planned: archetype field schemas, done-status lifecycle, `recommend_list_items` tool, richer Notion DB columns. See **`docs/TODO_LIST_RECOMMENDATION_SCHEMAS.md`**.
 
 **Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
 
 ---
 
-**Last updated:** 2026-08-03 (Notion auto-provisions dedicated Magnus space + list DBs on connect)
+**Last updated:** 2026-08-03 (added list recommendation schema TODO)
