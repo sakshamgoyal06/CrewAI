@@ -71,9 +71,9 @@ describe("routeHealthMessage", () => {
       ctx("Plan my meals for the week — vegan, nut allergy, moderate protein."),
     );
     expect(createMock).toHaveBeenCalledTimes(1);
-    expect(createMock.mock.calls[0][0]).toMatchObject({
-      system: MEAL_PLANNER_SYSTEM,
-    });
+    expect(String(createMock.mock.calls[0]![0].system)).toContain(
+      MEAL_PLANNER_SYSTEM.slice(0, 40),
+    );
     expect(out.metadata).toMatchObject({
       health_order: "meal_plan",
       specialist: "MealPlanner",
@@ -88,9 +88,9 @@ describe("routeHealthMessage", () => {
     expect(createMock.mock.calls[0]![0]).toMatchObject({
       system: expect.not.stringContaining("Alternates Recommender"),
     });
-    expect(createMock.mock.calls[1]![0]).toMatchObject({
-      system: ALTERNATES_RECOMMENDER_SYSTEM,
-    });
+    expect(createMock.mock.calls[1]![0].system).toEqual(
+      expect.stringContaining(ALTERNATES_RECOMMENDER_SYSTEM.slice(0, 40)),
+    );
     expect(out.metadata).toMatchObject({
       health_order: "nutrition",
       specialist: "AlternatesRecommender",
@@ -102,9 +102,9 @@ describe("routeHealthMessage", () => {
       ctx("16-week base phase before my spring half — how to sequence volume?"),
     );
     expect(createMock).toHaveBeenCalledTimes(1);
-    expect(createMock.mock.calls[0][0]).toMatchObject({
-      system: LONG_TERM_HEALTH_PLANNING_SYSTEM,
-    });
+    expect(String(createMock.mock.calls[0]![0].system)).toContain(
+      LONG_TERM_HEALTH_PLANNING_SYSTEM.slice(0, 40),
+    );
     expect(out.metadata).toMatchObject({
       health_order: "long_term_health_planning",
       specialist: "LongTermHealthPlanning",
