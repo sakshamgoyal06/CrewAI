@@ -69,6 +69,7 @@ const REDIS_TOKEN_VARS = ["UPSTASH_REDIS_REST_TOKEN", "REDIS_TOKEN"] as const;
 const GOOGLE_CALENDAR_PLATFORM_VARS = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] as const;
 const GOOGLE_YOUTUBE_PLATFORM_VARS = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] as const;
 const YOUTUBE_API_KEY_VARS = ["YOUTUBE_API_KEY", "GOOGLE_YOUTUBE_API_KEY"] as const;
+const KITE_PLATFORM_VARS = ["KITE_API_KEY", "KITE_API_SECRET"] as const;
 
 function coreRequirements(env: EnvBag, production: boolean): CoreRequirement[] {
   const serviceRole = val(env, "SUPABASE_SERVICE_ROLE_KEY");
@@ -276,6 +277,30 @@ function workoutsCapability(): Capability {
   };
 }
 
+function zerodhaCapability(env: EnvBag): Capability {
+  const missing = KITE_PLATFORM_VARS.filter((name) => !val(env, name));
+  if (missing.length === 0) {
+    return {
+      id: "zerodha",
+      title: "Zerodha (Kite Connect)",
+      telegram: "“connect Zerodha”, “what are my holdings?”",
+      status: "partial",
+      detail:
+        "Kite app configured on host. Say “connect Zerodha” for in-chat login; access token in user_integrations (expires daily ~6 AM IST). Read-only: equity, Coin MF, SIPs.",
+      missing: ["user_integrations.kite_access_token"],
+    };
+  }
+  return {
+    id: "zerodha",
+    title: "Zerodha (Kite Connect)",
+    telegram: "“connect Zerodha”",
+    status: "off",
+    detail:
+      "Set KITE_API_KEY and KITE_API_SECRET on the host (developers.kite.trade). Per-user token via connect flow.",
+    missing,
+  };
+}
+
 function deliveryCapability(env: EnvBag): Capability {
   const runtime = resolveTelegramRuntime(env);
   if (runtime.mode === "webhook") {
@@ -350,6 +375,7 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
       missing: [],
     },
     workoutsCapability(),
+    zerodhaCapability(env),
     mealCapability(env),
     {
       id: "journal",

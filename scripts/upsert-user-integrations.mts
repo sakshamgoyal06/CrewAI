@@ -32,6 +32,10 @@ const result = await upsertUserIntegrations({
   googleYoutubeRefreshToken: process.env.GOOGLE_YOUTUBE_REFRESH_TOKEN?.trim(),
   hevyApiKey:
     process.env.HEVY_API_KEY?.trim() || process.env.MAGNUS_HEVY_API_KEY?.trim(),
+  kiteAccessToken:
+    process.env.KITE_ACCESS_TOKEN?.trim() || process.env.MAGNUS_KITE_ACCESS_TOKEN?.trim(),
+  kiteUserId: process.env.KITE_USER_ID?.trim() || process.env.MAGNUS_KITE_USER_ID?.trim(),
+  kiteTokenObtainedAt: process.env.KITE_TOKEN_OBTAINED_AT?.trim() || new Date().toISOString(),
   notionToken:
     process.env.NOTION_TOKEN?.trim() ||
     process.env.NOTION_API_KEY?.trim() ||
@@ -51,6 +55,7 @@ console.log("Updated user_integrations for:", profile);
 console.log("Stored keys present:");
 console.log("  google_youtube_refresh_token:", Boolean(process.env.GOOGLE_YOUTUBE_REFRESH_TOKEN?.trim()));
 console.log("  hevy_api_key:", Boolean(process.env.HEVY_API_KEY?.trim() || process.env.MAGNUS_HEVY_API_KEY?.trim()));
+console.log("  kite_access_token:", Boolean(process.env.KITE_ACCESS_TOKEN?.trim() || process.env.MAGNUS_KITE_ACCESS_TOKEN?.trim()));
 console.log("  notion_token:", Boolean(process.env.NOTION_TOKEN?.trim()));
 console.log("  notion_daily_log_parent_page_id:", Boolean(process.env.NOTION_DAILY_LOG_PARENT_PAGE_ID?.trim()));
 console.log("  notion_morning_brief_parent_page_id:", Boolean(process.env.NOTION_MORNING_BRIEF_PARENT_PAGE_ID?.trim()));

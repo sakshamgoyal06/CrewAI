@@ -40,6 +40,7 @@ import {
   youtubeSearchTool,
 } from "./tools/youtubeTool.js";
 import { connectGoogleTool } from "./tools/youtubeConnectTool.js";
+import { connectKiteTool } from "./tools/kiteConnectTool.js";
 import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
 
@@ -433,6 +434,25 @@ const TOOLS: Tool[] = [
       required: [],
     },
   },
+  {
+    name: "connect_zerodha",
+    description:
+      "Start Zerodha (Kite Connect) onboarding for read-only portfolio: equity holdings, Coin mutual funds, SIPs. Use when they ask to connect Zerodha, Kite, or Coin, or when wealth context says token expired or not connected.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "connect_kite",
+    description: "Alias for connect_zerodha — same Kite Connect login link.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
 ];
 
 function textFromMessage(msg: Message): string {
@@ -639,6 +659,12 @@ async function runTool(
       case "connect_calendar":
       case "connect_youtube":
         return await connectGoogleTool({
+          userProfileId: ctx.userProfileId,
+          telegramUserId: ctx.telegramUserId,
+        });
+      case "connect_zerodha":
+      case "connect_kite":
+        return await connectKiteTool({
           userProfileId: ctx.userProfileId,
           telegramUserId: ctx.telegramUserId,
         });
