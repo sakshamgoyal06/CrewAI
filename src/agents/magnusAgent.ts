@@ -40,7 +40,6 @@ import {
   youtubeSearchTool,
 } from "./tools/youtubeTool.js";
 import { connectGoogleTool } from "./tools/youtubeConnectTool.js";
-import { connectFiTool } from "./tools/fiConnectTool.js";
 import { connectKiteTool } from "./tools/kiteConnectTool.js";
 import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
@@ -458,16 +457,6 @@ const TOOLS: Tool[] = [
       required: [],
     },
   },
-  {
-    name: "connect_fi",
-    description:
-      "Start Fi Money onboarding for read-only net worth, bank transactions, and credit report. Use when they ask to connect Fi or Fi Money, or when wealth context says Fi is not connected or session expired (~30 min).",
-    input_schema: {
-      type: "object",
-      properties: {},
-      required: [],
-    },
-  },
 ];
 
 function textFromMessage(msg: Message): string {
@@ -682,10 +671,6 @@ async function runTool(
         return await connectKiteTool({
           userProfileId: ctx.userProfileId,
           telegramUserId: ctx.telegramUserId,
-        });
-      case "connect_fi":
-        return await connectFiTool({
-          userProfileId: ctx.userProfileId,
         });
       default:
         return `Unknown tool: ${name}`;

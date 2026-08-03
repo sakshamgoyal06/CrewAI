@@ -1,8 +1,8 @@
 /**
- * Wealth pillar — money coaching with optional Fi Money (banks, cards, net worth) and
- * Zerodha (Kite Connect) portfolio context.
+ * Wealth pillar — money coaching with optional Zerodha (Kite Connect) portfolio context.
  *
- * Read-only data only — no order placement, no buy/sell advice.
+ * Read-only broker data: equity holdings, Coin MF holdings/SIPs, available cash.
+ * No order placement, no buy/sell advice.
  */
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
@@ -12,20 +12,8 @@ import { loggableError } from "../../util/loggableError.js";
 import { buildAgentMessages } from "../memory/memoryAgent.js";
 import { buildSpecialistIdentity } from "../promptIdentity.js";
 import { PILLAR_MODEL } from "../pillarSpecialist.js";
-import {
-  acknowledgeFiConnected,
-  connectFiTool,
-  disconnectFiTool,
-  isFiConnectRequest,
-  isFiConnectedAck,
-  isFiDisconnectRequest,
-} from "../tools/fiConnectTool.js";
 import { connectKiteTool, isKiteConnectRequest } from "../tools/kiteConnectTool.js";
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
-import {
-  fetchFiWealthSnapshot,
-  formatFiWealthForPrompt,
-} from "../../pillars/wealth/fi/index.js";
 import {
   fetchKitePortfolioSnapshot,
   formatKitePortfolioForPrompt,
@@ -36,15 +24,11 @@ export const WEALTH_SYSTEM = `You are the Wealth specialist inside Magnus.
 Scope: budgeting, spending patterns, saving rate, cash flow, debt, net worth tracking, financial
 independence goals, and investing *philosophy* (allocation logic, risk tolerance, time horizon).
 
-When Fi Money context is attached below, use those numbers for net worth, bank spending, and credit
-accounts — do not invent balances. If context says not connected or session expired, tell them to
-say "connect Fi" for a fresh login link (passcode from Fi app, ~30 min session).
-
 When Zerodha (Kite Connect) context is attached below, use those numbers for holdings, SIPs, and
 cash — do not invent balances. Summarise allocation and drift in plain language. If context says
 not connected or token expired, tell them to say "connect Zerodha" for a fresh login link.
 
-Magnus is read-only on Fi and Zerodha (no orders). Do not offer to place trades or MF orders.
+Magnus is read-only on Zerodha today (no orders). Do not offer to place trades or MF orders.
 
 Boundaries you hold without being preachy about them:
 - No personalised financial advice, no buy/sell calls, no predictions about specific assets.
@@ -73,46 +57,6 @@ function optionalProfileBlock(ctx: AgentContext): string {
     parts.push(`Timezone (from profile): ${ctx.timezone.trim()}`);
   }
   return parts.length === 0 ? "" : `\n\n${parts.join("\n")}`;
-}
-
-async function loadFiContextBlock(userProfileId: string): Promise<{
-  block: string;
-  meta: Record<string, unknown>;
-}> {
-  try {
-    const res = await fetchFiWealthSnapshot(userProfileId);
-    if (!res.ok) {
-      if (res.error === "not_connected" || res.error === "login_required") {
-        return {
-          block:
-            '\n\nFi Money: not connected. User can say "connect Fi" for a browser login link (read-only net worth, banks, credit).',
-          meta: res.meta,
-        };
-      }
-      if (res.error === "disabled") {
-        return {
-          block: "\n\nFi Money: integration disabled on this host.",
-          meta: res.meta,
-        };
-      }
-      return {
-        block: `\n\nFi Money: could not load wealth data (${res.error}).`,
-        meta: res.meta,
-      };
-    }
-
-    const formatted = formatFiWealthForPrompt(res.snapshot);
-    return {
-      block: formatted ? `\n\n${formatted}` : "",
-      meta: res.meta,
-    };
-  } catch (e) {
-    logger.warn({ err: loggableError(e) }, "wealth: fi context load failed");
-    return {
-      block: "",
-      meta: { fi: "error", fi_error: e instanceof Error ? e.message : String(e) },
-    };
-  }
 }
 
 async function loadKiteContextBlock(userProfileId: string): Promise<{
@@ -157,42 +101,6 @@ async function loadKiteContextBlock(userProfileId: string): Promise<{
 }
 
 export async function runWealthAgent(ctx: AgentContext): Promise<AgentResult> {
-  if (isFiConnectRequest(ctx.rawMessage)) {
-    const text = await connectFiTool({ userProfileId: ctx.userProfileId });
-    return {
-      text,
-      metadata: {
-        specialist: "Wealth",
-        pillar: "wealth",
-        fi_connect: true,
-      },
-    };
-  }
-
-  if (isFiConnectedAck(ctx.rawMessage)) {
-    const text = await acknowledgeFiConnected({ userProfileId: ctx.userProfileId });
-    return {
-      text,
-      metadata: {
-        specialist: "Wealth",
-        pillar: "wealth",
-        fi_connected: true,
-      },
-    };
-  }
-
-  if (isFiDisconnectRequest(ctx.rawMessage)) {
-    const text = await disconnectFiTool({ userProfileId: ctx.userProfileId });
-    return {
-      text,
-      metadata: {
-        specialist: "Wealth",
-        pillar: "wealth",
-        fi_disconnect: true,
-      },
-    };
-  }
-
   if (isKiteConnectRequest(ctx.rawMessage)) {
     const text = await connectKiteTool({
       userProfileId: ctx.userProfileId,
@@ -208,11 +116,7 @@ export async function runWealthAgent(ctx: AgentContext): Promise<AgentResult> {
     };
   }
 
-  const [{ block: fiBlock, meta: fiMeta }, { block: kiteBlock, meta: kiteMeta }] =
-    await Promise.all([
-      loadFiContextBlock(ctx.userProfileId),
-      loadKiteContextBlock(ctx.userProfileId),
-    ]);
+  const { block: kiteBlock, meta: kiteMeta } = await loadKiteContextBlock(ctx.userProfileId);
 
   const msg = await anthropic.messages.create({
     model: PILLAR_MODEL,
@@ -220,7 +124,7 @@ export async function runWealthAgent(ctx: AgentContext): Promise<AgentResult> {
     system: `${buildSpecialistIdentity(ctx)}\n\n${WEALTH_SYSTEM}`,
     messages: buildAgentMessages(
       ctx,
-      `${ctx.rawMessage}${optionalProfileBlock(ctx)}${fiBlock}${kiteBlock}`,
+      `${ctx.rawMessage}${optionalProfileBlock(ctx)}${kiteBlock}`,
     ),
   });
 
@@ -229,7 +133,6 @@ export async function runWealthAgent(ctx: AgentContext): Promise<AgentResult> {
     metadata: {
       specialist: "Wealth",
       pillar: "wealth",
-      ...fiMeta,
       ...kiteMeta,
     },
   };
