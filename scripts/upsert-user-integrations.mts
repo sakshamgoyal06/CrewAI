@@ -47,6 +47,9 @@ const result = await upsertUserIntegrations({
   notionMorningBriefParentPageId: process.env.NOTION_MORNING_BRIEF_PARENT_PAGE_ID?.trim(),
   notionGoalsDatabaseId: process.env.NOTION_GOALS_DATABASE_ID?.trim(),
   notionDailyCheckinsDatabaseId: process.env.NOTION_DAILY_CHECKINS_DATABASE_ID?.trim(),
+  notionRegistry: process.env.NOTION_REGISTRY_JSON?.trim()
+    ? (JSON.parse(process.env.NOTION_REGISTRY_JSON) as Record<string, unknown>)
+    : undefined,
 });
 
 if (!result.ok) {

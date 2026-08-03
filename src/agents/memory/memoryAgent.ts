@@ -8,7 +8,6 @@ import { logger } from "../../logger.js";
 import { supabase as defaultSupabase } from "../../tools/clients.js";
 import type { MemoryContext, MemoryPurpose } from "./types.js";
 import { memoryConfig } from "./memoryConfig.js";
-
 export { formatMemoryBlockForSystem, augmentUserWithMemory } from "./format.js";
 export { buildAgentMessages, buildAgentHistoryPrefix } from "./buildAgentMessages.js";
 export { buildMemoryPackage } from "./memoryPackage.js";
@@ -381,6 +380,28 @@ export async function loadMemoryContext(input: {
     patterns.push(...(pat.data ?? []));
   }
 
+  let lists: MemoryContext["lists"];
+  try {
+    const { loadListMemoryContext } = await import("../../lists/listMemory.js");
+    const listCtx = await loadListMemoryContext(input.userProfileId);
+    lists = {
+      notionConnected: listCtx.notionConnected,
+      catalog: listCtx.catalog,
+      openHighlights: listCtx.openHighlights,
+    };
+    if (activeGoals.length === 0) {
+      for (const g of listCtx.openHighlights.filter((h) => h.slug === "goals")) {
+        activeGoals.push({
+          id: g.title,
+          label: g.title,
+          status: g.status,
+        });
+      }
+    }
+  } catch (e) {
+    gaps.push(`lists: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
   const ctx: MemoryContext = {
     purpose: input.purpose,
     loadedAt,
@@ -395,6 +416,7 @@ export async function loadMemoryContext(input: {
     activeGoals,
     joy,
     patterns,
+    ...(lists ? { lists } : {}),
     gaps,
   };
 

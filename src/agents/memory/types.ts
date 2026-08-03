@@ -19,6 +19,19 @@ export type MemoryGoalRow = {
   timeframe?: string;
 };
 
+export type MemoryListCatalogEntry = {
+  slug: string;
+  displayName: string;
+  openCount: number;
+  notionLinked: boolean;
+};
+
+export type MemoryListHighlight = {
+  slug: string;
+  title: string;
+  status?: string;
+};
+
 /** Row from `magnus_daily_logs` — free-form notes mirrored from Notion / Telegram. */
 export type MemoryDailyLogEntry = {
   body: string;
@@ -75,6 +88,12 @@ export type MemoryContext = {
     happinessReserve?: Record<string, unknown> | null;
   };
   patterns: Array<Record<string, unknown>>;
+  /** Per-user list catalog and open-item highlights from magnus_user_lists. */
+  lists?: {
+    notionConnected: boolean;
+    catalog: MemoryListCatalogEntry[];
+    openHighlights: MemoryListHighlight[];
+  };
   /**
    * Explicit missing data or failed optional queries — never silent empty failure.
    */

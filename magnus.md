@@ -9,6 +9,8 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
 | **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
 | **`docs/YOUTUBE.md`** | YouTube / YT Music setup (search, playlists, bookmarks, cue) |
+| **`docs/NOTION_SETUP.md`** | Notion OAuth redirect URI + in-chat connect flow |
+| **`docs/NOTION_LIFEOS_STRUCTURE.md`** | Notion ↔ Supabase list/log map, gaps, ideal registry layout |
 | **`MAGNUS_CORE_CONTEXT.md`** | Product intent and philosophy |
 
 ---
@@ -42,7 +44,7 @@ Wealth has **Zerodha integration** (Kite Connect OAuth, read-only portfolio cont
 | **Runtime** | Node.js ≥ 20, TypeScript ESM, `tsx` for dev |
 | **Entry** | `src/index.ts` |
 | **Interface** | Telegram (Telegraf) — long polling or webhook |
-| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `GET /oauth/google` (redirect URI), `GET /oauth/google/callback`, `GET /oauth/kite`, `GET /oauth/kite/callback`, legacy `/oauth/youtube/*`, `POST /internal/jobs/morning-brief` |
+| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `GET /oauth/google`, `GET /oauth/notion`, `GET /oauth/kite`, `GET /oauth/google/callback`, `GET /oauth/notion/callback`, `GET /oauth/kite/callback`, legacy `/oauth/youtube/*`, `POST /internal/jobs/morning-brief` |
 | **Model** | `claude-sonnet-4-6` for classification and every agent |
 | **Supabase project** | `xdrpjfdhduskhzryevze` (ap-northeast-1) |
 | **Logging** | pino JSON; Telegram user ids masked in production |
@@ -82,6 +84,10 @@ shell or `.env`.
 | `src/agents/tools/youtubeConnectTool.ts` | In-chat `connect_google` / aliases — Calendar + YouTube one consent |
 | `src/agents/tools/youtubeTool.ts` | YouTube / YT Music: search, recommend, playlists, bookmarks, cue (per-user token) |
 | `src/agents/tools/eventLogTool.ts` | Event log tools: plan, update, reschedule, list (`magnus_events`) |
+| `src/integrations/notion/` | Per-user Notion onboarding: token, hub, database discovery |
+| `src/agents/tools/notionConnectTool.ts` | `connect_notion`, `setup_notion` Magnus tools |
+| `src/agents/tools/listTool.ts` | User lists: catalog, read/add/update items, create custom list, link Notion mirror |
+| `src/lists/` | List catalog templates, Supabase store, service orchestration, optional Notion mirror |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
 | `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
 | `src/events/` | Event log domain: timezone helpers, Supabase store, calendar sync, formatting |
@@ -208,6 +214,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
 | `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
 | `npx tsx scripts/upsert-user-integrations.mts` | Update `user_integrations` for a user without wiping data |
+| `npx tsx scripts/reset-user-notion-lists.mts` | Reset list architecture + re-sync notion_registry for a user |
 
 ---
 
@@ -237,9 +244,10 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
   LifeOS sections are omitted when `dataAvailability` flags are false (no “unknown” filler).
 - **No inactivity / activity-triggered proactive messages yet** — only time-based cron jobs.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube.
+- **Notion list mirror** — Supabase `magnus_user_lists` / `magnus_list_items` are canonical for every user; Notion mirrors when linked. Bidirectional sync and proactive stale-list nudges still TODO. See `docs/NOTION_LIFEOS_STRUCTURE.md`.
 
 **Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
 
 ---
 
-**Last updated:** 2026-08-03 (removed Fi Money integration; Kite write long-term todo)
+**Last updated:** 2026-08-03 (Notion lists + OAuth; merged with Kite/Zerodha on main)

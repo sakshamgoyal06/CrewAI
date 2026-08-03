@@ -177,6 +177,102 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
     void handleGoogleOauthCallback(req, res);
   });
 
+  app.get("/oauth/notion", async (_req, res) => {
+    try {
+      const { notionOauthRedirectUri, resolvePublicBaseUrl } = await import(
+        "./config/publicBaseUrl.js"
+      );
+      const { platformNotionOAuthReady } = await import("./integrations/notion/oauthFlow.js");
+      const redirectUri = notionOauthRedirectUri();
+      const base = resolvePublicBaseUrl();
+      const clientId =
+        process.env.NOTION_OAUTH_CLIENT_ID?.trim() ||
+        process.env.NOTION_CLIENT_ID?.trim() ||
+        null;
+      if (!redirectUri || !base) {
+        res.status(503).json({
+          ok: false,
+          error:
+            "No public HTTPS base URL. Set MAGNUS_PUBLIC_BASE_URL or deploy with RAILWAY_PUBLIC_DOMAIN.",
+        });
+        return;
+      }
+      res.status(200).json({
+        ok: true,
+        redirect_uri: redirectUri,
+        base_url: base.base,
+        source: base.source,
+        client_id: clientId,
+        oauth_ready: platformNotionOAuthReady(),
+        notion_portal_hint:
+          "Create a public connection at https://www.notion.so/my-integrations — add redirect_uri under OAuth Domain & URIs. After connect, Magnus stores the access token per user and auto-discovers list databases.",
+      });
+    } catch (err) {
+      logger.warn({ err: loggableError(err) }, "oauth notion diagnostic failed");
+      res.status(500).json({ ok: false, error: "diagnostic_failed" });
+    }
+  });
+
+  const handleNotionOauthCallback = async (
+    req: express.Request,
+    res: express.Response,
+  ): Promise<void> => {
+    const code = typeof req.query.code === "string" ? req.query.code : null;
+    const state = typeof req.query.state === "string" ? req.query.state : null;
+    const oauthError = typeof req.query.error === "string" ? req.query.error : null;
+
+    const { completeNotionOauth } = await import("./integrations/notion/oauthFlow.js");
+    const result = await completeNotionOauth({ code, state, error: oauthError });
+
+    if (!result.ok) {
+      res
+        .status(400)
+        .type("html")
+        .send(
+          `<!doctype html><html><body style="font-family:system-ui;padding:2rem;max-width:32rem">` +
+            `<h2>Notion connection did not finish</h2>` +
+            `<p>${escapeHtml(result.userFacing)}</p>` +
+            `<p>You can close this tab and go back to Telegram.</p>` +
+            `</body></html>`,
+        );
+      return;
+    }
+
+    const workspace = result.workspaceName ? ` (${result.workspaceName})` : "";
+    res
+      .status(200)
+      .type("html")
+      .send(
+        `<!doctype html><html><body style="font-family:system-ui;padding:2rem;max-width:32rem">` +
+          `<h2>Notion is connected to Magnus${escapeHtml(workspace)}</h2>` +
+          `<p>List databases were scanned when possible. Close this tab — I will confirm in Telegram.</p>` +
+          `</body></html>`,
+      );
+
+    try {
+      const { sendMessage } = await import("./tools/telegram.js");
+      const lines = [
+        `Notion is connected${workspace}.`,
+        result.discoverSummary ? `\n${result.discoverSummary}` : "",
+        "",
+        "Try: list catalog · what's on my watchlist?",
+      ].filter(Boolean);
+      await sendMessage(lines.join("\n"), {
+        chatId: result.telegramChatId,
+        telegramUserIdForLog: result.telegramChatId,
+      });
+    } catch (err) {
+      logger.warn(
+        { err: loggableError(err), chatId: result.telegramChatId },
+        "notion oauth: connected but Telegram confirm failed",
+      );
+    }
+  };
+
+  app.get("/oauth/notion/callback", (req, res) => {
+    void handleNotionOauthCallback(req, res);
+  });
+
   /**
    * Ops helper: exact redirect_uri Magnus sends for Kite Connect (Zerodha).
    */

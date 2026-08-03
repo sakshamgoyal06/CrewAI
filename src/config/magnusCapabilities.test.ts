@@ -86,10 +86,19 @@ describe("describeCapabilities — optional lanes", () => {
     expect(capability(CORE_ENV, "workouts").missing).toContain("user_integrations.hevy_api_key");
   });
 
-  it("marks Notion as per-user in Supabase", () => {
+  it("marks Notion OAuth as host-configured", () => {
     expect(capability(CORE_ENV, "notion").status).toBe("partial");
-    expect(capability({ ...CORE_ENV, NOTION_TOKEN: "t" }, "notion").status).toBe("partial");
-    expect(capability(CORE_ENV, "notion").missing).toContain("user_integrations.notion_token");
+    expect(capability(CORE_ENV, "notion").missing).toContain("NOTION_OAUTH_CLIENT_ID");
+    expect(
+      capability(
+        {
+          ...CORE_ENV,
+          NOTION_OAUTH_CLIENT_ID: "id",
+          NOTION_OAUTH_CLIENT_SECRET: "secret",
+        },
+        "notion",
+      ).missing,
+    ).toEqual([]);
   });
 
   it("reports proactive cron and morning brief scheduling", () => {

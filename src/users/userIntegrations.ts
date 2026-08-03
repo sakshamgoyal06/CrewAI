@@ -20,10 +20,11 @@ export type UserIntegrations = {
   notionMorningBriefParentPageId?: string;
   notionGoalsDatabaseId?: string;
   notionDailyCheckinsDatabaseId?: string;
+  notionRegistry?: Record<string, unknown>;
 };
 
 const INTEGRATION_COLUMNS =
-  "google_calendar_refresh_token, google_youtube_refresh_token, hevy_api_key, kite_api_key, kite_api_secret, kite_access_token, kite_user_id, kite_token_obtained_at, notion_token, notion_daily_log_parent_page_id, notion_morning_brief_parent_page_id, notion_goals_database_id, notion_daily_checkins_database_id";
+  "google_calendar_refresh_token, google_youtube_refresh_token, hevy_api_key, kite_api_key, kite_api_secret, kite_access_token, kite_user_id, kite_token_obtained_at, notion_token, notion_daily_log_parent_page_id, notion_morning_brief_parent_page_id, notion_goals_database_id, notion_daily_checkins_database_id, notion_registry";
 
 function trimOrUndefined(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -44,6 +45,10 @@ function rowToIntegrations(data: Record<string, unknown>): UserIntegrations {
     notionMorningBriefParentPageId: trimOrUndefined(data.notion_morning_brief_parent_page_id),
     notionGoalsDatabaseId: trimOrUndefined(data.notion_goals_database_id),
     notionDailyCheckinsDatabaseId: trimOrUndefined(data.notion_daily_checkins_database_id),
+    notionRegistry:
+      data.notion_registry && typeof data.notion_registry === "object"
+        ? (data.notion_registry as Record<string, unknown>)
+        : undefined,
   };
 }
 
@@ -118,6 +123,9 @@ export async function upsertUserIntegrations(
   }
   if (input.notionDailyCheckinsDatabaseId !== undefined) {
     row.notion_daily_checkins_database_id = input.notionDailyCheckinsDatabaseId || null;
+  }
+  if (input.notionRegistry !== undefined) {
+    row.notion_registry = input.notionRegistry;
   }
 
   const { error } = await client

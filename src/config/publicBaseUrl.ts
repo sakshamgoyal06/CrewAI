@@ -82,6 +82,7 @@ export function resolvePublicBaseUrl(env: EnvBag = process.env): PublicBaseUrl |
 export const YOUTUBE_OAUTH_CALLBACK_PATH = "/oauth/youtube/callback";
 /** Canonical in-chat Google OAuth callback (Calendar + YouTube). */
 export const GOOGLE_OAUTH_CALLBACK_PATH = "/oauth/google/callback";
+export const NOTION_OAUTH_CALLBACK_PATH = "/oauth/notion/callback";
 /** Kite Connect OAuth callback (Zerodha login redirect). */
 export const KITE_OAUTH_CALLBACK_PATH = "/oauth/kite/callback";
 
@@ -99,6 +100,14 @@ export function googleOauthRedirectUri(env: EnvBag = process.env): string | null
     return null;
   }
   return `${base.base}${GOOGLE_OAUTH_CALLBACK_PATH}`;
+}
+
+export function notionOauthRedirectUri(env: EnvBag = process.env): string | null {
+  const base = resolvePublicBaseUrl(env);
+  if (!base) {
+    return null;
+  }
+  return `${base.base}${NOTION_OAUTH_CALLBACK_PATH}`;
 }
 
 export function kiteOauthRedirectUri(env: EnvBag = process.env): string | null {
