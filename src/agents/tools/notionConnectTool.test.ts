@@ -49,7 +49,7 @@ describe("connectNotionTool", () => {
 
     expect(beginOauth).toHaveBeenCalled();
     expect(out).toContain("https://api.notion.com/v1/oauth/authorize");
-    expect(out).toContain("legacy manual token");
+    expect(out).toContain("dedicated Magnus space");
     expect(out).not.toContain("fully set up");
   });
 

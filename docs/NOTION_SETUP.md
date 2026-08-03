@@ -45,12 +45,13 @@ Response includes `redirect_uri` — must match Notion portal character-for-char
 
 ### 4. Connect in Telegram
 
-Say **“connect Notion”**. Magnus sends a link. In Notion's page picker:
+Say **“connect Notion”**. Magnus sends an OAuth link. After you approve, Magnus **creates a dedicated Magnus page** in your Notion workspace with:
 
-- Select your **LifeOS hub** page
-- Select **list databases** (watchlist, readlist, goals, etc.)
+- **Magnus** hub page (your private Magnus space)
+- **Journal** subpage (daily logs + Morning Brief)
+- Standard **list catalogs** (watchlist, readlist, goals, tasks, etc.)
 
-After approval, Magnus stores the token for **your user only**, auto-discovers list DBs by title, and confirms in Telegram.
+You do **not** need to pick databases in the page picker or paste database ids.
 
 ---
 

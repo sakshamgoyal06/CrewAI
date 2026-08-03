@@ -626,13 +626,13 @@ const TOOLS: Tool[] = [
   {
     name: "setup_notion",
     description:
-      "Per-user Notion setup steps: status, save_token, set_hub, discover (auto-link list DBs), sync_registry.",
+      "Per-user Notion setup: status, save_token, set_hub, discover, provision (create Magnus space + list DBs), sync_registry.",
     input_schema: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: ["status", "save_token", "set_hub", "discover", "sync_registry"],
+          enum: ["status", "save_token", "set_hub", "discover", "provision", "sync_registry"],
         },
         token: { type: "string", description: "Notion integration secret (save_token)." },
         hub_page: { type: "string", description: "LifeOS hub page URL or id (set_hub)." },
