@@ -40,6 +40,7 @@ import {
   youtubeSearchTool,
 } from "./tools/youtubeTool.js";
 import { connectGoogleTool } from "./tools/youtubeConnectTool.js";
+import { connectNotionTool, setupNotionTool } from "./tools/notionConnectTool.js";
 import {
   addGoal,
   getDailyCheckin,
@@ -612,6 +613,29 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "connect_notion",
+    description:
+      "Start or check Notion setup for this user. Returns step-by-step instructions or current status.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "setup_notion",
+    description:
+      "Per-user Notion setup steps: status, save_token, set_hub, discover (auto-link list DBs), sync_registry.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["status", "save_token", "set_hub", "discover", "sync_registry"],
+        },
+        token: { type: "string", description: "Notion integration secret (save_token)." },
+        hub_page: { type: "string", description: "LifeOS hub page URL or id (set_hub)." },
+      },
+      required: ["action"],
+    },
+  },
+  {
     name: "connect_google",
     description:
       "Start unified Google onboarding (Calendar + YouTube / YT Music) for this user: returns a one-time consent link. Use when they ask to connect Google, Calendar, or YouTube, or when a calendar/YouTube tool says it is not connected.",
@@ -941,6 +965,15 @@ async function runTool(
           title: String(input.title ?? ""),
           pillar: str(input.pillar),
           status: str(input.status),
+        });
+      case "connect_notion":
+        return await connectNotionTool({ userProfileId: ctx.userProfileId });
+      case "setup_notion":
+        return await setupNotionTool({
+          userProfileId: ctx.userProfileId,
+          action: String(input.action ?? ""),
+          token: str(input.token),
+          hub_page: str(input.hub_page),
         });
       case "connect_google":
       case "connect_calendar":

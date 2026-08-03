@@ -83,7 +83,8 @@ shell or `.env`.
 | `src/agents/tools/youtubeConnectTool.ts` | In-chat `connect_google` / aliases — Calendar + YouTube one consent |
 | `src/agents/tools/youtubeTool.ts` | YouTube / YT Music: search, recommend, playlists, bookmarks, cue (per-user token) |
 | `src/agents/tools/eventLogTool.ts` | Event log tools: plan, update, reschedule, list (`magnus_events`) |
-| `src/agents/tools/listTool.ts` | User lists: catalog, read/add/update items, create custom list, link Notion mirror |
+| `src/integrations/notion/` | Per-user Notion onboarding: token, hub, database discovery |
+| `src/agents/tools/notionConnectTool.ts` | `connect_notion`, `setup_notion` Magnus tools |
 | `src/lists/` | List catalog templates, Supabase store, service orchestration, optional Notion mirror |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
 | `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
@@ -206,7 +207,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
 | `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
 | `npx tsx scripts/upsert-user-integrations.mts` | Update `user_integrations` for a user without wiping data |
-| `npx tsx scripts/audit-notion-lifeos.mts` | Inventory Notion pages/DBs vs configured `user_integrations` ids |
+| `npx tsx scripts/reset-user-notion-lists.mts` | Reset list architecture + re-sync notion_registry for a user |
 
 ---
 
@@ -240,4 +241,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-03 (user-agnostic list architecture: magnus_user_lists + optional Notion mirror)
+**Last updated:** 2026-08-03 (Notion user onboarding + list memory context)

@@ -141,6 +141,29 @@ export function formatMemoryBlockForSystem(
     parts.push(`Active goals: ${gl}`);
   }
 
+  if (ctx.lists) {
+    const listParts: string[] = [];
+    listParts.push(
+      `Notion: ${ctx.lists.notionConnected ? "connected (optional mirror)" : "not connected — lists work in Supabase"}`,
+    );
+    const withOpen = ctx.lists.catalog.filter((c) => c.openCount > 0);
+    if (withOpen.length > 0) {
+      const lines = withOpen
+        .slice(0, 10)
+        .map((c) => `- ${c.slug}: ${c.openCount} open${c.notionLinked ? " (notion)" : ""}`);
+      listParts.push(`Lists with open items:\n${lines.join("\n")}`);
+    }
+    if (ctx.lists.openHighlights.length > 0) {
+      const lines = ctx.lists.openHighlights.slice(0, 10).map((h) => {
+        const st = h.status ? ` [${h.status}]` : "";
+        return `- ${h.slug}: ${h.title}${st}`;
+      });
+      listParts.push(`Open list highlights:\n${lines.join("\n")}`);
+    }
+    listParts.push("Use list_items (open_only) before recommending — do not invent list rows.");
+    parts.push(listParts.join("\n"));
+  }
+
   if (includeJoy && ctx.joy.summary?.trim()) {
     parts.push(`Joy / happiness: ${ctx.joy.summary.trim().slice(0, 500)}`);
   }

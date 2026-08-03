@@ -8,7 +8,19 @@
 
 ---
 
-## 2.5 User-agnostic list architecture (shipped)
+## 2.6 Notion user onboarding (shipped)
+
+Per-user in-chat flow (no app-level Notion ids):
+
+1. `connect_notion` — instructions or status
+2. `setup_notion save_token` — validate and store integration secret
+3. User shares LifeOS hub + list DBs with integration in Notion UI
+4. `setup_notion set_hub` — hub page for journal + Morning Brief
+5. `setup_notion discover` — auto-match databases to list slugs by title
+
+Script: `scripts/reset-user-notion-lists.mts` — reset `magnus_user_lists` for a user and re-sync registry.
+
+---
 
 | Layer | Role |
 |-------|------|
