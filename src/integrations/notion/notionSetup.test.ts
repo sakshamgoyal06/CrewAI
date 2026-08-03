@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseNotionId } from "./notionId.js";
+import { notionConnectionKind } from "./notionSetup.js";
 
 describe("parseNotionId", () => {
   it("parses dashed UUID", () => {
@@ -17,5 +18,20 @@ describe("parseNotionId", () => {
 
   it("returns null for garbage", () => {
     expect(parseNotionId("not a url")).toBeNull();
+  });
+});
+
+describe("notionConnectionKind", () => {
+  it("detects oauth metadata", () => {
+    expect(
+      notionConnectionKind({
+        oauth: { connectedAt: "2026-08-03T00:00:00.000Z" },
+        lists: {},
+      }),
+    ).toBe("oauth");
+  });
+
+  it("returns none without oauth metadata", () => {
+    expect(notionConnectionKind({ lists: { goals: {} } })).toBe("none");
   });
 });
