@@ -49,6 +49,24 @@ describe("resolveIntentNaturalLanguage", () => {
     await expect(resolveIntentNaturalLanguage("bookmark that song")).resolves.toBe("GENERAL");
   });
 
+  it("forces list and LifeOS tool actions to GENERAL", async () => {
+    classifiedAs("HAPPINESS");
+    await expect(
+      resolveIntentNaturalLanguage("recommend a thriller from my watchlist"),
+    ).resolves.toBe("GENERAL");
+
+    classifiedAs("WEALTH");
+    await expect(resolveIntentNaturalLanguage("add goal: emergency fund")).resolves.toBe(
+      "GENERAL",
+    );
+
+    classifiedAs("HAPPINESS");
+    await expect(resolveIntentNaturalLanguage("log joy tank 68")).resolves.toBe("GENERAL");
+
+    classifiedAs("HEALTH");
+    await expect(resolveIntentNaturalLanguage("connect notion")).resolves.toBe("GENERAL");
+  });
+
   it("forces tool continuations to GENERAL after a YouTube turn", async () => {
     classifiedAs("WISDOM");
     await expect(
@@ -58,6 +76,21 @@ describe("resolveIntentNaturalLanguage", () => {
             role: "assistant",
             content: "Want me to add RAG videos?",
             metadata: { tools_used: ["youtube_search"] },
+          },
+        ],
+      }),
+    ).resolves.toBe("GENERAL");
+  });
+
+  it("forces list follow-ups to GENERAL after a list tool turn", async () => {
+    classifiedAs("HAPPINESS");
+    await expect(
+      resolveIntentNaturalLanguage("Yes, add it", {
+        recentTurns: [
+          {
+            role: "assistant",
+            content: "Want me to add Dune to your readlist?",
+            metadata: { tools_used: ["list_items"] },
           },
         ],
       }),

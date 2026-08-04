@@ -160,7 +160,9 @@ export function formatMemoryBlockForSystem(
       });
       listParts.push(`Open list highlights:\n${lines.join("\n")}`);
     }
-    listParts.push("Use list_items (open_only) before recommending — do not invent list rows.");
+    listParts.push(
+      "Use list_items or recommend_list_items before recommending from a saved list — do not invent rows.",
+    );
     parts.push(listParts.join("\n"));
   }
 

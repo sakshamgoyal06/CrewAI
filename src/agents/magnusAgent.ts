@@ -610,7 +610,8 @@ const TOOLS: Tool[] = [
   },
   {
     name: "add_goal",
-    description: "Add a goal to the user's goals list.",
+    description:
+      "Add a goal to the user's goals list AND the LifeOS goals table. Use for financial, health, or life goals they want tracked.",
     input_schema: {
       type: "object",
       properties: {
@@ -620,6 +621,11 @@ const TOOLS: Tool[] = [
           enum: ["health", "wealth", "wisdom", "joy", "happiness"],
         },
         status: { type: "string" },
+        timeframe: {
+          type: "string",
+          enum: ["north_star", "annual", "quarterly", "monthly", "weekly"],
+        },
+        description: { type: "string" },
       },
       required: ["title"],
     },
