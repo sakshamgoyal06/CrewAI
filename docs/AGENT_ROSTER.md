@@ -61,7 +61,7 @@ The model sees:
 
 ### Provisioning a user
 
-- **New Telegram user** — `resolveTelegramUserProfile` creates a minimal row (`timezone: UTC`, no north star) unless `MAGNUS_AUTO_ALLOWLIST_NEW_USERS=true`.
+- **New Telegram user** — `resolveTelegramUserProfile` creates a minimal row (`timezone: UTC`, no north star). Access requires `MAGNUS_AUTO_ALLOWLIST_NEW_USERS=true` or manual `allowlisted=true`.
 - **Owner reset + seed** — `npx tsx scripts/provision-owner-user.mts` with `TELEGRAM_USER_ID` wipes prior data for that Telegram id, creates a fresh `user_profile`, seeds `user_program_memory` from `scripts/seed-data/owner-health-program/`, and copies integration tokens from env into `user_integrations`.
 - **Migration** — `supabase/migrations/20260802120000_user_personalization.sql` adds `display_name`, `user_program_memory`, `user_integrations`.
 
@@ -229,7 +229,7 @@ You analyse clusters of daily check-in data and embeddings. Label each pattern T
 
 ### 4.4 Morning brief agent
 
-**Status:** **Implemented** — `src/jobs/morningBrief.ts` (`MORNING_BRIEF_SYSTEM` in `src/jobs/morningBriefPrompt.ts`); context assembly `src/jobs/morningBriefContext.ts` (re-exported for Memory at `src/agents/memory/briefContext.ts`); schedule `src/jobs/morningBriefCron.ts`; manual Telegram: `/morningbrief` or plain `morning brief` (`src/tools/telegram.ts`); optional Notion: `src/tools/notionMorningBrief.ts`.
+**Status:** **Implemented** — `src/jobs/morningBrief.ts` (`MORNING_BRIEF_SYSTEM` in `src/jobs/morningBriefPrompt.ts`); context assembly `src/jobs/morningBriefContext.ts` (re-exported for Memory at `src/agents/memory/briefContext.ts`); schedule `src/proactive/cron.ts` + `src/proactive/jobs/morningBriefJob.ts`; manual Telegram: `/morningbrief` or plain `morning brief` (`src/tools/telegram.ts`); optional Notion: `src/tools/notionMorningBrief.ts`.
 
 **Scope:** Generate **read-only** brief (not a task list dump); AI insight, one line per pillar where applicable, Joy tank, active flags; create dated Notion page; optional Telegram send.
 

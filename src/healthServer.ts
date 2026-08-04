@@ -1,5 +1,6 @@
 import express from "express";
 
+import { rejectUnlessOAuthDiagnosticsAllowed } from "./config/security.js";
 import { healthListenPort } from "./env.js";
 import { morningBriefInternalSecret } from "./jobs/morningBriefEnv.js";
 import { runMorningBrief } from "./jobs/morningBrief.js";
@@ -80,7 +81,10 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
   /**
    * Ops helper: exact redirect_uri Magnus sends for unified Google OAuth (Calendar + YouTube).
    */
-  app.get("/oauth/google", async (_req, res) => {
+  app.get("/oauth/google", async (req, res) => {
+    if (!rejectUnlessOAuthDiagnosticsAllowed(req, res)) {
+      return;
+    }
     try {
       const { googleOauthRedirectUri, resolvePublicBaseUrl } = await import(
         "./config/publicBaseUrl.js"
@@ -177,7 +181,10 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
     void handleGoogleOauthCallback(req, res);
   });
 
-  app.get("/oauth/notion", async (_req, res) => {
+  app.get("/oauth/notion", async (req, res) => {
+    if (!rejectUnlessOAuthDiagnosticsAllowed(req, res)) {
+      return;
+    }
     try {
       const { notionOauthRedirectUri, resolvePublicBaseUrl } = await import(
         "./config/publicBaseUrl.js"
@@ -276,7 +283,10 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
   /**
    * Ops helper: exact redirect_uri Magnus sends for Kite Connect (Zerodha).
    */
-  app.get("/oauth/kite", async (_req, res) => {
+  app.get("/oauth/kite", async (req, res) => {
+    if (!rejectUnlessOAuthDiagnosticsAllowed(req, res)) {
+      return;
+    }
     try {
       const { kiteOauthRedirectUri, resolvePublicBaseUrl } = await import(
         "./config/publicBaseUrl.js"

@@ -19,11 +19,11 @@ describe("notionPropertiesForTemplate", () => {
     expect((props.Status as { status?: unknown }).status).toBeDefined();
   });
 
-  it("uses date for checkins", () => {
+  it("uses title for checkins (date stored as title text)", () => {
     const template = STANDARD_LIST_TEMPLATES.find((t) => t.slug === "checkins")!;
     const props = notionPropertiesForTemplate(template);
     expect(props).toHaveProperty("Date");
-    expect((props.Date as { date?: unknown }).date).toBeDefined();
+    expect((props.Date as { title?: unknown }).title).toBeDefined();
   });
 });
 

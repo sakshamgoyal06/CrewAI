@@ -299,6 +299,8 @@ Not Postgres, but part of durable/fast state:
 
 | File | Creates / alters |
 |------|------------------|
+| `20260401000000_baseline_user_profile.sql` | `user_profile` (baseline) |
+| `20260401010000_baseline_magnus_chat_messages.sql` | `magnus_chat_messages` (baseline) |
 | `20260412120000_magnus_daily_logs.sql` | `magnus_daily_logs` |
 | `20260412140000_user_health_profile.sql` | `user_health_profile` |
 | `20260412180000_meal_logs.sql` | `meal_logs` |

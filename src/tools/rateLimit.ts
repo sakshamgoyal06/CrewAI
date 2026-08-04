@@ -1,3 +1,4 @@
+import { redisGuardFailOpen } from "../config/security.js";
 import { rateLimitPerMinute } from "../env.js";
 import { logger } from "../logger.js";
 import { redis } from "./clients.js";
@@ -27,7 +28,16 @@ export async function checkMessageRateLimit(
     }
     return { ok: true };
   } catch (e) {
-    logger.error({ err: e instanceof Error ? e.message : e }, "rate limit redis error; allowing message");
-    return { ok: true };
+    const failOpen = redisGuardFailOpen();
+    logger.error(
+      { err: e instanceof Error ? e.message : e, failOpen },
+      failOpen
+        ? "rate limit redis error; allowing message (fail-open)"
+        : "rate limit redis error; blocking message (fail-closed)",
+    );
+    if (failOpen) {
+      return { ok: true };
+    }
+    return { ok: false, retryAfterSec: 60 };
   }
 }

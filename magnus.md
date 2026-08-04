@@ -13,6 +13,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/diagrams/ARCHITECTURE_DIAGRAMS.md`** | Mermaid diagrams: context, sequence, routing, deployment |
 | **`docs/DATABASE_SCHEMA.md`** | Full Postgres + Redis schema, ERD, migration index |
 | **`docs/review/IMPARTIAL_REVIEW_2026-08-04.md`** | Third-party code review, grades, cleanup plan |
+| **`docs/review/REGRADE_2026-08-04.md`** | Post-cleanup re-grade (B+ 84/100) |
 | **`docs/ARCHITECTURE.md`** | What the system is: Magnus, four pillars, connections, ownership |
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
 | **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
@@ -73,7 +74,8 @@ npm run dev
 
 **Required to boot:** `TELEGRAM_BOT_TOKEN`, `ANTHROPIC_API_KEY`, `SUPABASE_URL`,
 `SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`. Set
-`MAGNUS_AUTO_ALLOWLIST_NEW_USERS=true` or new Telegram users get a refusal.
+`MAGNUS_AUTO_ALLOWLIST_NEW_USERS=false` by default — new Telegram users get a refusal until
+provisioned (`scripts/provision-owner-user.mts` or `allowlisted=true` in Supabase).
 
 `npm test` needs the dummy Supabase/Anthropic/Redis values from `.github/workflows/ci.yml` in your
 shell or `.env`.
@@ -244,10 +246,11 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ## Not built yet
 
-- **Memory reads tables nothing writes.** Fifteen read-only tables can produce `gaps` every turn when
-  `MAGNUS_MEMORY_INCLUDE_GAPS=true` (default off). Phases 2–3 write to `memory_summaries` after each
-  turn when enabled (requires the `memory_summaries` migration applied).
+- **Memory reads LifeOS tables only when enabled** — `MAGNUS_LIFEOS_CONTEXT_ENABLED=false` (default).
+  When off, memory and Morning Brief skip `goals`, `patterns`, `happiness_reserve`, etc.
 - **Schema not reproducible** from `supabase/migrations/` for tables predating April 2026 migrations.
+  Baseline migrations for `user_profile` and `magnus_chat_messages` added 2026-08-04; LifeOS tables
+  remain in `scripts/magnus_db_hardening.sql` (see `supabase/README.md`).
 - **Semantic recall** — no embeddings; memory is recent-window plus structured reads.
 - **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data (Wealth has read-only Zerodha context today; see below).
 - **Kite write (long-term)** — equity order placement/cancel via Kite Connect, behind `MAGNUS_KITE_ORDERS_ENABLED`, static IP on the developer console, and a Telegram **CONFIRM** flow separate from wealth coaching. Probe script: `npm run kite:test-write` (`scripts/wealth/kite/test-write-endpoints.mts`). **Live probe (2026-08-03):** Coin MF writes (`POST/DELETE /mf/orders`, `/mf/sips`) return **403 Insufficient permission** — not available on this app/plan; equity `POST /orders/regular` blocked until **static IP** is configured; equity cancel auth works (404 on fake id). Do not build MF execution in Magnus unless Zerodha opens those APIs.
@@ -262,4 +265,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-04 (architecture review + product doc suite)
+**Last updated:** 2026-08-04 (security hardening, baseline migrations, LifeOS context gate)

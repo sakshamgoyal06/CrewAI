@@ -13,6 +13,7 @@ describe("loadMemoryContext", () => {
   const from = vi.mocked(supabase.from);
 
   beforeEach(() => {
+    process.env.MAGNUS_LIFEOS_CONTEXT_ENABLED = "true";
     from.mockReset();
     from.mockImplementation((table: string) => {
       switch (table) {

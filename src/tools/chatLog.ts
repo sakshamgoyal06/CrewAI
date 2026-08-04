@@ -4,6 +4,7 @@
  * - **Telegram id:** `user_profile.telegram_chat_id` (unique when set) — Telegram user id as string.
  * - **Chat logs:** `magnus_chat_messages` stores both `user_profile_id` and denormalized `telegram_user_id` for filtering.
  */
+import { autoAllowlistNewUsers } from "../config/security.js";
 import { logger, maskTelegramUserId } from "../logger.js";
 import { loggableError } from "../util/loggableError.js";
 import { supabase } from "./clients.js";
@@ -44,8 +45,7 @@ function defaultsForNewProfile(): {
   userTier: string;
   accessFlags: Record<string, unknown>;
 } {
-  const auto = process.env.MAGNUS_AUTO_ALLOWLIST_NEW_USERS?.trim().toLowerCase();
-  const allowlisted = auto === "true";
+  const allowlisted = autoAllowlistNewUsers();
   const tierRaw = process.env.MAGNUS_DEFAULT_USER_TIER?.trim() || "standard";
   const userTier = USER_TIERS.includes(tierRaw as UserTier)
     ? tierRaw
