@@ -2,6 +2,7 @@
  * User-agnostic list orchestration: Supabase canonical, optional Notion mirror per list.
  */
 import { loadUserIntegrations } from "../users/userIntegrations.js";
+import { createLifeosGoal } from "../lifeos/lifeosStore.js";
 import type { NotionListConfig, NotionRegistry } from "../tools/notionRegistry.js";
 import { getStandardTemplate, STANDARD_LIST_TEMPLATES, type ListArchetype } from "./listCatalog.js";
 import {
@@ -171,6 +172,131 @@ export async function listItems(input: {
 
   const lines = items.data.map((item) => formatItemLine(item));
   return `${list.slug} (${items.data.length}):\n${lines.join("\n")}`;
+}
+
+function extraNumber(extra: Record<string, unknown>, key: string): number | undefined {
+  const v = extra[key];
+  if (typeof v === "number" && Number.isFinite(v)) {
+    return v;
+  }
+  if (typeof v === "string" && v.trim() && !Number.isNaN(Number(v))) {
+    return Number(v);
+  }
+  return undefined;
+}
+
+function extraString(extra: Record<string, unknown>, key: string): string | undefined {
+  const v = extra[key];
+  return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+
+function matchesGenre(extra: Record<string, unknown>, genre: string): boolean {
+  const g = genre.trim().toLowerCase();
+  const single = extraString(extra, "genre")?.toLowerCase();
+  if (single && single.includes(g)) {
+    return true;
+  }
+  const genres = extra.genres;
+  if (Array.isArray(genres)) {
+    return genres.some((x) => typeof x === "string" && x.toLowerCase().includes(g));
+  }
+  return false;
+}
+
+/** Structured list recommendations — filters `extra` JSONB fields client-side. */
+export async function recommendListItems(input: {
+  userProfileId: string;
+  list: string;
+  genre?: string;
+  language?: string;
+  minRating?: number;
+  maxRuntimeMinutes?: number;
+  openOnly?: boolean;
+  query?: string;
+  limit?: number;
+}): Promise<string> {
+  const list = await resolveList(input.userProfileId, input.list);
+  if (!list) {
+    return describeUnknownList(input.list);
+  }
+
+  const items = await queryListItems({
+    userProfileId: input.userProfileId,
+    listId: list.id,
+    openStatuses: input.openOnly !== false ? list.open_statuses : undefined,
+    limit: Math.min(input.limit ?? 48, 80),
+  });
+  if (!items.ok) {
+    return `Could not read ${list.slug}: ${items.error}`;
+  }
+
+  const q = input.query?.trim().toLowerCase();
+  const lang = input.language?.trim().toLowerCase();
+  const minRating = input.minRating;
+  const maxRuntime = input.maxRuntimeMinutes;
+
+  const matched = items.data.filter((item) => {
+    const extra = item.extra ?? {};
+    if (q) {
+      const hay = `${item.title} ${item.notes ?? ""} ${item.author ?? ""}`.toLowerCase();
+      if (!hay.includes(q)) {
+        return false;
+      }
+    }
+    if (input.genre?.trim() && !matchesGenre(extra, input.genre)) {
+      return false;
+    }
+    if (lang) {
+      const itemLang = extraString(extra, "language")?.toLowerCase();
+      if (itemLang && !itemLang.includes(lang)) {
+        return false;
+      }
+    }
+    if (minRating !== undefined) {
+      const rating = extraNumber(extra, "rating");
+      if (rating === undefined || rating < minRating) {
+        return false;
+      }
+    }
+    if (maxRuntime !== undefined) {
+      const runtime = extraNumber(extra, "runtime_minutes");
+      if (runtime !== undefined && runtime > maxRuntime) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const cap = Math.min(input.limit ?? 8, 20);
+  const picks = matched.slice(0, cap);
+
+  if (picks.length === 0) {
+    return `No matches in ${list.slug} for those filters. Try list_items to browse, or add_list_item with genre/rating in notes.`;
+  }
+
+  const lines = picks.map((item) => {
+    const extra = item.extra ?? {};
+    const bits = [formatItemLine(item)];
+    const rating = extraNumber(extra, "rating");
+    const runtime = extraNumber(extra, "runtime_minutes");
+    const genre = extraString(extra, "genre");
+    const why: string[] = [];
+    if (genre) {
+      why.push(`genre: ${genre}`);
+    }
+    if (rating !== undefined) {
+      why.push(`rating: ${rating}`);
+    }
+    if (runtime !== undefined) {
+      why.push(`${runtime}m`);
+    }
+    if (why.length > 0) {
+      bits.push(`(${why.join(", ")})`);
+    }
+    return bits.join(" ");
+  });
+
+  return `Recommendations from ${list.slug} (${picks.length} of ${matched.length} matches):\n${lines.join("\n")}`;
 }
 
 export async function addListItem(input: {
@@ -452,14 +578,30 @@ export async function addGoal(input: {
   title: string;
   pillar?: string;
   status?: string;
+  timeframe?: string;
+  description?: string;
 }): Promise<string> {
-  return addListItem({
+  const listLine = await addListItem({
     userProfileId: input.userProfileId,
     list: "goals",
     title: input.title,
     status: input.status,
     pillar: input.pillar,
   });
+
+  const lifeos = await createLifeosGoal({
+    userProfileId: input.userProfileId,
+    title: input.title,
+    pillar: input.pillar,
+    status: input.status,
+    timeframe: input.timeframe,
+    description: input.description,
+  });
+
+  if (!lifeos.ok) {
+    return `${listLine}\n(LifeOS goals table: ${lifeos.error})`;
+  }
+  return `${listLine}\nAlso saved to LifeOS goals (${lifeos.data.id.slice(0, 8)}…).`;
 }
 
 /** Export registry shape helpers for scripts — not used at runtime for other users. */

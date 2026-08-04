@@ -9,6 +9,7 @@ import {
   linkNotionList,
   listCatalog,
   listItems,
+  recommendListItems,
   updateListItemCompat,
 } from "../../lists/listService.js";
 import { normalizeSlug, describeUnknownList } from "../../lists/listSlug.js";
@@ -114,6 +115,20 @@ export async function magnusLinkNotionList(input: {
   statusKind?: "select" | "status";
 }): Promise<string> {
   return linkNotionList(input);
+}
+
+export async function magnusRecommendListItems(input: {
+  userProfileId: string;
+  list: string;
+  genre?: string;
+  language?: string;
+  minRating?: number;
+  maxRuntimeMinutes?: number;
+  openOnly?: boolean;
+  query?: string;
+  limit?: number;
+}): Promise<string> {
+  return recommendListItems(input);
 }
 
 export { getDailyCheckin, addGoal };

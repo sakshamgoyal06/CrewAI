@@ -17,9 +17,10 @@ npm run db:apply -- supabase/migrations/<file>.sql
 | Migration prefix | Contents |
 |------------------|----------|
 | `20260401*` | Core tables: `user_profile`, `magnus_chat_messages` |
+| `20260804120000_baseline_lifeos_core.sql` | LifeOS core: `goals`, `pillar_status`, `happiness_reserve`, KPIs, `tasks`, … |
 | `20260412*` – `20260803*` | Feature tables (meals, events, integrations, lists, …) |
 
-**LifeOS domain tables** (`goals`, `tasks`, `pillar_status`, `happiness_reserve`, `patterns`, …) predate this repo's migration history. Reference DDL and hardening live in `scripts/magnus_db_hardening.sql` (applied on the hosted project). Enable reads with `MAGNUS_LIFEOS_CONTEXT_ENABLED=true` when those tables are populated.
+**Additional LifeOS tables** on the hosted project (contacts, projects, expenses, …) are documented in `scripts/magnus_db_hardening.sql`. Enable context reads with `MAGNUS_LIFEOS_CONTEXT_ENABLED=true` when populated. Magnus tools `add_goal`, `update_pillar_status`, and `log_joy_tank` write to LifeOS tables.
 
 ## Hosted project
 
