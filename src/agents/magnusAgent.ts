@@ -50,12 +50,18 @@ import {
   magnusLinkNotionList,
   magnusListCatalog,
   magnusListItems,
+  magnusRecommendListItems,
   magnusUpdateListItem,
   notionAddItem,
   notionListItems,
   notionUpdateItem,
   addNotionGoal,
 } from "./tools/listTool.js";
+import {
+  lifeosListGoals,
+  lifeosLogJoyTank,
+  lifeosUpdatePillarStatus,
+} from "../lifeos/lifeosTool.js";
 import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
 
@@ -529,6 +535,69 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "recommend_list_items",
+    description:
+      "Recommend items from a list using structured filters (genre, language, min_rating, max_runtime_minutes, query). Uses extra fields on list items.",
+    input_schema: {
+      type: "object",
+      properties: {
+        list: { type: "string", description: "List slug, e.g. watchlist, readlist, food." },
+        genre: { type: "string" },
+        language: { type: "string" },
+        min_rating: { type: "number" },
+        max_runtime_minutes: { type: "number" },
+        open_only: { type: "boolean", description: "Default true — only open-queue items." },
+        query: { type: "string", description: "Substring match in title, notes, author." },
+        limit: { type: "number" },
+      },
+      required: ["list"],
+    },
+  },
+  {
+    name: "update_pillar_status",
+    description:
+      "Record today's pillar status (on_track, at_risk, deviating) in LifeOS. Use after check-ins or coaching.",
+    input_schema: {
+      type: "object",
+      properties: {
+        pillar: {
+          type: "string",
+          enum: ["health", "wealth", "wisdom", "joy", "happiness", "learning", "life"],
+        },
+        status: { type: "string", enum: ["on_track", "at_risk", "deviating"] },
+        date: { type: "string", description: "YYYY-MM-DD. Defaults to today." },
+        score: { type: "number" },
+        summary: { type: "string" },
+      },
+      required: ["pillar", "status"],
+    },
+  },
+  {
+    name: "log_joy_tank",
+    description: "Log happiness reserve / joy tank level (0–100) for a day.",
+    input_schema: {
+      type: "object",
+      properties: {
+        level: { type: "number", description: "0–100" },
+        date: { type: "string", description: "YYYY-MM-DD. Defaults to today." },
+        notes: { type: "string" },
+        self_reported_state: { type: "string" },
+      },
+      required: ["level"],
+    },
+  },
+  {
+    name: "list_lifeos_goals",
+    description: "List active goals from the LifeOS goals table (not just the list catalog).",
+    input_schema: {
+      type: "object",
+      properties: {
+        limit: { type: "number" },
+      },
+      required: [],
+    },
+  },
+  {
     name: "get_daily_checkin",
     description: "Read the daily check-in for a date (pillar scores and reflection).",
     input_schema: {
@@ -907,6 +976,18 @@ async function runTool(
           openOnly: input.open_only === true,
           limit: num(input.limit),
         });
+      case "recommend_list_items":
+        return await magnusRecommendListItems({
+          userProfileId: ctx.userProfileId,
+          list: String(input.list ?? ""),
+          genre: str(input.genre),
+          language: str(input.language),
+          minRating: num(input.min_rating),
+          maxRuntimeMinutes: num(input.max_runtime_minutes),
+          openOnly: input.open_only !== false,
+          query: str(input.query),
+          limit: num(input.limit),
+        });
       case "add_list_item":
         return await magnusAddListItem({
           userProfileId: ctx.userProfileId,
@@ -960,6 +1041,30 @@ async function runTool(
           title: String(input.title ?? ""),
           pillar: str(input.pillar),
           status: str(input.status),
+          timeframe: str(input.timeframe),
+          description: str(input.description),
+        });
+      case "update_pillar_status":
+        return await lifeosUpdatePillarStatus({
+          userProfileId: ctx.userProfileId,
+          pillar: String(input.pillar ?? ""),
+          date: str(input.date),
+          status: String(input.status ?? ""),
+          score: num(input.score),
+          summary: str(input.summary),
+        });
+      case "log_joy_tank":
+        return await lifeosLogJoyTank({
+          userProfileId: ctx.userProfileId,
+          level: num(input.level) ?? 0,
+          date: str(input.date),
+          notes: str(input.notes),
+          selfReportedState: str(input.self_reported_state),
+        });
+      case "list_lifeos_goals":
+        return await lifeosListGoals({
+          userProfileId: ctx.userProfileId,
+          limit: num(input.limit),
         });
       case "list_notion_items":
         return await notionListItems({

@@ -13,7 +13,8 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/diagrams/ARCHITECTURE_DIAGRAMS.md`** | Mermaid diagrams: context, sequence, routing, deployment |
 | **`docs/DATABASE_SCHEMA.md`** | Full Postgres + Redis schema, ERD, migration index |
 | **`docs/review/IMPARTIAL_REVIEW_2026-08-04.md`** | Third-party code review, grades, cleanup plan |
-| **`docs/review/REGRADE_2026-08-04.md`** | Post-cleanup re-grade (B+ 84/100) |
+| **`docs/review/REGRADE_2026-08-04.md`** | Post-security cleanup re-grade (B+ 84/100) |
+| **`docs/review/REGRADE_LIFEOS_2026-08-04.md`** | Post-LifeOS re-grade (A- 87/100) |
 | **`docs/ARCHITECTURE.md`** | What the system is: Magnus, four pillars, connections, ownership |
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
 | **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
@@ -97,7 +98,8 @@ shell or `.env`.
 | `src/agents/tools/eventLogTool.ts` | Event log tools: plan, update, reschedule, list (`magnus_events`) |
 | `src/integrations/notion/notionProvision.ts` | Post-OAuth: create Magnus hub, Journal, standard list databases in Notion |
 | `src/agents/tools/notionConnectTool.ts` | `connect_notion`, `setup_notion` Magnus tools |
-| `src/agents/tools/listTool.ts` | User lists: catalog, read/add/update items, create custom list, link Notion mirror |
+| `src/lifeos/` | LifeOS Postgres writers: goals, pillar status, joy tank |
+| `src/agents/tools/listTool.ts` | List catalog + `recommend_list_items` filters |
 | `src/lists/` | List catalog templates, Supabase store, service orchestration, optional Notion mirror |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
 | `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
@@ -247,7 +249,9 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 ## Not built yet
 
 - **Memory reads LifeOS tables only when enabled** — `MAGNUS_LIFEOS_CONTEXT_ENABLED=false` (default).
-  When off, memory and Morning Brief skip `goals`, `patterns`, `happiness_reserve`, etc.
+  Magnus tools write LifeOS: `add_goal` (dual-write), `update_pillar_status`, `log_joy_tank`, `list_lifeos_goals`.
+  Set `MAGNUS_LIFEOS_CONTEXT_ENABLED=true` when tables have data.
+- **List recommendations** — `recommend_list_items` filters `extra` JSONB (genre, rating, runtime). Rich schemas: `docs/TODO_LIST_RECOMMENDATION_SCHEMAS.md`.
 - **Schema not reproducible** from `supabase/migrations/` for tables predating April 2026 migrations.
   Baseline migrations for `user_profile` and `magnus_chat_messages` added 2026-08-04; LifeOS tables
   remain in `scripts/magnus_db_hardening.sql` (see `supabase/README.md`).
@@ -265,4 +269,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-04 (security hardening, baseline migrations, LifeOS context gate)
+**Last updated:** 2026-08-04 (LifeOS migrations, writers, recommend_list_items, smoke tests)
