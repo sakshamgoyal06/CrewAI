@@ -4,6 +4,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { lifeosContextEnabled } from "../config/lifeosContext.js";
 import { startOfLocalDay } from "../events/eventTime.js";
 import { logger } from "../logger.js";
 
@@ -117,88 +118,99 @@ export async function fetchMorningBriefContext(
   const displayName =
     typeof profile?.display_name === "string" ? profile.display_name.trim() || undefined : undefined;
 
-  let goals =
-    (await safeList("goals", async () =>
-      await supabase
-        .from("goals")
-        .select("*")
-        .eq("user_profile_id", userProfileId)
-        .eq("status", "active")
-        .eq("is_deleted", false)
-        .limit(24),
-    )) ?? [];
-
-  if (goals.length === 0) {
+  let goals: unknown[] = [];
+  if (lifeosContextEnabled()) {
     goals =
-      (await safeList("goals_fallback", () =>
-        supabase
+      (await safeList("goals", async () =>
+        await supabase
           .from("goals")
           .select("*")
           .eq("user_profile_id", userProfileId)
           .eq("status", "active")
+          .eq("is_deleted", false)
           .limit(24),
       )) ?? [];
+
+    if (goals.length === 0) {
+      goals =
+        (await safeList("goals_fallback", () =>
+          supabase
+            .from("goals")
+            .select("*")
+            .eq("user_profile_id", userProfileId)
+            .eq("status", "active")
+            .limit(24),
+        )) ?? [];
+    }
   }
 
-  const pillarStatus =
-    (await safeList("pillar_status", async () =>
-      await supabase.from("pillar_status").select("*").eq("user_profile_id", userProfileId).limit(16),
-    )) ?? [];
+  let pillarStatus: unknown[] = [];
+  let happinessReserve: unknown | null = null;
+  let kpiReadings: unknown[] = [];
+  let magnusInsights: unknown[] = [];
+  let dailyPlans: unknown[] = [];
 
-  const happinessReserve = await safeMaybeSingle("happiness_reserve", () =>
-    supabase
-      .from("happiness_reserve")
-      .select("*")
-      .eq("user_profile_id", userProfileId)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  );
+  if (lifeosContextEnabled()) {
+    pillarStatus =
+      (await safeList("pillar_status", async () =>
+        await supabase.from("pillar_status").select("*").eq("user_profile_id", userProfileId).limit(16),
+      )) ?? [];
 
-  const since = isoDaysAgo(now, 7);
-  let kpiReadings =
-    (await safeList("kpi_readings", async () =>
-      await supabase
-        .from("kpi_readings")
+    happinessReserve = await safeMaybeSingle("happiness_reserve", () =>
+      supabase
+        .from("happiness_reserve")
         .select("*")
         .eq("user_profile_id", userProfileId)
-        .gte("recorded_at", since)
-        .order("recorded_at", { ascending: false })
-        .limit(40),
-    )) ?? [];
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    );
 
-  if (kpiReadings.length === 0) {
+    const since = isoDaysAgo(now, 7);
     kpiReadings =
-      (await safeList("kpi_readings_created", async () =>
+      (await safeList("kpi_readings", async () =>
         await supabase
           .from("kpi_readings")
           .select("*")
           .eq("user_profile_id", userProfileId)
-          .gte("created_at", since)
-          .order("created_at", { ascending: false })
+          .gte("recorded_at", since)
+          .order("recorded_at", { ascending: false })
           .limit(40),
       )) ?? [];
+
+    if (kpiReadings.length === 0) {
+      kpiReadings =
+        (await safeList("kpi_readings_created", async () =>
+          await supabase
+            .from("kpi_readings")
+            .select("*")
+            .eq("user_profile_id", userProfileId)
+            .gte("created_at", since)
+            .order("created_at", { ascending: false })
+            .limit(40),
+        )) ?? [];
+    }
+
+    magnusInsights =
+      (await safeList("magnus_insights", async () =>
+        await supabase
+          .from("magnus_insights")
+          .select("*")
+          .eq("user_profile_id", userProfileId)
+          .order("created_at", { ascending: false })
+          .limit(8),
+      )) ?? [];
+
+    dailyPlans =
+      (await safeList("daily_plans", async () =>
+        await supabase
+          .from("daily_plans")
+          .select("*")
+          .eq("user_profile_id", userProfileId)
+          .order("created_at", { ascending: false })
+          .limit(7),
+      )) ?? [];
   }
-
-  const magnusInsights =
-    (await safeList("magnus_insights", async () =>
-      await supabase
-        .from("magnus_insights")
-        .select("*")
-        .eq("user_profile_id", userProfileId)
-        .order("created_at", { ascending: false })
-        .limit(8),
-    )) ?? [];
-
-  const dailyPlans =
-    (await safeList("daily_plans", async () =>
-      await supabase
-        .from("daily_plans")
-        .select("*")
-        .eq("user_profile_id", userProfileId)
-        .order("created_at", { ascending: false })
-        .limit(7),
-    )) ?? [];
 
   const magnusDailyLogs =
     (await safeList("magnus_daily_logs", async () =>
@@ -253,14 +265,17 @@ export async function fetchMorningBriefContext(
         .limit(10),
     )) ?? [];
 
-  const rawPatterns =
-    (await safeList("patterns", async () =>
-      await supabase.from("patterns").select("*").eq("user_profile_id", userProfileId).limit(24),
-    )) ??
-    (await safeList("life_patterns", async () =>
-      await supabase.from("life_patterns").select("*").eq("user_profile_id", userProfileId).limit(24),
-    )) ??
-    [];
+  let rawPatterns: unknown[] = [];
+  if (lifeosContextEnabled()) {
+    rawPatterns =
+      (await safeList("patterns", async () =>
+        await supabase.from("patterns").select("*").eq("user_profile_id", userProfileId).limit(24),
+      )) ??
+      (await safeList("life_patterns", async () =>
+        await supabase.from("life_patterns").select("*").eq("user_profile_id", userProfileId).limit(24),
+      )) ??
+      [];
+  }
 
   const patternRows = filterEmergingPlusPatterns(rawPatterns ?? []);
 

@@ -4,6 +4,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Intent } from "../../intent.js";
+import { lifeosContextEnabled } from "../../config/lifeosContext.js";
 import { logger } from "../../logger.js";
 import { supabase as defaultSupabase } from "../../tools/clients.js";
 import type { MemoryContext, MemoryPurpose } from "./types.js";
@@ -202,22 +203,24 @@ export async function loadMemoryContext(input: {
   }
 
   let dailyScoresRows: Array<Record<string, unknown>> = [];
-  const dailyScores = await safeTableQuery<Array<Record<string, unknown>>>(
-    "daily_scores",
-    async () =>
-      await sb
-        .from("daily_scores")
-        .select("*")
-        .eq("user_profile_id", input.userProfileId)
-        .order("date", { ascending: false })
-        .limit(5),
-  );
-  if (!dailyScores.ok) {
-    gaps.push(dailyScores.gap);
-  } else {
-    dailyScoresRows = dailyScores.data ?? [];
-    if (dailyScoresRows.length === 0) {
-      gaps.push("daily_scores: no recent rows");
+  if (lifeosContextEnabled()) {
+    const dailyScores = await safeTableQuery<Array<Record<string, unknown>>>(
+      "daily_scores",
+      async () =>
+        await sb
+          .from("daily_scores")
+          .select("*")
+          .eq("user_profile_id", input.userProfileId)
+          .order("date", { ascending: false })
+          .limit(5),
+    );
+    if (!dailyScores.ok) {
+      gaps.push(dailyScores.gap);
+    } else {
+      dailyScoresRows = dailyScores.data ?? [];
+      if (dailyScoresRows.length === 0) {
+        gaps.push("daily_scores: no recent rows");
+      }
     }
   }
 
@@ -297,63 +300,67 @@ export async function loadMemoryContext(input: {
   }
 
   const activeGoals: MemoryContext["activeGoals"] = [];
-  const goalsQ = await safeTableQuery<Array<Record<string, unknown> & { id?: string }>>(
-    "goals",
-    async () =>
-      await sb
-        .from("goals")
-        .select("*")
-        .eq("user_profile_id", input.userProfileId)
-        .eq("status", "active")
-        .limit(12),
-  );
-  if (!goalsQ.ok) {
-    gaps.push(goalsQ.gap);
-  } else {
-    for (const g of goalsQ.data ?? []) {
-      const id = typeof g.id === "string" ? g.id : "";
-      const label =
-        (typeof g.title === "string" && g.title) ||
-        (typeof g.name === "string" && g.name) ||
-        (typeof g.description === "string" && g.description.slice(0, 120)) ||
-        id ||
-        "goal";
-      activeGoals.push({
-        id: id || label,
-        label: truncateContent(label, 200),
-        pillar: typeof g.pillar === "string" ? g.pillar : undefined,
-        status: typeof g.status === "string" ? g.status : undefined,
-        timeframe: typeof g.timeframe === "string" ? g.timeframe : undefined,
-      });
+  if (lifeosContextEnabled()) {
+    const goalsQ = await safeTableQuery<Array<Record<string, unknown> & { id?: string }>>(
+      "goals",
+      async () =>
+        await sb
+          .from("goals")
+          .select("*")
+          .eq("user_profile_id", input.userProfileId)
+          .eq("status", "active")
+          .limit(12),
+    );
+    if (!goalsQ.ok) {
+      gaps.push(goalsQ.gap);
+    } else {
+      for (const g of goalsQ.data ?? []) {
+        const id = typeof g.id === "string" ? g.id : "";
+        const label =
+          (typeof g.title === "string" && g.title) ||
+          (typeof g.name === "string" && g.name) ||
+          (typeof g.description === "string" && g.description.slice(0, 120)) ||
+          id ||
+          "goal";
+        activeGoals.push({
+          id: id || label,
+          label: truncateContent(label, 200),
+          pillar: typeof g.pillar === "string" ? g.pillar : undefined,
+          status: typeof g.status === "string" ? g.status : undefined,
+          timeframe: typeof g.timeframe === "string" ? g.timeframe : undefined,
+        });
+      }
     }
   }
 
   const joy: MemoryContext["joy"] = {};
-  const hr = await safeTableQuery<Record<string, unknown> | null>(
-    "happiness_reserve",
-    async () =>
-      await sb
-        .from("happiness_reserve")
-        .select("*")
-        .eq("user_profile_id", input.userProfileId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-  );
-  if (!hr.ok) {
-    gaps.push(hr.gap);
-  } else if (hr.data && typeof hr.data === "object") {
-    joy.happinessReserve = hr.data as Record<string, unknown>;
-    const tank =
-      typeof hr.data.tank_level === "number"
-        ? hr.data.tank_level
-        : typeof hr.data.happiness_score === "number"
-          ? hr.data.happiness_score
-          : undefined;
-    if (tank !== undefined) {
-      joy.summary = `Joy tank / reserve signal (numeric): ${tank}`;
-    } else {
-      joy.summary = "Joy / happiness reserve row present (see raw).";
+  if (lifeosContextEnabled()) {
+    const hr = await safeTableQuery<Record<string, unknown> | null>(
+      "happiness_reserve",
+      async () =>
+        await sb
+          .from("happiness_reserve")
+          .select("*")
+          .eq("user_profile_id", input.userProfileId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+    );
+    if (!hr.ok) {
+      gaps.push(hr.gap);
+    } else if (hr.data && typeof hr.data === "object") {
+      joy.happinessReserve = hr.data as Record<string, unknown>;
+      const tank =
+        typeof hr.data.tank_level === "number"
+          ? hr.data.tank_level
+          : typeof hr.data.happiness_score === "number"
+            ? hr.data.happiness_score
+            : undefined;
+      if (tank !== undefined) {
+        joy.summary = `Joy tank / reserve signal (numeric): ${tank}`;
+      } else {
+        joy.summary = "Joy / happiness reserve row present (see raw).";
+      }
     }
   }
 
@@ -364,20 +371,22 @@ export async function loadMemoryContext(input: {
   }
 
   const patterns: MemoryContext["patterns"] = [];
-  const pat = await safeTableQuery<Array<Record<string, unknown>>>(
-    "patterns",
-    async () =>
-      await sb
-        .from("patterns")
-        .select("*")
-        .eq("user_profile_id", input.userProfileId)
-        .order("created_at", { ascending: false })
-        .limit(8),
-  );
-  if (!pat.ok) {
-    gaps.push(pat.gap);
-  } else {
-    patterns.push(...(pat.data ?? []));
+  if (lifeosContextEnabled()) {
+    const pat = await safeTableQuery<Array<Record<string, unknown>>>(
+      "patterns",
+      async () =>
+        await sb
+          .from("patterns")
+          .select("*")
+          .eq("user_profile_id", input.userProfileId)
+          .order("created_at", { ascending: false })
+          .limit(8),
+    );
+    if (!pat.ok) {
+      gaps.push(pat.gap);
+    } else {
+      patterns.push(...(pat.data ?? []));
+    }
   }
 
   let lists: MemoryContext["lists"];

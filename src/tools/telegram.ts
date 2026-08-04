@@ -1,5 +1,6 @@
 import { Telegraf } from "telegraf";
 
+import { redisGuardFailOpen } from "../config/security.js";
 import {
   handlerTimeoutMs,
   redactWebhookUrl,
@@ -42,11 +43,14 @@ async function claimTelegramUpdate(updateId: number): Promise<boolean> {
     });
     return res !== null;
   } catch (e) {
+    const failOpen = redisGuardFailOpen();
     logger.error(
-      { err: loggableError(e), updateId },
-      "telegram update dedup redis error; allowing message",
+      { err: loggableError(e), updateId, failOpen },
+      failOpen
+        ? "telegram update dedup redis error; allowing message (fail-open)"
+        : "telegram update dedup redis error; dropping message (fail-closed)",
     );
-    return true;
+    return failOpen;
   }
 }
 
