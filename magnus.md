@@ -5,6 +5,14 @@ ship anything that changes behaviour, dependencies, environment, or the database
 
 | Doc | Purpose |
 |-----|---------|
+| **`docs/product/VISION.md`** | Long-term product vision and philosophy (prefer over stale sections in `MAGNUS_CORE_CONTEXT.md`) |
+| **`docs/product/BRD.md`** | Business requirements — stakeholders, objectives, scope |
+| **`docs/product/PRD.md`** | Product requirements — user stories, functional reqs |
+| **`docs/product/TRD.md`** | Technical requirements — stack, interfaces, security, deploy |
+| **`docs/product/ARD.md`** | Architecture decisions (ADRs), principles, evolution |
+| **`docs/diagrams/ARCHITECTURE_DIAGRAMS.md`** | Mermaid diagrams: context, sequence, routing, deployment |
+| **`docs/DATABASE_SCHEMA.md`** | Full Postgres + Redis schema, ERD, migration index |
+| **`docs/review/IMPARTIAL_REVIEW_2026-08-04.md`** | Third-party code review, grades, cleanup plan |
 | **`docs/ARCHITECTURE.md`** | What the system is: Magnus, four pillars, connections, ownership |
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
 | **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
@@ -254,4 +262,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-03 (Notion OAuth page-picker flow + provision fallback)
+**Last updated:** 2026-08-04 (architecture review + product doc suite)
