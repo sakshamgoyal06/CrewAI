@@ -90,7 +90,7 @@ shell or `.env`.
 | `src/index.ts` | Boot: clients → capability log → Telegram runtime → health server → watchdog → graceful shutdown |
 | `src/magnus.ts` | Turn handler: allowlist gate, chat persistence, typing indicator, orchestrator call. Starts the Morning Brief cron. |
 | `src/agents/magnusOrchestrator.ts` | Health onboarding gate → classify → memory → pillar specialist or Magnus |
-| `src/agents/orchestratorIntent.ts` | The five-way classifier, plus the one coercion (explicit meal log → HEALTH) |
+| `src/agents/orchestratorIntent.ts` | The five-way classifier, plus deterministic coercions (meal log → HEALTH; YouTube / list / LifeOS / Notion / tool continuations → GENERAL) |
 | `src/agents/magnusAgent.ts` | Magnus himself: calendar, YouTube, event log, journaling, reminders — tool loop |
 | `src/agents/tools/calendarTool.ts` | Google Calendar; per-user tokens; delete/update sync linked `magnus_events` rows |
 | `src/agents/tools/youtubeConnectTool.ts` | In-chat `connect_google` / aliases — Calendar + YouTube one consent |
@@ -99,6 +99,8 @@ shell or `.env`.
 | `src/integrations/notion/notionProvision.ts` | Post-OAuth: create Magnus hub, Journal, standard list databases in Notion |
 | `src/agents/tools/notionConnectTool.ts` | `connect_notion`, `setup_notion` Magnus tools |
 | `src/lifeos/` | LifeOS Postgres writers: goals, pillar status, joy tank |
+| `src/agents/tools/magnusActionDetect.ts` | Detect list, LifeOS, Notion, and event-log phrases that need Magnus tools (GENERAL) |
+| `src/agents/routing/magnusToolContinuation.ts` | Short affirmatives and list/playlist ops after a Magnus tool turn → GENERAL |
 | `src/agents/tools/listTool.ts` | List catalog + `recommend_list_items` filters |
 | `src/lists/` | List catalog templates, Supabase store, service orchestration, optional Notion mirror |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
@@ -138,8 +140,10 @@ shell or `.env`.
 3. **Rate limit** — Redis fixed 60s window per user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, 0 disables).
 4. **Dedupe** — `update_id` claimed in Redis for 24h, so webhook retries never double-reply.
 5. **Classification** — Five intents. `GENERAL` is Magnus's own work, not a fallback bucket.
-   Explicit meal logs coerce to `HEALTH`; YouTube / YT Music actions coerce to `GENERAL` so
-   Magnus tools run (Happiness stays taste-only).
+   Deterministic coercions after the LLM label: explicit meal logs → `HEALTH`; YouTube / YT Music
+   actions → `GENERAL`; list / LifeOS / Notion / event-log tool phrases → `GENERAL`
+   (`magnusActionDetect.ts`); short affirmatives and list/playlist follow-ups after a Magnus tool
+   turn → `GENERAL` (`magnusToolContinuation.ts`). Pillar specialists are prompt-only.
 6. **Memory** — Loaded once per turn: recent chat as verbatim `messages[]` (configurable window), rolling summary for older turns, semantic facts from `memory_summaries`, plus structured profile/goals/logs. Tunable via `MAGNUS_MEMORY_*` in `.env.example`. Post-turn maintenance updates conversation summary and extracted facts.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
    routing in `metadata` (`delegated_agent`, `agent_metadata`). Columns `message_type`
@@ -167,8 +171,9 @@ shell or `.env`.
     OAuth client (`GOOGLE_CLIENT_ID` / `SECRET`). YouTube playlists resolve by pillar name
     (`wisdom`, `wealth`, `magnus`, …) or `PL…` id; aliases cached in `magnus_youtube_state.playlist_aliases`.
     Bulk actions: `clear` (empty playlist), `dedupe` (remove duplicate videos).
-12. **Intent routing** — YouTube actions and short continuations after a YouTube tool turn coerce to
-    `GENERAL` (Magnus tools). Pillar specialists are prompt-only and must not claim tool actions.
+12. **Intent routing** — Only Magnus (`GENERAL`) has tools. YouTube actions, list/LifeOS/Notion
+    phrases, and short continuations after a Magnus tool turn coerce to `GENERAL`. Pillar specialists
+    are prompt-only and must not claim tool actions (see `pillarSpecialist.ts` guard).
 13. **Gym schedule** — Fitness turns inject today's session from locked `weekly_schedule` program memory
     (Mon-first table) before Hevy history.
 
@@ -251,7 +256,9 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Memory reads LifeOS tables only when enabled** — `MAGNUS_LIFEOS_CONTEXT_ENABLED=false` (default).
   Magnus tools write LifeOS: `add_goal` (dual-write), `update_pillar_status`, `log_joy_tank`, `list_lifeos_goals`.
   Set `MAGNUS_LIFEOS_CONTEXT_ENABLED=true` when tables have data.
-- **List recommendations** — `recommend_list_items` filters `extra` JSONB (genre, rating, runtime). Rich schemas: `docs/TODO_LIST_RECOMMENDATION_SCHEMAS.md`.
+- **List recommendation schemas** — `recommend_list_items` filters `extra` JSONB today; richer
+  per-archetype columns and Notion mirror fields remain planned. See
+  **`docs/TODO_LIST_RECOMMENDATION_SCHEMAS.md`**.
 - **Schema not reproducible** from `supabase/migrations/` for tables predating April 2026 migrations.
   Baseline migrations for `user_profile` and `magnus_chat_messages` added 2026-08-04; LifeOS tables
   remain in `scripts/magnus_db_hardening.sql` (see `supabase/README.md`).
@@ -261,12 +268,10 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables; empty
   LifeOS sections are omitted when `dataAvailability` flags are false (no “unknown” filler).
 - **No inactivity / activity-triggered proactive messages yet** — only time-based cron jobs.
-- **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube.
+- **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube (turn-handler smoke in `src/magnus.smoke.test.ts` only).
 - **Notion list mirror** — Supabase canonical; OAuth reconnect now wipes legacy LifeOS hub/registry and provisions a fresh **Magnus** page (no discover fallback to old DBs). Say connect Notion again after deploy if relink stuck on old LifeOS.
-- **List recommendation schemas** — default lists are title + queue status only; no genre/rating/runtime/rewatch filters yet. Planned: archetype field schemas, done-status lifecycle, `recommend_list_items` tool, richer Notion DB columns. See **`docs/TODO_LIST_RECOMMENDATION_SCHEMAS.md`**.
-
 **Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
 
 ---
 
-**Last updated:** 2026-08-04 (LifeOS migrations, writers, recommend_list_items, smoke tests)
+**Last updated:** 2026-08-04 (tool routing coercions: list/LifeOS/Notion → GENERAL)

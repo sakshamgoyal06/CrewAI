@@ -8,6 +8,7 @@ import { parseIntent, type Intent } from "../intent.js";
 import { anthropic } from "../tools/clients.js";
 import { parseMealLogCommand } from "../meals/parseMealLogCommand.js";
 import { looksLikeYoutubeAction } from "./tools/youtubeActionDetect.js";
+import { looksLikeMagnusToolAction } from "./tools/magnusActionDetect.js";
 import {
   looksLikeMagnusToolContinuation,
   type RoutingChatTurn,
@@ -27,8 +28,10 @@ WISDOM — getting better: learning something, courses, practice, career directi
 skills, and shipping projects.
 GENERAL — everything else, and specifically: the calendar and schedule, what the day or week
 looks like, reminders, journaling and logging, YouTube / YT Music actions (search, playlists,
-bookmarks, cue/queue, recommendations to open), questions spanning several categories, looking
-something up, and ordinary conversation.
+bookmarks, cue/queue, recommendations to open), user lists (watchlist, readlist, tasks, goals
+catalog — read, add, update, recommend from saved items), LifeOS logging (joy tank, pillar
+status, goals table), Notion connect/sync, event log (log/reschedule/list commitments), questions
+spanning several categories, looking something up, and ordinary conversation.
 
 When a message could fit two categories, choose the one the user is asking you to act on.
 Reply with only the category name.`;
@@ -56,6 +59,7 @@ async function classifyIntent(userMessage: string): Promise<Intent> {
  * Classify, then apply deterministic corrections worth having:
  * - explicit meal log → HEALTH (even when the classifier reads it as small talk about food)
  * - YouTube / YT Music actions → GENERAL (Magnus has the tools; Happiness does not)
+ * - list / LifeOS / Notion tool actions → GENERAL (pillar specialists are prompt-only)
  * - short continuations after a YouTube tool turn → GENERAL (pillar specialists have no tools)
  */
 export async function resolveIntentNaturalLanguage(
@@ -69,6 +73,10 @@ export async function resolveIntentNaturalLanguage(
   }
 
   if (intent !== "GENERAL" && looksLikeYoutubeAction(userMessage)) {
+    return "GENERAL";
+  }
+
+  if (intent !== "GENERAL" && looksLikeMagnusToolAction(userMessage)) {
     return "GENERAL";
   }
 

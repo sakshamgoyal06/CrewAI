@@ -15,6 +15,18 @@ describe("looksLikeMagnusToolContinuation", () => {
     ).toBe(true);
   });
 
+  it("detects list follow-up after list tool use", () => {
+    expect(
+      looksLikeMagnusToolContinuation("Yes, add it", [
+        {
+          role: "assistant",
+          content: "Want me to add Dune to your readlist?",
+          metadata: { tools_used: ["list_items"] },
+        },
+      ]),
+    ).toBe(true);
+  });
+
   it("detects playlist maintenance phrases not already caught by youtube detect", () => {
     expect(looksLikeMagnusToolContinuation("dedupe wealth", [])).toBe(true);
   });
