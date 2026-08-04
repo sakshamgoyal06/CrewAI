@@ -1,6 +1,6 @@
 # Magnus architecture
 
-Single user, one Telegram bot, four pillars, one voice.
+Multi-user when provisioned per `user_profile`; one Telegram bot, four pillars, one voice.
 
 Magnus is the only thing the user talks to and the only thing that talks back. Behind him, four
 pillar specialists handle depth. The user cannot address a specialist and is never told one was
@@ -113,8 +113,9 @@ The read-only set feeds memory context and the Morning Brief. Nothing writes to 
 empty and shows up as `gaps` on every turn — the largest remaining gap in the design. Either write
 to those tables or stop reading them.
 
-`supabase/migrations/` covers only `magnus_daily_logs`, `user_health_profile` and `meal_logs`;
-the rest of the schema exists solely on the hosted project.
+`supabase/migrations/` covers tables added since April 2026; core tables (`user_profile`,
+`magnus_chat_messages`) and LifeOS domain tables predate migrations — see `docs/DATABASE_SCHEMA.md`
+and `docs/review/IMPARTIAL_REVIEW_2026-08-04.md` for the full picture and cleanup plan.
 
 ## 7. Deliberate omissions
 
