@@ -1,10 +1,9 @@
 import { isInLocalHourWindow } from "../scheduleWindow.js";
 import type {
-  ProactiveKindContext,
   ProactiveKindHandler,
   ProactiveEvaluateResult,
 } from "./types.js";
-import type { OneShotSchedule, RecurringLocalSchedule } from "../subscriptions/types.js";
+import type { OneShotSchedule } from "../subscriptions/types.js";
 import { recurringLocalSchedule } from "./recurringLocal.js";
 
 export const customReminderHandler: ProactiveKindHandler = {
@@ -45,7 +44,7 @@ export const customReminderHandler: ProactiveKindHandler = {
     return { send: true, composeHint: message };
   },
 
-  async compose(ctx, gateResult) {
+  async compose(_ctx, gateResult) {
     return gateResult.composeHint?.trim() || "Reminder";
   },
 };

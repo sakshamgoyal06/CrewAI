@@ -1,5 +1,4 @@
 import type {
-  ProactiveKindContext,
   ProactiveKindHandler,
   ProactiveEvaluateResult,
 } from "./types.js";

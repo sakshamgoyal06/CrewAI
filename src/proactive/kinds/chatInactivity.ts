@@ -1,7 +1,6 @@
 import { gateAndCompose } from "../llm/gateAndCompose.js";
 import { loadChatInactivitySnapshot } from "../signals/inactivitySignals.js";
 import type {
-  ProactiveKindContext,
   ProactiveKindHandler,
   ProactiveEvaluateResult,
 } from "./types.js";
