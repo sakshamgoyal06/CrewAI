@@ -75,3 +75,15 @@ export function eventReminderJobEnabled(): boolean {
   }
   return proactiveCronEnabled();
 }
+
+/** Subscription-based proactive messages (evening journal, drift guard, custom reminders). */
+export function proactiveSubscriptionsJobEnabled(): boolean {
+  const raw = process.env.MAGNUS_PROACTIVE_SUBSCRIPTIONS_ENABLED?.trim().toLowerCase();
+  if (envTruthy(raw)) {
+    return true;
+  }
+  if (envFalsy(raw)) {
+    return false;
+  }
+  return proactiveCronEnabled();
+}

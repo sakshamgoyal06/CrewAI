@@ -66,6 +66,7 @@ import {
 import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
 import { classifyToolResult, type ToolOutcome } from "./routing/actionIntegrity.js";
+import { manageProactiveMessages } from "../proactive/manageProactiveTool.js";
 
 const MODEL = "claude-sonnet-4-6";
 // Calendar + event log + YouTube bulk ops in one turn needs headroom (env override).
@@ -313,6 +314,41 @@ const TOOLS: Tool[] = [
         limit: { type: "number", description: "Max rows, default 30." },
       },
       required: [],
+    },
+  },
+  {
+    name: "manage_proactive_messages",
+    description:
+      "Manage Magnus-initiated Telegram nudges: evening journal, drift guard, custom reminders. List, enable, disable, create_reminder, delete. User must opt in to catalog kinds.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["list", "enable", "disable", "create_reminder", "delete"],
+        },
+        kind: {
+          type: "string",
+          description:
+            "Catalog kind: evening_journal, drift_guard, midday_encouragement. Or subscription kind for disable.",
+        },
+        enabled: { type: "boolean" },
+        local_hour: {
+          type: "number",
+          description: "Local hour 0-23 for recurring catalog kinds (e.g. 21 for 9pm).",
+        },
+        at: {
+          type: "string",
+          description: "When to fire a one-shot reminder, local time (create_reminder).",
+        },
+        message: { type: "string", description: "Reminder body (create_reminder)." },
+        user_instruction: {
+          type: "string",
+          description: "Optional extra guidance stored on the subscription (drift guard, evening journal).",
+        },
+        subscription_id: { type: "string", description: "From list, for delete or disable one row." },
+      },
+      required: ["action"],
     },
   },
   {
@@ -949,6 +985,19 @@ async function runTool(
           includeStats: input.include_stats === true,
           includeUnscheduled: input.include_unscheduled === true,
           limit: num(input.limit),
+        });
+      case "manage_proactive_messages":
+        return await manageProactiveMessages({
+          userProfileId: ctx.userProfileId,
+          timezone: timeZone,
+          action: String(input.action ?? ""),
+          kind: str(input.kind),
+          enabled: input.enabled === true,
+          local_hour: num(input.local_hour),
+          at: str(input.at),
+          message: str(input.message),
+          user_instruction: str(input.user_instruction),
+          subscription_id: str(input.subscription_id),
         });
       case "youtube_search":
         return await youtubeSearchTool({
