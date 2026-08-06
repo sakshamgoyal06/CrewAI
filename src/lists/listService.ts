@@ -2,7 +2,11 @@
  * User-agnostic list orchestration: Supabase canonical, optional Notion mirror per list.
  */
 import { loadUserIntegrations } from "../users/userIntegrations.js";
-import { createLifeosGoal } from "../lifeos/lifeosStore.js";
+import {
+  createLifeosGoal,
+  logHappinessReserve,
+  upsertPillarStatus,
+} from "../lifeos/lifeosStore.js";
 import type { NotionListConfig, NotionRegistry } from "../tools/notionRegistry.js";
 import { getStandardTemplate, STANDARD_LIST_TEMPLATES, type ListArchetype } from "./listCatalog.js";
 import {
@@ -571,6 +575,234 @@ export async function getDailyCheckin(input: {
   }
 
   return formatCheckinReply(dateKey, item.data);
+}
+
+const CHECKIN_EXTRA_KEYS = {
+  day_rating: "Day Rating",
+  health_score: "Health Score",
+  wealth_score: "Wealth Score",
+  wisdom_score: "Wisdom Score",
+  joy_score: "Joy Score",
+  feeling: "How Are You Feeling",
+  pattern_flags: "Pattern Flags",
+} as const;
+
+function buildCheckinExtra(input: {
+  day_rating?: string | number;
+  health_score?: number;
+  wealth_score?: number;
+  wisdom_score?: number;
+  joy_score?: number;
+  feeling?: string;
+  pattern_flags?: string;
+}): Record<string, unknown> {
+  const extra: Record<string, unknown> = {};
+  if (input.day_rating != null && String(input.day_rating).trim()) {
+    extra[CHECKIN_EXTRA_KEYS.day_rating] = String(input.day_rating).trim();
+  }
+  if (input.health_score != null) {
+    extra[CHECKIN_EXTRA_KEYS.health_score] = input.health_score;
+  }
+  if (input.wealth_score != null) {
+    extra[CHECKIN_EXTRA_KEYS.wealth_score] = input.wealth_score;
+  }
+  if (input.wisdom_score != null) {
+    extra[CHECKIN_EXTRA_KEYS.wisdom_score] = input.wisdom_score;
+  }
+  if (input.joy_score != null) {
+    extra[CHECKIN_EXTRA_KEYS.joy_score] = input.joy_score;
+  }
+  if (input.feeling?.trim()) {
+    extra[CHECKIN_EXTRA_KEYS.feeling] = input.feeling.trim();
+  }
+  if (input.pattern_flags?.trim()) {
+    extra[CHECKIN_EXTRA_KEYS.pattern_flags] = input.pattern_flags.trim();
+  }
+  return extra;
+}
+
+function mergeCheckinExtra(
+  existing: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  return { ...existing, ...patch };
+}
+
+async function syncCheckinLifeosWriters(input: {
+  userProfileId: string;
+  dateKey: string;
+  notes?: string;
+  joy_score?: number;
+  health_score?: number;
+  wealth_score?: number;
+  wisdom_score?: number;
+  health_status?: string;
+  wealth_status?: string;
+  wisdom_status?: string;
+  joy_status?: string;
+}): Promise<string[]> {
+  const lines: string[] = [];
+
+  if (input.joy_score != null) {
+    const joy = await logHappinessReserve({
+      userProfileId: input.userProfileId,
+      date: input.dateKey,
+      level: input.joy_score,
+      notes: input.notes,
+      selfReportedState: undefined,
+    });
+    if (joy.ok) {
+      lines.push(`Joy tank ${input.joy_score}/100 saved.`);
+    } else {
+      lines.push(`Joy tank: ${joy.error}`);
+    }
+  }
+
+  const pillarWrites: Array<{
+    pillar: string;
+    score?: number;
+    status?: string;
+  }> = [
+    { pillar: "health", score: input.health_score, status: input.health_status },
+    { pillar: "wealth", score: input.wealth_score, status: input.wealth_status },
+    { pillar: "learning", score: input.wisdom_score, status: input.wisdom_status },
+  ];
+
+  for (const row of pillarWrites) {
+    if (row.score == null && !row.status?.trim()) {
+      continue;
+    }
+    const status = row.status?.trim() || "on_track";
+    const result = await upsertPillarStatus({
+      userProfileId: input.userProfileId,
+      pillar: row.pillar,
+      date: input.dateKey,
+      status,
+      score: row.score,
+      summary: input.notes?.trim() || undefined,
+    });
+    if (result.ok) {
+      const scoreBit = row.score != null ? ` (score ${row.score})` : "";
+      lines.push(`${row.pillar} pillar ${status}${scoreBit} saved.`);
+    } else {
+      lines.push(`${row.pillar} pillar: ${result.error}`);
+    }
+  }
+
+  return lines;
+}
+
+/** Upsert today's (or dated) daily check-in — list row + optional LifeOS dual-writes. */
+export async function logDailyCheckin(input: {
+  userProfileId: string;
+  date?: string;
+  notes?: string;
+  append_notes?: boolean;
+  day_rating?: string | number;
+  health_score?: number;
+  wealth_score?: number;
+  wisdom_score?: number;
+  joy_score?: number;
+  feeling?: string;
+  pattern_flags?: string;
+  health_status?: string;
+  wealth_status?: string;
+  wisdom_status?: string;
+}): Promise<string> {
+  const list = await resolveList(input.userProfileId, "checkins");
+  if (!list) {
+    return "Check-ins list is not available.";
+  }
+
+  const dateKey = input.date?.trim() || new Date().toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    return "date must be YYYY-MM-DD.";
+  }
+
+  const notes = input.notes?.trim();
+  const patchExtra = buildCheckinExtra(input);
+  const hasContent =
+    Boolean(notes) ||
+    Object.keys(patchExtra).length > 0 ||
+    input.health_status?.trim() ||
+    input.wealth_status?.trim() ||
+    input.wisdom_status?.trim();
+
+  if (!hasContent) {
+    return "Nothing to log — provide notes, pillar scores, or a day rating.";
+  }
+
+  const existing = await fetchCheckinItem(input.userProfileId, list.id, dateKey);
+  if (!existing.ok) {
+    return existing.error;
+  }
+
+  const mergedNotes =
+    existing.data && input.append_notes && notes
+      ? [existing.data.notes, notes].filter(Boolean).join("\n\n")
+      : notes ?? existing.data?.notes ?? undefined;
+
+  const mergedExtra = existing.data
+    ? mergeCheckinExtra(existing.data.extra, patchExtra)
+    : patchExtra;
+
+  let itemId: string;
+  let notionPageId = existing.data?.notion_page_id ?? undefined;
+
+  if (existing.data) {
+    if (notionPageId) {
+      await mirrorUpdateItem(input.userProfileId, list, notionPageId, {
+        title: dateKey,
+        notes: mergedNotes,
+      });
+    }
+
+    const updated = await updateListItem(existing.data.id, {
+      notes: mergedNotes,
+      extra: mergedExtra,
+    });
+    if (!updated.ok) {
+      return updated.error;
+    }
+    itemId = updated.data.id;
+  } else {
+    notionPageId =
+      (await mirrorCreateItem(input.userProfileId, list, {
+        title: dateKey,
+        notes: mergedNotes,
+        extra: mergedExtra,
+      })) ?? undefined;
+
+    const saved = await insertListItem({
+      userProfileId: input.userProfileId,
+      listId: list.id,
+      title: dateKey,
+      notes: mergedNotes,
+      extra: mergedExtra,
+      notionPageId,
+    });
+    if (!saved.ok) {
+      return `Could not save check-in: ${saved.error}`;
+    }
+    itemId = saved.data.id;
+  }
+
+  const lifeosLines = await syncCheckinLifeosWriters({
+    userProfileId: input.userProfileId,
+    dateKey,
+    notes: mergedNotes,
+    joy_score: input.joy_score,
+    health_score: input.health_score,
+    wealth_score: input.wealth_score,
+    wisdom_score: input.wisdom_score,
+    health_status: input.health_status,
+    wealth_status: input.wealth_status,
+    wisdom_status: input.wisdom_status,
+  });
+
+  const mirrorNote = notionPageId ? " Mirrored to Notion." : "";
+  const lifeosNote = lifeosLines.length > 0 ? `\n${lifeosLines.join("\n")}` : "";
+  return `Logged daily check-in for ${dateKey} (id:${itemId}).${mirrorNote}${lifeosNote}`;
 }
 
 export async function addGoal(input: {

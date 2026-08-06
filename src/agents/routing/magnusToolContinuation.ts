@@ -30,6 +30,7 @@ const LIST_TOOL_NAMES = new Set([
   "update_list_item",
   "add_goal",
   "get_daily_checkin",
+  "log_daily_checkin",
   "log_joy_tank",
   "update_pillar_status",
   "list_lifeos_goals",

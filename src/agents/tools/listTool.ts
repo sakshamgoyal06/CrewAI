@@ -9,6 +9,7 @@ import {
   linkNotionList,
   listCatalog,
   listItems,
+  logDailyCheckin,
   recommendListItems,
   updateListItemCompat,
 } from "../../lists/listService.js";
@@ -131,7 +132,7 @@ export async function magnusRecommendListItems(input: {
   return recommendListItems(input);
 }
 
-export { getDailyCheckin, addGoal };
+export { getDailyCheckin, logDailyCheckin, addGoal };
 
 // Backward-compatible aliases for prior tool names
 export const notionListItems = magnusListItems;

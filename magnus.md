@@ -104,6 +104,7 @@ shell or `.env`.
 | `src/agents/tools/listTool.ts` | List catalog + `recommend_list_items` filters |
 | `src/lists/` | List catalog templates, Supabase store, service orchestration, optional Notion mirror |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
+| `src/lists/listService.ts` | List catalog + `log_daily_checkin` / `get_daily_checkin` writers (checkins list + LifeOS dual-write) |
 | `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
 | `src/events/` | Event log domain: timezone helpers, Supabase store, calendar sync, formatting |
 | `src/youtube/` | Bookmarks, cue queue, and Magnus playlist state in Supabase |
@@ -274,4 +275,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-04 (tool routing coercions: list/LifeOS/Notion → GENERAL)
+**Last updated:** 2026-08-06 (log_daily_checkin writer + check-in routing coercion)

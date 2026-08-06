@@ -26,6 +26,9 @@ const LIFEOS_ACTION_RE =
 const EVENT_LOG_EXPLICIT_RE =
   /\b(?:log_event|list_events|reschedule_event|update_event)\b|\b(?:reschedule|move)\b.{0,40}\b(?:commitment|event)\b/i;
 
+const CHECKIN_LOG_RE =
+  /\b(?:log|write|save|record)\b.{0,60}\b(?:daily\s+)?check[\s-]?ins?\b|\b(?:daily\s+)?check[\s-]?ins?\b.{0,60}\b(?:log|write|save|record)\b|\b(?:log|write|save|record)\b.{0,60}\b(?:workout|gym session|training session|pull a|push a|legs)\b|\b(?:done with|finished)\b.{0,50}\b(?:workout|gym)\b.{0,60}\b(?:log|and log)\b|\blog_daily_checkin\b|\bget_daily_checkin\b/i;
+
 /** True when Magnus (GENERAL) must run tools — not Happiness/Wealth/Wisdom prompt-only paths. */
 export function looksLikeMagnusToolAction(message: string): boolean {
   const text = message.trim();
@@ -38,6 +41,7 @@ export function looksLikeMagnusToolAction(message: string): boolean {
   return (
     LIST_ACTION_RE.test(text) ||
     LIFEOS_ACTION_RE.test(text) ||
-    EVENT_LOG_EXPLICIT_RE.test(text)
+    EVENT_LOG_EXPLICIT_RE.test(text) ||
+    CHECKIN_LOG_RE.test(text)
   );
 }

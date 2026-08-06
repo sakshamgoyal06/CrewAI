@@ -45,6 +45,7 @@ import { connectKiteTool } from "./tools/kiteConnectTool.js";
 import {
   addGoal,
   getDailyCheckin,
+  logDailyCheckin,
   magnusAddListItem,
   magnusCreateList,
   magnusLinkNotionList,
@@ -609,6 +610,36 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "log_daily_checkin",
+    description:
+      "Write or update the daily check-in for a date. Use for EOD reflection, gym/workout summaries, pillar scores, and how-the-day-went notes. Upserts by date; set append_notes to add without replacing prior notes.",
+    input_schema: {
+      type: "object",
+      properties: {
+        date: { type: "string", description: "YYYY-MM-DD. Defaults to today." },
+        notes: {
+          type: "string",
+          description: "Reflection, workout recap, or day summary.",
+        },
+        append_notes: {
+          type: "boolean",
+          description: "When true and a check-in exists, append notes instead of replacing.",
+        },
+        day_rating: { type: "string", description: "Overall day rating (e.g. Good, Hard)." },
+        health_score: { type: "number" },
+        wealth_score: { type: "number" },
+        wisdom_score: { type: "number" },
+        joy_score: { type: "number", description: "0–100; also writes happiness_reserve." },
+        feeling: { type: "string" },
+        pattern_flags: { type: "string" },
+        health_status: { type: "string", enum: ["on_track", "at_risk", "deviating"] },
+        wealth_status: { type: "string", enum: ["on_track", "at_risk", "deviating"] },
+        wisdom_status: { type: "string", enum: ["on_track", "at_risk", "deviating"] },
+      },
+      required: [],
+    },
+  },
+  {
     name: "add_goal",
     description:
       "Add a goal to the user's goals list AND the LifeOS goals table. Use for financial, health, or life goals they want tracked.",
@@ -1040,6 +1071,23 @@ async function runTool(
         return await getDailyCheckin({
           userProfileId: ctx.userProfileId,
           date: str(input.date),
+        });
+      case "log_daily_checkin":
+        return await logDailyCheckin({
+          userProfileId: ctx.userProfileId,
+          date: str(input.date),
+          notes: str(input.notes),
+          append_notes: input.append_notes === true,
+          day_rating: input.day_rating as string | number | undefined,
+          health_score: num(input.health_score),
+          wealth_score: num(input.wealth_score),
+          wisdom_score: num(input.wisdom_score),
+          joy_score: num(input.joy_score),
+          feeling: str(input.feeling),
+          pattern_flags: str(input.pattern_flags),
+          health_status: str(input.health_status),
+          wealth_status: str(input.wealth_status),
+          wisdom_status: str(input.wisdom_status),
         });
       case "add_goal":
         return await addGoal({

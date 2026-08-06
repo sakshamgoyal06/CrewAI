@@ -67,6 +67,18 @@ describe("resolveIntentNaturalLanguage", () => {
     await expect(resolveIntentNaturalLanguage("connect notion")).resolves.toBe("GENERAL");
   });
 
+  it("forces daily check-in logs to GENERAL even when classified HEALTH", async () => {
+    classifiedAs("HEALTH");
+    await expect(
+      resolveIntentNaturalLanguage("log that i did the workout in my daily check ins"),
+    ).resolves.toBe("GENERAL");
+
+    classifiedAs("HEALTH");
+    await expect(
+      resolveIntentNaturalLanguage("I am done with the workout. Read hevy, review, and log"),
+    ).resolves.toBe("GENERAL");
+  });
+
   it("forces tool continuations to GENERAL after a YouTube turn", async () => {
     classifiedAs("WISDOM");
     await expect(

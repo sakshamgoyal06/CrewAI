@@ -26,6 +26,17 @@ describe("looksLikeMagnusToolAction", () => {
     expect(looksLikeMagnusToolAction("sync supabase to notion")).toBe(true);
   });
 
+  it("detects daily check-in writes", () => {
+    expect(looksLikeMagnusToolAction("log this in my daily checkins")).toBe(true);
+    expect(looksLikeMagnusToolAction("save today's check-in")).toBe(true);
+    expect(
+      looksLikeMagnusToolAction("I am done with the workout. Read hevy, review, and log"),
+    ).toBe(true);
+    expect(looksLikeMagnusToolAction("log that i did the workout in my daily check ins")).toBe(
+      true,
+    );
+  });
+
   it("does not steal pure taste talk", () => {
     expect(looksLikeMagnusToolAction("recommend a film like Arrival")).toBe(false);
     expect(looksLikeMagnusToolAction("should I train legs today?")).toBe(false);
