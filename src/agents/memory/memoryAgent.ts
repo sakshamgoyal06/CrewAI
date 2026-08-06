@@ -13,6 +13,11 @@ export { formatMemoryBlockForSystem, augmentUserWithMemory } from "./format.js";
 export { buildAgentMessages, buildAgentHistoryPrefix } from "./buildAgentMessages.js";
 export { buildMemoryPackage } from "./memoryPackage.js";
 export type { MemoryPackage } from "./memoryPackage.js";
+export {
+  formatUserKnowledgeBlock,
+  loadUserKnowledgeLayer,
+  userKnowledgeEnabled,
+} from "./userKnowledge.js";
 export { runPostTurnMemoryMaintenance, chronologicalTurnsFromPackage } from "./postTurnMemory.js";
 export { memoryConfig, resetMemoryConfigForTests } from "./memoryConfig.js";
 export type { MemoryConfig } from "./memoryConfig.js";

@@ -52,6 +52,9 @@ Life lists (Supabase canonical for every user; optional Notion mirror when conne
 - log_joy_tank when they report happiness reserve / joy tank level (0–100). Enables morning brief
   and memory when MAGNUS_LIFEOS_CONTEXT_ENABLED is on.
 Memory may show open list highlights — still call list_items or recommend_list_items before acting.
+A user knowledge block is prepended each turn with all list slugs, phrase aliases (e.g. "AI task list"
+→ magnus-ideas, "guitar" → music), integration status, and health watch items — consult it before
+denying a list exists or inventing items.
 Legacy aliases list_notion_items, add_notion_item, update_notion_item, add_notion_goal still work.
 
 Notion onboarding (per-user OAuth when configured on the host):

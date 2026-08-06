@@ -112,7 +112,7 @@ shell or `.env`.
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
 | `src/agents/health/healthRouter.ts` | Health composite: meal log → journal → Hevy write → fitness → nutrition |
 | `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
-| `src/agents/memory/` | `loadMemoryContext`, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
+| `src/agents/memory/` | `loadMemoryContext`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
 | `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
 | `src/meals/` | Meal parsing, estimate chain (web search → USDA → CalorieNinjas → optional LLM), `meal_logs` writes |
 | `src/pillars/health/workouts/` | Hevy client, fitness agent, Hevy write agent |
@@ -145,7 +145,7 @@ shell or `.env`.
    actions → `GENERAL`; list / LifeOS / Notion / event-log tool phrases → `GENERAL`
    (`magnusActionDetect.ts`); short affirmatives and list/playlist follow-ups after a Magnus tool
    turn → `GENERAL` (`magnusToolContinuation.ts`). Pillar specialists are prompt-only.
-6. **Memory** — Loaded once per turn: recent chat as verbatim `messages[]` (configurable window), rolling summary for older turns, semantic facts from `memory_summaries`, plus structured profile/goals/logs. Tunable via `MAGNUS_MEMORY_*` in `.env.example`. Post-turn maintenance updates conversation summary and extracted facts.
+6. **Memory** — Loaded once per turn: recent chat as verbatim `messages[]` (configurable window), rolling summary for older turns, semantic facts from `memory_summaries`, plus structured profile/goals/logs. A **user knowledge layer** (`src/agents/memory/userKnowledge.ts`) is prepended ahead of the memory block: full list slug inventory (including empty/custom lists like `magnus-ideas`), phrase→slug aliases, sample open items, integration status, YouTube playlist aliases, and health watch items from `user_program_memory` — so Magnus does not claim a list or integration does not exist. Tunable via `MAGNUS_MEMORY_*` in `.env.example` (`MAGNUS_MEMORY_USER_KNOWLEDGE=false` disables the layer). Post-turn maintenance updates conversation summary and extracted facts.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
    routing in `metadata` (`delegated_agent`, `agent_metadata`). Columns `message_type`
    (`conversation` | `automated`) and `delivery_trigger` (`manual`, `scheduled`, `http`,
@@ -275,4 +275,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-06 (log_daily_checkin writer, action-integrity guard on replies)
+**Last updated:** 2026-08-06 (user knowledge layer for list/integration/health recall)

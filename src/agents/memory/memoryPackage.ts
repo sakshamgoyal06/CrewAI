@@ -11,12 +11,19 @@ import {
 } from "./summaryBuffer.js";
 import type { MemoryContext, MemoryChatTurn } from "./types.js";
 import { formatMemoryBlockForSystem } from "./format.js";
+import {
+  formatUserKnowledgeBlock,
+  loadUserKnowledgeLayer,
+  userKnowledgeEnabled,
+} from "./userKnowledge.js";
 
 export type MemoryPackage = {
   verbatimTurns: MemoryChatTurn[];
   olderSummary?: string;
   semanticFacts: string[];
   memoryBlock: string;
+  /** Stable user pointers (lists, integrations, health watch) prepended to memoryBlock. */
+  userKnowledgeBlock?: string;
   retrievalProfile: MemoryRetrievalProfile;
   /** Full chronological turns loaded this turn (for post-turn summary update). */
   chronologicalTurns: MemoryChatTurn[];
@@ -64,16 +71,34 @@ export async function buildMemoryPackage(input: {
     );
   }
 
-  const memoryBlock = formatMemoryBlockForSystem(input.memory, profile, {
+  const memoryBlockBase = formatMemoryBlockForSystem(input.memory, profile, {
     semanticFacts,
     omitChatSnippets: config.conversationMessagesEnabled,
   });
+
+  let userKnowledgeBlock: string | undefined;
+  let memoryBlock = memoryBlockBase;
+  if (userKnowledgeEnabled()) {
+    const knowledge = await loadUserKnowledgeLayer(input.userProfileId, {
+      intent: input.intent,
+      rawMessage: input.rawMessage,
+      memory: input.memory,
+    });
+    userKnowledgeBlock = formatUserKnowledgeBlock(knowledge, {
+      intent: input.intent,
+      rawMessage: input.rawMessage,
+    });
+    if (userKnowledgeBlock.trim()) {
+      memoryBlock = `${userKnowledgeBlock.trim()}\n\n${memoryBlockBase}`;
+    }
+  }
 
   return {
     verbatimTurns: verbatim,
     olderSummary,
     semanticFacts,
     memoryBlock,
+    userKnowledgeBlock,
     retrievalProfile: profile,
     chronologicalTurns: chronological,
   };
