@@ -10,6 +10,8 @@ export type ProactiveMessageKind =
   | "drift_guard"
   | "custom_reminder"
   | "midday_encouragement"
+  | "stale_list_nudge"
+  | "chat_inactivity"
   | "custom";
 
 /** How the message was triggered (maps to `magnus_chat_messages.delivery_trigger`). */

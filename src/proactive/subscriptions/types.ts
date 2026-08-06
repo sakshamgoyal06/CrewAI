@@ -89,6 +89,8 @@ export const CATALOG_KINDS = [
   "evening_journal",
   "drift_guard",
   "midday_encouragement",
+  "stale_list_nudge",
+  "chat_inactivity",
 ] as const;
 
 export type CatalogProactiveKind = (typeof CATALOG_KINDS)[number];
@@ -101,27 +103,37 @@ export const CATALOG_KIND_LABELS: Record<CatalogProactiveKind, string> = {
   evening_journal: "Evening journal nudge",
   drift_guard: "Drift / weak-moment guard",
   midday_encouragement: "Midday encouragement",
+  stale_list_nudge: "Stale list nudge",
+  chat_inactivity: "Chat inactivity check-in",
 };
 
 export const DEFAULT_CATALOG_SCHEDULE: Record<CatalogProactiveKind, ProactiveSchedule> = {
   evening_journal: { type: "recurring_local", localHour: 21, windowMinutes: 14 },
   drift_guard: { type: "conditional" },
   midday_encouragement: { type: "recurring_local", localHour: 12, windowMinutes: 14 },
+  stale_list_nudge: { type: "conditional" },
+  chat_inactivity: { type: "conditional" },
 };
 
 export const DEFAULT_CATALOG_CAP: Record<CatalogProactiveKind, ProactiveCapBucket> = {
   evening_journal: "scheduled",
   drift_guard: "adaptive",
   midday_encouragement: "adaptive",
+  stale_list_nudge: "adaptive",
+  chat_inactivity: "adaptive",
 };
 
 export const DEFAULT_CATALOG_TRIGGER: Record<CatalogProactiveKind, ProactiveTriggerType> = {
   evening_journal: "recurring",
   drift_guard: "conditional",
   midday_encouragement: "recurring",
+  stale_list_nudge: "conditional",
+  chat_inactivity: "conditional",
 };
 
 export const DEFAULT_CATALOG_COOLDOWN_HOURS: Partial<Record<CatalogProactiveKind, number>> = {
   drift_guard: 24,
   midday_encouragement: 24,
+  stale_list_nudge: 72,
+  chat_inactivity: 48,
 };

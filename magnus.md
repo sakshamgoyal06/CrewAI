@@ -157,13 +157,14 @@ shell or `.env`.
    `MAGNUS_PROACTIVE_CRON_INTERVAL_MINUTES` (default 5). Jobs: **morning brief** (local hour from
    `MAGNUS_MORNING_BRIEF_LOCAL_HOUR` in `user_profile.timezone`; Redis dedupe per calendar day),
    **event reminders** (`remind_at` on `magnus_events`, sets `reminded_at` after send), **subscription
-   dispatcher** (`evening_journal`, `drift_guard`, `midday_encouragement`, `custom_reminder` via
-   `magnus_proactive_subscriptions` — modular kind registry in `src/proactive/kinds/`). User controls
-   via `manage_proactive_messages` tool: list/enable/disable/disable_all catalog kinds, create one-shot
-   or daily custom reminders (`create_reminder` / `create_recurring_reminder`). Relative time parsing
-   for one-shots (`tomorrow 8pm`, `in 30 minutes`). LLM gate+compose (Haiku) for evening journal,
-   drift guard, and midday encouragement; quiet hours 23:00–06:00 local; adaptive cap 3/day
-   (scheduled + user-asked reminders exempt). Manual brief: say `morning brief` or
+   dispatcher** (`evening_journal`, `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
+   `chat_inactivity`, `custom_reminder` via `magnus_proactive_subscriptions` — modular kind registry in
+   `src/proactive/kinds/`). User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
+   catalog kinds, create one-shot or daily custom reminders (`create_reminder` /
+   `create_recurring_reminder`). Relative time parsing for one-shots (`tomorrow 8pm`, `in 30 minutes`).
+   LLM gate+compose (Haiku) for evening journal, drift guard, midday encouragement, stale list nudges,
+   and chat inactivity; quiet hours 23:00–06:00 local; adaptive cap 3/day (scheduled + user-asked
+   reminders exempt). Manual brief: say `morning brief` or
    `/morningbrief`. Outbound uses HTML formatting and is logged to `magnus_chat_messages` with
    `metadata.proactive`.
 10. **Event log** — Magnus tools `log_event`, `update_event`, `reschedule_event`, `list_events` write
@@ -274,11 +275,12 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Kite write (long-term)** — equity order placement/cancel via Kite Connect, behind `MAGNUS_KITE_ORDERS_ENABLED`, static IP on the developer console, and a Telegram **CONFIRM** flow separate from wealth coaching. Probe script: `npm run kite:test-write` (`scripts/wealth/kite/test-write-endpoints.mts`). **Live probe (2026-08-03):** Coin MF writes (`POST/DELETE /mf/orders`, `/mf/sips`) return **403 Insufficient permission** — not available on this app/plan; equity `POST /orders/regular` blocked until **static IP** is configured; equity cancel auth works (404 on fake id). Do not build MF execution in Magnus unless Zerodha opens those APIs.
 - **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables; empty
   LifeOS sections are omitted when `dataAvailability` flags are false (no “unknown” filler).
-- **No inactivity / activity-triggered proactive messages yet** — drift_guard uses rule+LLM nudges; generic inactivity triggers still TODO.
+- **Activity/inactivity proactive** — `stale_list_nudge` (queued joy/media items idle 14+ days) and
+  `chat_inactivity` (no Telegram messages for 3+ days) are opt-in catalog kinds with LLM gate+compose.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube (turn-handler smoke in `src/magnus.smoke.test.ts` only).
 - **Notion list mirror** — Supabase canonical; OAuth reconnect now wipes legacy LifeOS hub/registry and provisions a fresh **Magnus** page (no discover fallback to old DBs). Say connect Notion again after deploy if relink stuck on old LifeOS.
 **Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
 
 ---
 
-**Last updated:** 2026-08-06 (proactive Phase 2: midday encouragement, recurring reminders, disable_all, relative time parsing)
+**Last updated:** 2026-08-06 (proactive Phase 3: stale list nudges, chat inactivity check-ins)

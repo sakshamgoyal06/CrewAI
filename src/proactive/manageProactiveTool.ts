@@ -39,7 +39,7 @@ export async function manageProactiveMessages(input: {
     if (subs.length === 0) {
       return [
         "No proactive messages configured.",
-        "Catalog kinds (opt in with enable): evening_journal, drift_guard, midday_encouragement.",
+        "Catalog kinds (opt in with enable): evening_journal, drift_guard, midday_encouragement, stale_list_nudge, chat_inactivity.",
         "Say enable evening journal at 9pm, or create_reminder with message + at.",
       ].join("\n");
     }
@@ -174,6 +174,6 @@ export async function manageProactiveMessages(input: {
 
   return [
     "Unknown action. Use: list | enable | disable | disable_all | create_reminder | create_recurring_reminder | delete",
-    "Kinds: evening_journal, drift_guard, midday_encouragement (catalog); custom_reminder (one-shot or daily).",
+    "Kinds: evening_journal, drift_guard, midday_encouragement, stale_list_nudge, chat_inactivity (catalog); custom_reminder (one-shot or daily).",
   ].join("\n");
 }
