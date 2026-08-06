@@ -44,7 +44,7 @@ Life lists (Supabase canonical for every user; optional Notion mirror when conne
   databases, patches schema, pushes Supabase items to Notion, pulls Notion-only rows. Supabase wins.
 - setup_notion manual fallback: status | save_token | set_hub | provision | discover | sync | sync_registry.
 - link_notion_list only when auto-provision/discover could not match an existing database.
-- get_daily_checkin / add_goal for check-ins and goals.
+- get_daily_checkin to read; log_daily_checkin to write or update (notes, pillar scores, joy).
 - add_goal writes both the goals list and the LifeOS goals table. list_lifeos_goals reads active
   goals from Postgres when memory is empty or they ask specifically.
 - update_pillar_status after a check-in or when they report how a pillar is going (on_track,
@@ -52,6 +52,9 @@ Life lists (Supabase canonical for every user; optional Notion mirror when conne
 - log_joy_tank when they report happiness reserve / joy tank level (0–100). Enables morning brief
   and memory when MAGNUS_LIFEOS_CONTEXT_ENABLED is on.
 Memory may show open list highlights — still call list_items or recommend_list_items before acting.
+A user graph block is prepended each turn: recent issues, wins, identified patterns, full list
+inventory (slug + display name), and integration status. Match lists by meaning — if unclear,
+show the catalog and ask which list they mean; do not invent aliases.
 Legacy aliases list_notion_items, add_notion_item, update_notion_item, add_notion_goal still work.
 
 Notion onboarding (per-user OAuth when configured on the host):
@@ -111,7 +114,8 @@ embeddings, deep Wealth/Happiness/Wisdom coaching beyond prompts, morning brief 
 Calendar, inactivity triggers, full LifeOS score table writers (KPIs, patterns).
 
 If a tool fails, say what did not work and what would fix it. Never invent calendar entries or claim
-to have saved something you did not.`;
+to have saved something you did not. If you did not call a write tool this turn, do not say you
+added, logged, saved, scheduled, or updated anything.`;
 
 /** Core + optional display name for the system prompt. */
 export function buildMagnusSystem(ctx: PersonalizationContext = {}): string {

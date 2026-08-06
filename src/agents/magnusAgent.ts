@@ -45,6 +45,7 @@ import { connectKiteTool } from "./tools/kiteConnectTool.js";
 import {
   addGoal,
   getDailyCheckin,
+  logDailyCheckin,
   magnusAddListItem,
   magnusCreateList,
   magnusLinkNotionList,
@@ -64,6 +65,7 @@ import {
 } from "../lifeos/lifeosTool.js";
 import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
+import { classifyToolResult, type ToolOutcome } from "./routing/actionIntegrity.js";
 
 const MODEL = "claude-sonnet-4-6";
 // Calendar + event log + YouTube bulk ops in one turn needs headroom (env override).
@@ -609,6 +611,36 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "log_daily_checkin",
+    description:
+      "Write or update the daily check-in for a date. Use for EOD reflection, gym/workout summaries, pillar scores, and how-the-day-went notes. Upserts by date; set append_notes to add without replacing prior notes.",
+    input_schema: {
+      type: "object",
+      properties: {
+        date: { type: "string", description: "YYYY-MM-DD. Defaults to today." },
+        notes: {
+          type: "string",
+          description: "Reflection, workout recap, or day summary.",
+        },
+        append_notes: {
+          type: "boolean",
+          description: "When true and a check-in exists, append notes instead of replacing.",
+        },
+        day_rating: { type: "string", description: "Overall day rating (e.g. Good, Hard)." },
+        health_score: { type: "number" },
+        wealth_score: { type: "number" },
+        wisdom_score: { type: "number" },
+        joy_score: { type: "number", description: "0–100; also writes happiness_reserve." },
+        feeling: { type: "string" },
+        pattern_flags: { type: "string" },
+        health_status: { type: "string", enum: ["on_track", "at_risk", "deviating"] },
+        wealth_status: { type: "string", enum: ["on_track", "at_risk", "deviating"] },
+        wisdom_status: { type: "string", enum: ["on_track", "at_risk", "deviating"] },
+      },
+      required: [],
+    },
+  },
+  {
     name: "add_goal",
     description:
       "Add a goal to the user's goals list AND the LifeOS goals table. Use for financial, health, or life goals they want tracked.",
@@ -1041,6 +1073,23 @@ async function runTool(
           userProfileId: ctx.userProfileId,
           date: str(input.date),
         });
+      case "log_daily_checkin":
+        return await logDailyCheckin({
+          userProfileId: ctx.userProfileId,
+          date: str(input.date),
+          notes: str(input.notes),
+          append_notes: input.append_notes === true,
+          day_rating: input.day_rating as string | number | undefined,
+          health_score: num(input.health_score),
+          wealth_score: num(input.wealth_score),
+          wisdom_score: num(input.wisdom_score),
+          joy_score: num(input.joy_score),
+          feeling: str(input.feeling),
+          pattern_flags: str(input.pattern_flags),
+          health_status: str(input.health_status),
+          wealth_status: str(input.wealth_status),
+          wisdom_status: str(input.wisdom_status),
+        });
       case "add_goal":
         return await addGoal({
           userProfileId: ctx.userProfileId,
@@ -1150,6 +1199,7 @@ export async function runMagnusAgent(ctx: AgentContext): Promise<AgentResult> {
   );
 
   const toolsUsed: string[] = [];
+  const toolOutcomes: ToolOutcome[] = [];
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
     const msg = await anthropic.messages.create({
@@ -1168,6 +1218,7 @@ export async function runMagnusAgent(ctx: AgentContext): Promise<AgentResult> {
           specialist: "Magnus",
           pillar: "magnus",
           ...(toolsUsed.length > 0 ? { tools_used: toolsUsed } : {}),
+          ...(toolOutcomes.length > 0 ? { tool_outcomes: toolOutcomes } : {}),
         },
       };
     }
@@ -1181,6 +1232,11 @@ export async function runMagnusAgent(ctx: AgentContext): Promise<AgentResult> {
         (use.input ?? {}) as Record<string, unknown>,
         ctx,
       );
+      toolOutcomes.push({
+        name: use.name,
+        ok: classifyToolResult(out),
+        preview: out.slice(0, 160),
+      });
       results.push({
         type: "tool_result" as const,
         tool_use_id: use.id,
@@ -1195,6 +1251,12 @@ export async function runMagnusAgent(ctx: AgentContext): Promise<AgentResult> {
     text:
       `I hit the step limit after ${toolsUsed.length} tool call(s) on that request. ` +
       `Say "continue" and I'll pick up where I left off — or ask for one smaller step at a time.`,
-    metadata: { specialist: "Magnus", pillar: "magnus", tool_limit: true, tools_used: toolsUsed },
+    metadata: {
+      specialist: "Magnus",
+      pillar: "magnus",
+      tool_limit: true,
+      tools_used: toolsUsed,
+      tool_outcomes: toolOutcomes,
+    },
   };
 }

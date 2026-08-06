@@ -100,10 +100,11 @@ shell or `.env`.
 | `src/agents/tools/notionConnectTool.ts` | `connect_notion`, `setup_notion` Magnus tools |
 | `src/lifeos/` | LifeOS Postgres writers: goals, pillar status, joy tank |
 | `src/agents/tools/magnusActionDetect.ts` | Detect list, LifeOS, Notion, and event-log phrases that need Magnus tools (GENERAL) |
-| `src/agents/routing/magnusToolContinuation.ts` | Short affirmatives and list/playlist ops after a Magnus tool turn → GENERAL |
+| `src/agents/routing/actionIntegrity.ts` | Blocks false save/add/log claims unless tools actually succeeded |
 | `src/agents/tools/listTool.ts` | List catalog + `recommend_list_items` filters |
 | `src/lists/` | List catalog templates, Supabase store, service orchestration, optional Notion mirror |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
+| `src/lists/listService.ts` | List catalog + `log_daily_checkin` / `get_daily_checkin` writers (checkins list + LifeOS dual-write) |
 | `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
 | `src/events/` | Event log domain: timezone helpers, Supabase store, calendar sync, formatting |
 | `src/youtube/` | Bookmarks, cue queue, and Magnus playlist state in Supabase |
@@ -111,7 +112,7 @@ shell or `.env`.
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
 | `src/agents/health/healthRouter.ts` | Health composite: meal log → journal → Hevy write → fitness → nutrition |
 | `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
-| `src/agents/memory/` | `loadMemoryContext`, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
+| `src/agents/memory/` | `loadMemoryContext`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
 | `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
 | `src/meals/` | Meal parsing, estimate chain (web search → USDA → CalorieNinjas → optional LLM), `meal_logs` writes |
 | `src/pillars/health/workouts/` | Hevy client, fitness agent, Hevy write agent |
@@ -144,7 +145,7 @@ shell or `.env`.
    actions → `GENERAL`; list / LifeOS / Notion / event-log tool phrases → `GENERAL`
    (`magnusActionDetect.ts`); short affirmatives and list/playlist follow-ups after a Magnus tool
    turn → `GENERAL` (`magnusToolContinuation.ts`). Pillar specialists are prompt-only.
-6. **Memory** — Loaded once per turn: recent chat as verbatim `messages[]` (configurable window), rolling summary for older turns, semantic facts from `memory_summaries`, plus structured profile/goals/logs. Tunable via `MAGNUS_MEMORY_*` in `.env.example`. Post-turn maintenance updates conversation summary and extracted facts.
+6. **Memory** — Loaded once per turn: recent chat as verbatim `messages[]` (configurable window), rolling summary for older turns, semantic facts from `memory_summaries`, plus structured profile/goals/logs. A **user graph** (`src/agents/memory/userKnowledge.ts`) is prepended ahead of the memory block: recent issues/wins from program learnings, identified patterns (DB + patterns list + semantic facts), full list inventory (slug + display name — no phrase aliases; Magnus matches by meaning or asks which list), integration status, and YouTube playlist pointers. Tunable via `MAGNUS_MEMORY_*` in `.env.example` (`MAGNUS_MEMORY_USER_KNOWLEDGE=false` disables the layer). Post-turn maintenance updates conversation summary and extracted facts.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
    routing in `metadata` (`delegated_agent`, `agent_metadata`). Columns `message_type`
    (`conversation` | `automated`) and `delivery_trigger` (`manual`, `scheduled`, `http`,
@@ -274,4 +275,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-04 (tool routing coercions: list/LifeOS/Notion → GENERAL)
+**Last updated:** 2026-08-06 (user graph: issues, wins, patterns; no list aliases)

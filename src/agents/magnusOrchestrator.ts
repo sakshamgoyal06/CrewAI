@@ -25,6 +25,7 @@ import { dispatchToAgent } from "./registry.js";
 import { intentToPillarRoute } from "./routing/intentToPillarRoute.js";
 import type { AgentContext } from "./types.js";
 import { fetchRecentRoutingTurns } from "../tools/routingContext.js";
+import { enforceActionIntegrity } from "./routing/actionIntegrity.js";
 
 export type OrchestratorReply = {
   replyText: string;
@@ -35,6 +36,21 @@ export type OrchestratorReply = {
   /** For post-turn memory maintenance (summary + semantic facts). */
   memoryPackageChronologicalTurns?: MemoryChatTurn[];
 };
+
+function finalizeOrchestratorReply(reply: OrchestratorReply): OrchestratorReply {
+  const integrity = enforceActionIntegrity({
+    text: reply.replyText,
+    metadata: reply.agentMetadata,
+  });
+  if (!integrity.corrected) {
+    return reply;
+  }
+  return {
+    ...reply,
+    replyText: integrity.text,
+    agentMetadata: integrity.metadata,
+  };
+}
 
 export async function runOrchestratorReply(input: {
   userMessage: string;
@@ -61,7 +77,7 @@ export async function runOrchestratorReply(input: {
       },
       healthProfile,
     );
-    return {
+    return finalizeOrchestratorReply({
       replyText: ob.text,
       intent: "HEALTH",
       delegatedAgent: "HealthOnboarding",
@@ -70,7 +86,7 @@ export async function runOrchestratorReply(input: {
         pillar: healthRoute.pillar,
         department: healthRoute.department,
       },
-    };
+    });
   }
 
   const recentTurns = await fetchRecentRoutingTurns(
@@ -85,7 +101,7 @@ export async function runOrchestratorReply(input: {
       userProfileId: input.userProfileId,
       telegramUserId: input.telegramUserId,
     });
-    return {
+    return finalizeOrchestratorReply({
       replyText: started.text,
       intent: "HEALTH",
       delegatedAgent: "HealthOnboarding",
@@ -94,7 +110,7 @@ export async function runOrchestratorReply(input: {
         pillar: healthRoute.pillar,
         department: healthRoute.department,
       },
-    };
+    });
   }
 
   const pillarRoute = intentToPillarRoute(intent);
@@ -139,17 +155,17 @@ export async function runOrchestratorReply(input: {
 
   if (intent === "GENERAL") {
     const magnus = await runMagnusAgent(ctx);
-    return {
+    return finalizeOrchestratorReply({
       replyText: magnus.text,
       intent,
       agentMetadata: magnus.metadata,
       memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
-    };
+    });
   }
 
   const delegated = await dispatchToAgent(ctx, intent);
   if (delegated) {
-    return {
+    return finalizeOrchestratorReply({
       replyText: delegated.result.text,
       intent,
       delegatedAgent: delegated.agentName,
@@ -159,16 +175,16 @@ export async function runOrchestratorReply(input: {
         ...delegated.result.metadata,
       },
       memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
-    };
+    });
   }
 
   // Unreachable while every pillar has an agent; Magnus answers rather than apologising.
   logger.warn({ intent }, "no specialist registered for intent; Magnus answering");
   const fallback = await runMagnusAgent(ctx);
-  return {
+  return finalizeOrchestratorReply({
     replyText: fallback.text,
     intent,
     agentMetadata: { ...fallback.metadata, unrouted: true },
     memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
-  };
+  });
 }
