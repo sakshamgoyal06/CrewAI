@@ -10,8 +10,6 @@ describe("listSlug", () => {
     expect(normalizeSlug("todo")).toBe("tasks");
     expect(normalizeSlug("song")).toBe("music");
     expect(normalizeSlug("check-in")).toBe("checkins");
-    expect(normalizeSlug("magnus ideas")).toBe("magnus-ideas");
-    expect(normalizeSlug("guitar")).toBe("music");
   });
 
   it("accepts custom slugs", () => {

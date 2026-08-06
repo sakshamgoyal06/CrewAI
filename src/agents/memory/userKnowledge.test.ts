@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../config/lifeosContext.js", () => ({
+  lifeosContextEnabled: vi.fn().mockReturnValue(false),
+}));
 vi.mock("../../lists/listService.js", () => ({
   ensureUserLists: vi.fn(),
 }));
@@ -15,6 +18,12 @@ vi.mock("../../users/userProgramMemory.js", () => ({
 vi.mock("../../youtube/youtubeStore.js", () => ({
   getYoutubeState: vi.fn(),
 }));
+vi.mock("../../tools/clients.js", () => ({
+  supabase: { from: vi.fn() },
+}));
+vi.mock("./semanticMemory.js", () => ({
+  loadSemanticFacts: vi.fn().mockResolvedValue(["Prefers morning gym sessions"]),
+}));
 
 import { ensureUserLists } from "../../lists/listService.js";
 import { queryListItems } from "../../lists/listStore.js";
@@ -28,20 +37,25 @@ import {
 } from "./userKnowledge.js";
 
 describe("parseMarkdownSectionBullets", () => {
-  it("extracts bullets under Not working / watch", () => {
+  it("extracts bullets under Not working / watch and Working", () => {
     const body = `## Working
-- Good thing
+- **Push A** — full routine on time
+- **Nutrition** — improving since Jul
 
 ## Not working / watch
-- **Assisted pull-up** — removed from Pull A
-- **Finisher when late** — treadmill short
+- **Post-gap treadmill** — 7 min logged
+- **Dual load risk** — gym + swim
 
 ## Open tweaks
 - Something else`;
 
     expect(parseMarkdownSectionBullets(body, "Not working / watch")).toEqual([
-      "Assisted pull-up — removed from Pull A",
-      "Finisher when late — treadmill short",
+      "Post-gap treadmill — 7 min logged",
+      "Dual load risk — gym + swim",
+    ]);
+    expect(parseMarkdownSectionBullets(body, "Working")).toEqual([
+      "Push A — full routine on time",
+      "Nutrition — improving since Jul",
     ]);
   });
 });
@@ -95,13 +109,12 @@ describe("loadUserKnowledgeLayer", () => {
     vi.mocked(loadUserProgramMemory).mockResolvedValue([
       {
         section: "program_learnings",
-        body: `## Not working / watch
+        body: `## Working
+- **Push A return** — discipline reset holding
+
+## Not working / watch
 - **Post-gap treadmill** — 7 min logged
 - **Dual load risk** — gym + swim`,
-      },
-      {
-        section: "recovery_routine",
-        body: "- Max 3 consecutive gym days\n- Default rest after Cardio+Abs",
       },
     ] as never);
 
@@ -110,29 +123,25 @@ describe("loadUserKnowledgeLayer", () => {
       data: {
         playlist_aliases: {
           magnus: { playlist_id: "PL1", title: "Magnus" },
-          wisdom: { playlist_id: "PL2", title: "Wisdom" },
         },
       },
     } as never);
   });
 
-  it("loads full list inventory and aliases", async () => {
+  it("loads list inventory and user graph without phrase aliases", async () => {
     const layer = await loadUserKnowledgeLayer("user-1");
 
     expect(layer.lists.map((l) => l.slug)).toEqual(["magnus-ideas", "music"]);
-    expect(layer.listAliases.some((a) => a.phrase === "ai task list" && a.slug === "magnus-ideas")).toBe(
+    expect(layer.userGraph.recentIssues[0]?.text).toContain("Post-gap treadmill");
+    expect(layer.userGraph.recentWins[0]?.text).toContain("Push A return");
+    expect(layer.userGraph.identifiedPatterns.some((p) => p.text.includes("morning gym"))).toBe(
       true,
     );
-    expect(layer.listAliases.some((a) => a.phrase === "guitar" && a.slug === "music")).toBe(true);
-    expect(layer.listSamples.find((s) => s.slug === "magnus-ideas")?.titles).toContain(
-      "Build user knowledge layer",
-    );
-    expect(layer.integrations.notion).toBe("connected");
     expect(layer.integrations.hevy).toBe("connected");
-    expect(layer.healthWatchItems[0]).toContain("Post-gap treadmill");
+    expect("listAliases" in layer).toBe(false);
   });
 
-  it("formats a block that mentions all list slugs", () => {
+  it("formats user graph and list-matching guidance without aliases", () => {
     const block = formatUserKnowledgeBlock(
       {
         lists: [
@@ -152,7 +161,6 @@ describe("loadUserKnowledgeLayer", () => {
             pillar: "happiness",
           },
         ],
-        listAliases: [{ phrase: "ai task list", slug: "magnus-ideas" }],
         listSamples: [{ slug: "magnus-ideas", titles: ["Item A"] }],
         integrations: {
           notion: "connected",
@@ -162,18 +170,23 @@ describe("loadUserKnowledgeLayer", () => {
           zerodha: "token_set",
         },
         playlistAliases: [{ alias: "magnus", title: "Magnus" }],
-        healthWatchItems: ["Post-gap treadmill — 7 min"],
-        healthConstraints: ["Max 3 consecutive gym days"],
+        userGraph: {
+          recentIssues: [{ text: "Post-gap treadmill — 7 min", source: "program_learnings" }],
+          recentWins: [{ text: "Push A return", source: "program_learnings" }],
+          identifiedPatterns: [{ text: "Skips gym when sleep is poor", source: "semantic_facts" }],
+        },
         gaps: [],
       },
-      { intent: "GENERAL", rawMessage: "what is in my AI task list?" },
+      { intent: "GENERAL", rawMessage: "what is in my ideas list?" },
     );
 
-    expect(block).toContain("All list slugs for this user");
+    expect(block).toContain("User graph");
+    expect(block).toContain("Recent issues / watch");
+    expect(block).toContain("Recent wins");
+    expect(block).toContain("Identified patterns");
     expect(block).toContain("magnus-ideas");
-    expect(block).toContain("ai task list");
-    expect(block).toContain("Hevy: connected");
-    expect(block).toContain("Health — active watch");
-    expect(block).toContain("list_catalog");
+    expect(block).toContain("ask which list");
+    expect(block).not.toContain("ai task list");
+    expect(block).not.toContain("→ music");
   });
 });

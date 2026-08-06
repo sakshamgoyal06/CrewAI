@@ -145,7 +145,7 @@ shell or `.env`.
    actions → `GENERAL`; list / LifeOS / Notion / event-log tool phrases → `GENERAL`
    (`magnusActionDetect.ts`); short affirmatives and list/playlist follow-ups after a Magnus tool
    turn → `GENERAL` (`magnusToolContinuation.ts`). Pillar specialists are prompt-only.
-6. **Memory** — Loaded once per turn: recent chat as verbatim `messages[]` (configurable window), rolling summary for older turns, semantic facts from `memory_summaries`, plus structured profile/goals/logs. A **user knowledge layer** (`src/agents/memory/userKnowledge.ts`) is prepended ahead of the memory block: full list slug inventory (including empty/custom lists like `magnus-ideas`), phrase→slug aliases, sample open items, integration status, YouTube playlist aliases, and health watch items from `user_program_memory` — so Magnus does not claim a list or integration does not exist. Tunable via `MAGNUS_MEMORY_*` in `.env.example` (`MAGNUS_MEMORY_USER_KNOWLEDGE=false` disables the layer). Post-turn maintenance updates conversation summary and extracted facts.
+6. **Memory** — Loaded once per turn: recent chat as verbatim `messages[]` (configurable window), rolling summary for older turns, semantic facts from `memory_summaries`, plus structured profile/goals/logs. A **user graph** (`src/agents/memory/userKnowledge.ts`) is prepended ahead of the memory block: recent issues/wins from program learnings, identified patterns (DB + patterns list + semantic facts), full list inventory (slug + display name — no phrase aliases; Magnus matches by meaning or asks which list), integration status, and YouTube playlist pointers. Tunable via `MAGNUS_MEMORY_*` in `.env.example` (`MAGNUS_MEMORY_USER_KNOWLEDGE=false` disables the layer). Post-turn maintenance updates conversation summary and extracted facts.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
    routing in `metadata` (`delegated_agent`, `agent_metadata`). Columns `message_type`
    (`conversation` | `automated`) and `delivery_trigger` (`manual`, `scheduled`, `http`,
@@ -275,4 +275,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-06 (user knowledge layer for list/integration/health recall)
+**Last updated:** 2026-08-06 (user graph: issues, wins, patterns; no list aliases)

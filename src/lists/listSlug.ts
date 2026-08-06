@@ -32,9 +32,6 @@ const SLUG_ALIASES: Record<string, string> = {
   checkin: "checkins",
   "check-in": "checkins",
   "check-ins": "checkins",
-  "magnus-ideas": "magnus-ideas",
-  "magnus ideas": "magnus-ideas",
-  guitar: "music",
 };
 
 const SLUG_PATTERN = /^[a-z][a-z0-9_-]{0,48}$/;
