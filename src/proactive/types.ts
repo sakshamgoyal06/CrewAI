@@ -6,6 +6,10 @@
 export type ProactiveMessageKind =
   | "morning_brief"
   | "event_reminder"
+  | "evening_journal"
+  | "drift_guard"
+  | "custom_reminder"
+  | "midday_encouragement"
   | "custom";
 
 /** How the message was triggered (maps to `magnus_chat_messages.delivery_trigger`). */

@@ -31,6 +31,7 @@ const LIST_TOOL_NAMES = new Set([
   "add_goal",
   "get_daily_checkin",
   "log_daily_checkin",
+  "manage_proactive_messages",
   "log_joy_tank",
   "update_pillar_status",
   "list_lifeos_goals",

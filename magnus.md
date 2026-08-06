@@ -118,7 +118,7 @@ shell or `.env`.
 | `src/pillars/health/workouts/` | Hevy client, fitness agent, Hevy write agent |
 | `src/pillars/health/references/` | Reads committed program memory + Telegram journals |
 | `src/jobs/` | Morning Brief: prompt, context, cron (legacy re-export), timezone window. Optional. |
-| `src/proactive/` | Magnus-initiated Telegram: outbound HTML, dedupe, scheduled job registry, cron tick |
+| `src/proactive/` | Magnus-initiated Telegram: outbound HTML, dedupe, kind registry, dispatcher, subscriptions |
 | `src/tools/telegram.ts` | Telegraf bot, `/start` and `/help`, rate limit, update dedupe, webhook mount |
 | `src/tools/telegramWatchdog.ts` | Liveness probe; exits so the host restarts |
 | `src/config/telegramRuntime.ts` | Polling vs webhook, public URL derivation, handler timeout |
@@ -156,10 +156,14 @@ shell or `.env`.
    (`MAGNUS_PROACTIVE_CRON_ENABLED`, default on) runs scheduled jobs every
    `MAGNUS_PROACTIVE_CRON_INTERVAL_MINUTES` (default 5). Jobs: **morning brief** (local hour from
    `MAGNUS_MORNING_BRIEF_LOCAL_HOUR` in `user_profile.timezone`; Redis dedupe per calendar day),
-   **event reminders** (`remind_at` on `magnus_events`, sets `reminded_at` after send). Manual brief:
-   say `morning brief` or `/morningbrief`. Outbound uses HTML formatting and is logged to
-   `magnus_chat_messages` with `metadata.proactive`. Future: inactivity/activity triggers plug into
-   `src/proactive/registry.ts`.
+   **event reminders** (`remind_at` on `magnus_events`, sets `reminded_at` after send), **subscription
+   dispatcher** (`evening_journal`, `drift_guard`, `custom_reminder` via
+   `magnus_proactive_subscriptions` — modular kind registry in `src/proactive/kinds/`). User controls
+   via `manage_proactive_messages` tool: list/enable/disable catalog kinds, create one-shot reminders.
+   LLM gate+compose (Haiku) for evening journal and drift guard; quiet hours 23:00–06:00 local;
+   adaptive cap 3/day (scheduled + user-asked reminders exempt). Manual brief: say `morning brief` or
+   `/morningbrief`. Outbound uses HTML formatting and is logged to `magnus_chat_messages` with
+   `metadata.proactive`.
 10. **Event log** — Magnus tools `log_event`, `update_event`, `reschedule_event`, `list_events` write
    to `magnus_events`. Moving a commitment closes the old row and opens a linked replacement (never
    edits time in place). A second `log_event` for the same activity with a different time within two
@@ -195,7 +199,7 @@ Public tables use RLS with a `service_role_only` policy; the service role key by
 Supabase `sb_secret_…` key format works as service role.
 
 `supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`,
-`magnus_events`, `memory_summaries`, `magnus_youtube_*` (incl. `playlist_aliases`), and `magnus_chat_messages` type columns;
+`magnus_events`, `magnus_proactive_subscriptions`, `memory_summaries`, `magnus_youtube_*` (incl. `playlist_aliases`), and `magnus_chat_messages` type columns;
 older schema was applied directly to the project before those migrations existed.
 
 ---
@@ -268,11 +272,11 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Kite write (long-term)** — equity order placement/cancel via Kite Connect, behind `MAGNUS_KITE_ORDERS_ENABLED`, static IP on the developer console, and a Telegram **CONFIRM** flow separate from wealth coaching. Probe script: `npm run kite:test-write` (`scripts/wealth/kite/test-write-endpoints.mts`). **Live probe (2026-08-03):** Coin MF writes (`POST/DELETE /mf/orders`, `/mf/sips`) return **403 Insufficient permission** — not available on this app/plan; equity `POST /orders/regular` blocked until **static IP** is configured; equity cancel auth works (404 on fake id). Do not build MF execution in Magnus unless Zerodha opens those APIs.
 - **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables; empty
   LifeOS sections are omitted when `dataAvailability` flags are false (no “unknown” filler).
-- **No inactivity / activity-triggered proactive messages yet** — only time-based cron jobs.
+- **No inactivity / activity-triggered proactive messages yet** — drift_guard uses rule+LLM nudges; generic inactivity triggers still TODO.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube (turn-handler smoke in `src/magnus.smoke.test.ts` only).
 - **Notion list mirror** — Supabase canonical; OAuth reconnect now wipes legacy LifeOS hub/registry and provisions a fresh **Magnus** page (no discover fallback to old DBs). Say connect Notion again after deploy if relink stuck on old LifeOS.
 **Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
 
 ---
 
-**Last updated:** 2026-08-06 (user graph: issues, wins, patterns; no list aliases)
+**Last updated:** 2026-08-06 (modular proactive subscriptions: evening journal, drift guard, custom reminders)
