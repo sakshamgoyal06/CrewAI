@@ -65,6 +65,7 @@ import {
 } from "../lifeos/lifeosTool.js";
 import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
+import { classifyToolResult, type ToolOutcome } from "./routing/actionIntegrity.js";
 
 const MODEL = "claude-sonnet-4-6";
 // Calendar + event log + YouTube bulk ops in one turn needs headroom (env override).
@@ -1198,6 +1199,7 @@ export async function runMagnusAgent(ctx: AgentContext): Promise<AgentResult> {
   );
 
   const toolsUsed: string[] = [];
+  const toolOutcomes: ToolOutcome[] = [];
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
     const msg = await anthropic.messages.create({
@@ -1216,6 +1218,7 @@ export async function runMagnusAgent(ctx: AgentContext): Promise<AgentResult> {
           specialist: "Magnus",
           pillar: "magnus",
           ...(toolsUsed.length > 0 ? { tools_used: toolsUsed } : {}),
+          ...(toolOutcomes.length > 0 ? { tool_outcomes: toolOutcomes } : {}),
         },
       };
     }
@@ -1229,6 +1232,11 @@ export async function runMagnusAgent(ctx: AgentContext): Promise<AgentResult> {
         (use.input ?? {}) as Record<string, unknown>,
         ctx,
       );
+      toolOutcomes.push({
+        name: use.name,
+        ok: classifyToolResult(out),
+        preview: out.slice(0, 160),
+      });
       results.push({
         type: "tool_result" as const,
         tool_use_id: use.id,
@@ -1243,6 +1251,12 @@ export async function runMagnusAgent(ctx: AgentContext): Promise<AgentResult> {
     text:
       `I hit the step limit after ${toolsUsed.length} tool call(s) on that request. ` +
       `Say "continue" and I'll pick up where I left off — or ask for one smaller step at a time.`,
-    metadata: { specialist: "Magnus", pillar: "magnus", tool_limit: true, tools_used: toolsUsed },
+    metadata: {
+      specialist: "Magnus",
+      pillar: "magnus",
+      tool_limit: true,
+      tools_used: toolsUsed,
+      tool_outcomes: toolOutcomes,
+    },
   };
 }

@@ -111,7 +111,8 @@ embeddings, deep Wealth/Happiness/Wisdom coaching beyond prompts, morning brief 
 Calendar, inactivity triggers, full LifeOS score table writers (KPIs, patterns).
 
 If a tool fails, say what did not work and what would fix it. Never invent calendar entries or claim
-to have saved something you did not.`;
+to have saved something you did not. If you did not call a write tool this turn, do not say you
+added, logged, saved, scheduled, or updated anything.`;
 
 /** Core + optional display name for the system prompt. */
 export function buildMagnusSystem(ctx: PersonalizationContext = {}): string {

@@ -100,7 +100,7 @@ shell or `.env`.
 | `src/agents/tools/notionConnectTool.ts` | `connect_notion`, `setup_notion` Magnus tools |
 | `src/lifeos/` | LifeOS Postgres writers: goals, pillar status, joy tank |
 | `src/agents/tools/magnusActionDetect.ts` | Detect list, LifeOS, Notion, and event-log phrases that need Magnus tools (GENERAL) |
-| `src/agents/routing/magnusToolContinuation.ts` | Short affirmatives and list/playlist ops after a Magnus tool turn → GENERAL |
+| `src/agents/routing/actionIntegrity.ts` | Blocks false save/add/log claims unless tools actually succeeded |
 | `src/agents/tools/listTool.ts` | List catalog + `recommend_list_items` filters |
 | `src/lists/` | List catalog templates, Supabase store, service orchestration, optional Notion mirror |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
@@ -275,4 +275,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-06 (log_daily_checkin writer + check-in routing coercion)
+**Last updated:** 2026-08-06 (log_daily_checkin writer, action-integrity guard on replies)

@@ -45,9 +45,11 @@ export async function runPillarSpecialist(input: {
   maxTokens?: number;
 }): Promise<AgentResult> {
   const noToolsGuard =
-    "\n\n**You have no tools.** Never claim to have added, removed, or changed YouTube playlists, " +
-    "videos, calendars, or other external data. If the user asks for those actions, tell them to " +
-    "ask Magnus in one direct message (e.g. \"add X to wisdom playlist\") — do not pretend it is done.";
+    "\n\n**You have no tools.** Never claim to have added, removed, logged, saved, created, " +
+    "scheduled, updated, or mirrored anything — not lists, playlists, calendars, check-ins, " +
+    "or other external data. If the user asks for those actions, give advice only and say you " +
+    "have not saved anything yet (they will get a save on the next turn when tools run). " +
+    "Do not use fake confirmation blocks like `checkin:` or tables of items you did not write.";
 
   const msg = await anthropic.messages.create({
     model: PILLAR_MODEL,
