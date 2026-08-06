@@ -2,6 +2,7 @@
  * Magnus tool: manage proactive Telegram subscriptions (evening journal, drift guard, custom reminders).
  */
 import { zonedTimeToInstant } from "../events/eventTime.js";
+import { parseReminderTime } from "./parseReminderTime.js";
 import {
   CATALOG_KIND_LABELS,
   isCatalogKind,
@@ -9,7 +10,9 @@ import {
 } from "./subscriptions/types.js";
 import {
   createCustomReminder,
+  createRecurringCustomReminder,
   deleteSubscription,
+  disableAllSubscriptions,
   listAllSubscriptions,
   setSubscriptionEnabled,
   upsertCatalogSubscription,
@@ -27,6 +30,7 @@ export async function manageProactiveMessages(input: {
   message?: string;
   user_instruction?: string;
   subscription_id?: string;
+  catalog_only?: boolean;
 }): Promise<string> {
   const action = input.action.trim().toLowerCase();
 
@@ -108,7 +112,7 @@ export async function manageProactiveMessages(input: {
     if (!atRaw) {
       return "at is required (e.g. tomorrow 8pm, 2026-08-07 20:00).";
     }
-    const at = zonedTimeToInstant(atRaw, input.timezone);
+    const at = parseReminderTime(atRaw, input.timezone) ?? zonedTimeToInstant(atRaw, input.timezone);
     if (!at) {
       return `Could not parse time "${atRaw}" in timezone ${input.timezone}.`;
     }
@@ -126,6 +130,37 @@ export async function manageProactiveMessages(input: {
     return `Reminder set for ${at.toISOString()} (${input.timezone}): "${message}"`;
   }
 
+  if (action === "create_recurring_reminder") {
+    const message = input.message?.trim();
+    if (!message) {
+      return "message is required for create_recurring_reminder.";
+    }
+    if (input.local_hour == null || Number.isNaN(input.local_hour)) {
+      return "local_hour is required (0-23) for create_recurring_reminder.";
+    }
+    const res = await createRecurringCustomReminder({
+      userProfileId: input.userProfileId,
+      message,
+      localHour: input.local_hour,
+    });
+    if (!res.ok) {
+      return `Could not create recurring reminder: ${res.error}`;
+    }
+    const hour = (res.data.schedule as RecurringLocalSchedule).localHour ?? input.local_hour;
+    return `Daily reminder at ~${hour}:00 your time: "${message}"`;
+  }
+
+  if (action === "disable_all") {
+    const res = await disableAllSubscriptions(input.userProfileId, {
+      catalogOnly: input.catalog_only === true,
+    });
+    if (!res.ok) {
+      return res.error;
+    }
+    const scope = input.catalog_only ? "catalog proactive messages" : "proactive messages";
+    return `Disabled ${res.data.count} ${scope}.`;
+  }
+
   if (action === "delete") {
     if (!input.subscription_id?.trim()) {
       return "subscription_id is required for delete (from list).";
@@ -138,7 +173,7 @@ export async function manageProactiveMessages(input: {
   }
 
   return [
-    "Unknown action. Use: list | enable | disable | create_reminder | delete",
-    "Kinds: evening_journal, drift_guard, midday_encouragement (catalog); custom_reminder (one-shot).",
+    "Unknown action. Use: list | enable | disable | disable_all | create_reminder | create_recurring_reminder | delete",
+    "Kinds: evening_journal, drift_guard, midday_encouragement (catalog); custom_reminder (one-shot or daily).",
   ].join("\n");
 }

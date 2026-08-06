@@ -157,11 +157,13 @@ shell or `.env`.
    `MAGNUS_PROACTIVE_CRON_INTERVAL_MINUTES` (default 5). Jobs: **morning brief** (local hour from
    `MAGNUS_MORNING_BRIEF_LOCAL_HOUR` in `user_profile.timezone`; Redis dedupe per calendar day),
    **event reminders** (`remind_at` on `magnus_events`, sets `reminded_at` after send), **subscription
-   dispatcher** (`evening_journal`, `drift_guard`, `custom_reminder` via
+   dispatcher** (`evening_journal`, `drift_guard`, `midday_encouragement`, `custom_reminder` via
    `magnus_proactive_subscriptions` — modular kind registry in `src/proactive/kinds/`). User controls
-   via `manage_proactive_messages` tool: list/enable/disable catalog kinds, create one-shot reminders.
-   LLM gate+compose (Haiku) for evening journal and drift guard; quiet hours 23:00–06:00 local;
-   adaptive cap 3/day (scheduled + user-asked reminders exempt). Manual brief: say `morning brief` or
+   via `manage_proactive_messages` tool: list/enable/disable/disable_all catalog kinds, create one-shot
+   or daily custom reminders (`create_reminder` / `create_recurring_reminder`). Relative time parsing
+   for one-shots (`tomorrow 8pm`, `in 30 minutes`). LLM gate+compose (Haiku) for evening journal,
+   drift guard, and midday encouragement; quiet hours 23:00–06:00 local; adaptive cap 3/day
+   (scheduled + user-asked reminders exempt). Manual brief: say `morning brief` or
    `/morningbrief`. Outbound uses HTML formatting and is logged to `magnus_chat_messages` with
    `metadata.proactive`.
 10. **Event log** — Magnus tools `log_event`, `update_event`, `reschedule_event`, `list_events` write
@@ -279,4 +281,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-06 (modular proactive subscriptions: evening journal, drift guard, custom reminders)
+**Last updated:** 2026-08-06 (proactive Phase 2: midday encouragement, recurring reminders, disable_all, relative time parsing)

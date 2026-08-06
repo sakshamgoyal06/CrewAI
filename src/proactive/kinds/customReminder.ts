@@ -1,9 +1,11 @@
+import { isInLocalHourWindow } from "../scheduleWindow.js";
 import type {
   ProactiveKindContext,
   ProactiveKindHandler,
   ProactiveEvaluateResult,
 } from "./types.js";
-import type { OneShotSchedule } from "../subscriptions/types.js";
+import type { OneShotSchedule, RecurringLocalSchedule } from "../subscriptions/types.js";
+import { recurringLocalSchedule } from "./recurringLocal.js";
 
 export const customReminderHandler: ProactiveKindHandler = {
   kind: "custom_reminder",
@@ -11,6 +13,18 @@ export const customReminderHandler: ProactiveKindHandler = {
   dedupeTtlSec: 3600,
 
   async evaluate(ctx): Promise<ProactiveEvaluateResult> {
+    const recurring = recurringLocalSchedule(ctx);
+    if (recurring) {
+      const inWindow = isInLocalHourWindow(
+        ctx.signals.local,
+        recurring.localHour,
+        recurring.windowMinutes ?? 14,
+      );
+      return inWindow
+        ? { candidate: true, reason: "recurring_window" }
+        : { candidate: false, reason: "outside_window" };
+    }
+
     const sched = ctx.subscription.schedule as OneShotSchedule;
     if (sched?.type !== "one_shot" || !sched.at) {
       return { candidate: false, reason: "invalid_schedule" };

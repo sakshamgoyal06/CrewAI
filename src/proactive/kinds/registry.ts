@@ -2,6 +2,7 @@ import type { ProactiveKindHandler } from "./types.js";
 import { customReminderHandler } from "./customReminder.js";
 import { driftGuardHandler } from "./driftGuard.js";
 import { eveningJournalHandler } from "./eveningJournal.js";
+import { middayEncouragementHandler } from "./middayEncouragement.js";
 
 const handlers = new Map<string, ProactiveKindHandler>();
 
@@ -19,6 +20,7 @@ export function listProactiveKinds(): ProactiveKindHandler[] {
 
 export function registerDefaultProactiveKinds(): void {
   registerProactiveKind(eveningJournalHandler);
+  registerProactiveKind(middayEncouragementHandler);
   registerProactiveKind(driftGuardHandler);
   registerProactiveKind(customReminderHandler);
 }

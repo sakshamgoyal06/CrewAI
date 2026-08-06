@@ -15,6 +15,9 @@ import type { ProactiveMessageKind } from "./types.js";
 
 function dedupeKeyFor(sub: ProactiveSubscription, dateKey: string): string {
   if (sub.kind === "custom_reminder") {
+    if (sub.triggerType === "recurring") {
+      return `custom_reminder:recurring:${sub.id}:${dateKey}`;
+    }
     return `custom_reminder:${sub.id}`;
   }
   return `${sub.kind}:${sub.userProfileId}:${dateKey}`;
