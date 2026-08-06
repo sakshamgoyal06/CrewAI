@@ -319,7 +319,7 @@ const TOOLS: Tool[] = [
   {
     name: "manage_proactive_messages",
     description:
-      "Manage Magnus-initiated Telegram nudges: evening journal, drift guard, midday encouragement, custom reminders. List, enable, disable, disable_all, create_reminder, create_recurring_reminder, delete. User must opt in to catalog kinds.",
+      "Manage Magnus-initiated Telegram nudges: evening journal, drift guard, midday encouragement, stale list nudges, chat inactivity check-ins, custom reminders. List, enable, disable, disable_all, create_reminder, create_recurring_reminder, delete. User must opt in to catalog kinds.",
     input_schema: {
       type: "object",
       properties: {
@@ -338,7 +338,7 @@ const TOOLS: Tool[] = [
         kind: {
           type: "string",
           description:
-            "Catalog kind: evening_journal, drift_guard, midday_encouragement. Or subscription kind for disable.",
+            "Catalog kind: evening_journal, drift_guard, midday_encouragement, stale_list_nudge, chat_inactivity. Or subscription kind for disable.",
         },
         enabled: { type: "boolean" },
         local_hour: {

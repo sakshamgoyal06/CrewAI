@@ -43,4 +43,6 @@ export type ProactiveMessageKind =
   | "evening_journal"
   | "drift_guard"
   | "custom_reminder"
-  | "midday_encouragement";
+  | "midday_encouragement"
+  | "stale_list_nudge"
+  | "chat_inactivity";

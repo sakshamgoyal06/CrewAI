@@ -52,9 +52,9 @@ Life lists (Supabase canonical for every user; optional Notion mirror when conne
 - log_joy_tank when they report happiness reserve / joy tank level (0–100). Enables morning brief
   and memory when MAGNUS_LIFEOS_CONTEXT_ENABLED is on.
 - manage_proactive_messages to list, enable, disable, disable_all, or create Telegram nudges Magnus
-  sends without you messaging first: evening journal, drift guard, midday encouragement, one-shot
-  or daily custom reminders. Catalog kinds default off — user opts in. Quiet hours 11pm–6am local
-  (user-timed one-shots excepted).
+  sends without you messaging first: evening journal, drift guard, midday encouragement, stale list
+  nudges, chat inactivity check-ins, one-shot or daily custom reminders. Catalog kinds default off —
+  user opts in. Quiet hours 11pm–6am local (user-timed one-shots excepted).
 Memory may show open list highlights — still call list_items or recommend_list_items before acting.
 A user graph block is prepended each turn: recent issues, wins, identified patterns, full list
 inventory (slug + display name), and integration status. Match lists by meaning — if unclear,
