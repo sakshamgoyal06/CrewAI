@@ -2,7 +2,6 @@ import { isInLocalHourWindow } from "../scheduleWindow.js";
 import { gateAndCompose } from "../llm/gateAndCompose.js";
 import { recurringLocalSchedule } from "./recurringLocal.js";
 import type {
-  ProactiveKindContext,
   ProactiveKindHandler,
   ProactiveEvaluateResult,
 } from "./types.js";

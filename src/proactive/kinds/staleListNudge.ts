@@ -5,7 +5,6 @@ import {
   loadStaleListSnapshot,
 } from "../signals/listNudgeSignals.js";
 import type {
-  ProactiveKindContext,
   ProactiveKindHandler,
   ProactiveEvaluateResult,
 } from "./types.js";

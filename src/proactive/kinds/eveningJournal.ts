@@ -68,7 +68,7 @@ export const eveningJournalHandler: ProactiveKindHandler = {
     };
   },
 
-  async compose(ctx, gateResult) {
+  async compose(_ctx, gateResult) {
     if (gateResult.composeHint?.trim()) {
       return gateResult.composeHint.trim();
     }
