@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { supabase as defaultClient } from "../../tools/clients.js";
 import {
+  CATALOG_KINDS,
   DEFAULT_CATALOG_CAP,
   DEFAULT_CATALOG_COOLDOWN_HOURS,
   DEFAULT_CATALOG_SCHEDULE,
@@ -151,6 +152,59 @@ export async function createCustomReminder(input: {
     return { ok: false, error: error?.message ?? "insert failed" };
   }
   return { ok: true, data: rowToSubscription(data as ProactiveSubscriptionRow) };
+}
+
+export async function createRecurringCustomReminder(input: {
+  userProfileId: string;
+  message: string;
+  localHour: number;
+  windowMinutes?: number;
+  deps?: { client?: SupabaseClient };
+}): Promise<StoreResult<ProactiveSubscription>> {
+  const hour = Math.min(23, Math.max(0, Math.floor(input.localHour)));
+  const row = {
+    user_profile_id: input.userProfileId,
+    kind: "custom_reminder",
+    enabled: true,
+    trigger_type: "recurring" as ProactiveTriggerType,
+    schedule: {
+      type: "recurring_local",
+      localHour: hour,
+      windowMinutes: input.windowMinutes ?? 14,
+    } satisfies ProactiveSchedule,
+    config: { message: input.message.trim(), recurring: true },
+    user_instruction: input.message.trim(),
+    source: "user_chat" as const,
+    cap_bucket: "user_asked" as ProactiveCapBucket,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await client(input.deps).from(TABLE).insert(row).select("*").single();
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "insert failed" };
+  }
+  return { ok: true, data: rowToSubscription(data as ProactiveSubscriptionRow) };
+}
+
+export async function disableAllSubscriptions(
+  userProfileId: string,
+  opts?: { catalogOnly?: boolean; deps?: { client?: SupabaseClient } },
+): Promise<StoreResult<{ count: number }>> {
+  let q = client(opts?.deps)
+    .from(TABLE)
+    .update({ enabled: false, updated_at: new Date().toISOString() })
+    .eq("user_profile_id", userProfileId)
+    .eq("enabled", true);
+
+  if (opts?.catalogOnly) {
+    q = q.in("kind", [...CATALOG_KINDS]);
+  }
+
+  const { data, error } = await q.select("id");
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  return { ok: true, data: { count: data?.length ?? 0 } };
 }
 
 export async function setSubscriptionEnabled(

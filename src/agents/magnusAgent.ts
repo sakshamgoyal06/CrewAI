@@ -319,13 +319,21 @@ const TOOLS: Tool[] = [
   {
     name: "manage_proactive_messages",
     description:
-      "Manage Magnus-initiated Telegram nudges: evening journal, drift guard, custom reminders. List, enable, disable, create_reminder, delete. User must opt in to catalog kinds.",
+      "Manage Magnus-initiated Telegram nudges: evening journal, drift guard, midday encouragement, custom reminders. List, enable, disable, disable_all, create_reminder, create_recurring_reminder, delete. User must opt in to catalog kinds.",
     input_schema: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: ["list", "enable", "disable", "create_reminder", "delete"],
+          enum: [
+            "list",
+            "enable",
+            "disable",
+            "disable_all",
+            "create_reminder",
+            "create_recurring_reminder",
+            "delete",
+          ],
         },
         kind: {
           type: "string",
@@ -335,18 +343,27 @@ const TOOLS: Tool[] = [
         enabled: { type: "boolean" },
         local_hour: {
           type: "number",
-          description: "Local hour 0-23 for recurring catalog kinds (e.g. 21 for 9pm).",
+          description:
+            "Local hour 0-23 for recurring catalog kinds or create_recurring_reminder (e.g. 21 for 9pm).",
         },
         at: {
           type: "string",
-          description: "When to fire a one-shot reminder, local time (create_reminder).",
+          description:
+            "When to fire a one-shot reminder, local time (create_reminder): e.g. tomorrow 8pm, in 30 minutes, 2026-08-07 20:00.",
         },
-        message: { type: "string", description: "Reminder body (create_reminder)." },
+        message: {
+          type: "string",
+          description: "Reminder body (create_reminder, create_recurring_reminder).",
+        },
         user_instruction: {
           type: "string",
           description: "Optional extra guidance stored on the subscription (drift guard, evening journal).",
         },
         subscription_id: { type: "string", description: "From list, for delete or disable one row." },
+        catalog_only: {
+          type: "boolean",
+          description: "For disable_all: only disable catalog kinds (evening_journal, drift_guard, midday_encouragement).",
+        },
       },
       required: ["action"],
     },
@@ -998,6 +1015,7 @@ async function runTool(
           message: str(input.message),
           user_instruction: str(input.user_instruction),
           subscription_id: str(input.subscription_id),
+          catalog_only: input.catalog_only === true,
         });
       case "youtube_search":
         return await youtubeSearchTool({
