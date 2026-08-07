@@ -95,9 +95,10 @@ describe("isGymEventDueForHevyReconcile", () => {
 });
 
 describe("buildMatchedMessage", () => {
-  it("includes workout title and duration", () => {
+  it("includes planned date and workout title", () => {
     const msg = buildMatchedMessage({
       eventTitle: "Gym — Pull A",
+      plannedStartAt: new Date("2026-08-06T03:30:00.000Z"),
       workout: {
         title: "Pull A",
         start_time: "2026-08-06T03:36:00.000Z",
@@ -106,12 +107,22 @@ describe("buildMatchedMessage", () => {
       timeZone: "Asia/Kolkata",
     });
     expect(msg).toContain("Pull A");
+    expect(msg).toContain("Gym — Pull A");
     expect(msg).toContain("Hevy");
+    expect(msg).toMatch(/6 Aug|Thu/);
   });
 });
 
 describe("buildMissedGymMessage", () => {
-  it("asks about miss or postpone", () => {
-    expect(buildMissedGymMessage("Gym — Push A")).toContain("postpone");
+  it("includes planned date and asks about miss or postpone", () => {
+    const msg = buildMissedGymMessage({
+      title: "Gym — Pull A",
+      plannedStartAt: new Date("2026-08-05T03:30:00.000Z"),
+      timeZone: "Asia/Kolkata",
+    });
+    expect(msg).toContain("Gym — Pull A");
+    expect(msg).toMatch(/5 Aug|Wed/);
+    expect(msg).toContain("that day");
+    expect(msg).toContain("postpone");
   });
 });
