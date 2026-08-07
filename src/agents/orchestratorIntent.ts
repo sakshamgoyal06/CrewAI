@@ -13,6 +13,7 @@ import {
   looksLikeMagnusToolContinuation,
   type RoutingChatTurn,
 } from "./routing/magnusToolContinuation.js";
+import { looksLikeHealthFitnessIntent } from "./routing/healthConsultationSignals.js";
 
 const MODEL = "claude-sonnet-4-6";
 
@@ -69,6 +70,15 @@ export async function resolveIntentNaturalLanguage(
   const intent = await classifyIntent(userMessage);
 
   if (intent !== "HEALTH" && parseMealLogCommand(userMessage).kind === "meal") {
+    return "HEALTH";
+  }
+
+  // Fitness / Hevy reads → Health specialist (has Hevy context). Combined check-in+log stays GENERAL + consultation.
+  if (
+    intent !== "HEALTH" &&
+    looksLikeHealthFitnessIntent(userMessage) &&
+    !looksLikeMagnusToolAction(userMessage)
+  ) {
     return "HEALTH";
   }
 

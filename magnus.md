@@ -89,8 +89,10 @@ shell or `.env`.
 |------|----------------|
 | `src/index.ts` | Boot: clients → capability log → Telegram runtime → health server → watchdog → graceful shutdown |
 | `src/magnus.ts` | Turn handler: allowlist gate, chat persistence, typing indicator, orchestrator call. Starts the Morning Brief cron. |
-| `src/agents/magnusOrchestrator.ts` | Health onboarding gate → classify → memory → pillar specialist or Magnus |
-| `src/agents/orchestratorIntent.ts` | The five-way classifier, plus deterministic coercions (meal log → HEALTH; YouTube / list / LifeOS / Notion / tool continuations → GENERAL) |
+| `src/agents/magnusOrchestrator.ts` | Health onboarding gate → classify → memory → pillar specialist or Magnus; GENERAL + health context → parallel Health consultation |
+| `src/agents/orchestratorIntent.ts` | The five-way classifier, plus deterministic coercions (meal log → HEALTH; fitness/Hevy reads → HEALTH; YouTube / list / LifeOS / Notion / tool continuations → GENERAL) |
+| `src/agents/routing/healthConsultationSignals.ts` | When a GENERAL turn should still consult Health (message + recent-turn signals) |
+| `src/agents/routing/agentConsultation.ts` | Parallel Magnus + Health on GENERAL; reconciler picks or merges the best reply |
 | `src/agents/magnusAgent.ts` | Magnus himself: calendar, YouTube, event log, journaling, reminders — tool loop |
 | `src/agents/tools/calendarTool.ts` | Google Calendar; per-user tokens; delete/update sync linked `magnus_events` rows |
 | `src/agents/tools/youtubeConnectTool.ts` | In-chat `connect_google` / aliases — Calendar + YouTube one consent |
@@ -144,10 +146,14 @@ shell or `.env`.
 3. **Rate limit** — Redis fixed 60s window per user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, 0 disables).
 4. **Dedupe** — `update_id` claimed in Redis for 24h, so webhook retries never double-reply.
 5. **Classification** — Five intents. `GENERAL` is Magnus's own work, not a fallback bucket.
-   Deterministic coercions after the LLM label: explicit meal logs → `HEALTH`; YouTube / YT Music
-   actions → `GENERAL`; list / LifeOS / Notion / event-log tool phrases → `GENERAL`
-   (`magnusActionDetect.ts`); short affirmatives and list/playlist follow-ups after a Magnus tool
-   turn → `GENERAL` (`magnusToolContinuation.ts`). Pillar specialists are prompt-only.
+   Deterministic coercions after the LLM label: explicit meal logs → `HEALTH`; fitness / Hevy read
+   turns (gym session review, pull from Hevy) → `HEALTH`; YouTube / YT Music actions → `GENERAL`;
+   list / LifeOS / Notion / event-log tool phrases → `GENERAL` (`magnusActionDetect.ts`); short
+   affirmatives and list/playlist follow-ups after a Magnus tool turn → `GENERAL`
+   (`magnusToolContinuation.ts`). On `GENERAL` when the message or recent chat has health signals,
+   Magnus and Health run in parallel and `agentConsultation` reconciles (e.g. Fitness wins when Hevy
+   data is loaded; merge when Magnus logged a check-in and Health reviewed the workout). Pillar
+   specialists are prompt-only.
 6. **Memory** — Loaded once per turn: recent chat as verbatim `messages[]` (configurable window), rolling summary for older turns, semantic facts from `memory_summaries`, plus structured profile/goals/logs. A **user graph** (`src/agents/memory/userKnowledge.ts`) is prepended ahead of the memory block: recent issues/wins from program learnings, identified patterns (DB + patterns list + semantic facts), full list inventory (slug + display name — no phrase aliases; Magnus matches by meaning or asks which list), integration status, and YouTube playlist pointers. Tunable via `MAGNUS_MEMORY_*` in `.env.example` (`MAGNUS_MEMORY_USER_KNOWLEDGE=false` disables the layer). Post-turn maintenance updates conversation summary and extracted facts.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
    routing in `metadata` (`delegated_agent`, `agent_metadata`). Columns `message_type`
@@ -288,4 +294,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-07 (gym ↔ Hevy proactive reconcile; event-log cleanup script)
+**Last updated:** 2026-08-07 (health agent consultation on GENERAL; fitness/Hevy intent coercion)
