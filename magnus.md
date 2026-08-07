@@ -118,7 +118,10 @@ shell or `.env`.
 | `src/pillars/health/workouts/` | Hevy client, fitness agent, Hevy write agent |
 | `src/pillars/health/references/` | Reads committed program memory + Telegram journals |
 | `src/jobs/` | Morning Brief: prompt, context, cron (legacy re-export), timezone window. Optional. |
+| `src/events/gymHevyMatch.ts` | Match planned gym events to Hevy workouts (session label, local date) |
+| `src/events/gymHevyReconcile.ts` | After grace window: sync event log from Hevy or nudge user |
 | `src/proactive/` | Magnus-initiated Telegram: outbound HTML, dedupe, kind registry, dispatcher, subscriptions |
+| `src/proactive/jobs/gymHevyReconcileJob.ts` | Cron: gym ↔ Hevy reconciliation for connected users |
 | `src/tools/telegram.ts` | Telegraf bot, `/start` and `/help`, rate limit, update dedupe, webhook mount |
 | `src/tools/telegramWatchdog.ts` | Liveness probe; exits so the host restarts |
 | `src/config/telegramRuntime.ts` | Polling vs webhook, public URL derivation, handler timeout |
@@ -156,8 +159,10 @@ shell or `.env`.
    (`MAGNUS_PROACTIVE_CRON_ENABLED`, default on) runs scheduled jobs every
    `MAGNUS_PROACTIVE_CRON_INTERVAL_MINUTES` (default 5). Jobs: **morning brief** (local hour from
    `MAGNUS_MORNING_BRIEF_LOCAL_HOUR` in `user_profile.timezone`; Redis dedupe per calendar day),
-   **event reminders** (`remind_at` on `magnus_events`, sets `reminded_at` after send), **subscription
-   dispatcher** (`evening_journal`, `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
+   **event reminders** (`remind_at` on `magnus_events`, sets `reminded_at` after send), **gym ↔ Hevy
+   reconcile** (3 hours after planned gym time: if Hevy has a session that day, mark the event log
+   `done` with Hevy start/end and tell the user; otherwise ask once if they missed it / want to
+   postpone), **subscription dispatcher** (`evening_journal`, `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
    `chat_inactivity`, `custom_reminder` via `magnus_proactive_subscriptions` — modular kind registry in
    `src/proactive/kinds/`). User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
    catalog kinds, create one-shot or daily custom reminders (`create_reminder` /
@@ -242,7 +247,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npx tsx scripts/upsert-user-integrations.mts` | Update `user_integrations` for a user without wiping data |
 | `npx tsx scripts/reset-user-notion-lists.mts` | Reset list architecture + re-sync notion_registry for a user |
 | `npx tsx scripts/audit-notion-lifeos.mts` | Inventory LifeOS hub + accessible Notion databases |
-| `npx tsx scripts/cleanup-notion-lifeos.mts` | Archive duplicate provisioned list DBs + old Morning Brief pages |
+| `npx tsx scripts/cleanup-event-log-aug-2026.mts` | Fix Aug 2026 event-log rows + backfill Hevy gym timestamps |
 
 ---
 
@@ -283,4 +288,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-06 (proactive Phase 3: stale list nudges, chat inactivity check-ins)
+**Last updated:** 2026-08-07 (gym ↔ Hevy proactive reconcile; event-log cleanup script)

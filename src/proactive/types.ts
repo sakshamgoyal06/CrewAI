@@ -6,6 +6,7 @@
 export type ProactiveMessageKind =
   | "morning_brief"
   | "event_reminder"
+  | "gym_hevy_reconcile"
   | "evening_journal"
   | "drift_guard"
   | "custom_reminder"
