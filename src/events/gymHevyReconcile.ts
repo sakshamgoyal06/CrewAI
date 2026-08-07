@@ -67,29 +67,50 @@ function reconcileMetaPatch(
   return { ...(existing ?? {}), hevy_reconcile: patch };
 }
 
+/** Planned slot with calendar date so "Pull A" nudges are not ambiguous. */
+export function formatPlannedGymLabel(input: {
+  title: string;
+  plannedStartAt: Date;
+  timeZone: string;
+}): string {
+  const when = formatInstant(input.plannedStartAt, input.timeZone);
+  return `${when} — ${input.title.trim()}`;
+}
+
 export function buildMatchedMessage(input: {
   eventTitle: string;
+  plannedStartAt: Date;
   workout: HevyWorkout;
   timeZone: string;
 }): string {
   const times = hevyWorkoutTimes(input.workout);
+  const planLabel = formatPlannedGymLabel({
+    title: input.eventTitle,
+    plannedStartAt: input.plannedStartAt,
+    timeZone: input.timeZone,
+  });
   const name = input.workout.title?.trim() || input.eventTitle;
   if (!times) {
-    return `Logged your gym from Hevy: **${name}**. The event log is updated.`;
+    return `Logged **${planLabel}** from Hevy (**${name}**). The event log is updated.`;
   }
   const when = formatInstant(times.startedAt, input.timeZone);
   const duration = formatMinutes(
     Math.round((times.endedAt.getTime() - times.startedAt.getTime()) / 60_000),
   );
   return (
-    `Found your gym in Hevy and logged it: **${name}** — ${when} (${duration}).\n\n` +
+    `Found **${planLabel}** in Hevy and logged it: **${name}** — ${when} (${duration}).\n\n` +
     `The morning brief will count this as done.`
   );
 }
 
-export function buildMissedGymMessage(eventTitle: string): string {
+export function buildMissedGymMessage(input: {
+  title: string;
+  plannedStartAt: Date;
+  timeZone: string;
+}): string {
+  const planLabel = formatPlannedGymLabel(input);
   return (
-    `**${eventTitle}** was on the plan, but I don't see a Hevy session for it yet.\n\n` +
+    `**${planLabel}** was on the plan, but I don't see a Hevy session for that day yet.\n\n` +
     `Did you miss it, or log elsewhere? Reply to mark it done, skip it, or say when to postpone.`
   );
 }
@@ -186,6 +207,7 @@ export async function reconcileGymEventWithHevy(
       kind: "matched",
       message: buildMatchedMessage({
         eventTitle: event.title,
+        plannedStartAt: plannedStart,
         workout,
         timeZone: event.time_zone || "UTC",
       }),
@@ -212,7 +234,11 @@ export async function reconcileGymEventWithHevy(
 
   return {
     kind: "no_session",
-    message: buildMissedGymMessage(event.title),
+    message: buildMissedGymMessage({
+      title: event.title,
+      plannedStartAt: plannedStart,
+      timeZone: event.time_zone || "UTC",
+    }),
   };
 }
 
