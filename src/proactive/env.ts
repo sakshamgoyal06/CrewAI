@@ -76,6 +76,31 @@ export function eventReminderJobEnabled(): boolean {
   return proactiveCronEnabled();
 }
 
+/** Gym ↔ Hevy reconciliation: check Hevy after planned time + grace. */
+export function gymHevyReconcileJobEnabled(): boolean {
+  const raw = process.env.MAGNUS_GYM_HEVY_RECONCILE_ENABLED?.trim().toLowerCase();
+  if (envTruthy(raw)) {
+    return true;
+  }
+  if (envFalsy(raw)) {
+    return false;
+  }
+  return proactiveCronEnabled();
+}
+
+/** How far back to scan for unreconciled gym events (days). */
+export function gymHevyReconcileLookbackDays(): number {
+  const raw = process.env.MAGNUS_GYM_HEVY_RECONCILE_LOOKBACK_DAYS?.trim();
+  if (raw === undefined || raw === "") {
+    return 7;
+  }
+  const n = Number.parseInt(raw, 10);
+  if (Number.isNaN(n) || n < 1 || n > 30) {
+    return 7;
+  }
+  return n;
+}
+
 /** Subscription-based proactive messages (evening journal, drift guard, custom reminders). */
 export function proactiveSubscriptionsJobEnabled(): boolean {
   const raw = process.env.MAGNUS_PROACTIVE_SUBSCRIPTIONS_ENABLED?.trim().toLowerCase();
