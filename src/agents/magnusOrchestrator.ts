@@ -5,8 +5,8 @@
  * specialist may write the answer, but nothing in the reply says so. There are no user-facing
  * commands for choosing a lane, and no announcement when one is chosen.
  *
- * GENERAL turns with health signals (message or recent context) run Magnus and Health in parallel;
- * `agentConsultation` reconciles outputs (e.g. prefer Fitness when Hevy data loaded).
+ * GENERAL turns with pillar signals (message or recent context) run Magnus and every relevant
+ * pillar specialist in parallel; `agentConsultation` reconciles outputs.
  */
 import type { Intent } from "../intent.js";
 import { logger } from "../logger.js";
@@ -30,7 +30,7 @@ import type { AgentContext } from "./types.js";
 import { fetchRecentRoutingTurns } from "../tools/routingContext.js";
 import { enforceActionIntegrity } from "./routing/actionIntegrity.js";
 import { reconcileConsultationOutputs } from "./routing/agentConsultation.js";
-import { shouldConsultHealthOnGeneral } from "./routing/healthConsultationSignals.js";
+import { resolvePillarsToConsultOnGeneral } from "./routing/pillarConsultationSignals.js";
 
 export type OrchestratorReply = {
   replyText: string;
@@ -159,12 +159,12 @@ export async function runOrchestratorReply(input: {
   );
 
   if (intent === "GENERAL") {
-    const consultHealth = shouldConsultHealthOnGeneral({
+    const pillarsToConsult = resolvePillarsToConsultOnGeneral({
       userMessage: input.userMessage,
       recentTurns,
     });
 
-    if (!consultHealth) {
+    if (pillarsToConsult.length === 0) {
       const magnus = await runMagnusAgent(ctx);
       return finalizeOrchestratorReply({
         replyText: magnus.text,
@@ -174,41 +174,50 @@ export async function runOrchestratorReply(input: {
       });
     }
 
-    const healthRoute = intentToPillarRoute("HEALTH");
-    const [magnus, healthDispatch] = await Promise.all([
+    const [magnus, ...pillarDispatches] = await Promise.all([
       runMagnusAgent(ctx),
-      dispatchToAgent(
-        {
-          ...ctx,
-          intent: "HEALTH",
-          pillar: healthRoute.pillar,
-          department: healthRoute.department,
-        },
-        "HEALTH",
-      ),
+      ...pillarsToConsult.map(async (pillarIntent) => {
+        const route = intentToPillarRoute(pillarIntent);
+        const dispatch = await dispatchToAgent(
+          {
+            ...ctx,
+            intent: pillarIntent,
+            pillar: route.pillar,
+            department: route.department,
+          },
+          pillarIntent,
+        );
+        return dispatch
+          ? {
+              intent: pillarIntent,
+              agentName: dispatch.agentName,
+              result: dispatch.result,
+            }
+          : null;
+      }),
     ]);
 
     const reconciled = reconcileConsultationOutputs({
       userMessage: input.userMessage,
       magnus,
-      health: healthDispatch?.result ?? null,
+      pillars: pillarDispatches.filter((p): p is NonNullable<typeof p> => p !== null),
     });
 
     logger.debug(
       {
         module: "magnusOrchestrator",
         consultation: reconciled.consulted,
+        pillarsConsulted: pillarsToConsult,
         primary: reconciled.primarySource,
         reason: reconciled.reason,
       },
-      "general turn with health consultation",
+      "general turn with pillar consultation",
     );
 
     return finalizeOrchestratorReply({
       replyText: reconciled.text,
       intent,
-      delegatedAgent:
-        reconciled.primarySource === "health" ? (healthDispatch?.agentName ?? "HealthComposite") : undefined,
+      delegatedAgent: reconciled.delegatedAgent,
       agentMetadata: reconciled.metadata,
       memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
     });

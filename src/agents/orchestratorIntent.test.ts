@@ -75,11 +75,14 @@ describe("resolveIntentNaturalLanguage", () => {
     await expect(resolveIntentNaturalLanguage("How was my todays gym session")).resolves.toBe(
       "HEALTH",
     );
+  });
+
+  it("forces portfolio reads to WEALTH", async () => {
+    classifiedAs("GENERAL");
+    await expect(resolveIntentNaturalLanguage("show my kite portfolio")).resolves.toBe("WEALTH");
 
     classifiedAs("GENERAL");
-    await expect(
-      resolveIntentNaturalLanguage("review my workout from hevy"),
-    ).resolves.toBe("HEALTH");
+    await expect(resolveIntentNaturalLanguage("pull my zerodha holdings")).resolves.toBe("WEALTH");
   });
 
   it("forces daily check-in logs to GENERAL even when classified HEALTH", async () => {

@@ -13,7 +13,7 @@ import {
   looksLikeMagnusToolContinuation,
   type RoutingChatTurn,
 } from "./routing/magnusToolContinuation.js";
-import { looksLikeHealthFitnessIntent } from "./routing/healthConsultationSignals.js";
+import { looksLikeHealthFitnessIntent, looksLikeWealthPortfolioIntent } from "./routing/pillarConsultationSignals.js";
 
 const MODEL = "claude-sonnet-4-6";
 
@@ -71,6 +71,15 @@ export async function resolveIntentNaturalLanguage(
 
   if (intent !== "HEALTH" && parseMealLogCommand(userMessage).kind === "meal") {
     return "HEALTH";
+  }
+
+  // Portfolio / Kite reads → Wealth specialist (before fitness pull/hevy coercion).
+  if (
+    intent !== "WEALTH" &&
+    looksLikeWealthPortfolioIntent(userMessage) &&
+    !looksLikeMagnusToolAction(userMessage)
+  ) {
+    return "WEALTH";
   }
 
   // Fitness / Hevy reads → Health specialist (has Hevy context). Combined check-in+log stays GENERAL + consultation.
