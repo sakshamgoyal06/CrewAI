@@ -32,6 +32,8 @@ import type { AgentContext } from "./types.js";
 import { fetchRecentRoutingTurns } from "../tools/routingContext.js";
 import { enforceActionIntegrity } from "./routing/actionIntegrity.js";
 import { reconcileConsultationOutputs } from "./routing/agentConsultation.js";
+import { composePillarPlanReply } from "./routing/pillarStrategy/composePillarPlanReply.js";
+import { pillarPlanComposeEnabled } from "./routing/pillarStrategy/parsePillarStrategy.js";
 import { resolvePillarsToConsultOnGeneral } from "./routing/pillarConsultationSignals.js";
 
 export type OrchestratorReply = {
@@ -217,6 +219,22 @@ export async function runOrchestratorReply(input: {
       pillars: pillarDispatches.filter((p): p is NonNullable<typeof p> => p !== null),
     });
 
+    let replyText = reconciled.text;
+    if (pillarPlanComposeEnabled()) {
+      replyText = await composePillarPlanReply(
+        ctx,
+        { steps: [{ capability: "consultation", args: {} }], confidence: 1, parser: "deterministic" },
+        [
+          {
+            step_index: 0,
+            capability: "consultation",
+            text: reconciled.text,
+            metadata: { ...reconciled.metadata, pillar_compose: true },
+          },
+        ],
+      );
+    }
+
     logger.debug(
       {
         module: "magnusOrchestrator",
@@ -229,7 +247,7 @@ export async function runOrchestratorReply(input: {
     );
 
     return finalizeOrchestratorReply({
-      replyText: reconciled.text,
+      replyText,
       intent,
       delegatedAgent: reconciled.delegatedAgent,
       agentMetadata: reconciled.metadata,

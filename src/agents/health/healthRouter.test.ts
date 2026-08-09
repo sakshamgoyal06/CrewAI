@@ -154,7 +154,7 @@ describe("routeHealthMessage", () => {
     });
   });
 
-  it("continues active draft session for follow-up questions without meal_plan_read", async () => {
+  it("answers draft meal plan questions during review without re-posting the draft", async () => {
     process.env.MAGNUS_PILLAR_STRATEGY_PARSER = "true";
     process.env.MAGNUS_PILLAR_PLAN_COMPOSE = "false";
     sessionState.active = {
@@ -178,18 +178,20 @@ describe("routeHealthMessage", () => {
       expires_at: "",
     };
     createMock.mockResolvedValueOnce({
-      content: [{ type: "text", text: "Monday balances protein across three meals — oats AM, dal at lunch, paneer at dinner." }],
+      content: [{ type: "text", text: '{"confidence":0.95,"steps":[{"capability":"meal_plan_create","args":{}}]}' }],
+    });
+    createMock.mockResolvedValueOnce({
+      content: [{ type: "text", text: "Paneer at dinner hits protein well — fish would work if you prefer variety." }],
     });
 
-    const out = await routeHealthMessage(ctx("What about the whole day on Monday?"));
+    const out = await routeHealthMessage(ctx("Should I swap dinner for fish instead?"));
 
     expect(out.metadata).toMatchObject({
       meal_plan_question: true,
       health_router: "pillar_plan",
     });
-    expect(out.text).toMatch(/Monday balances protein/i);
+    expect(out.text).toMatch(/Paneer at dinner|fish/i);
     expect(out.text).not.toMatch(/\*\*Mon 9 Aug\*\*/);
-    expect(out.text).not.toMatch(/Reply \*\*save plan\*\* to lock this menu/);
   });
 
   it("routes food swap asks to Alternates after Fitness declines", async () => {

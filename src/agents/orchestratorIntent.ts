@@ -27,12 +27,17 @@ practice, rest, travel and trips, friends, family, relationships. Taste talk wit
 YouTube / YT Music stays here.
 WISDOM — getting better: learning something, courses, practice, career direction and growth,
 skills, and shipping projects.
-GENERAL — everything else, and specifically: the calendar and schedule, what the day or week
-looks like, reminders, journaling and logging, YouTube / YT Music actions (search, playlists,
-bookmarks, cue/queue, recommendations to open), user lists (watchlist, readlist, tasks, goals
-catalog — read, add, update, recommend from saved items), LifeOS logging (joy tank, pillar
-status, goals table), Notion connect/sync, event log (log/reschedule/list commitments), questions
-spanning several categories, looking something up, and ordinary conversation.
+GENERAL — everything else, and specifically: the calendar and schedule, **what the whole day or week
+looks like** (calendar events, commitments, and meals together — not food alone), reminders,
+journaling and logging, YouTube / YT Music actions (search, playlists, bookmarks, cue/queue,
+recommendations to open), user lists (watchlist, readlist, tasks, goals catalog — read, add,
+update, recommend from saved items), LifeOS logging (joy tank, pillar status, goals table), Notion
+connect/sync, event log (log/reschedule/list commitments), questions spanning several categories,
+looking something up, and ordinary conversation.
+
+HEALTH does **not** own holistic day/schedule overviews ("what does tomorrow look like", "entire
+day", "what's on my calendar tomorrow") — those are GENERAL even if food or meals could be part of
+the answer.
 
 When a message could fit two categories, choose the one the user is asking you to act on.
 Reply with only the category name.`;

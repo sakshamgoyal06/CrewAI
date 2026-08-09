@@ -4,6 +4,12 @@ export const GENERAL_CAPABILITY_CATALOG: CapabilityCatalog = {
   pillar: "GENERAL",
   capabilities: [
     {
+      id: "day_overview",
+      summary: "Holistic day snapshot: Google Calendar + event log commitments + planned meals",
+      disambiguation:
+        'User wants the **whole day** or schedule — "what does my day/tomorrow look like", "entire day", "what\'s on tomorrow", calendar AND meals AND commitments together. Prefer over calendar alone when they ask about the full day, not food-only.',
+    },
+    {
       id: "calendar",
       summary: "Read or write Google Calendar (schedule, events, availability)",
       disambiguation: "What's on my calendar, schedule meeting, move event.",
@@ -60,6 +66,7 @@ export const GENERAL_CAPABILITY_IDS = GENERAL_CAPABILITY_CATALOG.capabilities.ma
 
 /** Magnus tool names allowed per GENERAL capability (executor filters tools). */
 export const GENERAL_CAPABILITY_TOOLS: Record<string, string[]> = {
+  day_overview: [],
   calendar: [
     "read_calendar",
     "create_calendar_event",

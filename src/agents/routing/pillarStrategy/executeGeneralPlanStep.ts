@@ -5,6 +5,7 @@ import { runMagnusAgent } from "../../magnusAgent.js";
 import type { AgentContext, AgentResult } from "../../types.js";
 import { GENERAL_CAPABILITY_TOOLS } from "./catalogs/generalCatalog.js";
 import { buildStepAgentContext } from "./buildStepAgentContext.js";
+import { executeDayOverviewCapability } from "./dayOverview.js";
 import type { PillarPlanStep } from "./types.js";
 
 export async function executeGeneralPlanStep(
@@ -13,6 +14,11 @@ export async function executeGeneralPlanStep(
   priorContext: string,
 ): Promise<AgentResult> {
   const stepCtx = buildStepAgentContext(ctx, step, priorContext);
+
+  if (step.capability === "day_overview") {
+    return executeDayOverviewCapability(stepCtx, step.args);
+  }
+
   const allowedToolNames =
     GENERAL_CAPABILITY_TOOLS[step.capability] ?? GENERAL_CAPABILITY_TOOLS.conversation ?? [];
 

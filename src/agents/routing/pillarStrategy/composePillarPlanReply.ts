@@ -39,6 +39,10 @@ export async function composePillarPlanReply(
 
   const mealPlanQa =
     stepResults.length === 1 && stepResults.every((s) => isMealPlanQuestionStep(s));
+  const isDayOverview =
+    stepResults.length === 1 && stepResults.every((s) => s.metadata?.day_overview === true);
+  const isConsultationMerge =
+    stepResults.length === 1 && stepResults[0]?.capability === "consultation";
 
   const system = `You compose the final Telegram reply for Magnus after internal specialists executed a plan.
 
@@ -57,6 +61,20 @@ Rules:
 
 This turn is meal-plan Q&A during review. Deliver the answer and a one-line nudge (save plan / suggest a change). Do NOT paste the draft menu again.`;
     return composeWithLlm(ctx, stepResults, qaSystem);
+  }
+
+  if (isDayOverview) {
+    const daySystem = `${system}
+
+This turn is a **day overview** (calendar + commitments + meals). Weave the sections into one readable day walkthrough in time order where possible. Keep every event, commitment, and meal — do not drop items. Do not use internal section headers like "Step 1".`;
+    return composeWithLlm(ctx, stepResults, daySystem);
+  }
+
+  if (isConsultationMerge) {
+    const consultSystem = `${system}
+
+This turn merged Magnus and pillar specialist notes. One voice, one message — keep all factual content, remove duplicate greetings or specialist framing.`;
+    return composeWithLlm(ctx, stepResults, consultSystem);
   }
 
   return composeWithLlm(ctx, stepResults, system);

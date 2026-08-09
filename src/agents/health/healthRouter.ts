@@ -21,7 +21,6 @@ import { getActiveMealPlanSession } from "../../nutrition/planning/mealPlanningS
 import { buildRoutingHints } from "../routing/pillarStrategy/buildRoutingHints.js";
 import { executeHealthStrategy, healthDeterministicCapability } from "../routing/pillarStrategy/executeHealthStrategy.js";
 import { parsePillarExecutionPlan, pillarStrategyEnabled } from "../routing/pillarStrategy/parsePillarStrategy.js";
-import { planFromSingleCapability } from "../routing/pillarStrategy/types.js";
 import { HEALTH_GENERIC_ACK } from "./healthConstants.js";
 
 /** @deprecated Import from healthConstants.js */
@@ -89,13 +88,6 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
   }
 
   if (pillarStrategyEnabled()) {
-    const activePlanSession = await getActiveMealPlanSession(ctxWithPrefs.userProfileId);
-    if (activePlanSession) {
-      const plan = planFromSingleCapability("meal_plan_create", {}, 1, "deterministic");
-      const ctxWithPlan = { ...ctxWithPrefs, pillarStrategy: plan };
-      return executeHealthStrategy(ctxWithPlan, plan);
-    }
-
     const hints = await buildRoutingHints(ctxWithPrefs);
     const plan = await parsePillarExecutionPlan("HEALTH", ctx.rawMessage, hints);
     const ctxWithPlan = { ...ctxWithPrefs, pillarStrategy: plan };
@@ -144,7 +136,7 @@ async function routeHealthMessageLegacy(ctxWithPrefs: AgentContext): Promise<Age
   }
 
   const activePlanSession = await getActiveMealPlanSession(ctxWithPrefs.userProfileId);
-  if (activePlanSession) {
+  if (activePlanSession && activePlanSession.step !== "review") {
     const mealPlan = await tryMealPlanningAgent(ctxWithPrefs);
     if (mealPlan) {
       return withRouterMeta(mealPlan, "meal_plan");
