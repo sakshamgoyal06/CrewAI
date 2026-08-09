@@ -204,7 +204,7 @@ shell or `.env`.
 
 ## Database
 
-**Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`, `meal_plan_sessions`,
+**Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`, `meal_plan_sessions`, `meal_plan_templates`,
 `user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries` (Phases 2–3:
 rolling summary + semantic facts), `magnus_youtube_bookmarks`, `magnus_youtube_cues`,
 `magnus_youtube_state` (includes `playlist_aliases` JSONB for pillar playlist ids).
@@ -259,7 +259,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npx tsx scripts/audit-notion-lifeos.mts` | Inventory LifeOS hub + accessible Notion databases |
 | `npx tsx scripts/nutrition/rebuild-rollups.mts` | Rebuild `meal_daily_rollups` from `meal_logs` |
 
-**Meal planning journey:** User says "plan my meals for the week" → Magnus gathers horizon, slots, and period constraints (profile prefs pre-loaded from `user_health_profile`) → LLM draft in `meal_plan_sessions` → user revises or **save plan** → locked rows in `meal_plan_entries` → lifecycle: log linking, proactive nudges, rollups, weekly review.
+**Meal planning journey:** User says "plan my meals for the week" → Magnus gathers horizon, slots, and period constraints (profile prefs pre-loaded from `user_health_profile`) → LLM draft in `meal_plan_sessions` → user revises or **save plan** → locked rows in `meal_plan_entries` → lifecycle: log linking, proactive nudges, rollups, weekly review. **Templates:** `save this week as template <name>`, `use template <name>`, `list meal plan templates`. **Shopping list:** `shopping list for this week` from locked plan.
 
 ---
 
@@ -300,4 +300,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (meal planning journey + nutrition phase 4 intelligence)
+**Last updated:** 2026-08-09 (meal templates + shopping list; build fix merged)
