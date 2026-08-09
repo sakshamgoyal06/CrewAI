@@ -14,6 +14,15 @@ function dot(ok: boolean): string {
   return ok ? "🟢" : "🔴";
 }
 
+function macroLine(totals: {
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}): string {
+  return `~${Math.round(totals.calories)} kcal · P ${fmt(totals.protein_g, "g")} · C ${fmt(totals.carbs_g, "g")} · F ${fmt(totals.fat_g, "g")}`;
+}
+
 /** Calorie/carbs/fat: at or under target = good; protein: at or over target = good. */
 export function targetIndicators(day: DayNutritionTotals, t: DailyTargets | null): string[] {
   if (!t) {
@@ -47,6 +56,20 @@ export function targetIndicators(day: DayNutritionTotals, t: DailyTargets | null
   return lines;
 }
 
+/** One-line target status for compact log replies. */
+export function targetIndicatorsCompact(day: DayNutritionTotals, t: DailyTargets | null): string | null {
+  const ind = targetIndicators(day, t);
+  if (!ind.length) {
+    return null;
+  }
+  return ind
+    .map((line) => {
+      const m = line.match(/^(🟢|🔴)\s+(\w+)/);
+      return m ? `${m[1]} ${m[2]}` : line;
+    })
+    .join(" · ");
+}
+
 function slotLabel(slot: MealSlot): string | null {
   if (slot === "unspecified") {
     return null;
@@ -54,7 +77,7 @@ function slotLabel(slot: MealSlot): string | null {
   return slot.charAt(0).toUpperCase() + slot.slice(1);
 }
 
-export function formatMealLogReply(input: {
+type MealLogReplyInput = {
   mealSessionId: string;
   loggedDate: string;
   timezoneLabel: string;
@@ -66,71 +89,63 @@ export function formatMealLogReply(input: {
   mealTotals: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
   day: DayNutritionTotals;
   targets: DailyTargets | null;
-}): string {
-  const sid = input.mealSessionId.slice(0, 8);
+};
+
+/** Short default reply after logging — detail on request via meal breakdown. */
+export function formatMealLogReplyCompact(input: MealLogReplyInput): string {
   const slot = input.mealSlot ?? "unspecified";
   const slotPart = slotLabel(slot);
-  const header = slotPart
-    ? `**${slotPart}** \`${sid}…\` · ${input.loggedDate} (${input.timezoneLabel})`
-    : `**Meal** \`${sid}…\` · ${input.loggedDate} (${input.timezoneLabel})`;
-  const lines: string[] = [header, "", "**Components**"];
-
-  if (input.components.length > 1) {
-    lines.push(
-      "_One line per ingredient/component saved to the log; **This meal (total)** is the sum of the lines (not double-counted)._",
-    );
-  }
-
-  for (const c of input.components) {
-    const pn = c.itemsSnapshot[0]?.portion_note?.trim();
-    lines.push(
-      `- **${c.label}** · ${fmt(c.calories, " kcal")} · P ${fmt(c.protein_g, "g")} · C ${fmt(c.carbs_g, "g")} · F ${fmt(c.fat_g, "g")}`,
-    );
-    if (pn) {
-      lines.push(`  _${pn}_`);
-    }
-  }
-
-  const sa = input.estimate.serving_assumption?.trim();
-  if (sa) {
-    lines.push("", "**Portion / source notes**", sa);
-  }
+  const header = slotPart ? `**${slotPart} logged**` : "**Meal logged**";
+  const lines: string[] = [header, macroLine(input.mealTotals)];
 
   lines.push(
-    "",
-    "**This meal (total)**",
-    `~${Math.round(input.mealTotals.calories)} kcal · P ${fmt(input.mealTotals.protein_g, "g")} · C ${fmt(input.mealTotals.carbs_g, "g")} · F ${fmt(input.mealTotals.fat_g, "g")}`,
-    "",
-    `**Today so far (${input.timezoneLabel})**`,
-    `${Math.round(input.day.calories)} kcal · P ${fmt(input.day.protein_g, "g")} · C ${fmt(input.day.carbs_g, "g")} · F ${fmt(input.day.fat_g, "g")}`,
+    `**Today:** ${Math.round(input.day.calories)} kcal · P ${fmt(input.day.protein_g, "g")}`,
   );
 
-  const ind = targetIndicators(input.day, input.targets);
-  if (ind.length > 0) {
-    lines.push("", "**Targets**", ...ind);
-  } else {
-    lines.push(
-      "",
-      "_Set daily targets in Health onboarding or say e.g. \"set my protein target to 140g\" to see 🟢/🔴._",
-    );
+  const targets = targetIndicatorsCompact(input.day, input.targets);
+  if (targets) {
+    lines.push(targets);
   }
 
   if (input.planLink?.linked) {
     const title = input.planLink.planTitle ?? "planned meal";
-    if (input.planLink.matched) {
-      lines.push("", `**Plan:** matched ${title} ✓`);
-    } else {
-      lines.push("", `**Plan:** logged (planned: ${title})`);
-    }
-  }
-
-  lines.push("", `Source: ${input.estimate.source}`);
-  if (input.rawText.trim()) {
-    const t = input.rawText.trim();
     lines.push(
-      `Input: ${t.length > 160 ? `${t.slice(0, 160)}…` : t}`,
+      input.planLink.matched ? `Plan matched: ${title} ✓` : `Plan note: ${title}`,
     );
   }
 
+  lines.push("", "_Say **meal breakdown** for per-item detail._");
   return lines.join("\n");
+}
+
+/** Per-component detail (follow-up: "meal breakdown"). */
+export function formatMealBreakdown(input: {
+  mealSlot?: MealSlot;
+  rawText?: string;
+  components: MealComponentForRow[];
+  mealTotals: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
+}): string {
+  const slot = input.mealSlot ?? "unspecified";
+  const title = slotLabel(slot) ?? "Meal";
+  const lines: string[] = [`**${title} breakdown**`, ""];
+
+  for (const c of input.components) {
+    lines.push(
+      `- **${c.label}** · ${fmt(c.calories, " kcal")} · P ${fmt(c.protein_g, "g")} · C ${fmt(c.carbs_g, "g")} · F ${fmt(c.fat_g, "g")}`,
+    );
+  }
+
+  lines.push("", `**Total:** ${macroLine(input.mealTotals)}`);
+
+  const raw = input.rawText?.trim();
+  if (raw) {
+    lines.push("", raw.length > 120 ? `${raw.slice(0, 120)}…` : raw);
+  }
+
+  return lines.join("\n");
+}
+
+/** @deprecated Prefer compact + breakdown; kept for tests and legacy callers. */
+export function formatMealLogReply(input: MealLogReplyInput): string {
+  return formatMealLogReplyCompact(input);
 }

@@ -259,7 +259,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npx tsx scripts/audit-notion-lifeos.mts` | Inventory LifeOS hub + accessible Notion databases |
 | `npx tsx scripts/nutrition/rebuild-rollups.mts` | Rebuild `meal_daily_rollups` from `meal_logs` |
 
-**Meal planning journey:** User says "plan my meals for the week" → Magnus gathers horizon, slots, and period constraints (profile prefs pre-loaded from `user_health_profile`) → LLM draft in `meal_plan_sessions` → user revises, **partial lock** (e.g. save Mon–Wed only), or **save plan** → locked rows in `meal_plan_entries` → lifecycle: log linking, proactive nudges, rollups, weekly review. **Food wishlist:** draft prompts include the user's `food` list; locking adds novel short/restaurant titles back. **Photo logging:** send a meal photo in Telegram (optional caption) → vision → meal log pipeline. **Templates:** `save this week as template <name>`, `use template <name>`, `list meal plan templates`. **Shopping list:** `shopping list for this week` from locked plan.
+**Meal planning journey:** User says "plan my meals for the week" → … **Photo logging:** send a meal photo in Telegram (optional caption) → vision → meal log pipeline. **Meal log reply:** compact confirmation (~meal + today totals); say **meal breakdown** for per-item detail. **Templates:** …
 
 ---
 
@@ -300,4 +300,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (meal planning backlog: partial lock, photo logging, food wishlist enrichment)
+**Last updated:** 2026-08-09 (compact meal log replies; breakdown on follow-up)

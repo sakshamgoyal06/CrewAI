@@ -1,8 +1,9 @@
 import { isMealCommand } from "../../meals/parseMealLogCommand.js";
+import { formatMealBreakdown, targetIndicators } from "../../meals/formatMealLogReply.js";
 import { loadDailyTargets } from "../../meals/mealDaySummary.js";
-import { targetIndicators } from "../../meals/formatMealLogReply.js";
 import { localDateKey, timezoneAbbrev } from "../../nutrition/localDate.js";
 import {
+  getMealSessionComponents,
   getRangeTotals,
   getSessionsForLocalDate,
   softDeleteMostRecentSession,
@@ -12,6 +13,9 @@ import {
   hasAnyMacroTarget,
 } from "../../nutrition/parseMacroTargets.js";
 import type { AgentContext, AgentResult } from "../types.js";
+
+const MEAL_BREAKDOWN_RE =
+  /\b(?:meal\s+breakdown|breakdown\s+(?:last\s+)?meal|last\s+meal\s+(?:breakdown|detail|details)|component\s+breakdown|item\s+breakdown)\b/i;
 
 const MEAL_HISTORY_RE =
   /\b(?:what\s+did\s+i\s+eat|meals?\s+(?:today|yesterday|this\s+week)|food\s+log|eating\s+history|show\s+(?:my\s+)?meals?|macros?\s+(?:today|yesterday|last\s+\d+\s+days?)|nutrition\s+(?:today|yesterday|summary|recap)|today(?:'s)?\s+(?:meals?|food|macros?)|yesterday(?:'s)?\s+(?:meals?|food|macros?))\b/i;
@@ -87,7 +91,11 @@ async function formatDayHistory(
 }
 
 export function matchesMealHistoryMessage(rawMessage: string): boolean {
-  return MEAL_HISTORY_RE.test(rawMessage) || UNDO_MEAL_RE.test(rawMessage);
+  return (
+    MEAL_HISTORY_RE.test(rawMessage) ||
+    UNDO_MEAL_RE.test(rawMessage) ||
+    MEAL_BREAKDOWN_RE.test(rawMessage)
+  );
 }
 
 export async function tryMealHistoryAgent(ctx: AgentContext): Promise<AgentResult | null> {
@@ -112,6 +120,36 @@ export async function tryMealHistoryAgent(ctx: AgentContext): Promise<AgentResul
         specialist: "MealHistory",
         meal_history: "undo",
         meal_session_id: result.mealSessionId,
+      },
+    };
+  }
+
+  if (MEAL_BREAKDOWN_RE.test(raw)) {
+    const detail = await getMealSessionComponents(ctx.userProfileId);
+    if (!detail) {
+      return {
+        text: "No meal logged yet to break down.",
+        metadata: { specialist: "MealHistory", meal_history: "breakdown_empty" },
+      };
+    }
+    const { session, components } = detail;
+    const mealTotals = {
+      calories: session.calories,
+      protein_g: session.protein_g,
+      carbs_g: session.carbs_g,
+      fat_g: session.fat_g,
+    };
+    return {
+      text: formatMealBreakdown({
+        mealSlot: session.mealSlot,
+        rawText: session.rawText,
+        components,
+        mealTotals,
+      }),
+      metadata: {
+        specialist: "MealHistory",
+        meal_history: "breakdown",
+        meal_session_id: session.mealSessionId,
       },
     };
   }

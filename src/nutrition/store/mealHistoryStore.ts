@@ -2,6 +2,7 @@
  * Read and soft-delete meal log sessions.
  */
 import { supabase } from "../../tools/clients.js";
+import type { MealComponentForRow } from "../../meals/mealComponents.js";
 import { localDateKey } from "../localDate.js";
 import { recomputeDailyRollup } from "./mealRollupStore.js";
 import type { MealSlot } from "../types.js";
@@ -46,6 +47,7 @@ type MealLogRow = {
   meal_slot: string | null;
   log_kind: string | null;
   raw_text: string;
+  description?: string | null;
   calories: number | null;
   protein_g: number | null;
   carbs_g: number | null;
@@ -53,6 +55,7 @@ type MealLogRow = {
   logged_at: string | null;
   created_at: string;
   component_index: number;
+  items?: unknown;
 };
 
 function dateColumnFilter(localDate: string): { column: "local_date" | "date"; value: string } {
@@ -321,4 +324,67 @@ export async function softDeleteMostRecentSession(
     mealSessionId: session.mealSessionId,
     rawText: session.rawText,
   };
+}
+
+/** Load per-component rows for the latest session or a specific session id. */
+export async function getMealSessionComponents(
+  userProfileId: string,
+  mealSessionId?: string,
+): Promise<{ session: MealSessionSummary; components: MealComponentForRow[] } | null> {
+  let targetSessionId = mealSessionId?.trim();
+  if (!targetSessionId) {
+    const recent = await getRecentSessions(userProfileId, 1);
+    if (!recent.length) {
+      return null;
+    }
+    targetSessionId = recent[0]!.mealSessionId;
+  }
+
+  const { data, error } = await supabase
+    .from("meal_logs")
+    .select(
+      "meal_session_id, local_date, date, meal_slot, log_kind, raw_text, calories, protein_g, carbs_g, fat_g, logged_at, created_at, component_index, description, items",
+    )
+    .eq("user_profile_id", userProfileId)
+    .eq("meal_session_id", targetSessionId)
+    .is("deleted_at", null)
+    .order("component_index", { ascending: true });
+
+  if (error || !data?.length) {
+    return null;
+  }
+
+  const rows = data as MealLogRow[];
+  const first = rows[0]!;
+  const session: MealSessionSummary = {
+    mealSessionId: targetSessionId,
+    localDate: first.local_date ?? first.date ?? "",
+    mealSlot: (first.meal_slot as MealSlot) ?? "unspecified",
+    logKind: first.log_kind ?? "meal",
+    rawText: first.raw_text,
+    calories: rows.reduce((s, r) => s + num(r.calories), 0),
+    protein_g: rows.reduce((s, r) => s + num(r.protein_g), 0),
+    carbs_g: rows.reduce((s, r) => s + num(r.carbs_g), 0),
+    fat_g: rows.reduce((s, r) => s + num(r.fat_g), 0),
+    loggedAt: first.logged_at ?? first.created_at,
+    componentCount: rows.length,
+  };
+
+  const components: MealComponentForRow[] = rows.map((row, idx) => {
+    const items = Array.isArray(row.items) ? row.items : [];
+    const label =
+      row.description?.trim() ||
+      `Item ${idx + 1}`;
+    return {
+      componentIndex: row.component_index ?? idx,
+      label,
+      calories: row.calories,
+      protein_g: row.protein_g,
+      carbs_g: row.carbs_g,
+      fat_g: row.fat_g,
+      itemsSnapshot: items as MealComponentForRow["itemsSnapshot"],
+    };
+  });
+
+  return { session, components };
 }

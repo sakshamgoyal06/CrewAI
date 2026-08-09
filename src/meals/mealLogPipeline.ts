@@ -1,6 +1,6 @@
 import { timezoneAbbrev } from "../nutrition/localDate.js";
 import { estimateMealNutrition } from "./estimateMealNutrition.js";
-import { formatMealLogReply, targetIndicators } from "./formatMealLogReply.js";
+import { formatMealLogReplyCompact, targetIndicatorsCompact } from "./formatMealLogReply.js";
 import { loadDailyTargets, sumMealLogsForDay } from "./mealDaySummary.js";
 import type { MealComponentForRow } from "./mealComponents.js";
 import type { MealLogKind, MealSlot } from "./parseMealLogCommand.js";
@@ -72,25 +72,24 @@ export async function completeMealLogWithEstimate(input: {
     const tzLabel = timezoneAbbrev(input.timezone);
 
     if (estimate.calories === null) {
+      const slot = input.mealSlot ?? "unspecified";
+      const slotPart =
+        slot !== "unspecified"
+          ? slot.charAt(0).toUpperCase() + slot.slice(1)
+          : "Meal";
       const lines = [
-        `**Meal** \`${saved.mealSessionId.slice(0, 8)}…\` — logged without calorie estimate.`,
-        `Components: ${saved.components.length} row(s).`,
+        `**${slotPart} logged** (no calorie estimate).`,
         "",
-        `**Today so far (${tzLabel})**`,
-        `${Math.round(day.calories)} kcal · P ${day.protein_g}g · C ${day.carbs_g}g · F ${day.fat_g}g`,
+        `**Today (${tzLabel}):** ${Math.round(day.calories)} kcal · P ${day.protein_g}g`,
       ];
-      const ind = targetIndicators(day, targets);
-      if (ind.length > 0) {
-        lines.push("", "**Targets**", ...ind);
+      const ind = targetIndicatorsCompact(day, targets);
+      if (ind) {
+        lines.push(ind);
       }
-      lines.push(
-        "",
-        "Set CALORIENINJAS_API_KEY and/or USDA_FDC_API_KEY (see .env.example). Optional: HEALTHIFYME_PROXY_URL, or MAGNUS_MEAL_LOG_LLM_FALLBACK=true.",
-      );
       return { ok: true, reply: lines.join("\n"), mealSessionId: saved.mealSessionId };
     }
 
-    const reply = formatMealLogReply({
+    const reply = formatMealLogReplyCompact({
       mealSessionId: saved.mealSessionId,
       loggedDate: saved.date,
       timezoneLabel: tzLabel,

@@ -18,7 +18,6 @@ import {
 import { describeMealFromPhoto } from "../../meals/mealPhotoEstimate.js";
 import { downloadTelegramPhoto } from "../../meals/telegramPhotoDownload.js";
 import { buildSpecialistIdentity } from "../promptIdentity.js";
-import { draftMealLogTelegramIntro } from "./nutritionComposer.js";
 import { NUTRITION_SYSTEM } from "./nutritionPrompt.js";
 import { HEALTH_SPECIALIST_MODEL } from "./model.js";
 
@@ -125,31 +124,13 @@ export async function runOrchestratedMealLogTurn(
       };
     }
 
-    let intro = "";
-    try {
-      intro = await draftMealLogTelegramIntro({
-        rawMealText,
-        componentLabels: components.map((c) => c.user_label),
-        totalCalories: aggregate.calories,
-        parserNotes: parsed.parserNotes,
-        reconcileNotes: [rec.notes, rec.reason].filter(Boolean).join(" ") || undefined,
-        memoryBlock: ctx.memoryBlock,
-      });
-    } catch (err) {
-      logger.warn({ err }, "nutrition meal log: composer failed; numeric block only");
-    }
-
-    const text =
-      intro.length > 0 ? `${intro.trim()}\n\n${done.reply}` : done.reply;
-
     return {
-      text,
+      text: done.reply,
       metadata: {
         specialist: "nutrition",
         department: "HEALTH",
         meal_log: true,
         meal_parser_pipeline: true,
-        nutrition_composer: intro.length > 0,
         orchestrated_meal_log: true,
         meal_session_id: done.mealSessionId,
       },
