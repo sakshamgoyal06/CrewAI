@@ -30,12 +30,12 @@ import {
 } from "./mealPlanningPrompt.js";
 import { loadFoodListContext, syncLockedPlanToFoodList } from "./foodListEnrichment.js";
 import { isFullLockCommand, parsePartialLockDates } from "./parsePartialLock.js";
+import { MEAL_PLAN_CANCEL_RE } from "./mealPlanningRouting.js";
 import type { MealPlanEntryInput } from "../parseMealPlanJson.js";
 import { buildSpecialistIdentity } from "../../agents/promptIdentity.js";
 import { fetchUserHealthProfile } from "../../agents/health/healthOnboarding.js";
 
-const CANCEL_RE =
-  /\b(?:cancel\s+(?:planning|plan)|never\s*mind|stop\s+planning|abort\s+plan)\b/i;
+const CANCEL_RE = MEAL_PLAN_CANCEL_RE;
 
 const LOCK_RE = isFullLockCommand;
 

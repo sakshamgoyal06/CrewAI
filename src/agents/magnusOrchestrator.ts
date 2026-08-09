@@ -22,10 +22,15 @@ import {
 import type { MemoryChatTurn } from "./memory/types.js";
 import {
   fetchUserHealthProfile,
+  formatHealthPreferencesForPrompt,
   runHealthOnboardingTurn,
   startHealthOnboarding,
 } from "./health/healthOnboarding.js";
 import { isMealCommand } from "../meals/parseMealLogCommand.js";
+import { getActiveMealPlanSession } from "../nutrition/planning/mealPlanningSessionStore.js";
+import { shouldRouteToMealPlanning } from "../nutrition/planning/mealPlanningRouting.js";
+import { executeMealPlanningCapability } from "./health/mealPlanningAgent.js";
+import { loadHealthReferenceBlock } from "../pillars/health/references/loadHealthReferences.js";
 import { dispatchToAgent } from "./registry.js";
 import { intentToPillarRoute } from "./routing/intentToPillarRoute.js";
 import type { AgentContext } from "./types.js";
@@ -96,6 +101,36 @@ export async function runOrchestratorReply(input: {
         department: healthRoute.department,
       },
     });
+  }
+
+  if (!isMealCommand(input.userMessage) && !input.mealPhoto?.fileId) {
+    const activeMealPlan = await getActiveMealPlanSession(input.userProfileId);
+    if (shouldRouteToMealPlanning(input.userMessage, activeMealPlan)) {
+      const healthPreferences = formatHealthPreferencesForPrompt(healthProfile);
+      const { block: healthReferenceBlock } = await loadHealthReferenceBlock(input.userProfileId);
+      const result = await executeMealPlanningCapability({
+        userProfileId: input.userProfileId,
+        telegramUserId: input.telegramUserId,
+        timezone: input.timezone,
+        northStarGoal: input.northStarGoal,
+        displayName: input.displayName,
+        rawMessage: input.userMessage,
+        intent: "HEALTH",
+        healthPreferences,
+        healthReferenceBlock,
+      });
+      return finalizeOrchestratorReply({
+        replyText: result.text,
+        intent: "HEALTH",
+        delegatedAgent: "HealthComposite",
+        agentMetadata: {
+          pillar: healthRoute.pillar,
+          department: healthRoute.department,
+          meal_planning_fast_path: true,
+          ...result.metadata,
+        },
+      });
+    }
   }
 
   const recentTurns = await fetchRecentRoutingTurns(

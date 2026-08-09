@@ -17,6 +17,9 @@ import { tryHevyWriteAgent } from "../../pillars/health/workouts/agents/hevyWrit
 import { runOrchestratedMealLogTurn, runMealPhotoLogTurn } from "./nutritionOrchestrated.js";
 import { tryHealthJournalAgent } from "./healthJournalAgent.js";
 import { loadHealthReferenceBlock } from "../../pillars/health/references/loadHealthReferences.js";
+import { getActiveMealPlanSession } from "../../nutrition/planning/mealPlanningSessionStore.js";
+import { shouldRouteToMealPlanning } from "../../nutrition/planning/mealPlanningRouting.js";
+import { executeMealPlanningCapability } from "./mealPlanningAgent.js";
 import { buildRoutingHints } from "../routing/pillarStrategy/buildRoutingHints.js";
 import { executeHealthStrategy, healthDeterministicCapability } from "../routing/pillarStrategy/executeHealthStrategy.js";
 import { parsePillarExecutionPlan, pillarStrategyEnabled } from "../routing/pillarStrategy/parsePillarStrategy.js";
@@ -84,6 +87,19 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
       );
       return withRouterMeta(r, "meal_log");
     }
+  }
+
+  const activeMealPlan = await getActiveMealPlanSession(ctx.userProfileId);
+  if (shouldRouteToMealPlanning(ctx.rawMessage, activeMealPlan)) {
+    const result = await executeMealPlanningCapability(ctxWithPrefs);
+    return {
+      text: result.text,
+      metadata: {
+        ...(result.metadata ?? {}),
+        health_router: "meal_plan_journey",
+        health_order: "meal_plan",
+      },
+    };
   }
 
   if (pillarStrategyEnabled()) {

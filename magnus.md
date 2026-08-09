@@ -113,7 +113,7 @@ shell or `.env`.
 | `src/youtube/` | Bookmarks, cue queue, and Magnus playlist state in Supabase |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
-| `src/agents/health/healthRouter.ts` | Health composite: deterministic meal log/photo gates → pillar strategy parser → capability executors (legacy regex chain when `MAGNUS_PILLAR_STRATEGY_PARSER=false`) |
+| `src/agents/health/healthRouter.ts` | Health composite: meal log/photo gates → **meal-plan journey gate** (active session, cancel, planning ask) → pillar strategy parser → capability executors (legacy regex chain when `MAGNUS_PILLAR_STRATEGY_PARSER=false`) |
 | `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
 | `src/agents/memory/` | `loadMemoryContext`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
 | `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
@@ -210,6 +210,10 @@ shell or `.env`.
     default on) merges multi-step results into one Telegram reply. Deterministic pre-gates stay before
     the parser where unambiguous (explicit meal log, meal photo, Zerodha connect phrase).
     Set `MAGNUS_PILLAR_STRATEGY_PARSER=false` for legacy Health regex routing only.
+15. **Meal-plan journey fast path** — Before intent classification and before the pillar LLM parser,
+    `shouldRouteToMealPlanning` sends **cancel planning**, any message while a `meal_plan_sessions` row
+    is active, and new planning asks straight to `executeMealPlanningCapability` (no misroute to GENERAL,
+    no silent timeout on cancel).
 
 ---
 
@@ -316,4 +320,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (multi-step pillar execution plans + composer)
+**Last updated:** 2026-08-09 (meal-plan cancel/active-session routing fast path)

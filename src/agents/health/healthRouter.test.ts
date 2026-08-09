@@ -127,6 +127,17 @@ describe("routeHealthMessage", () => {
     expect(out.text).toMatch(/Which meals each day/i);
   });
 
+  it("routes cancel planning to MealPlanner even when pillar strategy is on", async () => {
+    process.env.MAGNUS_PILLAR_STRATEGY_PARSER = "true";
+    const out = await routeHealthMessage(ctx("cancel planning"));
+    expect(createMock).not.toHaveBeenCalled();
+    expect(out.metadata).toMatchObject({
+      health_router: "meal_plan_journey",
+      meal_plan_cancelled: true,
+    });
+    expect(out.text).toMatch(/cancelled/i);
+  });
+
   it("routes food swap asks to Alternates after Fitness declines", async () => {
     const out = await routeHealthMessage(
       ctx("What's a good vegan alternative to butter for baking?"),

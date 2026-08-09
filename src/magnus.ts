@@ -161,7 +161,7 @@ export async function handleMessage(
       }).catch(() => {});
     }
 
-    return plainChunksToTelegramHtml(replyText);
+    return plainChunksToTelegramHtml(replyText?.trim() || "…").filter((c) => c.trim().length > 0);
   } catch (err) {
     log.error({ err: loggableError(err) }, "handleMessage failed");
     const fallback = "Something went wrong. Check server logs.";
