@@ -322,4 +322,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (meal-plan draft hardening + cancel routing)
+**Last updated:** 2026-08-09 (meal-plan avoid-list enforcement + review questions)
