@@ -1,7 +1,7 @@
 # What users can ask Magnus
 
 **Purpose:** Map natural-language asks to the ideal routing path and expected output.  
-**Tests:** `src/capabilities/userQueryRouting.test.ts` (structural signals) · `src/capabilities/catalogIntegrity.test.ts`  
+**Tests:** `src/capabilities/userQueryRouting.test.ts` (157 queries, 1200+ structural checks) · `src/capabilities/catalogIntegrity.test.ts`  
 **Last updated:** 2026-08-09
 
 Magnus answers in **one voice**. The user never picks a pillar or specialist. Below: what to say, where it routes, and what you should get back.
@@ -153,10 +153,12 @@ Manual brief: `morning brief` or legacy `/morningbrief`.
 
 | Suite | What it verifies |
 |-------|------------------|
-| `userQueryRouting.test.ts` | 30+ queries → routing hints + tool detectors |
+| `userQueryRouting.test.ts` | 157 user queries × structural validators (hints, detectors, pillar consultation, meal parse) |
 | `catalogIntegrity.test.ts` | Catalog ids, tool map ↔ `magnusAgent` |
 | `orchestratorIntent.test.ts` | Classifier payload + meal hard override |
 | `magnusActionDetect.test.ts` | List/LifeOS/Notion/event/proactive phrases |
 | `healthServer.internal.test.ts` | Morning brief HTTP job auth |
 
-Full unit suite: `npm test` (483+ tests).
+Full unit suite: `npm test` (1757+ tests).
+
+Validate catalog hints locally: `npx tsx scripts/dev/validate-user-query-catalog.mts`

@@ -275,6 +275,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npm run google-calendar:auth` | One-time OAuth; prints the refresh token for the host |
 | `npm run youtube:auth` | One-time YouTube OAuth; prints refresh token to store in `user_integrations` |
 | `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
+| `npx tsx scripts/dev/validate-user-query-catalog.mts` | Validate 157 user-query routing hints against detectors |
 | `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
 | `npx tsx scripts/upsert-user-integrations.mts` | Update `user_integrations` for a user without wiping data |
 | `npx tsx scripts/reset-user-notion-lists.mts` | Reset list architecture + re-sync notion_registry for a user |
