@@ -16,6 +16,8 @@ export type AgentContext = {
   /** From `user_profile.display_name` when set. */
   displayName?: string;
   rawMessage: string;
+  /** Original user message before plan-step rewriting (multi-step pillar executor). */
+  originalUserMessage?: string;
   intent: Intent;
   /**
    * Preformatted memory from `loadMemoryContext` — orchestrator-only; augment specialist prompts.

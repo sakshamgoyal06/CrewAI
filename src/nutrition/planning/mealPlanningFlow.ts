@@ -17,7 +17,7 @@ import {
   updateMealPlanSession,
   type MealPlanSessionRow,
 } from "./mealPlanningSessionStore.js";
-import { parsePlanningHorizon } from "./parsePlanningHorizon.js";
+import { parsePlanningHorizon, listDatesInHorizon } from "./parsePlanningHorizon.js";
 import {
   defaultSlotsFromTimingNotes,
   formatSlotsLabel,
@@ -73,6 +73,7 @@ async function generateDraft(
   ctx: AgentContext,
   session: MealPlanSessionRow,
   revisionNotes: string | null,
+  attempt = 0,
 ): Promise<
   | { ok: true; display: string; entries: NonNullable<ReturnType<typeof extractMealPlanJson>> }
   | { ok: false; error: string }
@@ -81,31 +82,40 @@ async function generateDraft(
     return { ok: false, error: "horizon not set" };
   }
 
+  const dayCount = listDatesInHorizon(session.horizon_start, session.horizon_end).length;
+  const slotCount = Math.max(session.slots.length, 1);
+  const maxTokens = Math.min(8192, 768 + dayCount * slotCount * 72);
+
+  const userPrompt = buildDraftUserPrompt({
+    horizonStart: session.horizon_start,
+    horizonEnd: session.horizon_end,
+    slots: session.slots,
+    constraintsText: session.constraints_text,
+    healthPreferences: ctx.healthPreferences ?? null,
+    revisionNotes,
+    previousDraftDisplay: session.draft_display,
+    anchorBlock: planAnchorBlock(ctx),
+    foodListContext: await loadFoodListContext(ctx.userProfileId),
+  });
+
+  const jsonNudge =
+    attempt > 0
+      ? "\n\n**Required:** End with a fenced ```json block containing ALL entries for every date and slot. No prose after the JSON."
+      : "";
+
   const msg = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
-    max_tokens: 2048,
+    max_tokens: maxTokens,
     system: `${buildSpecialistIdentity(ctx)}\n\n${MEAL_PLAN_DRAFT_SYSTEM}`,
-    messages: [
-      {
-        role: "user",
-        content: buildDraftUserPrompt({
-          horizonStart: session.horizon_start,
-          horizonEnd: session.horizon_end,
-          slots: session.slots,
-          constraintsText: session.constraints_text,
-          healthPreferences: ctx.healthPreferences ?? null,
-          revisionNotes,
-          previousDraftDisplay: session.draft_display,
-          anchorBlock: planAnchorBlock(ctx),
-          foodListContext: await loadFoodListContext(ctx.userProfileId),
-        }),
-      },
-    ],
+    messages: [{ role: "user", content: `${userPrompt}${jsonNudge}` }],
   });
 
   const llmText = textFromMessage(msg).trim();
   const entries = extractMealPlanJson(llmText);
   if (!entries?.length) {
+    if (attempt === 0) {
+      return generateDraft(ctx, session, revisionNotes, 1);
+    }
     return { ok: false, error: "draft JSON missing" };
   }
 
@@ -479,7 +489,7 @@ async function handleHorizonStep(
   };
 }
 
-/** Fast-path: rich first message → skip straight to draft when horizon is clear. */
+/** Fast-path: rich first message with clear horizon — gather slots before drafting. */
 function tryFastPathConstraints(raw: string, today: string): {
   horizon: ReturnType<typeof parsePlanningHorizon>;
   constraints: string | null;
@@ -489,8 +499,10 @@ function tryFastPathConstraints(raw: string, today: string): {
     return null;
   }
   const stripped = raw
-    .replace(/\b(?:meal\s+plan(?:ning)?|plan\s+my\s+meals|weekly\s+menu|menu\s+for)\b/gi, "")
-    .replace(/\b(?:today|tomorrow|this\s+week|next\s+\d+\s+days?|for\s+the\s+week)\b/gi, "")
+    .replace(/\b(?:meal\s+plan(?:ning)?|plan\s+my\s+meals|weekly\s+menu|menu\s+for|help me make the plan)\b/gi, "")
+    .replace(/\btomorrow\s+is\s+monday\.?\b/gi, "")
+    .replace(/\b(?:today|this\s+week)\b/gi, "")
+    .replace(/\s+/g, " ")
     .trim();
 
   return {
@@ -548,22 +560,49 @@ export async function runMealPlanningTurn(
   const fast =
     session.step === "horizon" ? tryFastPathConstraints(raw, today) : null;
   if (fast?.horizon && fast.constraints) {
-    const slots = parsePlanningSlots(raw) ?? defaultSlotsFromTimingNotes(healthRow?.meal_timing_notes);
+    const slots =
+      parsePlanningSlots(raw) ?? defaultSlotsFromTimingNotes(healthRow?.meal_timing_notes);
     await updateMealPlanSession(session.id, {
       horizon_start: fast.horizon.startDate,
       horizon_end: fast.horizon.endDate,
       slots,
       constraints_text: fast.constraints,
-      step: "constraints",
+      step: "slots",
     });
-    return advanceToDraft(ctx, {
+    const nextSession = {
       ...session,
       horizon_start: fast.horizon.startDate,
       horizon_end: fast.horizon.endDate,
       slots,
       constraints_text: fast.constraints,
-      step: "constraints",
-    });
+      step: "slots" as const,
+    };
+
+    if (parsePlanningSlots(raw)) {
+      await updateMealPlanSession(session.id, { step: "constraints" });
+      const withConstraintsStep = { ...nextSession, step: "constraints" as const };
+      return {
+        text: [
+          `Planning **${fast.horizon.label}** (${fast.horizon.startDate} → ${fast.horizon.endDate}).`,
+          "",
+          `Noted for this stretch: ${fast.constraints}`,
+          "",
+          "**Anything else before I draft?** Diets, batch prep, travel — or say **skip** to generate the draft.",
+        ].join("\n"),
+        metadata: flowMeta(withConstraintsStep, { meal_plan_step: "constraints" }),
+      };
+    }
+
+    return {
+      text: [
+        `Planning **${fast.horizon.label}** (${fast.horizon.startDate} → ${fast.horizon.endDate}).`,
+        "",
+        `Noted: ${fast.constraints}`,
+        "",
+        "**Which meals each day?** Default is breakfast, lunch, dinner — say **add snacks**, **dinners only**, or **skip** for default.",
+      ].join("\n"),
+      metadata: flowMeta(nextSession, { meal_plan_step: "slots" }),
+    };
   }
 
   if (session.step === "horizon") {
