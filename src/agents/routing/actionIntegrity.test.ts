@@ -18,6 +18,19 @@ describe("claimsPersistence", () => {
     expect(claimsPersistence("Cool. This is good.")).toBe(false);
     expect(claimsPersistence("That sounds like a solid plan for Sunday.")).toBe(false);
   });
+
+  it("ignores descriptive meal-plan read text (no false save disclaimer)", () => {
+    expect(claimsPersistence("No meal plan saved for 2026-08-09 → 2026-08-15.")).toBe(false);
+    expect(claimsPersistence("Here's what tomorrow looks like — nothing scheduled yet.")).toBe(
+      false,
+    );
+    expect(
+      enforceActionIntegrity({
+        text: "No meal plan saved for this week. Want to draft one?",
+        metadata: { specialist: "MealPlanRead", meal_plan: "week" },
+      }).corrected,
+    ).toBe(false);
+  });
 });
 
 describe("classifyToolResult", () => {
