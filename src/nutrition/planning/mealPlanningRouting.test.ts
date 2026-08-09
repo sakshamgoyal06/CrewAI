@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isMealPlanCancelMessage,
+  sanitizeMealPlanningUserMessage,
   shouldRouteToMealPlanning,
 } from "./mealPlanningRouting.js";
 
@@ -39,5 +40,13 @@ describe("mealPlanningRouting", () => {
   it("routes new planning asks without a session", () => {
     expect(shouldRouteToMealPlanning("plan my meals for the week", null)).toBe(true);
     expect(shouldRouteToMealPlanning("what's on my calendar", null)).toBe(false);
+  });
+
+  it("strips pillar step context from user text", () => {
+    expect(
+      sanitizeMealPlanningUserMessage(
+        "Plan 2 weeks\n\n---\nStep focus: gather constraints",
+      ),
+    ).toBe("Plan 2 weeks");
   });
 });

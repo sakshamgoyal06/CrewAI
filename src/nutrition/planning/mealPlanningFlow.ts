@@ -30,7 +30,7 @@ import {
 } from "./mealPlanningPrompt.js";
 import { loadFoodListContext, syncLockedPlanToFoodList } from "./foodListEnrichment.js";
 import { isFullLockCommand, parsePartialLockDates } from "./parsePartialLock.js";
-import { MEAL_PLAN_CANCEL_RE } from "./mealPlanningRouting.js";
+import { MEAL_PLAN_CANCEL_RE, sanitizeMealPlanningUserMessage } from "./mealPlanningRouting.js";
 import type { MealPlanEntryInput } from "../parseMealPlanJson.js";
 import { buildSpecialistIdentity } from "../../agents/promptIdentity.js";
 import { fetchUserHealthProfile } from "../../agents/health/healthOnboarding.js";
@@ -69,14 +69,53 @@ function flowMeta(session: MealPlanSessionRow, extra: Record<string, unknown> = 
   };
 }
 
-async function generateDraft(
+function chunkHorizonDates(startDate: string, endDate: string, chunkSize = 7): string[][] {
+  const dates = listDatesInHorizon(startDate, endDate);
+  const chunks: string[][] = [];
+  for (let i = 0; i < dates.length; i += chunkSize) {
+    chunks.push(dates.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+async function maybeRefreshHorizonFromMessage(
+  session: MealPlanSessionRow,
+  raw: string,
+  timezone?: string,
+): Promise<MealPlanSessionRow> {
+  const today = localDateKey(new Date(), timezone);
+  const horizon = parsePlanningHorizon(raw, today);
+  if (!horizon) {
+    return session;
+  }
+  if (
+    horizon.startDate === session.horizon_start &&
+    horizon.endDate === session.horizon_end
+  ) {
+    return session;
+  }
+  const updated = await updateMealPlanSession(session.id, {
+    horizon_start: horizon.startDate,
+    horizon_end: horizon.endDate,
+  });
+  if (!updated.ok) {
+    return session;
+  }
+  return {
+    ...session,
+    horizon_start: horizon.startDate,
+    horizon_end: horizon.endDate,
+  };
+}
+
+async function generateDraftOnce(
   ctx: AgentContext,
   session: MealPlanSessionRow,
   revisionNotes: string | null,
   attempt = 0,
 ): Promise<
   | { ok: true; display: string; entries: NonNullable<ReturnType<typeof extractMealPlanJson>> }
-  | { ok: false; error: string }
+  | { ok: false; error: string; llmText?: string }
 > {
   if (!session.horizon_start || !session.horizon_end) {
     return { ok: false, error: "horizon not set" };
@@ -84,7 +123,7 @@ async function generateDraft(
 
   const dayCount = listDatesInHorizon(session.horizon_start, session.horizon_end).length;
   const slotCount = Math.max(session.slots.length, 1);
-  const maxTokens = Math.min(8192, 768 + dayCount * slotCount * 72);
+  const maxTokens = Math.min(8192, 1024 + dayCount * slotCount * 80);
 
   const userPrompt = buildDraftUserPrompt({
     horizonStart: session.horizon_start,
@@ -113,14 +152,120 @@ async function generateDraft(
   const llmText = textFromMessage(msg).trim();
   const entries = extractMealPlanJson(llmText);
   if (!entries?.length) {
-    if (attempt === 0) {
-      return generateDraft(ctx, session, revisionNotes, 1);
+    if (attempt < 2) {
+      return generateDraftOnce(ctx, session, revisionNotes, attempt + 1);
     }
-    return { ok: false, error: "draft JSON missing" };
+    return { ok: false, error: "draft JSON missing", llmText };
   }
 
   const display = stripMealPlanJsonBlock(llmText) || llmText;
   return { ok: true, display, entries };
+}
+
+async function generateDraftJsonRecovery(
+  session: MealPlanSessionRow,
+  priorDisplay: string,
+): Promise<
+  | { ok: true; display: string; entries: NonNullable<ReturnType<typeof extractMealPlanJson>> }
+  | { ok: false; error: string }
+> {
+  if (!session.horizon_start || !session.horizon_end) {
+    return { ok: false, error: "horizon not set" };
+  }
+
+  const dates = listDatesInHorizon(session.horizon_start, session.horizon_end);
+  const slotCount = Math.max(session.slots.length, 1);
+  const maxTokens = Math.min(8192, 512 + dates.length * slotCount * 48);
+
+  const msg = await anthropic.messages.create({
+    model: HEALTH_SPECIALIST_MODEL,
+    max_tokens: maxTokens,
+    system:
+      "Return ONLY a fenced ```json block with shape {\"entries\":[{\"local_date\":\"YYYY-MM-DD\",\"meal_slot\":\"breakfast|lunch|dinner|snack\",\"title\":\"...\"}]}. One entry per slot per date. No other text.",
+    messages: [
+      {
+        role: "user",
+        content: [
+          `Dates: ${dates.join(", ")}`,
+          `Slots each day: ${session.slots.join(", ")}`,
+          session.constraints_text ? `Constraints: ${session.constraints_text}` : "",
+          priorDisplay ? `Meals from prior draft attempt:\n${priorDisplay.slice(0, 2500)}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      },
+    ],
+  });
+
+  const llmText = textFromMessage(msg).trim();
+  const entries = extractMealPlanJson(llmText);
+  if (!entries?.length) {
+    return { ok: false, error: "draft JSON missing" };
+  }
+
+  const display = stripMealPlanJsonBlock(priorDisplay) || priorDisplay || "(draft)";
+  return { ok: true, display, entries };
+}
+
+async function generateDraft(
+  ctx: AgentContext,
+  session: MealPlanSessionRow,
+  revisionNotes: string | null,
+): Promise<
+  | { ok: true; display: string; entries: NonNullable<ReturnType<typeof extractMealPlanJson>> }
+  | { ok: false; error: string }
+> {
+  if (!session.horizon_start || !session.horizon_end) {
+    return { ok: false, error: "horizon not set" };
+  }
+
+  const chunks = chunkHorizonDates(session.horizon_start, session.horizon_end);
+  if (chunks.length <= 1) {
+    const single = await generateDraftOnce(ctx, session, revisionNotes);
+    if (single.ok) {
+      return single;
+    }
+    if (single.llmText) {
+      const recovered = await generateDraftJsonRecovery(session, single.llmText);
+      if (recovered.ok) {
+        return recovered;
+      }
+    }
+    return { ok: false, error: single.error };
+  }
+
+  const displayParts: string[] = [];
+  const allEntries: NonNullable<ReturnType<typeof extractMealPlanJson>> = [];
+
+  for (const dateChunk of chunks) {
+    const chunkStart = dateChunk[0]!;
+    const chunkEnd = dateChunk[dateChunk.length - 1]!;
+    const chunkSession = {
+      ...session,
+      horizon_start: chunkStart,
+      horizon_end: chunkEnd,
+    };
+    const chunkResult = await generateDraftOnce(ctx, chunkSession, revisionNotes);
+    if (!chunkResult.ok) {
+      if (chunkResult.llmText) {
+        const recovered = await generateDraftJsonRecovery(chunkSession, chunkResult.llmText);
+        if (recovered.ok) {
+          displayParts.push(recovered.display);
+          allEntries.push(...recovered.entries);
+          continue;
+        }
+      }
+      return { ok: false, error: chunkResult.error };
+    }
+    displayParts.push(chunkResult.display);
+    allEntries.push(...chunkResult.entries);
+  }
+
+  return {
+    ok: true,
+    display: displayParts.join("\n\n"),
+    entries: allEntries,
+  };
 }
 
 async function persistDraft(
@@ -318,9 +463,25 @@ async function advanceToDraft(
 ): Promise<AgentResult> {
   const draft = await generateDraft(ctx, session, null);
   if (!draft.ok) {
+    await updateMealPlanSession(session.id, {
+      status: "gathering",
+      step: "constraints",
+    });
+    const range =
+      session.horizon_start && session.horizon_end
+        ? `${session.horizon_start} → ${session.horizon_end}`
+        : "your dates";
     return {
-      text: `I hit a snag building the draft (${draft.error}). Check your horizon/slots or try again.`,
-      metadata: flowMeta(session, { meal_plan_saved: false }),
+      text: [
+        `I couldn't finish the draft (${draft.error}).`,
+        "",
+        `Horizon **${range}** and slots are saved.`,
+        "Say **skip** to retry the draft, **cancel planning** to start over, or try a shorter range (e.g. one week).",
+      ].join("\n"),
+      metadata: flowMeta(
+        { ...session, status: "gathering", step: "constraints" },
+        { meal_plan_saved: false, meal_plan_draft_failed: true },
+      ),
     };
   }
 
@@ -398,10 +559,19 @@ async function handleSlotsStep(
       constraints_text: constraintsFromMessage,
       step: "constraints",
     });
-    return advanceToDraft(ctx, {
-      ...nextSession,
-      constraints_text: constraintsFromMessage,
-    });
+    return {
+      text: [
+        `Got it — **${formatSlotsLabel(slots)}** each day.`,
+        "",
+        `Noted for this stretch: ${constraintsFromMessage}`,
+        "",
+        "**Anything else before I draft?** Diets, batch prep, travel — or say **skip** to generate the draft.",
+      ].join("\n"),
+      metadata: flowMeta(
+        { ...nextSession, constraints_text: constraintsFromMessage },
+        { meal_plan_step: "constraints" },
+      ),
+    };
   }
 
   return {
@@ -515,7 +685,7 @@ export async function runMealPlanningTurn(
   ctx: AgentContext,
   existingSession: MealPlanSessionRow | null,
 ): Promise<AgentResult> {
-  const raw = ctx.rawMessage.trim();
+  const raw = sanitizeMealPlanningUserMessage(ctx.rawMessage);
 
   if (CANCEL_RE.test(raw)) {
     if (existingSession) {
@@ -541,6 +711,8 @@ export async function runMealPlanningTurn(
     }
     session = created.session;
   }
+
+  session = await maybeRefreshHorizonFromMessage(session, raw, ctx.timezone);
 
   const healthRow = await fetchUserHealthProfile(ctx.userProfileId);
 

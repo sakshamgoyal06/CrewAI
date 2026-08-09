@@ -38,6 +38,34 @@ function plainChunksToTelegramHtml(plain: string): string[] {
   return splitPlainForTelegram(plain).map((p) => markdownishToTelegramHtml(p));
 }
 
+function turnTimeoutMs(): number {
+  const raw = process.env.MAGNUS_TURN_TIMEOUT_MS;
+  const n = raw ? Number.parseInt(raw, 10) : NaN;
+  if (Number.isNaN(n) || n < 30_000) {
+    return 240_000;
+  }
+  return n;
+}
+
+async function runOrchestratorWithTimeout(input: Parameters<typeof runOrchestratorReply>[0]) {
+  const timeoutMs = turnTimeoutMs();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      runOrchestratorReply(input),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error("turn_timeout"));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
 export type MagnusRuntime = {
   start(): void;
 };
@@ -115,7 +143,7 @@ export async function handleMessage(
   }
 
   try {
-    const orchestrated = await runOrchestratorReply({
+    const orchestrated = await runOrchestratorWithTimeout({
       userMessage,
       userProfileId: user.profileId,
       telegramUserId: user.telegramUserId,
@@ -161,10 +189,18 @@ export async function handleMessage(
       }).catch(() => {});
     }
 
-    return plainChunksToTelegramHtml(replyText?.trim() || "…").filter((c) => c.trim().length > 0);
+    const htmlChunks = plainChunksToTelegramHtml(replyText?.trim() || "…").filter(
+      (c) => c.trim().length > 0,
+    );
+    return htmlChunks.length > 0 ? htmlChunks : [toTelegramHtml("…")];
   } catch (err) {
     log.error({ err: loggableError(err) }, "handleMessage failed");
-    const fallback = "Something went wrong. Check server logs.";
+    const timedOut =
+      err instanceof Error &&
+      (err.message.includes("turn_timeout") || err.name === "AbortError");
+    const fallback = timedOut
+      ? "That took too long. Try again, or say **cancel planning** if you were mid meal-plan."
+      : "Something went wrong. Check server logs.";
     const errLog = await recordMagnusChatMessage({
       user_profile_id: user.profileId,
       telegram_user_id: user.telegramUserId,

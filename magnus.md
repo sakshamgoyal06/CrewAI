@@ -213,7 +213,8 @@ shell or `.env`.
 15. **Meal-plan journey fast path** — Before intent classification and before the pillar LLM parser,
     `shouldRouteToMealPlanning` sends **cancel planning**, any message while a `meal_plan_sessions` row
     is active, and new planning asks straight to `executeMealPlanningCapability` (no misroute to GENERAL,
-    no silent timeout on cancel).
+    no silent timeout on cancel). Draft generation chunks horizons >7 days, retries JSON extraction,
+    and on failure keeps the session at **constraints** with **skip** / **cancel planning** recovery.
 
 ---
 
@@ -256,6 +257,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **`MAGNUS_PILLAR_PLAN_COMPOSE`** — Haiku composer for multi-step replies (default on).
 - **`MAGNUS_PILLAR_COMPOSE_MODEL`** — Composer model (default `claude-haiku-4-5`).
 - **`MAGNUS_MAX_TOOL_ROUNDS`** — Magnus agent tool loop cap (default 12).
+- **`MAGNUS_TURN_TIMEOUT_MS`** — Orchestrator turn budget before user-facing timeout reply (default 240000).
 
 ---
 
@@ -320,4 +322,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (meal-plan cancel/active-session routing fast path)
+**Last updated:** 2026-08-09 (meal-plan draft hardening + cancel routing)
