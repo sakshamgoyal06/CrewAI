@@ -153,12 +153,13 @@ Manual brief: `morning brief` or legacy `/morningbrief`.
 
 | Suite | What it verifies |
 |-------|------------------|
-| `userQueryRouting.test.ts` | 157 user queries × structural validators (hints, detectors, pillar consultation, meal parse) |
+| `magnusGoldenPath.test.ts` | **100** user asks through full orchestrator — intent, capability, tools, one voice |
+| `userQueryRouting.test.ts` | 157 queries × structural validators (hints, detectors) |
 | `catalogIntegrity.test.ts` | Catalog ids, tool map ↔ `magnusAgent` |
 | `orchestratorIntent.test.ts` | Classifier payload + meal hard override |
 | `magnusActionDetect.test.ts` | List/LifeOS/Notion/event/proactive phrases |
 | `healthServer.internal.test.ts` | Morning brief HTTP job auth |
 
-Full unit suite: `npm test` (1757+ tests).
+Full unit suite: `npm test` (1859+ tests).
 
-Validate catalog hints locally: `npx tsx scripts/dev/validate-user-query-catalog.mts`
+Golden-path only: `npm test -- src/capabilities/magnusGoldenPath.test.ts` — see `docs/review/GOLDEN_PATH_TEST_RESULTS.md`.

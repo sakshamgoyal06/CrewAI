@@ -16,6 +16,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/DATABASE_SCHEMA.md`** | Full Postgres + Redis schema, ERD, migration index |
 | **`docs/review/IMPARTIAL_REVIEW_2026-08-04.md`** | Third-party code review, grades, cleanup plan |
 | **`docs/review/REGRADE_2026-08-04.md`** | Post-security cleanup re-grade (B+ 84/100) |
+| **`docs/review/GOLDEN_PATH_TEST_RESULTS.md`** | 100 golden-path integration tests — routing, tools, one voice |
 | **`docs/review/AUDIT_2026-08-09.md`** | Full-repo audit: security, coherence, test results |
 | **`docs/ARCHITECTURE.md`** | What the system is: Magnus, four pillars, connections, ownership |
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
