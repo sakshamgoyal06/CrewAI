@@ -25,6 +25,10 @@ Multi-turn **meal planning journey**:
 
 Show / swap / skip / copy locked plans: `mealPlanReadAgent`
 
+**Templates:** save this week as template `<name>` · use template `<name>` · list meal plan templates
+
+**Shopping list:** shopping list for this week (from locked plan entries)
+
 Runs in `healthRouter.ts` after journal, before long-term planning.
 
 ## Lifecycle after lock

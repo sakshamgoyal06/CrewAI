@@ -2,6 +2,13 @@ import { isMealCommand } from "../../meals/parseMealLogCommand.js";
 import { localDateKey, timezoneAbbrev } from "../../nutrition/localDate.js";
 import { offsetDateKey } from "../../nutrition/parseMealPlanJson.js";
 import {
+  applyMealPlanTemplate,
+  formatTemplateList,
+  listMealPlanTemplates,
+  saveTemplateFromRange,
+} from "../../nutrition/planning/mealPlanTemplateStore.js";
+import { buildShoppingListForRange } from "../../nutrition/planning/shoppingList.js";
+import {
   copyPlanWeek,
   formatPlanDay,
   formatPlanWeek,
@@ -24,6 +31,17 @@ const SWAP_PLAN_RE =
 
 const COPY_WEEK_RE =
   /\b(?:repeat|copy)\s+(?:last\s+week(?:'s)?\s+plan|my\s+(?:last\s+)?week(?:'s)?\s+(?:meal\s+)?plan)\b/i;
+
+const SAVE_TEMPLATE_RE =
+  /\b(?:save|store)\s+(?:(?:this|the)\s+)?(?:week|plan)\s+as\s+(?:template|template\s+named?)\s+(.+)$/i;
+
+const APPLY_TEMPLATE_RE =
+  /\b(?:apply|use|load)\s+(?:template|meal\s+plan\s+template)\s+(.+?)(?:\s+(?:for|starting|from)\s+(?:this\s+week|today|tomorrow|\d{4}-\d{2}-\d{2}))?\s*$/i;
+
+const LIST_TEMPLATES_RE = /\b(?:list|show)\s+(?:my\s+)?(?:meal\s+)?plan\s+templates\b/i;
+
+const SHOPPING_LIST_RE =
+  /\b(?:shopping\s+list|grocery\s+list|what\s+to\s+buy)\b/i;
 
 function parsePlanSlot(raw: string): Exclude<MealSlot, "unspecified"> | null {
   const s = raw.toLowerCase();
@@ -66,7 +84,11 @@ export function matchesMealPlanReadMessage(rawMessage: string): boolean {
     MEAL_PLAN_SHOW_RE.test(rawMessage) ||
     SKIP_PLAN_RE.test(rawMessage) ||
     SWAP_PLAN_RE.test(rawMessage) ||
-    COPY_WEEK_RE.test(rawMessage)
+    COPY_WEEK_RE.test(rawMessage) ||
+    SAVE_TEMPLATE_RE.test(rawMessage) ||
+    APPLY_TEMPLATE_RE.test(rawMessage) ||
+    LIST_TEMPLATES_RE.test(rawMessage) ||
+    SHOPPING_LIST_RE.test(rawMessage)
   );
 }
 
@@ -78,6 +100,86 @@ export async function tryMealPlanReadAgent(ctx: AgentContext): Promise<AgentResu
   const raw = ctx.rawMessage.trim();
   const today = localDateKey(new Date(), ctx.timezone);
   const tz = timezoneAbbrev(ctx.timezone);
+
+  if (LIST_TEMPLATES_RE.test(raw)) {
+    const templates = await listMealPlanTemplates(ctx.userProfileId);
+    return {
+      text: formatTemplateList(templates),
+      metadata: { specialist: "MealPlanRead", meal_plan: "templates_list", count: templates.length },
+    };
+  }
+
+  const saveTemplateMatch = raw.match(SAVE_TEMPLATE_RE);
+  if (saveTemplateMatch?.[1]) {
+    const end = offsetDateKey(today, 6);
+    const result = await saveTemplateFromRange({
+      userProfileId: ctx.userProfileId,
+      name: saveTemplateMatch[1].trim(),
+      fromDate: today,
+      toDate: end,
+    });
+    if (!result.ok) {
+      return {
+        text: `Could not save template: ${result.error}`,
+        metadata: { specialist: "MealPlanRead", meal_plan: "template_save_failed" },
+      };
+    }
+    return {
+      text: `Saved template **${saveTemplateMatch[1].trim()}** (${result.entryCount} meals from this week). Apply with \`use template ${saveTemplateMatch[1].trim()}\`.`,
+      metadata: {
+        specialist: "MealPlanRead",
+        meal_plan: "template_saved",
+        template_id: result.templateId,
+      },
+    };
+  }
+
+  const applyTemplateMatch = raw.match(APPLY_TEMPLATE_RE);
+  if (applyTemplateMatch?.[1]) {
+    const templateName = applyTemplateMatch[1].trim();
+    const startDate = /\btomorrow\b/i.test(raw)
+      ? offsetDateKey(today, 1)
+      : today;
+    const result = await applyMealPlanTemplate({
+      userProfileId: ctx.userProfileId,
+      templateName,
+      startDate,
+    });
+    if (!result.ok) {
+      return {
+        text: `Could not apply template: ${result.error}`,
+        metadata: { specialist: "MealPlanRead", meal_plan: "template_apply_failed" },
+      };
+    }
+    return {
+      text: `Applied template **${templateName}** — ${result.savedCount} meal(s) from ${startDate}. Say **save plan** isn't needed (already locked). Review with "show my meal plan".`,
+      metadata: {
+        specialist: "MealPlanRead",
+        meal_plan: "template_applied",
+        saved_count: result.savedCount,
+      },
+    };
+  }
+
+  if (SHOPPING_LIST_RE.test(raw)) {
+    const end = /\btomorrow\b/i.test(raw) ? offsetDateKey(today, 1) : offsetDateKey(today, 6);
+    const from = /\btomorrow\b/i.test(raw) ? offsetDateKey(today, 1) : today;
+    const result = await buildShoppingListForRange({
+      userProfileId: ctx.userProfileId,
+      fromDate: from,
+      toDate: end,
+    });
+    if (!result.ok) {
+      return {
+        text: result.error,
+        metadata: { specialist: "MealPlanRead", meal_plan: "shopping_list_failed" },
+      };
+    }
+    return {
+      text: `**Shopping list** (${from} → ${end}):\n\n${result.text}`,
+      metadata: { specialist: "MealPlanRead", meal_plan: "shopping_list", from, to: end },
+    };
+  }
 
   const copyMatch = COPY_WEEK_RE.test(raw);
   if (copyMatch) {

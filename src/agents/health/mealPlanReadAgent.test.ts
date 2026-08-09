@@ -17,6 +17,13 @@ describe("mealPlanReadAgent", () => {
     expect(matchesMealPlanReadMessage("log lunch: rice")).toBe(false);
   });
 
+  it("matches templates and shopping list", () => {
+    expect(matchesMealPlanReadMessage("save this week as template high-protein")).toBe(true);
+    expect(matchesMealPlanReadMessage("use template high-protein")).toBe(true);
+    expect(matchesMealPlanReadMessage("list my meal plan templates")).toBe(true);
+    expect(matchesMealPlanReadMessage("shopping list for this week")).toBe(true);
+  });
+
   it("does not match planning asks (planner owns those)", () => {
     expect(matchesMealPlanReadMessage("plan my meals for the week")).toBe(false);
   });
