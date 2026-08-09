@@ -95,6 +95,7 @@ export const CATALOG_KINDS = [
   "meal_adherence_nudge",
   "meal_eod_reconciliation",
   "meal_gap_nudge",
+  "weekly_nutrition_review",
 ] as const;
 
 export type CatalogProactiveKind = (typeof CATALOG_KINDS)[number];
@@ -113,6 +114,7 @@ export const CATALOG_KIND_LABELS: Record<CatalogProactiveKind, string> = {
   meal_adherence_nudge: "Planned meal adherence nudge",
   meal_eod_reconciliation: "End-of-day meal catch-up",
   meal_gap_nudge: "Snack / gap log nudge",
+  weekly_nutrition_review: "Weekly nutrition review",
 };
 
 export const DEFAULT_CATALOG_SCHEDULE: Record<CatalogProactiveKind, ProactiveSchedule> = {
@@ -125,6 +127,7 @@ export const DEFAULT_CATALOG_SCHEDULE: Record<CatalogProactiveKind, ProactiveSch
   meal_adherence_nudge: { type: "conditional" },
   meal_eod_reconciliation: { type: "recurring_local", localHour: 21, windowMinutes: 20 },
   meal_gap_nudge: { type: "conditional" },
+  weekly_nutrition_review: { type: "recurring_local", localHour: 18, windowMinutes: 20 },
 };
 
 export const DEFAULT_CATALOG_CAP: Record<CatalogProactiveKind, ProactiveCapBucket> = {
@@ -137,6 +140,7 @@ export const DEFAULT_CATALOG_CAP: Record<CatalogProactiveKind, ProactiveCapBucke
   meal_adherence_nudge: "adaptive",
   meal_eod_reconciliation: "scheduled",
   meal_gap_nudge: "adaptive",
+  weekly_nutrition_review: "scheduled",
 };
 
 export const DEFAULT_CATALOG_TRIGGER: Record<CatalogProactiveKind, ProactiveTriggerType> = {
@@ -149,6 +153,7 @@ export const DEFAULT_CATALOG_TRIGGER: Record<CatalogProactiveKind, ProactiveTrig
   meal_adherence_nudge: "conditional",
   meal_eod_reconciliation: "recurring",
   meal_gap_nudge: "conditional",
+  weekly_nutrition_review: "recurring",
 };
 
 export const DEFAULT_CATALOG_COOLDOWN_HOURS: Partial<Record<CatalogProactiveKind, number>> = {

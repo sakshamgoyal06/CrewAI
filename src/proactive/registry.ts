@@ -1,6 +1,7 @@
 import { eventReminderScheduledJob } from "./jobs/eventReminderJob.js";
 import { gymHevyReconcileScheduledJob } from "./jobs/gymHevyReconcileJob.js";
 import { morningBriefScheduledJob } from "./jobs/morningBriefJob.js";
+import { nutritionNightlyScheduledJob } from "./jobs/nutritionNightlyJob.js";
 import { proactiveSubscriptionsJob } from "./jobs/proactiveSubscriptionsJob.js";
 import type { ScheduledProactiveJob } from "./jobs/types.js";
 
@@ -10,6 +11,7 @@ export function scheduledProactiveJobs(): ScheduledProactiveJob[] {
     morningBriefScheduledJob,
     eventReminderScheduledJob,
     gymHevyReconcileScheduledJob,
+    nutritionNightlyScheduledJob,
     proactiveSubscriptionsJob,
   ];
 }

@@ -4,6 +4,7 @@ import { anthropic } from "../../tools/clients.js";
 import { buildAgentMessages } from "../memory/memoryAgent.js";
 import { buildSpecialistIdentity } from "../promptIdentity.js";
 import type { AgentContext, AgentResult } from "../types.js";
+import { buildNutritionJournalContext } from "../../nutrition/analytics/nutritionJournalContext.js";
 import { appendHealthReferenceBlock } from "../../pillars/health/references/appendHealthReferenceBlock.js";
 import { saveHealthJournalEntry } from "../../pillars/health/journal/healthJournalStore.js";
 import { HEALTH_SPECIALIST_MODEL } from "./model.js";
@@ -79,6 +80,11 @@ export async function tryHealthJournalAgent(
       ? ctx.rawMessage.trim() || "today — summarize my day from what I shared."
       : ctx.rawMessage;
 
+  const nutritionContext = await buildNutritionJournalContext({
+    userProfileId: ctx.userProfileId,
+    timezone: ctx.timezone,
+  });
+
   const msg = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 900,
@@ -86,7 +92,7 @@ export async function tryHealthJournalAgent(
     messages: buildAgentMessages(
       ctx,
       appendHealthReferenceBlock(
-        `${payload}${ctx.healthPreferences ?? ""}`,
+        `${payload}${nutritionContext}${ctx.healthPreferences ?? ""}`,
         ctx.healthReferenceBlock,
       ),
     ),
