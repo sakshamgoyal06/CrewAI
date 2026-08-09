@@ -4,7 +4,6 @@ import { ENERGY_SYSTEM } from "./energyAgent.js";
 import { routeHealthMessage } from "./healthRouter.js";
 import { ALTERNATES_RECOMMENDER_SYSTEM } from "./alternatesRecommenderAgent.js";
 import { LONG_TERM_HEALTH_PLANNING_SYSTEM } from "./longTermHealthPlanningAgent.js";
-import { MEAL_PLAN_DRAFT_SYSTEM } from "../../nutrition/planning/mealPlanningPrompt.js";
 import { NUTRITION_SYSTEM } from "./nutritionPrompt.js";
 import { FITNESS_SYSTEM } from "../../pillars/health/workouts/agents/fitnessAgent.js";
 
@@ -117,27 +116,15 @@ describe("routeHealthMessage", () => {
   });
 
   it("routes meal planning asks to MealPlanner before Fitness", async () => {
-    createMock.mockResolvedValueOnce({
-      content: [
-        {
-          type: "text",
-          text: `Week plan\n\`\`\`json
-{"entries":[{"local_date":"2026-08-09","meal_slot":"lunch","title":"Bowl"}]}
-\`\`\``,
-        },
-      ],
-    });
     const out = await routeHealthMessage(
       ctx("Plan my meals for the week — vegan, nut allergy, moderate protein."),
     );
-    expect(createMock).toHaveBeenCalledTimes(1);
-    expect(String(createMock.mock.calls[0]![0].system)).toContain(
-      MEAL_PLAN_DRAFT_SYSTEM.slice(0, 40),
-    );
+    expect(createMock).not.toHaveBeenCalled();
     expect(out.metadata).toMatchObject({
-      health_order: "meal_plan",
       specialist: "MealPlanner",
+      meal_plan_step: "slots",
     });
+    expect(out.text).toMatch(/Which meals each day/i);
   });
 
   it("routes food swap asks to Alternates after Fitness declines", async () => {
