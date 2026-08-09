@@ -32,8 +32,23 @@ const READ_ONLY_TOOLS = new Set([
   "youtube_recommend",
 ]);
 
-const WRITE_CLAIM_RE =
-  /\b(?:I've|I have|I'?ve) (?:added|logged|saved|created|scheduled|booked|removed|deleted|updated|mirrored|set up|linked|connected)\b|\b(?:added|logged|saved|created|scheduled|booked|removed|deleted|updated|mirrored)\b(?:\s+\S+){0,8}\s+(?:to|on|in)\b|\b(?:added|logged|saved|created|scheduled|booked|removed|deleted|updated|mirrored)\b|\blogging .{0,50} now\b|\b(?:all done|done ✅)\b|\b(?:mirrored to notion|also saved to)\b|\b(?:is|are) now (?:on|in|linked|connected|clean|empty|live)\b|^`checkin:/im;
+const FIRST_PERSON_WRITE_RE =
+  /\b(?:I've|I have|I'?ve) (?:added|logged|saved|created|scheduled|booked|removed|deleted|updated|mirrored|set up|linked|connected)\b/i;
+
+/** e.g. "Added X to watchlist", "Saved template to library" */
+const ACTION_TO_TARGET_RE =
+  /\b(?:added|logged|saved|created|scheduled|booked|removed|deleted|updated|mirrored)\b(?:\s+\S+){0,8}\s+(?:to|on|in)\b/i;
+
+/** e.g. "Saved template **name**", "Logged daily check-in" at line start */
+const LINE_START_ACTION_RE =
+  /^(?:added|logged|saved|created|scheduled|booked|removed|deleted|updated|mirrored)\b/im;
+
+const OTHER_WRITE_CLAIM_RE =
+  /\blogging .{0,50} now\b|\b(?:logged|saved|added) as\b|\b(?:all done|done ✅)\b|\b(?:mirrored to notion|also saved to)\b|\b(?:is|are) now (?:on|in|linked|connected|clean|empty|live)\b|^`checkin:/im;
+
+/** Descriptive/negative uses — not assistant write claims. */
+const NEGATED_WRITE_CONTEXT_RE =
+  /\b(?:no|not|nothing|none|without|haven't|hasn't|don't|didn't|isn't|aren't|wasn't|weren't|un(?:saved|logged|scheduled|updated|locked))\b[^.\n]{0,48}\b(?:added|logged|saved|created|scheduled|booked|removed|deleted|updated|mirrored|locked)\b/i;
 
 const FULL_COMPLETION_RE =
   /\b(?:all done|everything(?:'s| is) (?:set|saved|logged|updated)|fully (?:logged|saved|updated)|clean at \d+|is now clean)\b/i;
@@ -54,7 +69,22 @@ export function classifyToolResult(output: string): boolean {
 }
 
 export function claimsPersistence(text: string): boolean {
-  return WRITE_CLAIM_RE.test(text.trim());
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+  const looksLikeWriteClaim =
+    FIRST_PERSON_WRITE_RE.test(trimmed) ||
+    ACTION_TO_TARGET_RE.test(trimmed) ||
+    LINE_START_ACTION_RE.test(trimmed) ||
+    OTHER_WRITE_CLAIM_RE.test(trimmed);
+  if (!looksLikeWriteClaim) {
+    return false;
+  }
+  if (NEGATED_WRITE_CONTEXT_RE.test(trimmed)) {
+    return false;
+  }
+  return true;
 }
 
 function isReadOnlyTool(name: string): boolean {
@@ -72,6 +102,13 @@ function hasSpecialistWriteEvidence(meta: Record<string, unknown>): boolean {
     return true;
   }
   if (meta.meal_plan_saved === true || meta.meal_plan_locked === true) {
+    return true;
+  }
+  const mealPlanTag = meta.meal_plan;
+  if (
+    typeof mealPlanTag === "string" &&
+    ["template_saved", "template_applied", "copied", "skipped", "swapped"].includes(mealPlanTag)
+  ) {
     return true;
   }
   return false;
