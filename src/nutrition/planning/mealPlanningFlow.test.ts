@@ -139,4 +139,37 @@ describe("runMealPlanningTurn", () => {
     expect(out.text).toMatch(/cancelled/i);
     expect(out.metadata?.meal_plan_cancelled).toBe(true);
   });
+
+  it("answers review questions without re-posting the full draft", async () => {
+    sessionState.session = {
+      id: "sess-1",
+      user_profile_id: "u1",
+      status: "draft",
+      step: "review",
+      horizon_start: "2026-08-09",
+      horizon_end: "2026-08-09",
+      slots: ["breakfast", "lunch", "dinner"],
+      constraints_text: null,
+      draft_entries: [
+        { local_date: "2026-08-09", meal_slot: "breakfast", title: "Oats" },
+        { local_date: "2026-08-09", meal_slot: "lunch", title: "Dal rice" },
+        { local_date: "2026-08-09", meal_slot: "dinner", title: "Paneer stir fry" },
+      ],
+      draft_display: "**Mon 9 Aug**\n- Breakfast: Oats\n- Lunch: Dal rice\n- Dinner: Paneer stir fry",
+      revision_notes: null,
+      created_at: "",
+      updated_at: "",
+      expires_at: "",
+    };
+    messagesCreate.mockResolvedValueOnce({
+      content: [{ type: "text", text: "Monday spreads protein well across the three slots." }],
+    });
+
+    const out = await runMealPlanningTurn(ctx("Should I swap dinner for fish instead?"), sessionState.session as never);
+
+    expect(out.metadata?.meal_plan_question).toBe(true);
+    expect(out.text).toMatch(/Monday spreads protein/i);
+    expect(out.text).not.toMatch(/\*\*Mon 9 Aug\*\*/);
+    expect(out.text).toMatch(/save plan/i);
+  });
 });

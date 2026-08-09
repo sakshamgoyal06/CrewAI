@@ -17,9 +17,11 @@ import { tryHevyWriteAgent } from "../../pillars/health/workouts/agents/hevyWrit
 import { runOrchestratedMealLogTurn, runMealPhotoLogTurn } from "./nutritionOrchestrated.js";
 import { tryHealthJournalAgent } from "./healthJournalAgent.js";
 import { loadHealthReferenceBlock } from "../../pillars/health/references/loadHealthReferences.js";
+import { getActiveMealPlanSession } from "../../nutrition/planning/mealPlanningSessionStore.js";
 import { buildRoutingHints } from "../routing/pillarStrategy/buildRoutingHints.js";
 import { executeHealthStrategy, healthDeterministicCapability } from "../routing/pillarStrategy/executeHealthStrategy.js";
 import { parsePillarExecutionPlan, pillarStrategyEnabled } from "../routing/pillarStrategy/parsePillarStrategy.js";
+import { planFromSingleCapability } from "../routing/pillarStrategy/types.js";
 import { HEALTH_GENERIC_ACK } from "./healthConstants.js";
 
 /** @deprecated Import from healthConstants.js */
@@ -87,6 +89,13 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
   }
 
   if (pillarStrategyEnabled()) {
+    const activePlanSession = await getActiveMealPlanSession(ctxWithPrefs.userProfileId);
+    if (activePlanSession) {
+      const plan = planFromSingleCapability("meal_plan_create", {}, 1, "deterministic");
+      const ctxWithPlan = { ...ctxWithPrefs, pillarStrategy: plan };
+      return executeHealthStrategy(ctxWithPlan, plan);
+    }
+
     const hints = await buildRoutingHints(ctxWithPrefs);
     const plan = await parsePillarExecutionPlan("HEALTH", ctx.rawMessage, hints);
     const ctxWithPlan = { ...ctxWithPrefs, pillarStrategy: plan };
@@ -132,6 +141,14 @@ async function routeHealthMessageLegacy(ctxWithPrefs: AgentContext): Promise<Age
   const hevyWrite = await tryHevyWriteAgent(ctxWithPrefs);
   if (hevyWrite) {
     return withRouterMeta(hevyWrite, "hevy_write");
+  }
+
+  const activePlanSession = await getActiveMealPlanSession(ctxWithPrefs.userProfileId);
+  if (activePlanSession) {
+    const mealPlan = await tryMealPlanningAgent(ctxWithPrefs);
+    if (mealPlan) {
+      return withRouterMeta(mealPlan, "meal_plan");
+    }
   }
 
   const mealPlanRead = await tryMealPlanReadAgent(ctxWithPrefs);

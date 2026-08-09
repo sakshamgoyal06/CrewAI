@@ -12,6 +12,9 @@ import { NUTRITION_SYSTEM } from "./nutritionPrompt.js";
 import { FITNESS_SYSTEM } from "../../pillars/health/workouts/agents/fitnessAgent.js";
 
 const createMock = vi.fn();
+const sessionState = {
+  active: null as Record<string, unknown> | null,
+};
 
 vi.mock("../../tools/clients.js", () => ({
   anthropic: {
@@ -28,7 +31,8 @@ vi.mock("../../tools/clients.js", () => ({
               in: () => ({
                 order: () => ({
                   limit: () => ({
-                    maybeSingle: () => Promise.resolve({ data: null, error: null }),
+                    maybeSingle: () =>
+                      Promise.resolve({ data: sessionState.active, error: null }),
                   }),
                 }),
               }),
@@ -102,6 +106,7 @@ describe("routeHealthMessage", () => {
     delete process.env.HEVY_API_KEY;
     delete process.env.MAGNUS_HEVY_API_KEY;
     process.env.MAGNUS_PILLAR_STRATEGY_PARSER = "false";
+    sessionState.active = null;
     createMock.mockReset();
     createMock.mockResolvedValue({
       content: [{ type: "text", text: "mock reply" }],
@@ -147,6 +152,44 @@ describe("routeHealthMessage", () => {
       meal_plan_cancelled: true,
       health_router: "pillar_plan",
     });
+  });
+
+  it("continues active draft session for follow-up questions without meal_plan_read", async () => {
+    process.env.MAGNUS_PILLAR_STRATEGY_PARSER = "true";
+    process.env.MAGNUS_PILLAR_PLAN_COMPOSE = "false";
+    sessionState.active = {
+      id: "sess-review",
+      user_profile_id: "u1",
+      status: "draft",
+      step: "review",
+      horizon_start: "2026-08-09",
+      horizon_end: "2026-08-09",
+      slots: ["breakfast", "lunch", "dinner"],
+      constraints_text: null,
+      draft_entries: [
+        { local_date: "2026-08-09", meal_slot: "breakfast", title: "Oats" },
+        { local_date: "2026-08-09", meal_slot: "lunch", title: "Dal rice" },
+        { local_date: "2026-08-09", meal_slot: "dinner", title: "Paneer stir fry" },
+      ],
+      draft_display: "**Mon 9 Aug**\n- Breakfast: Oats\n- Lunch: Dal rice\n- Dinner: Paneer stir fry",
+      revision_notes: null,
+      created_at: "",
+      updated_at: "",
+      expires_at: "",
+    };
+    createMock.mockResolvedValueOnce({
+      content: [{ type: "text", text: "Monday balances protein across three meals — oats AM, dal at lunch, paneer at dinner." }],
+    });
+
+    const out = await routeHealthMessage(ctx("What about the whole day on Monday?"));
+
+    expect(out.metadata).toMatchObject({
+      meal_plan_question: true,
+      health_router: "pillar_plan",
+    });
+    expect(out.text).toMatch(/Monday balances protein/i);
+    expect(out.text).not.toMatch(/\*\*Mon 9 Aug\*\*/);
+    expect(out.text).not.toMatch(/Reply \*\*save plan\*\* to lock this menu/);
   });
 
   it("routes food swap asks to Alternates after Fitness declines", async () => {

@@ -106,10 +106,10 @@ Rules:
 - READ before WRITE when order matters (e.g. show plan, then shopping list).
 - Use the **entire user message** plus **recent_turns** and **routing_hints** together — do not rely on keyword matching alone.
 - Meal plan CREATE vs READ (critical):
-  - **meal_plan_read**: user wants to see what is already planned/saved — "what's my meal plan", "what am I eating tomorrow", "show planned meals". Use even when the phrase contains "meal plan".
+  - **meal_plan_read**: user wants to see what is already **locked/saved** — "what's my meal plan", "what am I eating tomorrow", "show planned meals". Use even when the phrase contains "meal plan".
   - **meal_plan_create**: user wants to build/draft a NEW plan OR continue an in-progress session (active_meal_plan_session=true). Includes gather, draft, review, cancel planning, save plan, and questions/revisions during review.
-  - previous_turn_meal_plan_locked=true + asking about upcoming meals → **meal_plan_read**, NOT create.
-  - active_meal_plan_session=true → **meal_plan_create** (continue journey; executor handles cancel, save, Q&A, revisions).
+  - active_meal_plan_session=true OR meal_plan_session_step is horizon/slots/constraints/review → **always meal_plan_create** — even for "what about Monday?", "the whole day", or "should I eat X instead?". The executor handles Q&A against the draft.
+  - previous_turn_meal_plan_locked=true + no active session + asking about upcoming meals → **meal_plan_read**, NOT create.
 - Meal corrections after a recent log → meal_log_correct (check previous_turn_was_meal_log).
 - Do NOT duplicate the same capability unless the user explicitly asked twice.
 

@@ -49,14 +49,15 @@ const LOCK_RE = isFullLockCommand;
 
 const SKIP_RE = /^(?:skip|nothing\s+special|no(?:thing)?\s+different|same\s+as\s+usual)\.?$/i;
 
-const MEAL_PLAN_REVIEW_QA_SYSTEM = `You are the Meal Planner specialist reviewing a draft plan with the user.
+const MEAL_PLAN_REVIEW_QA_SYSTEM = `You are helping Magnus review a draft meal plan with the user.
 
-**Your job on this turn:** Answer their question or discuss the plan — do NOT regenerate or rewrite the whole plan.
+**Your job on this turn:** Answer their question about the draft — do NOT regenerate or rewrite the whole plan, and do NOT paste the full menu (they already see it above).
 
 Rules:
+- Treat "it", "that", "the plan above", "Monday", "the whole day", etc. as referring to the draft in context unless they clearly mean something else.
 - Reference specific days/meals from the draft when relevant.
 - For "should I / would it be better / instead of" questions: give concise, practical advice (macros, routine, preferences). Mention what the draft currently has for that slot.
-- If they seem to want a change, explain the tradeoff and say they can ask you to **update** that slot (e.g. "swap Tuesday lunch to paneer") and you will revise the draft.
+- If they seem to want a change, explain the tradeoff and say they can ask to **update** that slot (e.g. "swap Tuesday lunch to paneer").
 - Respect dietary restrictions and avoid lists from health preferences.
 - Keep answers under ~200 words unless they asked for detail.
 - Do not claim the plan is saved/locked unless metadata says so.`;
@@ -529,10 +530,10 @@ async function answerMealPlanReviewQuestion(
 
   const answer = textFromMessage(msg).trim();
   const footer =
-    "Reply with changes to apply, or **save plan** / **lock this in** when the draft looks right.";
+    "Reply with changes to apply, or **save plan** when the draft looks right.";
 
   return {
-    text: [answer, "", footer, "", reviewPrompt(session)].join("\n"),
+    text: [answer, "", footer].join("\n"),
     metadata: flowMeta(session, { meal_plan_question: true }),
   };
 }
@@ -874,6 +875,7 @@ export async function runMealPlanningTurn(
       metadata: {
         specialist: "MealPlanner",
         meal_plan_cancelled: true,
+        pillar_compose: false,
       },
     };
   }

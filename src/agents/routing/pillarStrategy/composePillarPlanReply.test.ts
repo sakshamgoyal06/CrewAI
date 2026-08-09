@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { composePillarPlanReply } from "./composePillarPlanReply.js";
 import type { PillarExecutionPlan, PlanStepResult } from "./types.js";
@@ -14,7 +14,15 @@ vi.mock("../../../tools/clients.js", () => ({
 }));
 
 describe("composePillarPlanReply", () => {
-  it("returns single step text unchanged", async () => {
+  beforeEach(() => {
+    createMock.mockReset();
+  });
+
+  it("composes single-step specialist output via LLM", async () => {
+    createMock.mockResolvedValueOnce({
+      content: [{ type: "text", text: "Here is your plan for Monday." }],
+    });
+
     const text = await composePillarPlanReply(
       {
         userProfileId: "u1",
@@ -25,8 +33,8 @@ describe("composePillarPlanReply", () => {
       { steps: [{ capability: "meal_plan_read", args: {} }], confidence: 1, parser: "llm" },
       [{ step_index: 0, capability: "meal_plan_read", text: "Plan for Monday…", metadata: {} }],
     );
-    expect(text).toBe("Plan for Monday…");
-    expect(createMock).not.toHaveBeenCalled();
+    expect(text).toBe("Here is your plan for Monday.");
+    expect(createMock).toHaveBeenCalledTimes(1);
   });
 
   it("composes multi-step outcomes via LLM", async () => {

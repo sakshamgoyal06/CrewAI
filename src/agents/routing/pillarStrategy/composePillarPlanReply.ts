@@ -20,6 +20,10 @@ function formatStepOutcomes(stepResults: PlanStepResult[]): string {
 /**
  * Merge multi-step executor outputs into one user-facing reply (Magnus voice, Telegram-friendly).
  */
+function isMealPlanQuestionStep(step: PlanStepResult): boolean {
+  return step.metadata?.meal_plan_question === true;
+}
+
 export async function composePillarPlanReply(
   ctx: AgentContext,
   _plan: PillarExecutionPlan,
@@ -28,22 +32,41 @@ export async function composePillarPlanReply(
   if (stepResults.length === 0) {
     return "…";
   }
-  if (stepResults.length === 1) {
-    return stepResults[0]!.text;
-  }
 
   if (!pillarPlanComposeEnabled()) {
     return stepResults.map((s) => s.text.trim()).join("\n\n---\n\n");
   }
 
-  const system = `You compose the final Telegram reply for Magnus after sub-agents executed a multi-step plan.
+  const mealPlanQa =
+    stepResults.length === 1 && stepResults.every((s) => isMealPlanQuestionStep(s));
+
+  const system = `You compose the final Telegram reply for Magnus after internal specialists executed a plan.
 
 Rules:
-- One cohesive message in Magnus's voice — not a numbered dump of agent outputs.
+- Speak as **Magnus** directly to the user — warm, concise, one voice. Never mention specialists, sub-agents, departments, or internal steps.
+- One cohesive message — not a numbered dump of agent outputs.
 - Include every material fact/action outcome from the steps (confirmations, lists, times, errors).
 - Do NOT invent data not present in step outcomes.
 - Plain text with **bold** sparingly; under ~350 words unless the user asked for detail.
-- No "Step 1/2" headers unless the user asked for a breakdown.`;
+- No "Step 1/2" headers unless the user asked for a breakdown.
+- If the user asked a follow-up question about a meal plan they already saw in chat, answer the question only — do NOT repeat the full plan or draft unless they explicitly asked to see it again.
+- Strip journey scaffolding ("Step 1 — How long?", "Let's build a meal plan together") when the user is past that phase — keep only what they need this turn.`;
+
+  if (mealPlanQa) {
+    const qaSystem = `${system}
+
+This turn is meal-plan Q&A during review. Deliver the answer and a one-line nudge (save plan / suggest a change). Do NOT paste the draft menu again.`;
+    return composeWithLlm(ctx, stepResults, qaSystem);
+  }
+
+  return composeWithLlm(ctx, stepResults, system);
+}
+
+async function composeWithLlm(
+  ctx: AgentContext,
+  stepResults: PlanStepResult[],
+  system: string,
+): Promise<string> {
 
   const userContent = [
     `Original user message:\n${ctx.rawMessage.trim()}`,

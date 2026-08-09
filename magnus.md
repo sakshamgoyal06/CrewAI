@@ -207,10 +207,13 @@ shell or `.env`.
     It returns an ordered **steps[]** array (1–`MAGNUS_PILLAR_PLAN_MAX_STEPS`, default 4): each step has
     `capability`, `args`, and `intent_summary`. **Step executors** run sequentially with full context and
     prior-step outcomes; GENERAL steps use Magnus with capability-filtered tools. A **composer**
-    (`MAGNUS_PILLAR_PLAN_COMPOSE`, default on) merges multi-step results into one Telegram reply.
-    Deterministic pre-gates stay before the parser where unambiguous (explicit meal log, meal photo).
-    Meal-plan **create vs read** is parser-owned (no regex fast path). Review-step Q&A defaults to
-    answering questions about the draft; explicit change language triggers revision.
+    (`MAGNUS_PILLAR_PLAN_COMPOSE`, default on) re-voices specialist step output into one Magnus
+    Telegram reply (single- and multi-step). Terminal confirmations (e.g. cancel planning) set
+    `pillar_compose: false` to skip re-voicing. Deterministic pre-gates stay before the parser where
+    unambiguous (explicit meal log, meal photo, **active `meal_plan_sessions` draft/gathering** →
+    always `meal_plan_create`). Meal-plan **create vs read** is parser-owned when no active session.
+    Review-step Q&A answers the question only — no full draft re-post; explicit change language
+    triggers revision.
 
 ---
 
@@ -250,7 +253,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **`MAGNUS_PILLAR_STRATEGY_PARSER`** — LLM plan parser per pillar (default on). Set `false` for legacy Health regex routing only.
 - **`MAGNUS_PILLAR_STRATEGY_MODEL`** — Plan parser model (default `claude-haiku-4-5`).
 - **`MAGNUS_PILLAR_PLAN_MAX_STEPS`** — Max steps per plan (default `4`, max `8`).
-- **`MAGNUS_PILLAR_PLAN_COMPOSE`** — Haiku composer for multi-step replies (default on).
+- **`MAGNUS_PILLAR_PLAN_COMPOSE`** — Haiku composer for pillar step replies (default on; single- and multi-step).
 - **`MAGNUS_PILLAR_COMPOSE_MODEL`** — Composer model (default `claude-haiku-4-5`).
 - **`MAGNUS_MAX_TOOL_ROUNDS`** — Magnus agent tool loop cap (default 12).
 - **`MAGNUS_TURN_TIMEOUT_MS`** — Orchestrator turn budget before user-facing timeout reply (default 240000).
@@ -318,4 +321,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (parser-owned meal-plan routing + review Q&A default)
+**Last updated:** 2026-08-09 (meal-plan voice compose + active-session routing + review Q&A without draft re-post)

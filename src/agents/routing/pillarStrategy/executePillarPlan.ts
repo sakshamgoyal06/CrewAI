@@ -32,10 +32,16 @@ export async function executePillarPlan(
   }
 
   let finalText: string;
-  if (plan.steps.length === 1 && !pillarPlanComposeEnabled()) {
-    finalText = stepResults[0]?.text ?? "…";
-  } else if (plan.steps.length === 1) {
-    finalText = stepResults[0]?.text ?? "…";
+  const needsVoiceCompose =
+    pillarPlanComposeEnabled() &&
+    (stepResults.length > 1 ||
+      stepResults.some((s) => s.metadata?.pillar_compose !== false));
+
+  if (!needsVoiceCompose) {
+    finalText =
+      stepResults.length === 1
+        ? (stepResults[0]?.text ?? "…")
+        : stepResults.map((s) => s.text.trim()).join("\n\n---\n\n");
   } else {
     finalText = await composePillarPlanReply(ctx, plan, stepResults);
   }
