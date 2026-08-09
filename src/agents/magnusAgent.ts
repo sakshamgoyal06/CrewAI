@@ -1261,11 +1261,16 @@ async function runTool(
 
 export async function runMagnusAgent(
   ctx: AgentContext,
-  options?: { allowedToolNames?: string[] },
+  options?: { allowedToolNames?: string[]; originalUserMessage?: string },
 ): Promise<AgentResult> {
+  const userTurn =
+    options?.originalUserMessage && options.originalUserMessage !== ctx.rawMessage
+      ? `User's full request:\n${options.originalUserMessage.trim()}\n\nThis step:\n${ctx.rawMessage.trim()}`
+      : ctx.rawMessage;
+
   const messages: MessageParam[] = buildAgentMessages(
     ctx,
-    `${ctx.rawMessage}\n\n---\n${contextBlock(ctx)}`,
+    `${userTurn}\n\n---\n${contextBlock(ctx)}`,
   );
 
   const toolsUsed: string[] = [];

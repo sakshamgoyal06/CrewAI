@@ -42,8 +42,8 @@ export type AgentContext = {
   slashCommandKey?: string;
   /** Telegram meal photo for vision-based logging. */
   mealPhoto?: { fileId: string; caption?: string | null };
-  /** Pillar strategy from request parser — executor uses this instead of regex routing. */
-  pillarStrategy?: import("./routing/pillarStrategy/types.js").PillarStrategy;
+  /** Parsed execution plan from request parser — executor runs steps sequentially. */
+  pillarStrategy?: import("./routing/pillarStrategy/types.js").PillarExecutionPlan;
 };
 
 export type AgentResult = {

@@ -19,7 +19,7 @@ import { tryHealthJournalAgent } from "./healthJournalAgent.js";
 import { loadHealthReferenceBlock } from "../../pillars/health/references/loadHealthReferences.js";
 import { buildRoutingHints } from "../routing/pillarStrategy/buildRoutingHints.js";
 import { executeHealthStrategy, healthDeterministicCapability } from "../routing/pillarStrategy/executeHealthStrategy.js";
-import { parsePillarStrategy, pillarStrategyEnabled } from "../routing/pillarStrategy/parsePillarStrategy.js";
+import { parsePillarExecutionPlan, pillarStrategyEnabled } from "../routing/pillarStrategy/parsePillarStrategy.js";
 import { HEALTH_GENERIC_ACK } from "./healthConstants.js";
 
 /** @deprecated Import from healthConstants.js */
@@ -88,14 +88,9 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
 
   if (pillarStrategyEnabled()) {
     const hints = await buildRoutingHints(ctxWithPrefs);
-    const strategy = await parsePillarStrategy("HEALTH", ctx.rawMessage, hints);
-    const ctxWithStrategy = { ...ctxWithPrefs, pillarStrategy: strategy };
-    const result = await executeHealthStrategy(ctxWithStrategy, strategy);
-    const order =
-      typeof result.metadata?.health_order === "string"
-        ? (result.metadata.health_order as Parameters<typeof withRouterMeta>[1])
-        : "meal_plan";
-    return withRouterMeta(result, order);
+    const plan = await parsePillarExecutionPlan("HEALTH", ctx.rawMessage, hints);
+    const ctxWithPlan = { ...ctxWithPrefs, pillarStrategy: plan };
+    return executeHealthStrategy(ctxWithPlan, plan);
   }
 
   return routeHealthMessageLegacy(ctxWithPrefs);

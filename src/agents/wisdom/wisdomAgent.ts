@@ -7,7 +7,7 @@ import { runPillarSpecialist } from "../pillarSpecialist.js";
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
 import { buildRoutingHints } from "../routing/pillarStrategy/buildRoutingHints.js";
 import { executeWisdomStrategy } from "../routing/pillarStrategy/executeWisdomStrategy.js";
-import { parsePillarStrategy, pillarStrategyEnabled } from "../routing/pillarStrategy/parsePillarStrategy.js";
+import { parsePillarExecutionPlan, pillarStrategyEnabled } from "../routing/pillarStrategy/parsePillarStrategy.js";
 
 export const WISDOM_SYSTEM = `You are the Wisdom specialist inside Magnus.
 
@@ -29,8 +29,8 @@ Keep replies under ~200 words unless they ask for a full plan.`;
 export async function runWisdomAgent(ctx: AgentContext): Promise<AgentResult> {
   if (pillarStrategyEnabled()) {
     const hints = await buildRoutingHints(ctx);
-    const strategy = await parsePillarStrategy("WISDOM", ctx.rawMessage, hints);
-    return executeWisdomStrategy({ ...ctx, pillarStrategy: strategy }, strategy);
+    const plan = await parsePillarExecutionPlan("WISDOM", ctx.rawMessage, hints);
+    return executeWisdomStrategy({ ...ctx, pillarStrategy: plan }, plan);
   }
 
   return runPillarSpecialist({
