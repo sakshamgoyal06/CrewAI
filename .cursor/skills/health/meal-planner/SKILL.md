@@ -20,8 +20,10 @@ Multi-turn **meal planning journey**:
 1. **Horizon** — today / tomorrow / week / custom dates (`parsePlanningHorizon`)
 2. **Slots** — breakfast, lunch, dinner, snack (`parsePlanningSlots`)
 3. **Constraints** — period-specific notes (travel, prep, budget); profile prefs pre-loaded
-4. **Draft** — LLM preview stored in `meal_plan_sessions` (not locked yet)
-5. **Review** — user revises or says **save plan** to persist → `meal_plan_entries`
+4. **Draft** — LLM preview stored in `meal_plan_sessions` (not locked yet); food wishlist injected when present
+5. **Review** — user revises, **partial lock** (e.g. save Mon–Wed only), or **save plan** → `meal_plan_entries`; novel plan titles sync to `food` list
+
+**Photo meal logging:** Telegram photo (+ optional caption) → vision description → orchestrated meal log (bypasses health onboarding gate).
 
 Show / swap / skip / copy locked plans: `mealPlanReadAgent`
 

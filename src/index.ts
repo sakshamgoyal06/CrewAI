@@ -26,11 +26,12 @@ async function main(): Promise<void> {
   );
 
   const telegram = createTelegramRuntime(
-    async (text, reply, telegramUserId, updateId, sendTyping) => {
+    async (incoming, reply, telegramUserId, updateId, sendTyping) => {
       try {
-        const messages = await handleMessage(text, telegramUserId, {
+        const messages = await handleMessage(incoming.text, telegramUserId, {
           updateId,
           sendTyping,
+          mealPhoto: incoming.mealPhoto,
         });
         for (const chunk of messages) {
           await reply(chunk, { parse_mode: "HTML" });

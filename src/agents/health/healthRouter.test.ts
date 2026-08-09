@@ -55,6 +55,9 @@ vi.mock("../../tools/clients.js", () => ({
       return {
         select: () => ({
           eq: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: null, error: null }),
+            }),
             contains: () => ({
               order: () => ({
                 limit: () => Promise.resolve({ data: [], error: null }),

@@ -15,8 +15,10 @@ import {
   reconcileParserWithApiResults,
   summarizeEstimateForReconcile,
 } from "./mealParserAgent.js";
-import { draftMealLogTelegramIntro } from "./nutritionComposer.js";
+import { describeMealFromPhoto } from "../../meals/mealPhotoEstimate.js";
+import { downloadTelegramPhoto } from "../../meals/telegramPhotoDownload.js";
 import { buildSpecialistIdentity } from "../promptIdentity.js";
+import { draftMealLogTelegramIntro } from "./nutritionComposer.js";
 import { NUTRITION_SYSTEM } from "./nutritionPrompt.js";
 import { HEALTH_SPECIALIST_MODEL } from "./model.js";
 
@@ -254,6 +256,46 @@ export async function runOrchestratedNutritionAdviceTurn(ctx: AgentContext): Pro
     text,
     metadata: { specialist: "nutrition", department: "HEALTH", nutrition_agent_tools: false },
   };
+}
+
+/** Vision meal log from a Telegram photo (+ optional caption). */
+export async function runMealPhotoLogTurn(ctx: AgentContext): Promise<AgentResult> {
+  const fileId = ctx.mealPhoto?.fileId;
+  if (!fileId) {
+    return {
+      text: "No photo attached — send a meal picture or type what you ate.",
+      metadata: { specialist: "MealPhoto", meal_log: false },
+    };
+  }
+
+  try {
+    const photo = await downloadTelegramPhoto(fileId);
+    const description = await describeMealFromPhoto({
+      photo,
+      caption: ctx.mealPhoto?.caption ?? ctx.rawMessage,
+      healthPreferences: ctx.healthPreferences ?? null,
+    });
+
+    const slotHint = ctx.rawMessage.match(/\b(breakfast|lunch|dinner|snack)\b/i)?.[1]?.toLowerCase();
+    const mealSlot =
+      slotHint === "breakfast" ||
+      slotHint === "lunch" ||
+      slotHint === "dinner" ||
+      slotHint === "snack"
+        ? slotHint
+        : undefined;
+
+    return runOrchestratedMealLogTurn(ctx, description, ctx.rawMessage || `[meal photo] ${description}`, {
+      mealSlot,
+      logKind: mealSlot === "snack" ? "snack" : "meal",
+    });
+  } catch (err) {
+    logger.warn({ err: String(err) }, "meal photo log failed");
+    return {
+      text: "I couldn't read that photo well enough to log — try again with better light, or type what you ate.",
+      metadata: { specialist: "MealPhoto", meal_log: false, error: String(err) },
+    };
+  }
 }
 
 /** Namespace for Anthropic param types (avoids importing conflicting names). */

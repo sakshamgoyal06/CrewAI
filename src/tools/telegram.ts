@@ -148,8 +148,13 @@ export type ReplyOptions = {
   parse_mode?: "HTML";
 };
 
+export type TelegramIncomingMessage = {
+  text: string;
+  mealPhoto?: { fileId: string; caption?: string | null };
+};
+
 export type TelegramTextHandler = (
-  text: string,
+  message: TelegramIncomingMessage,
   reply: (r: string, opts?: ReplyOptions) => Promise<void>,
   telegramUserId: string,
   updateId?: number,
@@ -181,6 +186,46 @@ export type TelegramRuntime = {
  * Registers handlers and returns a runtime that has not started receiving updates yet, so the
  * caller can mount the webhook route before Telegram is told where to deliver.
  */
+async function deliverToMagnusHandler(
+  onMessage: TelegramTextHandler,
+  ctx: {
+    from?: { id?: number };
+    chat: { id?: number };
+    update: { update_id: number };
+    reply: (text: string, extra?: { parse_mode?: "HTML" }) => Promise<unknown>;
+    telegram: { sendChatAction: (chatId: number, action: "typing") => Promise<unknown> };
+  },
+  incoming: TelegramIncomingMessage,
+): Promise<void> {
+  const updateId = ctx.update.update_id;
+  const telegramUserId = String(ctx.from?.id ?? ctx.chat.id);
+  const chatId = ctx.chat?.id;
+  const reply = async (r: string, opts?: ReplyOptions): Promise<void> => {
+    if (opts?.parse_mode === "HTML") {
+      await ctx.reply(r, { parse_mode: "HTML" });
+    } else {
+      await ctx.reply(r);
+    }
+  };
+
+  const sendTyping =
+    chatId !== undefined
+      ? () => {
+          void ctx.telegram.sendChatAction(chatId, "typing");
+        }
+      : undefined;
+
+  const rate = await checkMessageRateLimit(telegramUserId);
+  if (!rate.ok) {
+    await reply(
+      `You're sending messages too quickly. Try again in about ${rate.retryAfterSec} seconds.`,
+    );
+    return;
+  }
+
+  await onMessage(incoming, reply, telegramUserId, updateId, sendTyping);
+}
+
 export function createTelegramRuntime(onMessage: TelegramTextHandler): TelegramRuntime {
   const b = getBot();
   const config = resolveTelegramRuntime();
@@ -194,6 +239,7 @@ export function createTelegramRuntime(onMessage: TelegramTextHandler): TelegramR
 
     const telegramUserId = String(ctx.from?.id ?? ctx.chat.id);
     const chatId = ctx.chat?.id;
+    const rawText = ctx.message.text;
     const reply = async (r: string, opts?: ReplyOptions): Promise<void> => {
       if (opts?.parse_mode === "HTML") {
         await ctx.reply(r, { parse_mode: "HTML" });
@@ -208,8 +254,6 @@ export function createTelegramRuntime(onMessage: TelegramTextHandler): TelegramR
             void ctx.telegram.sendChatAction(chatId, "typing");
           }
         : undefined;
-
-    const rawText = ctx.message.text;
 
     if (isStartCommand(rawText) || isHelpCommand(rawText)) {
       await ctx.reply(
@@ -271,7 +315,27 @@ export function createTelegramRuntime(onMessage: TelegramTextHandler): TelegramR
       );
       return;
     }
-    await onMessage(rawText, reply, telegramUserId, updateId, sendTyping);
+    await onMessage({ text: rawText }, reply, telegramUserId, updateId, sendTyping);
+  });
+
+  b.on("photo", async (ctx) => {
+    const updateId = ctx.update.update_id;
+    if (!(await claimTelegramUpdate(updateId))) {
+      logger.debug({ updateId }, "duplicate telegram update ignored");
+      return;
+    }
+
+    const photos = ctx.message.photo;
+    const largest = photos[photos.length - 1];
+    if (!largest?.file_id) {
+      return;
+    }
+
+    const caption = "caption" in ctx.message ? ctx.message.caption?.trim() : undefined;
+    await deliverToMagnusHandler(onMessage, ctx, {
+      text: caption || "[meal photo]",
+      mealPhoto: { fileId: largest.file_id, caption: caption ?? null },
+    });
   });
 
   b.catch((err, ctx) => {

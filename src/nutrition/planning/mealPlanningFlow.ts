@@ -28,14 +28,16 @@ import {
   MEAL_PLAN_DRAFT_SYSTEM,
   buildDraftUserPrompt,
 } from "./mealPlanningPrompt.js";
+import { loadFoodListContext, syncLockedPlanToFoodList } from "./foodListEnrichment.js";
+import { isFullLockCommand, parsePartialLockDates } from "./parsePartialLock.js";
+import type { MealPlanEntryInput } from "../parseMealPlanJson.js";
 import { buildSpecialistIdentity } from "../../agents/promptIdentity.js";
 import { fetchUserHealthProfile } from "../../agents/health/healthOnboarding.js";
 
 const CANCEL_RE =
   /\b(?:cancel\s+(?:planning|plan)|never\s*mind|stop\s+planning|abort\s+plan)\b/i;
 
-const LOCK_RE =
-  /^(?:yes|yep|yeah|save(?:\s+it|\s+plan|\s+the\s+plan)?|lock(?:\s+it|\s+plan|\s+the\s+plan)?|looks?\s+good|perfect|go\s+ahead|confirm|ship\s+it|that\s+works)\b/i;
+const LOCK_RE = isFullLockCommand;
 
 const SKIP_RE = /^(?:skip|nothing\s+special|no(?:thing)?\s+different|same\s+as\s+usual)\.?$/i;
 
@@ -95,6 +97,7 @@ async function generateDraft(
           revisionNotes,
           previousDraftDisplay: session.draft_display,
           anchorBlock: planAnchorBlock(ctx),
+          foodListContext: await loadFoodListContext(ctx.userProfileId),
         }),
       },
     ],
@@ -150,9 +153,106 @@ function reviewPrompt(session: MealPlanSessionRow): string {
     "",
     `**Draft plan** for ${range} (${formatSlotsLabel(session.slots)}).`,
     "",
-    "Reply **save plan** to lock this menu, or tell me what to change (e.g. more protein, simpler dinners, swap Tuesday lunch).",
+    "Reply **save plan** to lock this menu, **save plan for Mon–Wed** for a partial lock, or tell me what to change.",
     "Say **cancel planning** to discard.",
   ].join("\n");
+}
+
+async function lockPlanEntries(
+  ctx: AgentContext,
+  session: MealPlanSessionRow,
+  entries: MealPlanEntryInput[],
+  partial: boolean,
+): Promise<AgentResult> {
+  if (!entries.length) {
+    return {
+      text: "No meals matched that date range — check the days or say **save plan** for the full draft.",
+      metadata: flowMeta(session, { meal_plan_saved: false }),
+    };
+  }
+
+  const saved = await savePlanEntries(ctx.userProfileId, entries, "chat");
+  if (!saved.ok) {
+    return {
+      text: `Could not lock plan: ${saved.error}`,
+      metadata: flowMeta(session, { meal_plan_saved: false, error: saved.error }),
+    };
+  }
+
+  const foodSync = await syncLockedPlanToFoodList({
+    userProfileId: ctx.userProfileId,
+    entries,
+  });
+
+  const savedDates = new Set(entries.map((e) => e.local_date));
+  const remaining = session.draft_entries.filter((e) => !savedDates.has(e.local_date));
+
+  if (partial && remaining.length > 0) {
+    await updateMealPlanSession(session.id, {
+      status: "draft",
+      step: "review",
+      draft_entries: remaining,
+      revision_notes: null,
+    });
+
+    const dateRange =
+      saved.dates.length === 1
+        ? saved.dates[0]
+        : `${saved.dates[0]} → ${saved.dates[saved.dates.length - 1]}`;
+
+    const foodNote =
+      foodSync.added.length > 0
+        ? `\nAdded to food wishlist: ${foodSync.added.slice(0, 5).join(", ")}.`
+        : "";
+
+    return {
+      text: [
+        `**Partial lock** — ${saved.savedCount} meal(s) saved for ${dateRange}.`,
+        `${remaining.length} meal(s) still in draft for other days.`,
+        "",
+        "Reply **save plan** for the rest, or keep revising.",
+        foodNote,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      metadata: flowMeta(session, {
+        meal_plan_saved: true,
+        meal_plan_partial_lock: true,
+        saved_count: saved.savedCount,
+        remaining_count: remaining.length,
+      }),
+    };
+  }
+
+  await lockMealPlanSession(session.id);
+
+  const dateRange =
+    saved.dates.length === 1
+      ? saved.dates[0]
+      : `${saved.dates[0]} → ${saved.dates[saved.dates.length - 1]}`;
+
+  const foodNote =
+    foodSync.added.length > 0
+      ? `\nAdded to food wishlist: ${foodSync.added.slice(0, 5).join(", ")}.`
+      : "";
+
+  return {
+    text: [
+      `**Plan locked** — ${saved.savedCount} meal(s) saved for ${dateRange}.`,
+      "",
+      "I'll use this for reminders, adherence nudges, and log matching. Say **show my meal plan** anytime.",
+      foodNote,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    metadata: flowMeta(session, {
+      meal_plan_saved: true,
+      meal_plan_locked: true,
+      saved_count: saved.savedCount,
+      plan_dates: saved.dates,
+      food_list_added: foodSync.added.length,
+    }),
+  };
 }
 
 async function handleReviewStep(
@@ -160,7 +260,16 @@ async function handleReviewStep(
   session: MealPlanSessionRow,
   raw: string,
 ): Promise<AgentResult> {
-  if (LOCK_RE.test(raw.trim())) {
+  if (session.horizon_start && session.horizon_end) {
+    const partialDates = parsePartialLockDates(raw, session.horizon_start, session.horizon_end);
+    if (partialDates?.length) {
+      const dateSet = new Set(partialDates);
+      const toLock = session.draft_entries.filter((e) => dateSet.has(e.local_date));
+      return lockPlanEntries(ctx, session, toLock, true);
+    }
+  }
+
+  if (LOCK_RE(raw.trim())) {
     if (!session.draft_entries.length) {
       return {
         text: "No draft to save yet — I'll rebuild one. What should change?",
@@ -168,34 +277,7 @@ async function handleReviewStep(
       };
     }
 
-    const saved = await savePlanEntries(ctx.userProfileId, session.draft_entries, "chat");
-    if (!saved.ok) {
-      return {
-        text: `Could not lock plan: ${saved.error}`,
-        metadata: flowMeta(session, { meal_plan_saved: false, error: saved.error }),
-      };
-    }
-
-    await lockMealPlanSession(session.id);
-
-    const dateRange =
-      saved.dates.length === 1
-        ? saved.dates[0]
-        : `${saved.dates[0]} → ${saved.dates[saved.dates.length - 1]}`;
-
-    return {
-      text: [
-        `**Plan locked** — ${saved.savedCount} meal(s) saved for ${dateRange}.`,
-        "",
-        "I'll use this for reminders, adherence nudges, and log matching. Say **show my meal plan** anytime.",
-      ].join("\n"),
-      metadata: flowMeta(session, {
-        meal_plan_saved: true,
-        meal_plan_locked: true,
-        saved_count: saved.savedCount,
-        plan_dates: saved.dates,
-      }),
-    };
+    return lockPlanEntries(ctx, session, session.draft_entries, false);
   }
 
   const draft = await generateDraft(ctx, session, raw.trim());

@@ -31,6 +31,7 @@ export function buildDraftUserPrompt(input: {
   revisionNotes: string | null;
   previousDraftDisplay: string | null;
   anchorBlock: string;
+  foodListContext?: string;
 }): string {
   const parts = [
     `Plan meals from **${input.horizonStart}** through **${input.horizonEnd}**.`,
@@ -44,6 +45,10 @@ export function buildDraftUserPrompt(input: {
 
   if (input.constraintsText?.trim()) {
     parts.push(`\nThis period specifically:\n${input.constraintsText.trim()}`);
+  }
+
+  if (input.foodListContext?.trim()) {
+    parts.push(input.foodListContext.trim());
   }
 
   if (input.revisionNotes?.trim()) {

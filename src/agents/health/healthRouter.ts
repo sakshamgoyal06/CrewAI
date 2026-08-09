@@ -14,7 +14,7 @@ import { tryLongTermHealthPlanningAgent } from "./longTermHealthPlanningAgent.js
 import { tryAlternatesRecommenderAgent } from "./alternatesRecommenderAgent.js";
 import { tryNutritionAgent } from "./nutritionAgent.js";
 import { tryHevyWriteAgent } from "../../pillars/health/workouts/agents/hevyWriteAgent.js";
-import { runOrchestratedMealLogTurn } from "./nutritionOrchestrated.js";
+import { runOrchestratedMealLogTurn, runMealPhotoLogTurn } from "./nutritionOrchestrated.js";
 import { tryHealthJournalAgent } from "./healthJournalAgent.js";
 import { loadHealthReferenceBlock } from "../../pillars/health/references/loadHealthReferences.js";
 
@@ -66,6 +66,11 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
   };
 
   const mealParsed = parseMealLogCommand(ctx.rawMessage);
+  if (ctx.mealPhoto?.fileId) {
+    const r = await runMealPhotoLogTurn(ctxWithPrefs);
+    return withRouterMeta(r, "meal_log");
+  }
+
   if (mealParsed.kind === "meal") {
     const r = await runOrchestratedMealLogTurn(
       ctxWithPrefs,

@@ -55,6 +55,8 @@ export type HandleMessageOptions = {
   updateId?: number;
   /** Telegram "typing…" indicator, refreshed while the turn runs. */
   sendTyping?: () => void | Promise<void>;
+  /** Meal photo from Telegram for vision logging. */
+  mealPhoto?: { fileId: string; caption?: string | null };
 };
 
 /** Outbound Telegram payloads in send order (HTML via `markdownishToTelegramHtml`). */
@@ -120,6 +122,7 @@ export async function handleMessage(
       timezone: user.timezone,
       northStarGoal: user.northStarGoal,
       displayName: user.displayName,
+      mealPhoto: options?.mealPhoto,
     });
 
     const { replyText, intent } = orchestrated;

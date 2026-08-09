@@ -64,6 +64,7 @@ export async function runOrchestratorReply(input: {
   timezone?: string;
   northStarGoal?: string;
   displayName?: string;
+  mealPhoto?: { fileId: string; caption?: string | null };
 }): Promise<OrchestratorReply> {
   const healthProfile = await fetchUserHealthProfile(input.userProfileId);
   const healthRoute = intentToPillarRoute("HEALTH");
@@ -72,7 +73,8 @@ export async function runOrchestratorReply(input: {
   if (
     healthProfile &&
     !healthProfile.onboarding_completed_at &&
-    !isMealCommand(input.userMessage)
+    !isMealCommand(input.userMessage) &&
+    !input.mealPhoto?.fileId
   ) {
     const ob = await runHealthOnboardingTurn(
       {
@@ -98,9 +100,16 @@ export async function runOrchestratorReply(input: {
     input.userProfileId,
     input.telegramUserId,
   );
-  const intent = await resolveIntentNaturalLanguage(input.userMessage, { recentTurns });
+  const intent = input.mealPhoto?.fileId
+    ? ("HEALTH" as Intent)
+    : await resolveIntentNaturalLanguage(input.userMessage, { recentTurns });
 
-  if (intent === "HEALTH" && !healthProfile && !isMealCommand(input.userMessage)) {
+  if (
+    intent === "HEALTH" &&
+    !healthProfile &&
+    !isMealCommand(input.userMessage) &&
+    !input.mealPhoto?.fileId
+  ) {
     const started = await startHealthOnboarding({
       userMessage: input.userMessage,
       userProfileId: input.userProfileId,
@@ -140,6 +149,7 @@ export async function runOrchestratorReply(input: {
     northStarGoal: input.northStarGoal,
     displayName: input.displayName,
     rawMessage: input.userMessage,
+    mealPhoto: input.mealPhoto,
     intent,
     memoryBlock,
     memoryPackage,

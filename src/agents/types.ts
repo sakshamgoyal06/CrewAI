@@ -40,6 +40,8 @@ export type AgentContext = {
   specialist?: string;
   /** Set when the user message came from a Telegram `/command` (payload only in `rawMessage`). */
   slashCommandKey?: string;
+  /** Telegram meal photo for vision-based logging. */
+  mealPhoto?: { fileId: string; caption?: string | null };
 };
 
 export type AgentResult = {
