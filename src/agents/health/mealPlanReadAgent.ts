@@ -92,16 +92,32 @@ export function matchesMealPlanReadMessage(rawMessage: string): boolean {
   );
 }
 
-export async function tryMealPlanReadAgent(ctx: AgentContext): Promise<AgentResult | null> {
-  if (isMealCommand(ctx.rawMessage)) {
-    return null;
-  }
+export type MealPlanReadCapability =
+  | "meal_plan_read"
+  | "meal_plan_skip"
+  | "meal_plan_swap"
+  | "meal_plan_copy_week"
+  | "meal_plan_template_save"
+  | "meal_plan_template_apply"
+  | "meal_plan_templates_list"
+  | "meal_plan_shopping_list";
 
+function strArg(args: Record<string, unknown>, key: string): string | undefined {
+  const v = args[key];
+  return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+
+/** Pillar strategy executor — capability dispatch without regex first-accept. */
+export async function executeMealPlanReadCapability(
+  ctx: AgentContext,
+  cap: MealPlanReadCapability,
+  args: Record<string, unknown> = {},
+): Promise<AgentResult> {
   const raw = ctx.rawMessage.trim();
   const today = localDateKey(new Date(), ctx.timezone);
   const tz = timezoneAbbrev(ctx.timezone);
 
-  if (LIST_TEMPLATES_RE.test(raw)) {
+  if (cap === "meal_plan_templates_list") {
     const templates = await listMealPlanTemplates(ctx.userProfileId);
     return {
       text: formatTemplateList(templates),
@@ -109,12 +125,18 @@ export async function tryMealPlanReadAgent(ctx: AgentContext): Promise<AgentResu
     };
   }
 
-  const saveTemplateMatch = raw.match(SAVE_TEMPLATE_RE);
-  if (saveTemplateMatch?.[1]) {
+  if (cap === "meal_plan_template_save") {
+    const name = strArg(args, "template_name") ?? raw.match(SAVE_TEMPLATE_RE)?.[1]?.trim();
+    if (!name) {
+      return {
+        text: 'Name the template — e.g. **"save this week as template vegan week"**.',
+        metadata: { specialist: "MealPlanRead", meal_plan: "template_save_failed" },
+      };
+    }
     const end = offsetDateKey(today, 6);
     const result = await saveTemplateFromRange({
       userProfileId: ctx.userProfileId,
-      name: saveTemplateMatch[1].trim(),
+      name,
       fromDate: today,
       toDate: end,
     });
@@ -125,7 +147,7 @@ export async function tryMealPlanReadAgent(ctx: AgentContext): Promise<AgentResu
       };
     }
     return {
-      text: `Saved template **${saveTemplateMatch[1].trim()}** (${result.entryCount} meals from this week). Apply with \`use template ${saveTemplateMatch[1].trim()}\`.`,
+      text: `Saved template **${name}** (${result.entryCount} meals from this week). Apply with \`use template ${name}\`.`,
       metadata: {
         specialist: "MealPlanRead",
         meal_plan: "template_saved",
@@ -134,12 +156,19 @@ export async function tryMealPlanReadAgent(ctx: AgentContext): Promise<AgentResu
     };
   }
 
-  const applyTemplateMatch = raw.match(APPLY_TEMPLATE_RE);
-  if (applyTemplateMatch?.[1]) {
-    const templateName = applyTemplateMatch[1].trim();
-    const startDate = /\btomorrow\b/i.test(raw)
-      ? offsetDateKey(today, 1)
-      : today;
+  if (cap === "meal_plan_template_apply") {
+    const templateName =
+      strArg(args, "template_name") ?? raw.match(APPLY_TEMPLATE_RE)?.[1]?.trim();
+    if (!templateName) {
+      return {
+        text: 'Which template? e.g. **"use template vegan week"**.',
+        metadata: { specialist: "MealPlanRead", meal_plan: "template_apply_failed" },
+      };
+    }
+    const startDate =
+      strArg(args, "date_hint") === "tomorrow" || /\btomorrow\b/i.test(raw)
+        ? offsetDateKey(today, 1)
+        : today;
     const result = await applyMealPlanTemplate({
       userProfileId: ctx.userProfileId,
       templateName,
@@ -152,7 +181,7 @@ export async function tryMealPlanReadAgent(ctx: AgentContext): Promise<AgentResu
       };
     }
     return {
-      text: `Applied template **${templateName}** — ${result.savedCount} meal(s) from ${startDate}. Say **save plan** isn't needed (already locked). Review with "show my meal plan".`,
+      text: `Applied template **${templateName}** — ${result.savedCount} meal(s) from ${startDate}. Review with "show my meal plan".`,
       metadata: {
         specialist: "MealPlanRead",
         meal_plan: "template_applied",
@@ -161,7 +190,7 @@ export async function tryMealPlanReadAgent(ctx: AgentContext): Promise<AgentResu
     };
   }
 
-  if (SHOPPING_LIST_RE.test(raw)) {
+  if (cap === "meal_plan_shopping_list") {
     const end = /\btomorrow\b/i.test(raw) ? offsetDateKey(today, 1) : offsetDateKey(today, 6);
     const from = /\btomorrow\b/i.test(raw) ? offsetDateKey(today, 1) : today;
     const result = await buildShoppingListForRange({
@@ -181,8 +210,7 @@ export async function tryMealPlanReadAgent(ctx: AgentContext): Promise<AgentResu
     };
   }
 
-  const copyMatch = COPY_WEEK_RE.test(raw);
-  if (copyMatch) {
+  if (cap === "meal_plan_copy_week") {
     const lastWeekStart = offsetDateKey(today, -7);
     const thisWeekStart = today;
     const result = await copyPlanWeek(ctx.userProfileId, lastWeekStart, thisWeekStart);
@@ -198,13 +226,18 @@ export async function tryMealPlanReadAgent(ctx: AgentContext): Promise<AgentResu
     };
   }
 
-  const skipMatch = raw.match(SKIP_PLAN_RE);
-  if (skipMatch) {
-    const slot = parsePlanSlot(skipMatch[2]!);
+  if (cap === "meal_plan_skip") {
+    const skipMatch = raw.match(SKIP_PLAN_RE);
+    const slot =
+      parsePlanSlot(strArg(args, "slot") ?? skipMatch?.[2] ?? "") ??
+      parsePlanSlot(raw.toLowerCase());
     if (!slot) {
-      return null;
+      return {
+        text: 'Which slot? e.g. **"skip dinner tomorrow"**.',
+        metadata: { specialist: "MealPlanRead", meal_plan: "skip_failed" },
+      };
     }
-    const { localDate, label } = resolvePlanDate(ctx, skipMatch[1], raw);
+    const { localDate, label } = resolvePlanDate(ctx, skipMatch?.[1], raw);
     const result = await skipPlanSlot(ctx.userProfileId, localDate, slot);
     if (!result.ok) {
       return {
@@ -218,14 +251,17 @@ export async function tryMealPlanReadAgent(ctx: AgentContext): Promise<AgentResu
     };
   }
 
-  const swapMatch = raw.match(SWAP_PLAN_RE);
-  if (swapMatch) {
-    const slot = parsePlanSlot(swapMatch[2]!);
-    const newTitle = swapMatch[3]?.trim();
+  if (cap === "meal_plan_swap") {
+    const swapMatch = raw.match(SWAP_PLAN_RE);
+    const slot = parsePlanSlot(strArg(args, "slot") ?? swapMatch?.[2] ?? "");
+    const newTitle = strArg(args, "new_title") ?? swapMatch?.[3]?.trim();
     if (!slot || !newTitle) {
-      return null;
+      return {
+        text: 'Try **"swap dinner for lentil soup"**.',
+        metadata: { specialist: "MealPlanRead", meal_plan: "swap_failed" },
+      };
     }
-    const { localDate, label } = resolvePlanDate(ctx, swapMatch[1], raw);
+    const { localDate, label } = resolvePlanDate(ctx, swapMatch?.[1], raw);
     const result = await swapPlanSlot(ctx.userProfileId, localDate, slot, newTitle);
     if (!result.ok) {
       return {
@@ -239,13 +275,10 @@ export async function tryMealPlanReadAgent(ctx: AgentContext): Promise<AgentResu
     };
   }
 
-  if (!MEAL_PLAN_SHOW_RE.test(raw)) {
-    return null;
-  }
-
   const { localDate, label } = resolvePlanDate(ctx, undefined, raw);
+  const horizon = strArg(args, "horizon_hint") ?? raw.toLowerCase();
 
-  if (/\bthis\s+week\b/.test(raw.toLowerCase())) {
+  if (cap === "meal_plan_read" && (/\bthis\s+week\b/.test(horizon) || horizon.includes("week"))) {
     const end = offsetDateKey(today, 6);
     const entries = await getPlanEntriesForRange(ctx.userProfileId, today, end);
     const text = formatPlanWeek(entries, today, end);
@@ -261,4 +294,46 @@ export async function tryMealPlanReadAgent(ctx: AgentContext): Promise<AgentResu
     text: `${text}\n\n_${tz}_`,
     metadata: { specialist: "MealPlanRead", meal_plan: "day", local_date: localDate },
   };
+}
+
+export async function tryMealPlanReadAgent(ctx: AgentContext): Promise<AgentResult | null> {
+  if (isMealCommand(ctx.rawMessage)) {
+    return null;
+  }
+
+  const raw = ctx.rawMessage.trim();
+
+  if (LIST_TEMPLATES_RE.test(raw)) {
+    return executeMealPlanReadCapability(ctx, "meal_plan_templates_list");
+  }
+
+  if (SAVE_TEMPLATE_RE.test(raw)) {
+    return executeMealPlanReadCapability(ctx, "meal_plan_template_save");
+  }
+
+  if (APPLY_TEMPLATE_RE.test(raw)) {
+    return executeMealPlanReadCapability(ctx, "meal_plan_template_apply");
+  }
+
+  if (SHOPPING_LIST_RE.test(raw)) {
+    return executeMealPlanReadCapability(ctx, "meal_plan_shopping_list");
+  }
+
+  if (COPY_WEEK_RE.test(raw)) {
+    return executeMealPlanReadCapability(ctx, "meal_plan_copy_week");
+  }
+
+  if (SKIP_PLAN_RE.test(raw)) {
+    return executeMealPlanReadCapability(ctx, "meal_plan_skip");
+  }
+
+  if (SWAP_PLAN_RE.test(raw)) {
+    return executeMealPlanReadCapability(ctx, "meal_plan_swap");
+  }
+
+  if (!MEAL_PLAN_SHOW_RE.test(raw)) {
+    return null;
+  }
+
+  return executeMealPlanReadCapability(ctx, "meal_plan_read");
 }

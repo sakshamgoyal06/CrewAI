@@ -17,6 +17,24 @@ export function matchesMealPlanningMessage(rawMessage: string): boolean {
   return matchesMealPlannerMessage(rawMessage);
 }
 
+/** Run meal planning journey — used by pillar strategy executor (no regex gate). */
+export async function executeMealPlanningCapability(ctx: AgentContext): Promise<AgentResult> {
+  const active = await getActiveMealPlanSession(ctx.userProfileId);
+
+  if (!active) {
+    const result = await runMealPlanningTurn(ctx, null);
+    if (result.metadata?.meal_plan_step === "horizon" && !result.metadata?.meal_plan_drafted) {
+      return {
+        text: `${mealPlanningIntro()}\n\n${result.text}`,
+        metadata: result.metadata,
+      };
+    }
+    return result;
+  }
+
+  return runMealPlanningTurn(ctx, active);
+}
+
 export async function tryMealPlanningAgent(ctx: AgentContext): Promise<AgentResult | null> {
   if (isMealCommand(ctx.rawMessage)) {
     return null;
@@ -32,16 +50,5 @@ export async function tryMealPlanningAgent(ctx: AgentContext): Promise<AgentResu
     return null;
   }
 
-  if (!active && isPlanningAsk) {
-    const result = await runMealPlanningTurn(ctx, null);
-    if (result.metadata?.meal_plan_step === "horizon" && !result.metadata?.meal_plan_drafted) {
-      return {
-        text: `${mealPlanningIntro()}\n\n${result.text}`,
-        metadata: result.metadata,
-      };
-    }
-    return result;
-  }
-
-  return runMealPlanningTurn(ctx, active);
+  return executeMealPlanningCapability(ctx);
 }

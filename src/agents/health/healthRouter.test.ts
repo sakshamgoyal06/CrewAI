@@ -98,6 +98,7 @@ describe("routeHealthMessage", () => {
   beforeEach(() => {
     delete process.env.HEVY_API_KEY;
     delete process.env.MAGNUS_HEVY_API_KEY;
+    process.env.MAGNUS_PILLAR_STRATEGY_PARSER = "false";
     createMock.mockReset();
     createMock.mockResolvedValue({
       content: [{ type: "text", text: "mock reply" }],

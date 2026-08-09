@@ -98,14 +98,15 @@ export function matchesMealHistoryMessage(rawMessage: string): boolean {
   );
 }
 
-export async function tryMealHistoryAgent(ctx: AgentContext): Promise<AgentResult | null> {
-  if (isMealCommand(ctx.rawMessage)) {
-    return null;
-  }
+export type MealHistoryCapability = "meal_history" | "meal_history_undo" | "meal_breakdown";
 
+export async function executeMealHistoryCapability(
+  ctx: AgentContext,
+  cap: MealHistoryCapability,
+): Promise<AgentResult> {
   const raw = ctx.rawMessage.trim();
 
-  if (UNDO_MEAL_RE.test(raw)) {
+  if (cap === "meal_history_undo") {
     const result = await softDeleteMostRecentSession(ctx.userProfileId, ctx.timezone);
     if (!result.ok) {
       return {
@@ -124,7 +125,7 @@ export async function tryMealHistoryAgent(ctx: AgentContext): Promise<AgentResul
     };
   }
 
-  if (MEAL_BREAKDOWN_RE.test(raw)) {
+  if (cap === "meal_breakdown") {
     const detail = await getMealSessionComponents(ctx.userProfileId);
     if (!detail) {
       return {
@@ -152,10 +153,6 @@ export async function tryMealHistoryAgent(ctx: AgentContext): Promise<AgentResul
         meal_session_id: session.mealSessionId,
       },
     };
-  }
-
-  if (!MEAL_HISTORY_RE.test(raw)) {
-    return null;
   }
 
   const today = localDateKey(new Date(), ctx.timezone);
@@ -194,6 +191,28 @@ export async function tryMealHistoryAgent(ctx: AgentContext): Promise<AgentResul
     text,
     metadata: { specialist: "MealHistory", meal_history: "today", local_date: today },
   };
+}
+
+export async function tryMealHistoryAgent(ctx: AgentContext): Promise<AgentResult | null> {
+  if (isMealCommand(ctx.rawMessage)) {
+    return null;
+  }
+
+  const raw = ctx.rawMessage.trim();
+
+  if (UNDO_MEAL_RE.test(raw)) {
+    return executeMealHistoryCapability(ctx, "meal_history_undo");
+  }
+
+  if (MEAL_BREAKDOWN_RE.test(raw)) {
+    return executeMealHistoryCapability(ctx, "meal_breakdown");
+  }
+
+  if (!MEAL_HISTORY_RE.test(raw)) {
+    return null;
+  }
+
+  return executeMealHistoryCapability(ctx, "meal_history");
 }
 
 export async function formatTargetsOnFile(userProfileId: string): Promise<string> {

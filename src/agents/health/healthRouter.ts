@@ -17,10 +17,13 @@ import { tryHevyWriteAgent } from "../../pillars/health/workouts/agents/hevyWrit
 import { runOrchestratedMealLogTurn, runMealPhotoLogTurn } from "./nutritionOrchestrated.js";
 import { tryHealthJournalAgent } from "./healthJournalAgent.js";
 import { loadHealthReferenceBlock } from "../../pillars/health/references/loadHealthReferences.js";
+import { buildRoutingHints } from "../routing/pillarStrategy/buildRoutingHints.js";
+import { executeHealthStrategy, healthDeterministicCapability } from "../routing/pillarStrategy/executeHealthStrategy.js";
+import { parsePillarStrategy, pillarStrategyEnabled } from "../routing/pillarStrategy/parsePillarStrategy.js";
+import { HEALTH_GENERIC_ACK } from "./healthConstants.js";
 
-/** Short generic acknowledgement when no HEALTH sub-specialist matches the message. */
-export const HEALTH_GENERIC_ACK =
-  "Noted — health-related. Tell me if you want help with training, meals, or sleep and recovery, and what you’re optimizing for.";
+/** @deprecated Import from healthConstants.js */
+export { HEALTH_GENERIC_ACK };
 
 /**
  * **Sequential first-accept (v1):** Meal planner → Long-term health planning (seasons / arcs) →
@@ -65,8 +68,43 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
     healthReferenceBlock,
   };
 
-  const mealParsed = parseMealLogCommand(ctx.rawMessage);
-  if (ctx.mealPhoto?.fileId) {
+  const deterministic = healthDeterministicCapability(ctxWithPrefs);
+  if (deterministic === "meal_log_photo") {
+    const r = await runMealPhotoLogTurn(ctxWithPrefs);
+    return withRouterMeta(r, "meal_log");
+  }
+  if (deterministic === "meal_log") {
+    const mealParsed = parseMealLogCommand(ctx.rawMessage);
+    if (mealParsed.kind === "meal") {
+      const r = await runOrchestratedMealLogTurn(
+        ctxWithPrefs,
+        mealParsed.text,
+        ctx.rawMessage,
+        { mealSlot: mealParsed.slot, logKind: mealParsed.logKind },
+      );
+      return withRouterMeta(r, "meal_log");
+    }
+  }
+
+  if (pillarStrategyEnabled()) {
+    const hints = await buildRoutingHints(ctxWithPrefs);
+    const strategy = await parsePillarStrategy("HEALTH", ctx.rawMessage, hints);
+    const ctxWithStrategy = { ...ctxWithPrefs, pillarStrategy: strategy };
+    const result = await executeHealthStrategy(ctxWithStrategy, strategy);
+    const order =
+      typeof result.metadata?.health_order === "string"
+        ? (result.metadata.health_order as Parameters<typeof withRouterMeta>[1])
+        : "meal_plan";
+    return withRouterMeta(result, order);
+  }
+
+  return routeHealthMessageLegacy(ctxWithPrefs);
+}
+
+/** Regex first-accept chain — used when MAGNUS_PILLAR_STRATEGY_PARSER=false. */
+async function routeHealthMessageLegacy(ctxWithPrefs: AgentContext): Promise<AgentResult> {
+  const mealParsed = parseMealLogCommand(ctxWithPrefs.rawMessage);
+  if (ctxWithPrefs.mealPhoto?.fileId) {
     const r = await runMealPhotoLogTurn(ctxWithPrefs);
     return withRouterMeta(r, "meal_log");
   }
@@ -75,7 +113,7 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
     const r = await runOrchestratedMealLogTurn(
       ctxWithPrefs,
       mealParsed.text,
-      ctx.rawMessage,
+      ctxWithPrefs.rawMessage,
       { mealSlot: mealParsed.slot, logKind: mealParsed.logKind },
     );
     return withRouterMeta(r, "meal_log");
@@ -142,8 +180,6 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
     },
   };
 }
-
-/** Single HEALTH entrypoint for `registry.ts` — name matches orchestrator tests. */
 export const healthCompositeAgent: DepartmentAgent = {
   name: "HealthComposite",
   departmentId: "HEALTH",

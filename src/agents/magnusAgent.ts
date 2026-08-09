@@ -1259,7 +1259,10 @@ async function runTool(
   }
 }
 
-export async function runMagnusAgent(ctx: AgentContext): Promise<AgentResult> {
+export async function runMagnusAgent(
+  ctx: AgentContext,
+  options?: { allowedToolNames?: string[] },
+): Promise<AgentResult> {
   const messages: MessageParam[] = buildAgentMessages(
     ctx,
     `${ctx.rawMessage}\n\n---\n${contextBlock(ctx)}`,
@@ -1267,13 +1270,18 @@ export async function runMagnusAgent(ctx: AgentContext): Promise<AgentResult> {
 
   const toolsUsed: string[] = [];
   const toolOutcomes: ToolOutcome[] = [];
+  const allowed = options?.allowedToolNames;
+  const tools =
+    allowed === undefined
+      ? TOOLS
+      : TOOLS.filter((t) => "name" in t && allowed.includes(String(t.name)));
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
     const msg = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 1024,
       system: buildMagnusSystem({ displayName: ctx.displayName }),
-      tools: TOOLS,
+      tools,
       messages,
     });
 

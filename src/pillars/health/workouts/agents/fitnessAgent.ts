@@ -158,12 +158,7 @@ export async function shouldAcceptFitnessTurn(
   return sub === "FITNESS";
 }
 
-export async function tryFitnessAgent(ctx: AgentContext): Promise<AgentResult | null> {
-  const accept = await shouldAcceptFitnessTurn(ctx.rawMessage, anthropic);
-  if (!accept) {
-    return null;
-  }
-
+export async function runFitnessCapability(ctx: AgentContext): Promise<AgentResult> {
   const { summary: workoutSummary, meta: workoutMeta } = await loadWorkoutContext(
     ctx.userProfileId,
   );
@@ -205,4 +200,13 @@ export async function tryFitnessAgent(ctx: AgentContext): Promise<AgentResult | 
       ...workoutMeta,
     },
   };
+}
+
+export async function tryFitnessAgent(ctx: AgentContext): Promise<AgentResult | null> {
+  const accept = await shouldAcceptFitnessTurn(ctx.rawMessage, anthropic);
+  if (!accept) {
+    return null;
+  }
+
+  return runFitnessCapability(ctx);
 }

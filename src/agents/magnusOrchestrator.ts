@@ -11,6 +11,8 @@
 import type { Intent } from "../intent.js";
 import { logger } from "../logger.js";
 import { runMagnusAgent } from "./magnusAgent.js";
+import { executeGeneralStrategy } from "./routing/pillarStrategy/executeGeneralStrategy.js";
+import { pillarStrategyEnabled } from "./routing/pillarStrategy/parsePillarStrategy.js";
 import { resolveIntentNaturalLanguage } from "./orchestratorIntent.js";
 import {
   intentToMemoryPurpose,
@@ -175,7 +177,9 @@ export async function runOrchestratorReply(input: {
     });
 
     if (pillarsToConsult.length === 0) {
-      const magnus = await runMagnusAgent(ctx);
+      const magnus = pillarStrategyEnabled()
+        ? await executeGeneralStrategy(ctx)
+        : await runMagnusAgent(ctx);
       return finalizeOrchestratorReply({
         replyText: magnus.text,
         intent,
