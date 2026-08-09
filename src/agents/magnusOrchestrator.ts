@@ -1,18 +1,13 @@
 /**
  * The routing cycle behind every message.
  *
- * The user talks to Magnus and hears Magnus. Internally each turn is classified to a pillar; a
- * specialist may write the answer, but nothing in the reply says so. There are no user-facing
- * commands for choosing a lane, and no announcement when one is chosen.
- *
- * GENERAL turns with pillar signals (message or recent context) run Magnus and every relevant
- * pillar specialist in parallel; `agentConsultation` reconciles outputs.
+ * Architecture: **input parse → execute → output parse (compose)** per pillar.
+ * The user always hears Magnus; terminal entry (intent) and exit (voice) stay in Magnus's voice.
  */
 import type { Intent } from "../intent.js";
 import { logger } from "../logger.js";
 import { runMagnusAgent } from "./magnusAgent.js";
 import { executeGeneralStrategy } from "./routing/pillarStrategy/executeGeneralStrategy.js";
-import { pillarStrategyEnabled } from "./routing/pillarStrategy/parsePillarStrategy.js";
 import { resolveIntentNaturalLanguage } from "./orchestratorIntent.js";
 import {
   intentToMemoryPurpose,
@@ -31,8 +26,7 @@ import { intentToPillarRoute } from "./routing/intentToPillarRoute.js";
 import type { AgentContext } from "./types.js";
 import { fetchRecentRoutingTurns } from "../tools/routingContext.js";
 import { enforceActionIntegrity } from "./routing/actionIntegrity.js";
-import { reconcileConsultationOutputs } from "./routing/agentConsultation.js";
-import { resolvePillarsToConsultOnGeneral } from "./routing/pillarConsultationSignals.js";
+import { finalizeMagnusVoice } from "./routing/finalizeMagnusVoice.js";
 
 export type OrchestratorReply = {
   replyText: string;
@@ -44,14 +38,15 @@ export type OrchestratorReply = {
   memoryPackageChronologicalTurns?: MemoryChatTurn[];
 };
 
-function finalizeOrchestratorReply(reply: OrchestratorReply): OrchestratorReply {
+async function finalizeOrchestratorReply(
+  ctx: AgentContext,
+  reply: OrchestratorReply,
+): Promise<OrchestratorReply> {
+  const voiced = await finalizeMagnusVoice(ctx, reply.replyText, reply.agentMetadata ?? {});
   const integrity = enforceActionIntegrity({
-    text: reply.replyText,
-    metadata: reply.agentMetadata,
+    text: voiced.text,
+    metadata: voiced.metadata,
   });
-  if (!integrity.corrected) {
-    return reply;
-  }
   return {
     ...reply,
     replyText: integrity.text,
@@ -71,7 +66,6 @@ export async function runOrchestratorReply(input: {
   const healthProfile = await fetchUserHealthProfile(input.userProfileId);
   const healthRoute = intentToPillarRoute("HEALTH");
 
-  // Onboarding owns every turn until it finishes, so health advice starts from real constraints.
   if (
     healthProfile &&
     !healthProfile.onboarding_completed_at &&
@@ -86,7 +80,14 @@ export async function runOrchestratorReply(input: {
       },
       healthProfile,
     );
-    return finalizeOrchestratorReply({
+    const ctx: AgentContext = {
+      userProfileId: input.userProfileId,
+      telegramUserId: input.telegramUserId,
+      timezone: input.timezone,
+      rawMessage: input.userMessage,
+      intent: "HEALTH",
+    };
+    return finalizeOrchestratorReply(ctx, {
       replyText: ob.text,
       intent: "HEALTH",
       delegatedAgent: "HealthOnboarding",
@@ -94,6 +95,8 @@ export async function runOrchestratorReply(input: {
         ...ob.metadata,
         pillar: healthRoute.pillar,
         department: healthRoute.department,
+        pillar_compose: false,
+        magnus_voice_finalized: true,
       },
     });
   }
@@ -117,7 +120,14 @@ export async function runOrchestratorReply(input: {
       userProfileId: input.userProfileId,
       telegramUserId: input.telegramUserId,
     });
-    return finalizeOrchestratorReply({
+    const ctx: AgentContext = {
+      userProfileId: input.userProfileId,
+      telegramUserId: input.telegramUserId,
+      timezone: input.timezone,
+      rawMessage: input.userMessage,
+      intent: "HEALTH",
+    };
+    return finalizeOrchestratorReply(ctx, {
       replyText: started.text,
       intent: "HEALTH",
       delegatedAgent: "HealthOnboarding",
@@ -125,6 +135,8 @@ export async function runOrchestratorReply(input: {
         ...started.metadata,
         pillar: healthRoute.pillar,
         department: healthRoute.department,
+        pillar_compose: false,
+        magnus_voice_finalized: true,
       },
     });
   }
@@ -171,75 +183,18 @@ export async function runOrchestratorReply(input: {
   );
 
   if (intent === "GENERAL") {
-    const pillarsToConsult = resolvePillarsToConsultOnGeneral({
-      userMessage: input.userMessage,
-      recentTurns,
-    });
-
-    if (pillarsToConsult.length === 0) {
-      const magnus = pillarStrategyEnabled()
-        ? await executeGeneralStrategy(ctx)
-        : await runMagnusAgent(ctx);
-      return finalizeOrchestratorReply({
-        replyText: magnus.text,
-        intent,
-        agentMetadata: magnus.metadata,
-        memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
-      });
-    }
-
-    const [magnus, ...pillarDispatches] = await Promise.all([
-      runMagnusAgent(ctx),
-      ...pillarsToConsult.map(async (pillarIntent) => {
-        const route = intentToPillarRoute(pillarIntent);
-        const dispatch = await dispatchToAgent(
-          {
-            ...ctx,
-            intent: pillarIntent,
-            pillar: route.pillar,
-            department: route.department,
-          },
-          pillarIntent,
-        );
-        return dispatch
-          ? {
-              intent: pillarIntent,
-              agentName: dispatch.agentName,
-              result: dispatch.result,
-            }
-          : null;
-      }),
-    ]);
-
-    const reconciled = reconcileConsultationOutputs({
-      userMessage: input.userMessage,
-      magnus,
-      pillars: pillarDispatches.filter((p): p is NonNullable<typeof p> => p !== null),
-    });
-
-    logger.debug(
-      {
-        module: "magnusOrchestrator",
-        consultation: reconciled.consulted,
-        pillarsConsulted: pillarsToConsult,
-        primary: reconciled.primarySource,
-        reason: reconciled.reason,
-      },
-      "general turn with pillar consultation",
-    );
-
-    return finalizeOrchestratorReply({
-      replyText: reconciled.text,
+    const magnus = await executeGeneralStrategy(ctx);
+    return finalizeOrchestratorReply(ctx, {
+      replyText: magnus.text,
       intent,
-      delegatedAgent: reconciled.delegatedAgent,
-      agentMetadata: reconciled.metadata,
+      agentMetadata: magnus.metadata,
       memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
     });
   }
 
   const delegated = await dispatchToAgent(ctx, intent);
   if (delegated) {
-    return finalizeOrchestratorReply({
+    return finalizeOrchestratorReply(ctx, {
       replyText: delegated.result.text,
       intent,
       delegatedAgent: delegated.agentName,
@@ -252,10 +207,9 @@ export async function runOrchestratorReply(input: {
     });
   }
 
-  // Unreachable while every pillar has an agent; Magnus answers rather than apologising.
   logger.warn({ intent }, "no specialist registered for intent; Magnus answering");
   const fallback = await runMagnusAgent(ctx);
-  return finalizeOrchestratorReply({
+  return finalizeOrchestratorReply(ctx, {
     replyText: fallback.text,
     intent,
     agentMetadata: { ...fallback.metadata, unrouted: true },

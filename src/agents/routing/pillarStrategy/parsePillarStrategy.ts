@@ -90,7 +90,7 @@ function normalizePlan(parsed: RawPlanJson, pillar: PillarId): PillarExecutionPl
 
 function buildSystemPrompt(pillar: PillarId): string {
   const catalog = getCapabilityCatalog(pillar);
-  return `You are the **${pillar} request parser** for Magnus. You do NOT see user profile, meal history, or memory — only the current message, routing hints, and recent turn previews.
+  const sharedRules = `You are the **${pillar} request parser** for Magnus. You do NOT see user profile, meal history, or memory — only the current message, routing hints, and recent turn previews.
 
 Your job: produce an **ordered execution plan** — one or more steps. Each step picks one capability id, optional structured args, and a short intent_summary (what this step should accomplish).
 
@@ -104,17 +104,35 @@ Rules:
 - "confidence" is 0.0–1.0 for the whole plan.
 - Single clear intent → one step. Multiple distinct actions ("and also", "then", comma-separated tool asks) → multiple steps in logical order.
 - READ before WRITE when order matters (e.g. show plan, then shopping list).
-- Use the **entire user message** plus **recent_turns** and **routing_hints** together — do not rely on keyword matching alone.
-- Meal plan CREATE vs READ (critical):
-  - **meal_plan_read**: user wants to see what is already planned/saved — "what's my meal plan", "what am I eating tomorrow", "show planned meals". Use even when the phrase contains "meal plan".
-  - **meal_plan_create**: user wants to build/draft a NEW plan OR continue an in-progress session (active_meal_plan_session=true). Includes gather, draft, review, cancel planning, save plan, and questions/revisions during review.
-  - previous_turn_meal_plan_locked=true + asking about upcoming meals → **meal_plan_read**, NOT create.
-  - active_meal_plan_session=true → **meal_plan_create** (continue journey; executor handles cancel, save, Q&A, revisions).
-- Meal corrections after a recent log → meal_log_correct (check previous_turn_was_meal_log).
+- Use the **entire user message** plus **recent_turns** and **routing_hints** together — interpret meaning; do not keyword-match in code.
 - Do NOT duplicate the same capability unless the user explicitly asked twice.
 
 Shape:
 {"confidence":0.9,"steps":[{"capability":"id","args":{},"intent_summary":"brief sub-request"}]}`;
+
+  if (pillar === "GENERAL") {
+    return `${sharedRules}
+
+GENERAL-specific:
+- **day_overview** when the user wants the **whole day** — calendar, schedule, commitments, and meals together. Examples: "what does my day/tomorrow look like", "entire day tomorrow", "what's on tomorrow", "walk me through Monday". Pass date_hint in args when clear: "today", "tomorrow", "yesterday", or YYYY-MM-DD.
+- **pillar_consultation** when the turn needs Magnus tools AND pillar specialist depth in one reply. Set args.pillars to subset of ["HEALTH","WEALTH","HAPPINESS","WISDOM"]. Examples: log check-in + review workout, calendar edit + nutrition advice, list update + portfolio context.
+- **calendar** only when they want Google Calendar / schedule **without** also wanting meals and commitments woven in.
+- Holistic day asks are NEVER satisfied by conversation alone — use day_overview.
+- Use routing_hints integration flags (google_calendar_connected, etc.) — if calendar not connected, day_overview still runs but calendar section may be empty.`;
+  }
+
+  if (pillar === "HEALTH") {
+    return `${sharedRules}
+
+HEALTH-specific — meal plan CREATE vs READ:
+- **meal_plan_read**: user wants to see what is already **locked/saved** — "what's my meal plan", "what am I eating tomorrow", "show planned meals" (food only).
+- **meal_plan_create**: build/draft a NEW plan OR continue an in-progress session (active_meal_plan_session=true): gather, draft, review, cancel, save, revisions, and Q&A **about the draft meal plan shown in recent turns**.
+- active_meal_plan_session=true → meal_plan_create **only** when the user is continuing the planning journey or asking about the **draft menu** — NOT when they ask for a holistic day/schedule (calendar + full day). Those belong to GENERAL day_overview; if you only see a holistic day ask, use generic_ack.
+- previous_turn_meal_plan_locked=true + no active session + food-only view ask → **meal_plan_read**, NOT create.
+- Meal corrections after a recent log → meal_log_correct (check previous_turn_was_meal_log).`;
+  }
+
+  return sharedRules;
 }
 
 function fallbackPlan(pillar: PillarId): PillarExecutionPlan {
@@ -176,11 +194,8 @@ export async function parsePillarExecutionPlan(
 /** @deprecated Use parsePillarExecutionPlan */
 export const parsePillarStrategy = parsePillarExecutionPlan;
 
+/** @deprecated Legacy env toggle removed — pillar strategy parser is always on. */
 export function pillarStrategyEnabled(): boolean {
-  const raw = process.env.MAGNUS_PILLAR_STRATEGY_PARSER?.trim().toLowerCase();
-  if (raw === "false" || raw === "0") {
-    return false;
-  }
   return true;
 }
 

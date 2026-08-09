@@ -89,11 +89,14 @@ shell or `.env`.
 |------|----------------|
 | `src/index.ts` | Boot: clients → capability log → Telegram runtime → health server → watchdog → graceful shutdown |
 | `src/magnus.ts` | Turn handler: allowlist gate, chat persistence, typing indicator, orchestrator call. Starts the Morning Brief cron. |
-| `src/agents/magnusOrchestrator.ts` | Health onboarding gate → classify → memory → pillar specialist or Magnus; GENERAL + health context → parallel Health consultation |
-| `src/agents/orchestratorIntent.ts` | The five-way classifier, plus deterministic coercions (meal log → HEALTH; fitness/Hevy reads → HEALTH; portfolio/Kite reads → WEALTH; YouTube / list / LifeOS / Notion / tool continuations → GENERAL) |
-| `src/agents/routing/pillarConsultationSignals.ts` | When a GENERAL turn should consult each pillar (message + recent-turn signals) |
-| `src/agents/routing/agentConsultation.ts` | Parallel Magnus + all relevant pillars on GENERAL; reconciler picks or merges the best reply |
-| `src/agents/routing/pillarStrategy/` | **Pillar execution plans:** capability catalogs → Haiku plan parser (message + routing hints only) → sequential step executors → composer for user-facing reply |
+| `src/agents/magnusOrchestrator.ts` | Classify → memory → parse/execute/compose per pillar; GENERAL uses parser plan (incl. day_overview, pillar_consultation); `finalizeMagnusVoice` at exit |
+| `src/agents/orchestratorIntent.ts` | Five-way classifier with structural **routing hints** (`intentRoutingHints.ts`); only hard override: explicit meal log → HEALTH |
+| `src/agents/routing/intentRoutingHints.ts` | Structural signals for top-level intent classifier (YouTube, Magnus tools, portfolio/Hevy reads) |
+| `src/agents/routing/pillarConsultationSignals.ts` | Pillar read signals for `pillar_consultation` GENERAL step |
+| `src/agents/routing/agentConsultation.ts` | Reconciler for `pillar_consultation` multi-pillar step |
+| `src/agents/routing/finalizeMagnusVoice.ts` | Orchestrator output parser — terminal Magnus voice when inner pipeline did not compose |
+| `src/agents/routing/pillarStrategy/` | Capability catalogs → Haiku plan parser → step executors → composer (`composePillarPlanReply`) |
+| `src/agents/routing/pillarStrategy/dayOverview.ts` | Holistic day snapshot: calendar + commitments + meals |
 | `src/agents/magnusAgent.ts` | Magnus himself: calendar, YouTube, event log, journaling, reminders — tool loop (optional capability-filtered tools on GENERAL) |
 | `src/agents/tools/calendarTool.ts` | Google Calendar; per-user tokens; delete/update sync linked `magnus_events` rows |
 | `src/agents/tools/youtubeConnectTool.ts` | In-chat `connect_google` / aliases — Calendar + YouTube one consent |
@@ -113,7 +116,7 @@ shell or `.env`.
 | `src/youtube/` | Bookmarks, cue queue, and Magnus playlist state in Supabase |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
-| `src/agents/health/healthRouter.ts` | Health composite: meal log/photo gates → pillar strategy parser → capability executors (legacy regex chain when `MAGNUS_PILLAR_STRATEGY_PARSER=false`) |
+| `src/agents/health/healthRouter.ts` | Health composite: meal log/photo deterministic gates → pillar plan parser → capability executors (compose pipeline) |
 | `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
 | `src/agents/memory/` | `loadMemoryContext`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
 | `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
@@ -149,15 +152,11 @@ shell or `.env`.
 3. **Rate limit** — Redis fixed 60s window per user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, 0 disables).
 4. **Dedupe** — `update_id` claimed in Redis for 24h, so webhook retries never double-reply.
 5. **Classification** — Five intents. `GENERAL` is Magnus's own work, not a fallback bucket.
-   Deterministic coercions after the LLM label: explicit meal logs → `HEALTH`; fitness / Hevy read
-   turns → `HEALTH`; portfolio / Kite read turns → `WEALTH`; YouTube / YT Music actions → `GENERAL`;
-   list / LifeOS / Notion / event-log tool phrases → `GENERAL` (`magnusActionDetect.ts`); short
-   affirmatives and list/playlist follow-ups after a Magnus tool turn → `GENERAL`
-   (`magnusToolContinuation.ts`). On `GENERAL` when the message or recent chat has pillar signals,
-   Magnus and every relevant pillar specialist run in parallel and `agentConsultation` reconciles
-   (e.g. Fitness when Hevy data is loaded, Wealth when Kite portfolio is loaded, merge when Magnus
-   logged a check-in and Health reviewed the workout). Pillar specialists are prompt-only except
-   Health (sub-router) and Wealth (Kite read).
+   The classifier receives **routing hints** (explicit meal log, YouTube/Magnus-tool signals,
+   portfolio/Hevy read signals) with the message; only explicit meal-log command format hard-overrides
+   to `HEALTH`. On `GENERAL`, the pillar plan parser may choose `pillar_consultation` (Magnus tools +
+   pillar depth in one reply) or `day_overview` (calendar + commitments + meals). Pillar specialists
+   are prompt-only except Health (capability executors) and Wealth (Kite read in executor).
 6. **Memory** — Loaded once per turn: recent chat as verbatim `messages[]` (configurable window), rolling summary for older turns, semantic facts from `memory_summaries`, plus structured profile/goals/logs. A **user graph** (`src/agents/memory/userKnowledge.ts`) is prepended ahead of the memory block: recent issues/wins from program learnings, identified patterns (DB + patterns list + semantic facts), full list inventory (slug + display name — no phrase aliases; Magnus matches by meaning or asks which list), integration status, and YouTube playlist pointers. Tunable via `MAGNUS_MEMORY_*` in `.env.example` (`MAGNUS_MEMORY_USER_KNOWLEDGE=false` disables the layer). Post-turn maintenance updates conversation summary and extracted facts.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
    routing in `metadata` (`delegated_agent`, `agent_metadata`). Columns `message_type`
@@ -201,16 +200,20 @@ shell or `.env`.
     sub-router depth; Wealth loads Kite read-only portfolio context.
 13. **Gym schedule** — Fitness turns inject today's session from locked `weekly_schedule` program memory
     (Mon-first table) before Hevy history.
-14. **Pillar execution plans** — When `MAGNUS_PILLAR_STRATEGY_PARSER=true` (default), each routed pillar
-    runs a Haiku **plan parser** (`MAGNUS_PILLAR_STRATEGY_MODEL`, default `claude-haiku-4-5`) that sees
-    the user message, **routing hints**, and **recent turn previews** (no profile, memory, or DB rows).
-    It returns an ordered **steps[]** array (1–`MAGNUS_PILLAR_PLAN_MAX_STEPS`, default 4): each step has
-    `capability`, `args`, and `intent_summary`. **Step executors** run sequentially with full context and
-    prior-step outcomes; GENERAL steps use Magnus with capability-filtered tools. A **composer**
-    (`MAGNUS_PILLAR_PLAN_COMPOSE`, default on) merges multi-step results into one Telegram reply.
-    Deterministic pre-gates stay before the parser where unambiguous (explicit meal log, meal photo).
-    Meal-plan **create vs read** is parser-owned (no regex fast path). Review-step Q&A defaults to
-    answering questions about the draft; explicit change language triggers revision.
+14. **Pillar execution plans** — Every routed pillar runs a Haiku **plan parser**
+    (`MAGNUS_PILLAR_STRATEGY_MODEL`, default `claude-haiku-4-5`) that sees the user message,
+    **routing hints** (meal session flags, integration connectivity, recent turn previews), and returns
+    an ordered **steps[]** array (1–`MAGNUS_PILLAR_PLAN_MAX_STEPS`, default 4). **Architecture:
+    input parse → execute → output parse (compose)** — one Magnus voice at terminal exit. **Step executors**
+    run sequentially with full context and prior-step outcomes; GENERAL steps use Magnus with
+    capability-filtered tools or `day_overview` / `pillar_consultation`. A **composer**
+    (`MAGNUS_PILLAR_PLAN_COMPOSE`, default on) re-voices every step output (single- and multi-step).
+    `finalizeMagnusVoice` at the orchestrator boundary catches any path that did not already compose.
+    Terminal confirmations (e.g. cancel planning, OAuth links) set `pillar_compose: false`. Deterministic
+    pre-gates stay before the parser where unambiguous (explicit meal log, meal photo) — then through
+    compose like other capabilities. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
+    loads calendar + event log + planned meals. Review-step meal Q&A answers without re-posting the draft.
+    Happiness/Wisdom catalogs include multiple capabilities (recommendations, travel, learning plan, etc.).
 
 ---
 
@@ -247,10 +250,9 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **`MAGNUS_TELEGRAM_MODE=webhook`** — recommended on a host; no 409 on overlapping deploys.
 - **`MAGNUS_PROACTIVE_CRON_ENABLED`** — scheduled Magnus-initiated Telegram (default on). Set
   `MAGNUS_MORNING_BRIEF_CRON_ENABLED=false` to skip only the brief job.
-- **`MAGNUS_PILLAR_STRATEGY_PARSER`** — LLM plan parser per pillar (default on). Set `false` for legacy Health regex routing only.
 - **`MAGNUS_PILLAR_STRATEGY_MODEL`** — Plan parser model (default `claude-haiku-4-5`).
 - **`MAGNUS_PILLAR_PLAN_MAX_STEPS`** — Max steps per plan (default `4`, max `8`).
-- **`MAGNUS_PILLAR_PLAN_COMPOSE`** — Haiku composer for multi-step replies (default on).
+- **`MAGNUS_PILLAR_PLAN_COMPOSE`** — Haiku composer for pillar step replies (default on; single- and multi-step).
 - **`MAGNUS_PILLAR_COMPOSE_MODEL`** — Composer model (default `claude-haiku-4-5`).
 - **`MAGNUS_MAX_TOOL_ROUNDS`** — Magnus agent tool loop cap (default 12).
 - **`MAGNUS_TURN_TIMEOUT_MS`** — Orchestrator turn budget before user-facing timeout reply (default 240000).
@@ -318,4 +320,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (parser-owned meal-plan routing + review Q&A default)
+**Last updated:** 2026-08-09 (roadmap complete: parser-only routing, intent hints, meal log compose)

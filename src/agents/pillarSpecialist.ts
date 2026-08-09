@@ -67,6 +67,7 @@ export async function runPillarSpecialist(input: {
       specialist: input.specialist,
       pillar: input.pillar,
       prompt_only: true,
+      pillar_compose: true,
     },
   };
 }

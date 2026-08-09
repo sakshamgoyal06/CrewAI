@@ -73,6 +73,25 @@ vi.mock("../tools/routingContext.js", () => ({
   fetchRecentRoutingTurns: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock("./routing/pillarStrategy/buildRoutingHints.js", () => ({
+  buildRoutingHints: vi.fn().mockResolvedValue({
+    has_meal_photo: false,
+    explicit_meal_log: false,
+    active_meal_plan_session: false,
+    meal_plan_session_step: null,
+    previous_turn_intent: null,
+    previous_turn_capability: null,
+    previous_turn_was_meal_log: false,
+    previous_turn_meal_plan_locked: false,
+    google_calendar_connected: false,
+    youtube_connected: false,
+    notion_connected: false,
+    hevy_connected: false,
+    zerodha_connected: false,
+    recent_turns: [],
+  }),
+}));
+
 vi.mock("../pillars/wealth/zerodha/index.js", () => ({
   fetchKitePortfolioSnapshot: vi.fn().mockResolvedValue({
     ok: false,
@@ -97,7 +116,7 @@ function replyText(text: string): { content: { type: "text"; text: string }[] } 
 
 describe("runOrchestratorReply", () => {
   beforeEach(() => {
-    process.env.MAGNUS_PILLAR_STRATEGY_PARSER = "false";
+    process.env.MAGNUS_PILLAR_PLAN_COMPOSE = "false";
     createMock.mockReset();
     createMock.mockImplementation(async () => replyText("GENERAL"));
     vi.mocked(loadMemoryContext).mockReset();
@@ -107,6 +126,17 @@ describe("runOrchestratorReply", () => {
   it("answers GENERAL as Magnus himself, with no specialist recorded", async () => {
     createMock
       .mockResolvedValueOnce(replyText("GENERAL"))
+      .mockResolvedValueOnce({
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              confidence: 0.9,
+              steps: [{ capability: "conversation", args: {} }],
+            }),
+          },
+        ],
+      })
       .mockResolvedValueOnce(replyText("Two things today."));
 
     const out = await runOrchestratorReply({ userMessage: "how's my day?", ...TURN });
@@ -118,12 +148,23 @@ describe("runOrchestratorReply", () => {
   });
 
   it.each([
-    ["WEALTH", "Wealth"],
-    ["HAPPINESS", "Happiness"],
-    ["WISDOM", "Wisdom"],
-  ])("routes %s to the %s pillar without telling the user", async (intent, agentName) => {
+    ["WEALTH", "Wealth", "coaching"],
+    ["HAPPINESS", "Happiness", "recommendations"],
+    ["WISDOM", "Wisdom", "coaching"],
+  ])("routes %s to the %s pillar without telling the user", async (intent, agentName, capability) => {
     createMock
       .mockResolvedValueOnce(replyText(intent))
+      .mockResolvedValueOnce({
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              confidence: 0.9,
+              steps: [{ capability, args: {} }],
+            }),
+          },
+        ],
+      })
       .mockResolvedValueOnce(replyText("Here is the answer."));
 
     const out = await runOrchestratorReply({ userMessage: "a question", ...TURN });
@@ -138,6 +179,17 @@ describe("runOrchestratorReply", () => {
   it("loads memory once per turn", async () => {
     createMock
       .mockResolvedValueOnce(replyText("WISDOM"))
+      .mockResolvedValueOnce({
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              confidence: 0.9,
+              steps: [{ capability: "coaching", args: {} }],
+            }),
+          },
+        ],
+      })
       .mockResolvedValueOnce(replyText("ok"));
 
     await runOrchestratorReply({ userMessage: "help me learn rust", ...TURN });

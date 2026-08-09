@@ -4,11 +4,10 @@
  *
  * One agent rather than a recommender per medium. Taste carries across them.
  */
-import { runPillarSpecialist } from "../pillarSpecialist.js";
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
 import { buildRoutingHints } from "../routing/pillarStrategy/buildRoutingHints.js";
 import { executeHappinessStrategy } from "../routing/pillarStrategy/executeHappinessStrategy.js";
-import { parsePillarExecutionPlan, pillarStrategyEnabled } from "../routing/pillarStrategy/parsePillarStrategy.js";
+import { parsePillarExecutionPlan } from "../routing/pillarStrategy/parsePillarStrategy.js";
 
 export const HAPPINESS_SYSTEM = `You are the Happiness specialist inside Magnus.
 
@@ -33,18 +32,9 @@ How to recommend:
 Match their energy. If they sound depleted, suggest something small. Keep replies under ~200 words.`;
 
 export async function runHappinessAgent(ctx: AgentContext): Promise<AgentResult> {
-  if (pillarStrategyEnabled()) {
-    const hints = await buildRoutingHints(ctx);
-    const plan = await parsePillarExecutionPlan("HAPPINESS", ctx.rawMessage, hints);
-    return executeHappinessStrategy({ ...ctx, pillarStrategy: plan }, plan);
-  }
-
-  return runPillarSpecialist({
-    ctx,
-    system: HAPPINESS_SYSTEM,
-    specialist: "Happiness",
-    pillar: "joy",
-  });
+  const hints = await buildRoutingHints(ctx);
+  const plan = await parsePillarExecutionPlan("HAPPINESS", ctx.rawMessage, hints);
+  return executeHappinessStrategy({ ...ctx, pillarStrategy: plan }, plan);
 }
 
 export const happinessAgent: DepartmentAgent = {

@@ -28,6 +28,11 @@ const EMPTY_HINTS = {
   previous_turn_capability: null,
   previous_turn_was_meal_log: false,
   previous_turn_meal_plan_locked: false,
+  google_calendar_connected: false,
+  youtube_connected: false,
+  notion_connected: false,
+  hevy_connected: false,
+  zerodha_connected: false,
   recent_turns: [],
 };
 
@@ -143,11 +148,7 @@ describe("parsePillarExecutionPlan", () => {
     expect(String(createMock.mock.calls[0]![0].system)).toContain("meal_plan_read");
   });
 
-  it("pillarStrategyEnabled defaults true unless env disables", () => {
-    delete process.env.MAGNUS_PILLAR_STRATEGY_PARSER;
+  it("pillarStrategyEnabled is always true", () => {
     expect(pillarStrategyEnabled()).toBe(true);
-    process.env.MAGNUS_PILLAR_STRATEGY_PARSER = "false";
-    expect(pillarStrategyEnabled()).toBe(false);
-    delete process.env.MAGNUS_PILLAR_STRATEGY_PARSER;
   });
 });

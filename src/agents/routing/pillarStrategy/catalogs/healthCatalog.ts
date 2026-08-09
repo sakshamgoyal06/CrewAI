@@ -4,6 +4,17 @@ export const HEALTH_CAPABILITY_CATALOG: CapabilityCatalog = {
   pillar: "HEALTH",
   capabilities: [
     {
+      id: "meal_log",
+      summary: "Log food via explicit meal command (meal:, log meal:, ate:, etc.)",
+      disambiguation:
+        "Deterministic gate before parser when format matches. NOT free-form food chat — use nutrition_advice.",
+    },
+    {
+      id: "meal_log_photo",
+      summary: "Log food from a Telegram meal photo attachment",
+      disambiguation: "Deterministic gate when mealPhoto.fileId is present.",
+    },
+    {
       id: "meal_log_correct",
       summary: "Correct or revise the most recent meal log (follow-up after logging)",
       disambiguation:
@@ -38,7 +49,7 @@ export const HEALTH_CAPABILITY_CATALOG: CapabilityCatalog = {
       id: "meal_plan_create",
       summary: "Start or continue multi-turn meal planning (gather, draft, review, cancel, save)",
       disambiguation:
-        'BUILD/MAKE/CREATE a new plan, continue active_meal_plan_session (any step including review Q&A and revisions), cancel planning, save/lock plan. NOT "show what is already planned" — use meal_plan_read for that.',
+        'BUILD/MAKE/CREATE a new plan, continue active_meal_plan_session for gather/draft/review (Q&A about the **draft menu**, revisions, cancel, save). NOT holistic day/schedule asks (calendar + whole day) — those are GENERAL day_overview.',
     },
     {
       id: "meal_plan_read",

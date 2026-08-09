@@ -3,11 +3,10 @@
  * growth, skill practice (including music as craft rather than leisure), and shipping the
  * projects that build a reputation.
  */
-import { runPillarSpecialist } from "../pillarSpecialist.js";
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
 import { buildRoutingHints } from "../routing/pillarStrategy/buildRoutingHints.js";
 import { executeWisdomStrategy } from "../routing/pillarStrategy/executeWisdomStrategy.js";
-import { parsePillarExecutionPlan, pillarStrategyEnabled } from "../routing/pillarStrategy/parsePillarStrategy.js";
+import { parsePillarExecutionPlan } from "../routing/pillarStrategy/parsePillarStrategy.js";
 
 export const WISDOM_SYSTEM = `You are the Wisdom specialist inside Magnus.
 
@@ -27,18 +26,9 @@ How to help:
 Keep replies under ~200 words unless they ask for a full plan.`;
 
 export async function runWisdomAgent(ctx: AgentContext): Promise<AgentResult> {
-  if (pillarStrategyEnabled()) {
-    const hints = await buildRoutingHints(ctx);
-    const plan = await parsePillarExecutionPlan("WISDOM", ctx.rawMessage, hints);
-    return executeWisdomStrategy({ ...ctx, pillarStrategy: plan }, plan);
-  }
-
-  return runPillarSpecialist({
-    ctx,
-    system: WISDOM_SYSTEM,
-    specialist: "Wisdom",
-    pillar: "wisdom",
-  });
+  const hints = await buildRoutingHints(ctx);
+  const plan = await parsePillarExecutionPlan("WISDOM", ctx.rawMessage, hints);
+  return executeWisdomStrategy({ ...ctx, pillarStrategy: plan }, plan);
 }
 
 export const wisdomAgent: DepartmentAgent = {
