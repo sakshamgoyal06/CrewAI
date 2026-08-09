@@ -4,7 +4,7 @@ import { ENERGY_SYSTEM } from "./energyAgent.js";
 import { routeHealthMessage } from "./healthRouter.js";
 import { ALTERNATES_RECOMMENDER_SYSTEM } from "./alternatesRecommenderAgent.js";
 import { LONG_TERM_HEALTH_PLANNING_SYSTEM } from "./longTermHealthPlanningAgent.js";
-import { MEAL_PLANNER_SYSTEM } from "./mealPlannerAgent.js";
+import { MEAL_PLAN_DRAFT_SYSTEM } from "../../nutrition/planning/mealPlanningPrompt.js";
 import { NUTRITION_SYSTEM } from "./nutritionPrompt.js";
 import { FITNESS_SYSTEM } from "../../pillars/health/workouts/agents/fitnessAgent.js";
 
@@ -17,21 +17,67 @@ vi.mock("../../tools/clients.js", () => ({
     },
   },
   supabase: {
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          contains: () => ({
+    from: (table: string) => {
+      if (table === "meal_plan_sessions") {
+        return {
+          select: () => ({
+            eq: () => ({
+              in: () => ({
+                order: () => ({
+                  limit: () => ({
+                    maybeSingle: () => Promise.resolve({ data: null, error: null }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          insert: () => ({
+            select: () => ({
+              single: () =>
+                Promise.resolve({
+                  data: {
+                    id: "sess-1",
+                    user_profile_id: "u1",
+                    status: "gathering",
+                    step: "horizon",
+                    slots: ["breakfast", "lunch", "dinner"],
+                    draft_entries: [],
+                  },
+                  error: null,
+                }),
+            }),
+          }),
+          update: () => ({
+            eq: () => Promise.resolve({ error: null }),
+          }),
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            contains: () => ({
+              order: () => ({
+                limit: () => Promise.resolve({ data: [], error: null }),
+              }),
+            }),
             order: () => ({
               limit: () => Promise.resolve({ data: [], error: null }),
             }),
+            maybeSingle: () => Promise.resolve({ data: null, error: null }),
           }),
-          order: () => ({
-            limit: () => Promise.resolve({ data: [], error: null }),
-          }),
-          maybeSingle: () => Promise.resolve({ data: null, error: null }),
         }),
-      }),
-    }),
+        delete: () => ({
+          eq: () => ({
+            eq: () => ({
+              eq: () => ({
+                eq: () => Promise.resolve({ error: null }),
+              }),
+            }),
+          }),
+        }),
+        insert: () => Promise.resolve({ error: null }),
+      };
+    },
   },
   redis: {},
 }));
@@ -67,12 +113,22 @@ describe("routeHealthMessage", () => {
   });
 
   it("routes meal planning asks to MealPlanner before Fitness", async () => {
+    createMock.mockResolvedValueOnce({
+      content: [
+        {
+          type: "text",
+          text: `Week plan\n\`\`\`json
+{"entries":[{"local_date":"2026-08-09","meal_slot":"lunch","title":"Bowl"}]}
+\`\`\``,
+        },
+      ],
+    });
     const out = await routeHealthMessage(
       ctx("Plan my meals for the week — vegan, nut allergy, moderate protein."),
     );
     expect(createMock).toHaveBeenCalledTimes(1);
     expect(String(createMock.mock.calls[0]![0].system)).toContain(
-      MEAL_PLANNER_SYSTEM.slice(0, 40),
+      MEAL_PLAN_DRAFT_SYSTEM.slice(0, 40),
     );
     expect(out.metadata).toMatchObject({
       health_order: "meal_plan",

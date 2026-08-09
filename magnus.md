@@ -117,7 +117,7 @@ shell or `.env`.
 | `src/agents/memory/` | `loadMemoryContext`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
 | `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
 | `src/meals/` | Meal parsing, estimate chain (web search → USDA → CalorieNinjas → optional LLM), `meal_logs` writes |
-| `src/nutrition/` | Local-date helpers, macro target parsing, `meal_daily_rollups`, meal history/target/plan stores |
+| `src/nutrition/` | Local-date helpers, rollups/plan stores, **planning journey** (`meal_plan_sessions`), anomaly detection |
 | `src/pillars/health/workouts/` | Hevy client, fitness agent, Hevy write agent |
 | `src/pillars/health/references/` | Reads committed program memory + Telegram journals |
 | `src/jobs/` | Morning Brief: prompt, context, cron (legacy re-export), timezone window. Optional. |
@@ -202,7 +202,7 @@ shell or `.env`.
 
 ## Database
 
-**Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`,
+**Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`, `meal_plan_sessions`,
 `user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries` (Phases 2–3:
 rolling summary + semantic facts), `magnus_youtube_bookmarks`, `magnus_youtube_cues`,
 `magnus_youtube_state` (includes `playlist_aliases` JSONB for pillar playlist ids).
@@ -214,7 +214,7 @@ rolling summary + semantic facts), `magnus_youtube_bookmarks`, `magnus_youtube_c
 Public tables use RLS with a `service_role_only` policy; the service role key bypasses it. The new
 Supabase `sb_secret_…` key format works as service role.
 
-`supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`,
+`supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`, `meal_plan_sessions`,
 `magnus_events`, `magnus_proactive_subscriptions`, `memory_summaries`, `magnus_youtube_*` (incl. `playlist_aliases`), and `magnus_chat_messages` type columns;
 older schema was applied directly to the project before those migrations existed.
 
@@ -257,6 +257,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npx tsx scripts/audit-notion-lifeos.mts` | Inventory LifeOS hub + accessible Notion databases |
 | `npx tsx scripts/nutrition/rebuild-rollups.mts` | Rebuild `meal_daily_rollups` from `meal_logs` |
 
+**Meal planning journey:** User says "plan my meals for the week" → Magnus gathers horizon, slots, and period constraints (profile prefs pre-loaded from `user_health_profile`) → LLM draft in `meal_plan_sessions` → user revises or **save plan** → locked rows in `meal_plan_entries` → lifecycle: log linking, proactive nudges, rollups, weekly review.
+
 ---
 
 ## Operations
@@ -296,4 +298,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (nutrition phase 3: proactive meal nudges + brief slice)
+**Last updated:** 2026-08-09 (meal planning journey: gather → draft → lock)

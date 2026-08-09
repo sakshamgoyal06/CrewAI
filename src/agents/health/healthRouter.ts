@@ -6,8 +6,8 @@ import {
   fetchUserHealthProfile,
   formatHealthPreferencesForPrompt,
 } from "./healthOnboarding.js";
-import { tryMealPlannerAgent } from "./mealPlannerAgent.js";
 import { tryMealPlanReadAgent } from "./mealPlanReadAgent.js";
+import { tryMealPlanningAgent } from "./mealPlanningAgent.js";
 import { tryMealHistoryAgent } from "./mealHistoryAgent.js";
 import { tryMealTargetAgent } from "./mealTargetAgent.js";
 import { tryLongTermHealthPlanningAgent } from "./longTermHealthPlanningAgent.js";
@@ -101,7 +101,7 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
     return withRouterMeta(mealPlanRead, "meal_plan_read");
   }
 
-  const mealPlan = await tryMealPlannerAgent(ctxWithPrefs);
+  const mealPlan = await tryMealPlanningAgent(ctxWithPrefs);
   if (mealPlan) {
     return withRouterMeta(mealPlan, "meal_plan");
   }
