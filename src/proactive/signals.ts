@@ -6,10 +6,7 @@ import { getLocalTimeParts, type LocalTimeParts } from "../jobs/morningBriefTime
 import { fetchCheckinItem, fetchListBySlug } from "../lists/listStore.js";
 import { supabase } from "../tools/clients.js";
 import { loadUserIntegrations } from "../users/userIntegrations.js";
-import {
-  loadUserProgramMemory,
-  type ProgramMemorySection,
-} from "../users/userProgramMemory.js";
+import { loadMealProactiveSnapshot, type MealProactiveSnapshot } from "../nutrition/mealProactiveSignals.js";
 
 export type ProactiveSignalSnapshot = {
   now: Date;
@@ -23,6 +20,8 @@ export type ProactiveSignalSnapshot = {
   userGraphSummary: string;
   weeklyScheduleExcerpt: string;
   programWatchExcerpt: string;
+  /** Nutrition snapshot for meal proactive kinds and brief. */
+  meals: MealProactiveSnapshot;
 };
 
 function localWeekdayIndex(now: Date, timezone: string): number {
@@ -149,6 +148,13 @@ export async function buildProactiveSignals(input: {
     recentUserChatSnippet(input.userProfileId, input.telegramChatId),
   ]);
 
+  const meals = await loadMealProactiveSnapshot({
+    userProfileId: input.userProfileId,
+    timezone: input.timezone,
+    now: input.now,
+    recentUserChatSnippet: chat,
+  });
+
   const weeklySchedule = programSection(programRows, "weekly_schedule");
   const learnings = programSection(programRows, "program_learnings");
   const watchMatch = learnings.match(/##\s*Not working\s*\/\s*watch\s*\n([\s\S]*?)(?=\n##\s|$)/i);
@@ -189,5 +195,6 @@ export async function buildProactiveSignals(input: {
     userGraphSummary,
     weeklyScheduleExcerpt: weeklySchedule.slice(0, 600),
     programWatchExcerpt: watchMatch?.[1]?.slice(0, 500) ?? "",
+    meals,
   };
 }

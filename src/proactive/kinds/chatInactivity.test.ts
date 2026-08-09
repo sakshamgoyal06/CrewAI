@@ -4,6 +4,7 @@ vi.mock("../signals/inactivitySignals.js", () => ({
   loadChatInactivitySnapshot: vi.fn(),
 }));
 
+import { emptyMealProactiveSnapshot } from "../../nutrition/mealProactiveSignals.js";
 import { loadChatInactivitySnapshot } from "../signals/inactivitySignals.js";
 import { chatInactivityHandler } from "./chatInactivity.js";
 import type { ProactiveKindContext } from "./types.js";
@@ -43,6 +44,7 @@ function ctx(overrides: Partial<ProactiveKindContext> = {}): ProactiveKindContex
       userGraphSummary: "",
       weeklyScheduleExcerpt: "",
       programWatchExcerpt: "",
+      meals: emptyMealProactiveSnapshot(),
     },
     ...overrides,
   };

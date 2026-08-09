@@ -39,7 +39,7 @@ export async function manageProactiveMessages(input: {
     if (subs.length === 0) {
       return [
         "No proactive messages configured.",
-        "Catalog kinds (opt in with enable): evening_journal, drift_guard, midday_encouragement, stale_list_nudge, chat_inactivity.",
+        "Catalog kinds (opt in with enable): evening_journal, drift_guard, midday_encouragement, stale_list_nudge, chat_inactivity, meal_log_reminder, meal_adherence_nudge, meal_eod_reconciliation, meal_gap_nudge.",
         "Say enable evening journal at 9pm, or create_reminder with message + at.",
       ].join("\n");
     }

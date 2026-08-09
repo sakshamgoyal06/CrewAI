@@ -171,7 +171,7 @@ shell or `.env`.
    reconcile** (3 hours after planned gym time: if Hevy has a session that day, mark the event log
    `done` with Hevy start/end and tell the user; otherwise ask once if they missed it / want to
    postpone), **subscription dispatcher** (`evening_journal`, `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
-   `chat_inactivity`, `custom_reminder` via `magnus_proactive_subscriptions` — modular kind registry in
+   `chat_inactivity`, `custom_reminder`, `meal_log_reminder`, `meal_adherence_nudge`, `meal_eod_reconciliation`, `meal_gap_nudge` via `magnus_proactive_subscriptions` — modular kind registry in
    `src/proactive/kinds/`). User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
    catalog kinds, create one-shot or daily custom reminders (`create_reminder` /
    `create_recurring_reminder`). Relative time parsing for one-shots (`tomorrow 8pm`, `in 30 minutes`).
@@ -296,4 +296,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (nutrition phase 2: persisted meal plans, plan-log linking)
+**Last updated:** 2026-08-09 (nutrition phase 3: proactive meal nudges + brief slice)

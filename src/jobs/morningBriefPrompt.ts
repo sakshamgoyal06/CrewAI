@@ -15,6 +15,7 @@ Include, when the context supports it:
 - Joy: only when dataAvailability.happinessReserve is true — describe the tank band from context. When false, omit Joy entirely (do not say "unknown").
 - Pattern flags: only when dataAvailability.patterns is true — mention Emerging-or-stronger patterns listed in context.
 - Commitments: what the user has planned today from the event log, and — without reproach — what yesterday's entries show as missed or moved. Where adherence data shows a repeated slip, name the hour they actually keep rather than the one they keep planning.
+- Nutrition: when nutritionBrief is present, one line on yesterday's calories/protein vs target and today's planned meals (omit if null).
 
 Tone: calm, specific, kind. No guilt. No new commitments unless the user already committed in stored data (reminders are fine).`;
 

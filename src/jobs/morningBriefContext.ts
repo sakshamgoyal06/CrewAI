@@ -4,7 +4,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { lifeosContextEnabled } from "../config/lifeosContext.js";
+import { loadMealProactiveSnapshot } from "../nutrition/mealProactiveSignals.js";
+import { localDateKey } from "../nutrition/localDate.js";
 import { startOfLocalDay } from "../events/eventTime.js";
 import { logger } from "../logger.js";
 
@@ -27,6 +28,14 @@ export type MorningBriefContextBundle = {
   events: unknown[];
   /** Per-activity adherence from `magnus_event_activity_stats`. */
   eventActivityStats: unknown[];
+  /** Nutrition slice when meal rollups exist. */
+  nutritionBrief: {
+    yesterdayCalories: number | null;
+    yesterdayProtein: number | null;
+    yesterdayTargetCalories: number | null;
+    todayPlannedMeals: Array<{ slot: string; title: string; status: string }>;
+    caloriesSoFarToday: number | null;
+  } | null;
   /** Emerging+ patterns only — filtered from raw rows when possible. */
   patternRows: unknown[];
   /** Which LifeOS domains have real rows (omit empty sections in the brief). */
@@ -279,6 +288,32 @@ export async function fetchMorningBriefContext(
 
   const patternRows = filterEmergingPlusPatterns(rawPatterns ?? []);
 
+  const todayKey = localDateKey(now, timeZone);
+  const meals = await loadMealProactiveSnapshot({
+    userProfileId,
+    timezone: timeZone,
+    now,
+    recentUserChatSnippet: "",
+  }).catch(() => null);
+
+  const nutritionBrief =
+    meals &&
+    (meals.yesterdayCalories !== null ||
+      meals.plannedSlotsToday.length > 0 ||
+      meals.caloriesSoFarToday > 0)
+      ? {
+          yesterdayCalories: meals.yesterdayCalories,
+          yesterdayProtein: meals.yesterdayProtein,
+          yesterdayTargetCalories: meals.yesterdayTargetCalories,
+          todayPlannedMeals: meals.plannedSlotsToday.map((slot) => ({
+            slot,
+            title: meals.plannedTitlesToday[slot] ?? "",
+            status: meals.plannedSlotsMissedToday.includes(slot) ? "planned" : "logged",
+          })),
+          caloriesSoFarToday: meals.caloriesSoFarToday,
+        }
+      : null;
+
   const dataAvailability = {
     goals: goals.length > 0,
     pillarStatus: pillarStatus.length > 0,
@@ -303,6 +338,7 @@ export async function fetchMorningBriefContext(
     magnusDailyLogs,
     events,
     eventActivityStats,
+    nutritionBrief,
     patternRows,
     dataAvailability,
   };
@@ -366,6 +402,7 @@ export function buildMorningBriefUserMessage(bundle: MorningBriefContextBundle):
     recentMagnusDailyLogs: bundle.magnusDailyLogs,
     commitmentsYesterdayAndToday: bundle.events,
     activityAdherence: bundle.eventActivityStats,
+    nutritionBrief: bundle.nutritionBrief,
     patternsEmergingPlus: bundle.patternRows,
   };
   return `Context JSON (stored facts only; respect dataAvailability):\n${JSON.stringify(payload, null, 2)}`;

@@ -45,4 +45,8 @@ export type ProactiveMessageKind =
   | "custom_reminder"
   | "midday_encouragement"
   | "stale_list_nudge"
-  | "chat_inactivity";
+  | "chat_inactivity"
+  | "meal_log_reminder"
+  | "meal_adherence_nudge"
+  | "meal_eod_reconciliation"
+  | "meal_gap_nudge";

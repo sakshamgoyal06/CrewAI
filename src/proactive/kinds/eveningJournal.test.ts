@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { emptyMealProactiveSnapshot } from "../../nutrition/mealProactiveSignals.js";
 import { eveningJournalHandler } from "./eveningJournal.js";
 import type { ProactiveKindContext } from "./types.js";
 
@@ -38,6 +39,7 @@ function ctx(overrides: Partial<ProactiveKindContext> = {}): ProactiveKindContex
       userGraphSummary: "",
       weeklyScheduleExcerpt: "",
       programWatchExcerpt: "",
+      meals: emptyMealProactiveSnapshot(),
     },
     ...overrides,
   };

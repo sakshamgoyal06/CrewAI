@@ -10,6 +10,7 @@ vi.mock("../llm/gateAndCompose.js", () => ({
 }));
 
 import { loadStaleListSnapshot } from "../signals/listNudgeSignals.js";
+import { emptyMealProactiveSnapshot } from "../../nutrition/mealProactiveSignals.js";
 import { staleListNudgeHandler } from "./staleListNudge.js";
 import type { ProactiveKindContext } from "./types.js";
 
@@ -48,6 +49,7 @@ function ctx(overrides: Partial<ProactiveKindContext> = {}): ProactiveKindContex
       userGraphSummary: "",
       weeklyScheduleExcerpt: "",
       programWatchExcerpt: "",
+      meals: emptyMealProactiveSnapshot(),
     },
     ...overrides,
   };

@@ -91,6 +91,10 @@ export const CATALOG_KINDS = [
   "midday_encouragement",
   "stale_list_nudge",
   "chat_inactivity",
+  "meal_log_reminder",
+  "meal_adherence_nudge",
+  "meal_eod_reconciliation",
+  "meal_gap_nudge",
 ] as const;
 
 export type CatalogProactiveKind = (typeof CATALOG_KINDS)[number];
@@ -105,6 +109,10 @@ export const CATALOG_KIND_LABELS: Record<CatalogProactiveKind, string> = {
   midday_encouragement: "Midday encouragement",
   stale_list_nudge: "Stale list nudge",
   chat_inactivity: "Chat inactivity check-in",
+  meal_log_reminder: "Meal log reminder",
+  meal_adherence_nudge: "Planned meal adherence nudge",
+  meal_eod_reconciliation: "End-of-day meal catch-up",
+  meal_gap_nudge: "Snack / gap log nudge",
 };
 
 export const DEFAULT_CATALOG_SCHEDULE: Record<CatalogProactiveKind, ProactiveSchedule> = {
@@ -113,6 +121,10 @@ export const DEFAULT_CATALOG_SCHEDULE: Record<CatalogProactiveKind, ProactiveSch
   midday_encouragement: { type: "recurring_local", localHour: 12, windowMinutes: 14 },
   stale_list_nudge: { type: "conditional" },
   chat_inactivity: { type: "conditional" },
+  meal_log_reminder: { type: "conditional" },
+  meal_adherence_nudge: { type: "conditional" },
+  meal_eod_reconciliation: { type: "recurring_local", localHour: 21, windowMinutes: 20 },
+  meal_gap_nudge: { type: "conditional" },
 };
 
 export const DEFAULT_CATALOG_CAP: Record<CatalogProactiveKind, ProactiveCapBucket> = {
@@ -121,6 +133,10 @@ export const DEFAULT_CATALOG_CAP: Record<CatalogProactiveKind, ProactiveCapBucke
   midday_encouragement: "adaptive",
   stale_list_nudge: "adaptive",
   chat_inactivity: "adaptive",
+  meal_log_reminder: "scheduled",
+  meal_adherence_nudge: "adaptive",
+  meal_eod_reconciliation: "scheduled",
+  meal_gap_nudge: "adaptive",
 };
 
 export const DEFAULT_CATALOG_TRIGGER: Record<CatalogProactiveKind, ProactiveTriggerType> = {
@@ -129,6 +145,10 @@ export const DEFAULT_CATALOG_TRIGGER: Record<CatalogProactiveKind, ProactiveTrig
   midday_encouragement: "recurring",
   stale_list_nudge: "conditional",
   chat_inactivity: "conditional",
+  meal_log_reminder: "conditional",
+  meal_adherence_nudge: "conditional",
+  meal_eod_reconciliation: "recurring",
+  meal_gap_nudge: "conditional",
 };
 
 export const DEFAULT_CATALOG_COOLDOWN_HOURS: Partial<Record<CatalogProactiveKind, number>> = {
@@ -136,4 +156,6 @@ export const DEFAULT_CATALOG_COOLDOWN_HOURS: Partial<Record<CatalogProactiveKind
   midday_encouragement: 24,
   stale_list_nudge: 72,
   chat_inactivity: 48,
+  meal_adherence_nudge: 12,
+  meal_gap_nudge: 8,
 };

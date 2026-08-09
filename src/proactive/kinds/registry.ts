@@ -1,4 +1,8 @@
 import type { ProactiveKindHandler } from "./types.js";
+import { mealAdherenceNudgeHandler } from "./mealAdherenceNudge.js";
+import { mealEodReconciliationHandler } from "./mealEodReconciliation.js";
+import { mealGapNudgeHandler } from "./mealGapNudge.js";
+import { mealLogReminderHandler } from "./mealLogReminder.js";
 import { customReminderHandler } from "./customReminder.js";
 import { chatInactivityHandler } from "./chatInactivity.js";
 import { driftGuardHandler } from "./driftGuard.js";
@@ -26,6 +30,10 @@ export function registerDefaultProactiveKinds(): void {
   registerProactiveKind(driftGuardHandler);
   registerProactiveKind(staleListNudgeHandler);
   registerProactiveKind(chatInactivityHandler);
+  registerProactiveKind(mealLogReminderHandler);
+  registerProactiveKind(mealAdherenceNudgeHandler);
+  registerProactiveKind(mealEodReconciliationHandler);
+  registerProactiveKind(mealGapNudgeHandler);
   registerProactiveKind(customReminderHandler);
 }
 
