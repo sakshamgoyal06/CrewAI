@@ -12,6 +12,18 @@ vi.mock("../tools/clients.js", () => ({
     from: () => ({
       select: () => ({
         eq: () => ({
+          eq: () => ({
+            order: () => ({
+              limit: () => Promise.resolve({ data: [], error: null }),
+            }),
+          }),
+          in: () => ({
+            order: () => ({
+              limit: () => ({
+                maybeSingle: () => Promise.resolve({ data: null, error: null }),
+              }),
+            }),
+          }),
           order: () => ({
             limit: () => Promise.resolve({ data: [], error: null }),
           }),
@@ -31,6 +43,7 @@ const BASE = {
 
 describe("pillar dispatch", () => {
   beforeEach(() => {
+    process.env.MAGNUS_PILLAR_STRATEGY_PARSER = "false";
     messagesCreate.mockReset();
     messagesCreate.mockResolvedValue({
       content: [{ type: "text", text: "Specialist answer." }],

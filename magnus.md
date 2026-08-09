@@ -93,7 +93,8 @@ shell or `.env`.
 | `src/agents/orchestratorIntent.ts` | The five-way classifier, plus deterministic coercions (meal log → HEALTH; fitness/Hevy reads → HEALTH; portfolio/Kite reads → WEALTH; YouTube / list / LifeOS / Notion / tool continuations → GENERAL) |
 | `src/agents/routing/pillarConsultationSignals.ts` | When a GENERAL turn should consult each pillar (message + recent-turn signals) |
 | `src/agents/routing/agentConsultation.ts` | Parallel Magnus + all relevant pillars on GENERAL; reconciler picks or merges the best reply |
-| `src/agents/magnusAgent.ts` | Magnus himself: calendar, YouTube, event log, journaling, reminders — tool loop |
+| `src/agents/routing/pillarStrategy/` | **Pillar strategy parser (Option A):** per-pillar capability catalogs, Haiku JSON parser (message + routing hints only), executors that load user context and run the right pipeline |
+| `src/agents/magnusAgent.ts` | Magnus himself: calendar, YouTube, event log, journaling, reminders — tool loop (optional capability-filtered tools on GENERAL) |
 | `src/agents/tools/calendarTool.ts` | Google Calendar; per-user tokens; delete/update sync linked `magnus_events` rows |
 | `src/agents/tools/youtubeConnectTool.ts` | In-chat `connect_google` / aliases — Calendar + YouTube one consent |
 | `src/agents/tools/youtubeTool.ts` | YouTube / YT Music: search, recommend, playlists, bookmarks, cue (per-user token) |
@@ -112,7 +113,7 @@ shell or `.env`.
 | `src/youtube/` | Bookmarks, cue queue, and Magnus playlist state in Supabase |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
-| `src/agents/health/healthRouter.ts` | Health composite: meal log → history → targets → journal → plan read → plan write → … |
+| `src/agents/health/healthRouter.ts` | Health composite: deterministic meal log/photo gates → pillar strategy parser → capability executors (legacy regex chain when `MAGNUS_PILLAR_STRATEGY_PARSER=false`) |
 | `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
 | `src/agents/memory/` | `loadMemoryContext`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
 | `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
@@ -196,9 +197,22 @@ shell or `.env`.
     Bulk actions: `clear` (empty playlist), `dedupe` (remove duplicate videos).
 12. **Intent routing** — Only Magnus (`GENERAL`) has tools. YouTube actions, list/LifeOS/Notion
     phrases, and short continuations after a Magnus tool turn coerce to `GENERAL`. Pillar specialists
-    are prompt-only and must not claim tool actions (see `pillarSpecialist.ts` guard).
+    are prompt-only and must not claim tool actions (see `pillarSpecialist.ts` guard). Health has
+    sub-router depth; Wealth loads Kite read-only portfolio context.
 13. **Gym schedule** — Fitness turns inject today's session from locked `weekly_schedule` program memory
     (Mon-first table) before Hevy history.
+14. **Pillar strategy parser** — When `MAGNUS_PILLAR_STRATEGY_PARSER=true` (default), each routed pillar
+    runs a lightweight Haiku parser (`MAGNUS_PILLAR_STRATEGY_MODEL`, default `claude-haiku-4-5`) that
+    sees only the user message plus **routing hints** (meal photo flag, explicit log prefix, active meal-plan
+    session step, previous-turn intent/capability, whether the last turn was a meal log) — no profile,
+    memory, or DB contents. The parser picks one **capability id** from that pillar's catalog and optional
+    structured args. The **executor** then loads full context and runs the matching pipeline: Health
+    (meal plan create vs read, corrections, fitness, nutrition, …), Wealth (Kite connect vs coaching),
+    Happiness/Wisdom (coaching), GENERAL (Magnus with tools filtered to the capability — calendar,
+    YouTube, lists, LifeOS, Notion, proactive, journal note, Zerodha connect, or conversation-only).
+    Deterministic pre-gates stay before the parser where unambiguous (explicit meal log, meal photo,
+    Zerodha connect phrase). Set `MAGNUS_PILLAR_STRATEGY_PARSER=false` to restore regex first-accept on
+    Health only; other pillars fall back to their pre-parser behaviour.
 
 ---
 
@@ -235,6 +249,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **`MAGNUS_TELEGRAM_MODE=webhook`** — recommended on a host; no 409 on overlapping deploys.
 - **`MAGNUS_PROACTIVE_CRON_ENABLED`** — scheduled Magnus-initiated Telegram (default on). Set
   `MAGNUS_MORNING_BRIEF_CRON_ENABLED=false` to skip only the brief job.
+- **`MAGNUS_PILLAR_STRATEGY_PARSER`** — LLM capability parser per pillar (default on). Set `false` for legacy Health regex routing only.
+- **`MAGNUS_PILLAR_STRATEGY_MODEL`** — Parser model (default `claude-haiku-4-5`).
 - **`MAGNUS_MAX_TOOL_ROUNDS`** — Magnus agent tool loop cap (default 12).
 
 ---
@@ -300,4 +316,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (compact meal log replies; breakdown on follow-up)
+**Last updated:** 2026-08-09 (pillar strategy parser for all five routed pillars)

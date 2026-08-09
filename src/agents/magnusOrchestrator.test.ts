@@ -97,6 +97,7 @@ function replyText(text: string): { content: { type: "text"; text: string }[] } 
 
 describe("runOrchestratorReply", () => {
   beforeEach(() => {
+    process.env.MAGNUS_PILLAR_STRATEGY_PARSER = "false";
     createMock.mockReset();
     createMock.mockImplementation(async () => replyText("GENERAL"));
     vi.mocked(loadMemoryContext).mockReset();

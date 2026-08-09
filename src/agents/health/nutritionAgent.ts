@@ -10,10 +10,15 @@ export function matchesNutritionMessage(rawMessage: string): boolean {
   return NUTRITION_PATTERN.test(rawMessage);
 }
 
+/** Used by pillar strategy executor — no keyword gate. */
+export async function runNutritionCapability(ctx: AgentContext): Promise<AgentResult> {
+  return runOrchestratedNutritionAdviceTurn(ctx);
+}
+
 /** Used by `healthRouter` (Fitness → Nutrition → Energy). Not a separate registry agent. */
 export async function tryNutritionAgent(ctx: AgentContext): Promise<AgentResult | null> {
   if (!matchesNutritionMessage(ctx.rawMessage)) {
     return null;
   }
-  return runOrchestratedNutritionAdviceTurn(ctx);
+  return runNutritionCapability(ctx);
 }

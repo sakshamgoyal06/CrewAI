@@ -6,6 +6,9 @@
  */
 import { runPillarSpecialist } from "../pillarSpecialist.js";
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
+import { buildRoutingHints } from "../routing/pillarStrategy/buildRoutingHints.js";
+import { executeHappinessStrategy } from "../routing/pillarStrategy/executeHappinessStrategy.js";
+import { parsePillarStrategy, pillarStrategyEnabled } from "../routing/pillarStrategy/parsePillarStrategy.js";
 
 export const HAPPINESS_SYSTEM = `You are the Happiness specialist inside Magnus.
 
@@ -30,6 +33,12 @@ How to recommend:
 Match their energy. If they sound depleted, suggest something small. Keep replies under ~200 words.`;
 
 export async function runHappinessAgent(ctx: AgentContext): Promise<AgentResult> {
+  if (pillarStrategyEnabled()) {
+    const hints = await buildRoutingHints(ctx);
+    const strategy = await parsePillarStrategy("HAPPINESS", ctx.rawMessage, hints);
+    return executeHappinessStrategy({ ...ctx, pillarStrategy: strategy }, strategy);
+  }
+
   return runPillarSpecialist({
     ctx,
     system: HAPPINESS_SYSTEM,
