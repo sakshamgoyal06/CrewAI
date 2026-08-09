@@ -1,11 +1,28 @@
 import type { Intent } from "../../../intent.js";
 
-/** Parsed request plan — no user PII; produced by the pillar strategy parser. */
-export type PillarStrategy = {
+/** One step in a pillar execution plan — produced by the parser, no user PII. */
+export type PillarPlanStep = {
   capability: string;
-  confidence: number;
   args: Record<string, unknown>;
+  /** Brief sub-request for the step executor (no profile/memory). */
+  intent_summary?: string;
+};
+
+/** Ordered plan from parser → sequential step executors → composer. */
+export type PillarExecutionPlan = {
+  steps: PillarPlanStep[];
+  confidence: number;
   parser: "llm" | "deterministic";
+};
+
+/** @deprecated Alias — strategy is now a multi-step plan. */
+export type PillarStrategy = PillarExecutionPlan;
+
+export type PlanStepResult = {
+  step_index: number;
+  capability: string;
+  text: string;
+  metadata: Record<string, unknown>;
 };
 
 /** Routing hints only — no profile, memory, or DB contents. */
@@ -32,3 +49,25 @@ export type CapabilityCatalog = {
   pillar: PillarId;
   capabilities: CapabilityCatalogEntry[];
 };
+
+export function primaryStep(plan: PillarExecutionPlan): PillarPlanStep {
+  return (
+    plan.steps[0] ?? {
+      capability: "conversation",
+      args: {},
+    }
+  );
+}
+
+export function planFromSingleCapability(
+  capability: string,
+  args: Record<string, unknown>,
+  confidence: number,
+  parser: "llm" | "deterministic",
+): PillarExecutionPlan {
+  return {
+    steps: [{ capability, args }],
+    confidence,
+    parser,
+  };
+}

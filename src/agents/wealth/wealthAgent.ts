@@ -20,7 +20,7 @@ import {
 } from "../../pillars/wealth/zerodha/index.js";
 import { buildRoutingHints } from "../routing/pillarStrategy/buildRoutingHints.js";
 import { executeWealthStrategy } from "../routing/pillarStrategy/executeWealthStrategy.js";
-import { parsePillarStrategy, pillarStrategyEnabled } from "../routing/pillarStrategy/parsePillarStrategy.js";
+import { parsePillarExecutionPlan, pillarStrategyEnabled } from "../routing/pillarStrategy/parsePillarStrategy.js";
 
 export const WEALTH_SYSTEM = `You are the Wealth specialist inside Magnus.
 
@@ -121,8 +121,8 @@ export async function runWealthAgent(ctx: AgentContext): Promise<AgentResult> {
 
   if (pillarStrategyEnabled()) {
     const hints = await buildRoutingHints(ctx);
-    const strategy = await parsePillarStrategy("WEALTH", ctx.rawMessage, hints);
-    return executeWealthStrategy({ ...ctx, pillarStrategy: strategy }, strategy);
+    const plan = await parsePillarExecutionPlan("WEALTH", ctx.rawMessage, hints);
+    return executeWealthStrategy({ ...ctx, pillarStrategy: plan }, plan);
   }
 
   const { block: kiteBlock, meta: kiteMeta } = await loadKiteContextBlock(ctx.userProfileId);
