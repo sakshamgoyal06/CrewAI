@@ -1,4 +1,4 @@
-import { slotHour, slotLabel, type PlannedMealSlot } from "../../nutrition/mealReminderSchedule.js";
+import { slotHour } from "../../nutrition/mealReminderSchedule.js";
 import { gateAndCompose } from "../llm/gateAndCompose.js";
 import type { ProactiveKindHandler, ProactiveEvaluateResult } from "./types.js";
 

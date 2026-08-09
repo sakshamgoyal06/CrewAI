@@ -5,8 +5,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { loadMealProactiveSnapshot } from "../nutrition/mealProactiveSignals.js";
-import { localDateKey } from "../nutrition/localDate.js";
 import { startOfLocalDay } from "../events/eventTime.js";
+import { lifeosContextEnabled } from "../config/lifeosContext.js";
 import { logger } from "../logger.js";
 
 export type MorningBriefContextBundle = {
@@ -288,7 +288,6 @@ export async function fetchMorningBriefContext(
 
   const patternRows = filterEmergingPlusPatterns(rawPatterns ?? []);
 
-  const todayKey = localDateKey(now, timeZone);
   const meals = await loadMealProactiveSnapshot({
     userProfileId,
     timezone: timeZone,

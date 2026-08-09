@@ -13,7 +13,6 @@ import { HEALTH_SPECIALIST_MODEL } from "../../agents/health/model.js";
 import {
   abandonMealPlanSession,
   createMealPlanSession,
-  getActiveMealPlanSession,
   lockMealPlanSession,
   updateMealPlanSession,
   type MealPlanSessionRow,

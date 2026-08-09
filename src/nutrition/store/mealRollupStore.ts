@@ -5,6 +5,7 @@ import { logger } from "../../logger.js";
 import { loadDailyTargets } from "../../meals/mealDaySummary.js";
 import { supabase } from "../../tools/clients.js";
 import { loggableError } from "../../util/loggableError.js";
+import type { MealSlot } from "../types.js";
 import { fetchPlanAdherenceForDate } from "./mealPlanStore.js";
 
 function num(v: unknown): number {

@@ -6,6 +6,10 @@ import { getLocalTimeParts, type LocalTimeParts } from "../jobs/morningBriefTime
 import { fetchCheckinItem, fetchListBySlug } from "../lists/listStore.js";
 import { supabase } from "../tools/clients.js";
 import { loadUserIntegrations } from "../users/userIntegrations.js";
+import {
+  loadUserProgramMemory,
+  type ProgramMemorySection,
+} from "../users/userProgramMemory.js";
 import { loadMealProactiveSnapshot, type MealProactiveSnapshot } from "../nutrition/mealProactiveSignals.js";
 
 export type ProactiveSignalSnapshot = {

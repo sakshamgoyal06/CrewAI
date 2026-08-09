@@ -1,7 +1,6 @@
 /**
  * Multi-agent consultation: Magnus coordinates, relevant pillars advise, reconciler picks the reply.
  */
-import type { Intent } from "../../intent.js";
 import type { AgentResult } from "../types.js";
 import { hasSuccessfulWriteTool } from "./actionIntegrity.js";
 import {
