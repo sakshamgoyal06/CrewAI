@@ -20,7 +20,8 @@ Rules for JSON:
 - One entry per requested slot per date in the horizon.
 - Dates must be YYYY-MM-DD within the given range.
 - meal_slot must match requested slots only.
-- Titles are short (under 80 chars).`;
+- Titles are short (under 80 chars).
+- **Never** include foods listed under hard avoid / dietary restrictions.`;
 
 export function buildDraftUserPrompt(input: {
   horizonStart: string;
@@ -32,6 +33,7 @@ export function buildDraftUserPrompt(input: {
   previousDraftDisplay: string | null;
   anchorBlock: string;
   foodListContext?: string;
+  avoidFoods?: string[];
 }): string {
   const parts = [
     `Plan meals from **${input.horizonStart}** through **${input.horizonEnd}**.`,
@@ -49,6 +51,12 @@ export function buildDraftUserPrompt(input: {
 
   if (input.foodListContext?.trim()) {
     parts.push(input.foodListContext.trim());
+  }
+
+  if (input.avoidFoods?.length) {
+    parts.push(
+      `\n**Hard avoid (never in any meal):** ${input.avoidFoods.join(", ")}.`,
+    );
   }
 
   if (input.revisionNotes?.trim()) {

@@ -100,6 +100,19 @@ describe("enforceActionIntegrity", () => {
     expect(out.reason).toBe("tool_limit_partial");
     expect(out.text).toContain("partway through");
   });
+
+  it("does not rewrite meal plan draft review replies", () => {
+    const out = enforceActionIntegrity({
+      text: "Good catch — curd added wherever possible for protein.\n\n**Draft plan** for the week.",
+      metadata: {
+        specialist: "MealPlanner",
+        meal_plan_status: "draft",
+        meal_plan_revised: true,
+      },
+    });
+    expect(out.corrected).toBe(false);
+    expect(out.text).toContain("curd added");
+  });
 });
 
 describe("stripMisleadingClaimLines", () => {

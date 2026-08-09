@@ -34,12 +34,38 @@ import { MEAL_PLAN_CANCEL_RE, sanitizeMealPlanningUserMessage } from "./mealPlan
 import type { MealPlanEntryInput } from "../parseMealPlanJson.js";
 import { buildSpecialistIdentity } from "../../agents/promptIdentity.js";
 import { fetchUserHealthProfile } from "../../agents/health/healthOnboarding.js";
+import {
+  entryMentionsAvoidedFood,
+  filterAvoidedMealPlanEntries,
+  mergeAvoidFoods,
+  parseAvoidFoodsFromRestrictions,
+  parseAvoidFoodsFromRevision,
+} from "./mealPlanningAvoidList.js";
 
 const CANCEL_RE = MEAL_PLAN_CANCEL_RE;
 
 const LOCK_RE = isFullLockCommand;
 
 const SKIP_RE = /^(?:skip|nothing\s+special|no(?:thing)?\s+different|same\s+as\s+usual)\.?$/i;
+
+function isMealPlanReviewQuestion(raw: string): boolean {
+  const t = raw.trim();
+  if (/^\s*(?:why|what|how|when|where|did you|can you explain)\b/i.test(t)) {
+    return true;
+  }
+  return /\?\s*$/.test(t) && t.length <= 140;
+}
+
+async function resolveAvoidFoods(
+  userProfileId: string,
+  revisionNotes: string | null,
+): Promise<string[]> {
+  const healthRow = await fetchUserHealthProfile(userProfileId);
+  return mergeAvoidFoods(
+    parseAvoidFoodsFromRestrictions(healthRow?.dietary_restrictions ?? null),
+    revisionNotes ? parseAvoidFoodsFromRevision(revisionNotes) : [],
+  );
+}
 
 function textFromMessage(msg: Message): string {
   for (const block of msg.content) {
@@ -112,6 +138,7 @@ async function generateDraftOnce(
   ctx: AgentContext,
   session: MealPlanSessionRow,
   revisionNotes: string | null,
+  avoidFoods: string[],
   attempt = 0,
 ): Promise<
   | { ok: true; display: string; entries: NonNullable<ReturnType<typeof extractMealPlanJson>> }
@@ -135,12 +162,17 @@ async function generateDraftOnce(
     previousDraftDisplay: session.draft_display,
     anchorBlock: planAnchorBlock(ctx),
     foodListContext: await loadFoodListContext(ctx.userProfileId),
+    avoidFoods,
   });
 
+  const avoidReminder =
+    avoidFoods.length > 0
+      ? `\n\nReminder: NEVER include ${avoidFoods.join(", ")} in any meal.`
+      : "";
   const jsonNudge =
     attempt > 0
-      ? "\n\n**Required:** End with a fenced ```json block containing ALL entries for every date and slot. No prose after the JSON."
-      : "";
+      ? `\n\n**Required:** End with a fenced \`\`\`json block containing ALL entries for every date and slot. No prose after the JSON.${avoidReminder}`
+      : avoidReminder;
 
   const msg = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
@@ -153,18 +185,33 @@ async function generateDraftOnce(
   const entries = extractMealPlanJson(llmText);
   if (!entries?.length) {
     if (attempt < 2) {
-      return generateDraftOnce(ctx, session, revisionNotes, attempt + 1);
+      return generateDraftOnce(ctx, session, revisionNotes, avoidFoods, attempt + 1);
     }
     return { ok: false, error: "draft JSON missing", llmText };
   }
 
+  const filtered = filterAvoidedMealPlanEntries(entries, avoidFoods);
+  if (avoidFoods.length > 0 && filtered.length < entries.length) {
+    if (attempt < 2) {
+      const retryNotes = [
+        revisionNotes?.trim() ?? "",
+        `Regenerate without these avoided foods (removed ${entries.length - filtered.length} invalid entries): ${avoidFoods.join(", ")}.`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      return generateDraftOnce(ctx, session, retryNotes, avoidFoods, attempt + 1);
+    }
+    return { ok: false, error: "avoided food in draft", llmText };
+  }
+
   const display = stripMealPlanJsonBlock(llmText) || llmText;
-  return { ok: true, display, entries };
+  return { ok: true, display, entries: filtered.length ? filtered : entries };
 }
 
 async function generateDraftJsonRecovery(
   session: MealPlanSessionRow,
   priorDisplay: string,
+  avoidFoods: string[],
 ): Promise<
   | { ok: true; display: string; entries: NonNullable<ReturnType<typeof extractMealPlanJson>> }
   | { ok: false; error: string }
@@ -189,6 +236,7 @@ async function generateDraftJsonRecovery(
           `Dates: ${dates.join(", ")}`,
           `Slots each day: ${session.slots.join(", ")}`,
           session.constraints_text ? `Constraints: ${session.constraints_text}` : "",
+          avoidFoods.length ? `Never include: ${avoidFoods.join(", ")}` : "",
           priorDisplay ? `Meals from prior draft attempt:\n${priorDisplay.slice(0, 2500)}` : "",
         ]
           .filter(Boolean)
@@ -203,8 +251,13 @@ async function generateDraftJsonRecovery(
     return { ok: false, error: "draft JSON missing" };
   }
 
+  const filtered = filterAvoidedMealPlanEntries(entries, avoidFoods);
+  if (filtered.length === 0) {
+    return { ok: false, error: "avoided food in draft" };
+  }
+
   const display = stripMealPlanJsonBlock(priorDisplay) || priorDisplay || "(draft)";
-  return { ok: true, display, entries };
+  return { ok: true, display, entries: filtered };
 }
 
 async function generateDraft(
@@ -219,14 +272,26 @@ async function generateDraft(
     return { ok: false, error: "horizon not set" };
   }
 
+  const avoidFoods = await resolveAvoidFoods(ctx.userProfileId, revisionNotes);
   const chunks = chunkHorizonDates(session.horizon_start, session.horizon_end);
+  let notes = revisionNotes?.trim() ?? null;
+  if (notes && chunks.length > 1) {
+    notes = [
+      notes,
+      "Apply this change to the **full horizon** (every week).",
+      avoidFoods.length ? `Never include: ${avoidFoods.join(", ")}.` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
   if (chunks.length <= 1) {
-    const single = await generateDraftOnce(ctx, session, revisionNotes);
+    const single = await generateDraftOnce(ctx, session, notes, avoidFoods);
     if (single.ok) {
       return single;
     }
     if (single.llmText) {
-      const recovered = await generateDraftJsonRecovery(session, single.llmText);
+      const recovered = await generateDraftJsonRecovery(session, single.llmText, avoidFoods);
       if (recovered.ok) {
         return recovered;
       }
@@ -245,10 +310,10 @@ async function generateDraft(
       horizon_start: chunkStart,
       horizon_end: chunkEnd,
     };
-    const chunkResult = await generateDraftOnce(ctx, chunkSession, revisionNotes);
+    const chunkResult = await generateDraftOnce(ctx, chunkSession, notes, avoidFoods);
     if (!chunkResult.ok) {
       if (chunkResult.llmText) {
-        const recovered = await generateDraftJsonRecovery(chunkSession, chunkResult.llmText);
+        const recovered = await generateDraftJsonRecovery(chunkSession, chunkResult.llmText, avoidFoods);
         if (recovered.ok) {
           displayParts.push(recovered.display);
           allEntries.push(...recovered.entries);
@@ -410,6 +475,77 @@ async function lockPlanEntries(
   };
 }
 
+async function answerMealPlanReviewQuestion(
+  ctx: AgentContext,
+  session: MealPlanSessionRow,
+  raw: string,
+): Promise<AgentResult> {
+  const healthRow = await fetchUserHealthProfile(ctx.userProfileId);
+  const avoid = parseAvoidFoodsFromRestrictions(healthRow?.dietary_restrictions ?? null);
+  const lines: string[] = [];
+
+  if (/\blauki\b/i.test(raw) && avoid.some((f) => f.includes("lauki"))) {
+    lines.push(
+      "Your health profile lists **Avoid lauki** under dietary restrictions — drafts should stay lauki-free for the **whole** plan (both weeks), not just week 1.",
+    );
+  }
+  if (/\bwhy\b/i.test(raw) && /\blauki/i.test(raw)) {
+    lines.push(
+      "Week 1 was lauki-free because of that onboarding rule, not because you asked for it in today's message.",
+    );
+  }
+  if (lines.length === 0) {
+    lines.push("Here's the current draft — tell me what to change, or say **save plan** when it looks right.");
+  }
+
+  return {
+    text: [...lines, "", reviewPrompt(session)].join("\n"),
+    metadata: flowMeta(session, { meal_plan_question: true }),
+  };
+}
+
+async function tryDeterministicAvoidRevision(
+  ctx: AgentContext,
+  session: MealPlanSessionRow,
+  raw: string,
+): Promise<AgentResult | null> {
+  if (!session.draft_entries.length) {
+    return null;
+  }
+  const avoid = await resolveAvoidFoods(ctx.userProfileId, raw);
+  if (avoid.length === 0) {
+    return null;
+  }
+
+  const removed = session.draft_entries.filter((e) => entryMentionsAvoidedFood(e, avoid));
+  if (removed.length === 0) {
+    return null;
+  }
+
+  const revisionNotes = [
+    raw.trim(),
+    `Replace ONLY these meals (keep all other days/slots identical): ${removed
+      .map((e) => `${e.local_date} ${e.meal_slot}: ${e.title}`)
+      .join("; ")}.`,
+    `NEVER include: ${avoid.join(", ")} across the full horizon.`,
+  ].join("\n");
+
+  const draft = await generateDraft(ctx, session, revisionNotes);
+  if (!draft.ok) {
+    return null;
+  }
+
+  const next = await persistDraft(session, draft.display, draft.entries, raw.trim());
+  if (!next.ok) {
+    return null;
+  }
+
+  return {
+    text: reviewPrompt(next.session),
+    metadata: flowMeta(next.session, { meal_plan_revised: true, meal_plan_avoid_filter: true }),
+  };
+}
+
 async function handleReviewStep(
   ctx: AgentContext,
   session: MealPlanSessionRow,
@@ -433,6 +569,15 @@ async function handleReviewStep(
     }
 
     return lockPlanEntries(ctx, session, session.draft_entries, false);
+  }
+
+  if (isMealPlanReviewQuestion(raw)) {
+    return answerMealPlanReviewQuestion(ctx, session, raw);
+  }
+
+  const deterministic = await tryDeterministicAvoidRevision(ctx, session, raw);
+  if (deterministic) {
+    return deterministic;
   }
 
   const draft = await generateDraft(ctx, session, raw.trim());

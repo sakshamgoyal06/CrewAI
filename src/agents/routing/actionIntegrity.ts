@@ -71,7 +71,20 @@ function hasSpecialistWriteEvidence(meta: Record<string, unknown>): boolean {
   if (meta.hevy_write === true) {
     return true;
   }
+  if (meta.meal_plan_saved === true || meta.meal_plan_locked === true) {
+    return true;
+  }
   return false;
+}
+
+function isMealPlanDraftReply(meta: Record<string, unknown>): boolean {
+  return (
+    meta.specialist === "MealPlanner" &&
+    (meta.meal_plan_status === "draft" ||
+      meta.meal_plan_revised === true ||
+      meta.meal_plan_drafted === true ||
+      meta.meal_plan_question === true)
+  );
 }
 
 function toolOutcomes(meta: Record<string, unknown>): ToolOutcome[] {
@@ -146,6 +159,10 @@ export function enforceActionIntegrity(input: ActionIntegrityInput): ActionInteg
   const meta = { ...(input.metadata ?? {}) };
   const text = input.text.trim();
   if (!text) {
+    return { text, metadata: meta, corrected: false };
+  }
+
+  if (isMealPlanDraftReply(meta)) {
     return { text, metadata: meta, corrected: false };
   }
 
