@@ -89,11 +89,13 @@ shell or `.env`.
 |------|----------------|
 | `src/index.ts` | Boot: clients → capability log → Telegram runtime → health server → watchdog → graceful shutdown |
 | `src/magnus.ts` | Turn handler: allowlist gate, chat persistence, typing indicator, orchestrator call. Starts the Morning Brief cron. |
-| `src/agents/magnusOrchestrator.ts` | Health onboarding gate → classify → memory → pillar specialist or Magnus; GENERAL + health context → parallel Health consultation |
+| `src/agents/magnusOrchestrator.ts` | Classify → memory → parse/execute/compose per pillar; GENERAL uses parser plan (incl. day_overview, pillar_consultation); `finalizeMagnusVoice` at exit |
 | `src/agents/orchestratorIntent.ts` | The five-way classifier, plus deterministic coercions (meal log → HEALTH; fitness/Hevy reads → HEALTH; portfolio/Kite reads → WEALTH; YouTube / list / LifeOS / Notion / tool continuations → GENERAL) |
-| `src/agents/routing/pillarConsultationSignals.ts` | When a GENERAL turn should consult each pillar (message + recent-turn signals) |
-| `src/agents/routing/agentConsultation.ts` | Parallel Magnus + all relevant pillars on GENERAL; reconciler picks or merges the best reply |
-| `src/agents/routing/pillarStrategy/` | **Pillar execution plans:** capability catalogs → Haiku plan parser (message + routing hints only) → sequential step executors → composer for user-facing reply |
+| `src/agents/routing/pillarConsultationSignals.ts` | Legacy regex consultation signals when `MAGNUS_PILLAR_STRATEGY_PARSER=false` |
+| `src/agents/routing/agentConsultation.ts` | Parallel Magnus + pillars; reconciler for `pillar_consultation` step and legacy path |
+| `src/agents/routing/finalizeMagnusVoice.ts` | Orchestrator output parser — terminal Magnus voice when inner pipeline did not compose |
+| `src/agents/routing/pillarStrategy/` | Capability catalogs → Haiku plan parser → step executors → composer (`composePillarPlanReply`) |
+| `src/agents/routing/pillarStrategy/dayOverview.ts` | Holistic day snapshot: calendar + commitments + meals |
 | `src/agents/magnusAgent.ts` | Magnus himself: calendar, YouTube, event log, journaling, reminders — tool loop (optional capability-filtered tools on GENERAL) |
 | `src/agents/tools/calendarTool.ts` | Google Calendar; per-user tokens; delete/update sync linked `magnus_events` rows |
 | `src/agents/tools/youtubeConnectTool.ts` | In-chat `connect_google` / aliases — Calendar + YouTube one consent |
@@ -203,17 +205,18 @@ shell or `.env`.
     (Mon-first table) before Hevy history.
 14. **Pillar execution plans** — When `MAGNUS_PILLAR_STRATEGY_PARSER=true` (default), each routed pillar
     runs a Haiku **plan parser** (`MAGNUS_PILLAR_STRATEGY_MODEL`, default `claude-haiku-4-5`) that sees
-    the user message, **routing hints**, and **recent turn previews** (no profile, memory, or DB rows).
-    It returns an ordered **steps[]** array (1–`MAGNUS_PILLAR_PLAN_MAX_STEPS`, default 4): each step has
-    `capability`, `args`, and `intent_summary`. **Step executors** run sequentially with full context and
-    prior-step outcomes; GENERAL steps use Magnus with capability-filtered tools. A **composer**
-    (`MAGNUS_PILLAR_PLAN_COMPOSE`, default on) re-voices specialist step output into one Magnus
-    Telegram reply (single- and multi-step). Terminal confirmations (e.g. cancel planning) set
-    `pillar_compose: false` to skip re-voicing. Deterministic pre-gates stay before the parser where
-    unambiguous (explicit meal log, meal photo, **active `meal_plan_sessions` draft/gathering** →
-    always `meal_plan_create`). Meal-plan **create vs read** is parser-owned when no active session.
-    Review-step Q&A answers the question only — no full draft re-post; explicit change language
-    triggers revision.
+    the user message, **routing hints** (meal session flags, integration connectivity, recent turn previews),
+    and returns an ordered **steps[]** array (1–`MAGNUS_PILLAR_PLAN_MAX_STEPS`, default 4). **Architecture:
+    input parse → execute → output parse (compose)** — one Magnus voice at terminal exit. **Step executors**
+    run sequentially with full context and prior-step outcomes; GENERAL steps use Magnus with
+    capability-filtered tools or `day_overview` / `pillar_consultation`. A **composer**
+    (`MAGNUS_PILLAR_PLAN_COMPOSE`, default on) re-voices every step output (single- and multi-step).
+    `finalizeMagnusVoice` at the orchestrator boundary catches any path that did not already compose.
+    Terminal confirmations (e.g. cancel planning, OAuth links) set `pillar_compose: false`. Deterministic
+    pre-gates stay before the parser where unambiguous (explicit meal log, meal photo). Meal-plan create vs
+    read is parser-owned. **day_overview** (GENERAL) loads calendar + event log + planned meals.
+    Review-step meal Q&A answers without re-posting the draft. Legacy regex consultation remains only when
+    `MAGNUS_PILLAR_STRATEGY_PARSER=false`.
 
 ---
 

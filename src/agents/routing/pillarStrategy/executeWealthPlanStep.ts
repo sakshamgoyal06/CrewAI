@@ -88,6 +88,8 @@ export async function executeWealthPlanStep(
         specialist: "Wealth",
         pillar: "wealth",
         kite_connect: true,
+        pillar_compose: false,
+        magnus_voice_finalized: true,
       },
     };
   }
@@ -110,6 +112,7 @@ export async function executeWealthPlanStep(
       specialist: "Wealth",
       pillar: "wealth",
       ...kiteMeta,
+      pillar_compose: true,
     },
   };
 }

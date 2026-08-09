@@ -36,6 +36,12 @@ export type RoutingHints = {
   previous_turn_was_meal_log: boolean;
   /** User just locked a meal plan on the previous assistant turn. */
   previous_turn_meal_plan_locked: boolean;
+  /** Integration flags for parser disambiguation (no PII). */
+  google_calendar_connected: boolean;
+  youtube_connected: boolean;
+  notion_connected: boolean;
+  hevy_connected: boolean;
+  zerodha_connected: boolean;
   /** Last few chat turns (truncated) so the parser can disambiguate read vs create. */
   recent_turns: Array<{ role: "user" | "assistant"; preview: string }>;
 };

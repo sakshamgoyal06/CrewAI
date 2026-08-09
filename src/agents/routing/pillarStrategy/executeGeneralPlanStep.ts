@@ -6,6 +6,7 @@ import type { AgentContext, AgentResult } from "../../types.js";
 import { GENERAL_CAPABILITY_TOOLS } from "./catalogs/generalCatalog.js";
 import { buildStepAgentContext } from "./buildStepAgentContext.js";
 import { executeDayOverviewCapability } from "./dayOverview.js";
+import { executePillarConsultationStep } from "./executePillarConsultation.js";
 import type { PillarPlanStep } from "./types.js";
 
 export async function executeGeneralPlanStep(
@@ -14,6 +15,10 @@ export async function executeGeneralPlanStep(
   priorContext: string,
 ): Promise<AgentResult> {
   const stepCtx = buildStepAgentContext(ctx, step, priorContext);
+
+  if (step.capability === "pillar_consultation") {
+    return executePillarConsultationStep(ctx, step, priorContext);
+  }
 
   if (step.capability === "day_overview") {
     return executeDayOverviewCapability(stepCtx, step.args);

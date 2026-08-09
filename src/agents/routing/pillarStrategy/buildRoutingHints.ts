@@ -1,6 +1,7 @@
 import { parseMealLogCommand } from "../../../meals/parseMealLogCommand.js";
 import { getActiveMealPlanSession } from "../../../nutrition/planning/mealPlanningSessionStore.js";
 import { fetchRecentRoutingTurns } from "../../../tools/routingContext.js";
+import { loadUserIntegrations } from "../../../users/userIntegrations.js";
 import type { AgentContext } from "../../types.js";
 import type { RoutingHints } from "./types.js";
 
@@ -35,6 +36,7 @@ export async function buildRoutingHints(ctx: AgentContext): Promise<RoutingHints
       : undefined;
 
   const active = await getActiveMealPlanSession(ctx.userProfileId);
+  const integrations = await loadUserIntegrations(ctx.userProfileId);
 
   return {
     has_meal_photo: Boolean(ctx.mealPhoto?.fileId),
@@ -55,6 +57,11 @@ export async function buildRoutingHints(ctx: AgentContext): Promise<RoutingHints
     previous_turn_meal_plan_locked: Boolean(
       agentMeta?.meal_plan_locked === true || agentMeta?.meal_plan_saved === true,
     ),
+    google_calendar_connected: Boolean(integrations.googleCalendarRefreshToken),
+    youtube_connected: Boolean(integrations.googleYoutubeRefreshToken),
+    notion_connected: Boolean(integrations.notionToken),
+    hevy_connected: Boolean(integrations.hevyApiKey),
+    zerodha_connected: Boolean(integrations.kiteAccessToken),
     recent_turns: recent.slice(-4).map((t) => ({
       role: t.role === "assistant" ? ("assistant" as const) : ("user" as const),
       preview: t.content.slice(0, 280),

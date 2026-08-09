@@ -86,8 +86,13 @@ export async function executeDayOverviewCapability(
     mealsText.trim() || "No meals planned for this day.",
   ];
 
+  const userGraphNote =
+    ctx.memoryBlock?.trim() && ctx.memoryBlock.length < 1200
+      ? `\n\n_User context (internal — use for tone, not to repeat verbatim):_\n${ctx.memoryBlock.trim().slice(0, 800)}`
+      : "";
+
   return {
-    text: sections.join("\n"),
+    text: sections.join("\n") + userGraphNote,
     metadata: {
       specialist: "Magnus",
       day_overview: true,

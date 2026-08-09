@@ -4,6 +4,12 @@ export const GENERAL_CAPABILITY_CATALOG: CapabilityCatalog = {
   pillar: "GENERAL",
   capabilities: [
     {
+      id: "pillar_consultation",
+      summary: "Magnus tools plus one or more pillar specialists in the same turn",
+      disambiguation:
+        "Message needs BOTH Magnus actions (calendar, lists, check-in, event log) AND pillar depth (workout review, portfolio, taste, career). Args: pillars array e.g. [\"HEALTH\"]. Prefer over guessing a single pillar intent.",
+    },
+    {
       id: "day_overview",
       summary: "Holistic day snapshot: Google Calendar + event log commitments + planned meals",
       disambiguation:
@@ -66,6 +72,7 @@ export const GENERAL_CAPABILITY_IDS = GENERAL_CAPABILITY_CATALOG.capabilities.ma
 
 /** Magnus tool names allowed per GENERAL capability (executor filters tools). */
 export const GENERAL_CAPABILITY_TOOLS: Record<string, string[]> = {
+  pillar_consultation: [],
   day_overview: [],
   calendar: [
     "read_calendar",

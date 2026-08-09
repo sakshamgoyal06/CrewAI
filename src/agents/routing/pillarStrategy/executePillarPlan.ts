@@ -32,12 +32,11 @@ export async function executePillarPlan(
   }
 
   let finalText: string;
-  const needsVoiceCompose =
-    pillarPlanComposeEnabled() &&
-    (stepResults.length > 1 ||
-      stepResults.some((s) => s.metadata?.pillar_compose !== false));
+  const skipCompose =
+    stepResults.some((s) => s.metadata?.pillar_compose === false) &&
+    stepResults.every((s) => s.metadata?.pillar_compose === false);
 
-  if (!needsVoiceCompose) {
+  if (!pillarPlanComposeEnabled() || skipCompose) {
     finalText =
       stepResults.length === 1
         ? (stepResults[0]?.text ?? "…")
@@ -46,7 +45,9 @@ export async function executePillarPlan(
     finalText = await composePillarPlanReply(ctx, plan, stepResults);
   }
 
-  const mergedMetadata: Record<string, unknown> = {};
+  const mergedMetadata: Record<string, unknown> = {
+    magnus_voice_finalized: pillarPlanComposeEnabled() && !skipCompose,
+  };
   for (const s of stepResults) {
     Object.assign(mergedMetadata, s.metadata);
   }

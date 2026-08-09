@@ -115,8 +115,10 @@ Shape:
 
 GENERAL-specific:
 - **day_overview** when the user wants the **whole day** — calendar, schedule, commitments, and meals together. Examples: "what does my day/tomorrow look like", "entire day tomorrow", "what's on tomorrow", "walk me through Monday". Pass date_hint in args when clear: "today", "tomorrow", "yesterday", or YYYY-MM-DD.
+- **pillar_consultation** when the turn needs Magnus tools AND pillar specialist depth in one reply. Set args.pillars to subset of ["HEALTH","WEALTH","HAPPINESS","WISDOM"]. Examples: log check-in + review workout, calendar edit + nutrition advice, list update + portfolio context.
 - **calendar** only when they want Google Calendar / schedule **without** also wanting meals and commitments woven in.
-- Holistic day asks are NEVER satisfied by conversation alone — use day_overview.`;
+- Holistic day asks are NEVER satisfied by conversation alone — use day_overview.
+- Use routing_hints integration flags (google_calendar_connected, etc.) — if calendar not connected, day_overview still runs but calendar section may be empty.`;
   }
 
   if (pillar === "HEALTH") {

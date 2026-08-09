@@ -12,7 +12,6 @@ import { loggableError } from "../../util/loggableError.js";
 import { buildAgentMessages } from "../memory/memoryAgent.js";
 import { buildSpecialistIdentity } from "../promptIdentity.js";
 import { PILLAR_MODEL } from "../pillarSpecialist.js";
-import { connectKiteTool, isKiteConnectRequest } from "../tools/kiteConnectTool.js";
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
 import {
   fetchKitePortfolioSnapshot,
@@ -104,21 +103,6 @@ async function loadKiteContextBlock(userProfileId: string): Promise<{
 }
 
 export async function runWealthAgent(ctx: AgentContext): Promise<AgentResult> {
-  if (isKiteConnectRequest(ctx.rawMessage)) {
-    const text = await connectKiteTool({
-      userProfileId: ctx.userProfileId,
-      telegramUserId: ctx.telegramUserId,
-    });
-    return {
-      text,
-      metadata: {
-        specialist: "Wealth",
-        pillar: "wealth",
-        kite_connect: true,
-      },
-    };
-  }
-
   if (pillarStrategyEnabled()) {
     const hints = await buildRoutingHints(ctx);
     const plan = await parsePillarExecutionPlan("WEALTH", ctx.rawMessage, hints);
@@ -143,6 +127,7 @@ export async function runWealthAgent(ctx: AgentContext): Promise<AgentResult> {
       specialist: "Wealth",
       pillar: "wealth",
       ...kiteMeta,
+      pillar_compose: true,
     },
   };
 }
