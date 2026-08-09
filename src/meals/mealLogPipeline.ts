@@ -95,6 +95,7 @@ export async function completeMealLogWithEstimate(input: {
       loggedDate: saved.date,
       timezoneLabel: tzLabel,
       mealSlot: input.mealSlot ?? "unspecified",
+      planLink: saved.planLink,
       rawText: input.rawMealText,
       estimate,
       components: saved.components,

@@ -5,7 +5,7 @@ import { logger } from "../../logger.js";
 import { loadDailyTargets } from "../../meals/mealDaySummary.js";
 import { supabase } from "../../tools/clients.js";
 import { loggableError } from "../../util/loggableError.js";
-import type { MealSlot } from "../types.js";
+import { fetchPlanAdherenceForDate } from "./mealPlanStore.js";
 
 function num(v: unknown): number {
   if (v === null || v === undefined) {
@@ -84,12 +84,16 @@ export async function recomputeDailyRollup(
   }
 
   const targets = await loadDailyTargets(userProfileId);
+  const planStats = await fetchPlanAdherenceForDate(userProfileId, localDate);
   const flags: string[] = [];
   if (targets?.daily_protein_g_target && protein_g < targets.daily_protein_g_target * 0.7) {
     flags.push("protein_low");
   }
   if (targets?.daily_calorie_target && calories > targets.daily_calorie_target * 1.3) {
     flags.push("calorie_spike");
+  }
+  if (planStats.adherenceScore !== null && planStats.adherenceScore < 0.5 && planStats.slotsPlanned.length >= 2) {
+    flags.push("plan_drift");
   }
 
   const payload = {
@@ -102,6 +106,9 @@ export async function recomputeDailyRollup(
     meal_count: mealCount,
     snack_count: snackCount,
     slots_logged: [...slotsLogged],
+    slots_planned: planStats.slotsPlanned,
+    slots_missed: planStats.slotsMissed,
+    adherence_score: planStats.adherenceScore,
     target_calories: targets?.daily_calorie_target ?? null,
     target_protein_g: targets?.daily_protein_g_target ?? null,
     flags,

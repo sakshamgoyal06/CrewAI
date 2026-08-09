@@ -14,8 +14,9 @@ paths: "src/agents/health/mealPlannerAgent.ts"
 
 ## Scope
 
-- Meal **ideas** for a day or week
-- Runs early in `healthRouter.ts` (before fitness)
+- Meal **ideas** for a day or week — **saved** to `meal_plan_entries` when the model returns JSON
+- Show / swap / skip / copy: `mealPlanReadAgent` ("show my meal plan", "skip lunch tomorrow")
+- Runs after journal in `healthRouter.ts` (read before write)
 
 ## Not this skill
 

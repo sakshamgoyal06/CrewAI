@@ -1,26 +1,41 @@
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { anthropic } from "../../tools/clients.js";
+import { localDateKey, timezoneAbbrev } from "../../nutrition/localDate.js";
+import {
+  extractMealPlanJson,
+  offsetDateKey,
+  stripMealPlanJsonBlock,
+} from "../../nutrition/parseMealPlanJson.js";
+import { savePlanEntries } from "../../nutrition/store/mealPlanStore.js";
 import { buildAgentMessages } from "../memory/memoryAgent.js";
 import { buildSpecialistIdentity } from "../promptIdentity.js";
 import { isMealCommand } from "../../meals/parseMealLogCommand.js";
 import type { AgentContext, AgentResult } from "../types.js";
 import { HEALTH_SPECIALIST_MODEL } from "./model.js";
+import { matchesMealPlanReadMessage } from "./mealPlanReadAgent.js";
 
 /**
- * Meal **planning** (day/week ideas from stated constraints). Not the meal **log** pipeline
- * (`mealLogPipeline`, `/meal` commands). For optional nutrition lookups elsewhere in Magnus,
- * providers may use env such as `CALORIENINJAS_API_KEY` — this agent does not call those APIs.
+ * Meal **planning** (day/week ideas from stated constraints). Persists structured plans to
+ * `meal_plan_entries` when the model returns valid JSON.
  */
 export const MEAL_PLANNER_SYSTEM = `You are the Meal Planner specialist for Magnus (Health pillar).
 
 **Scope:** Suggest **meal ideas and structure** for a **day or a week** from the user's goals and constraints (time, budget band, cuisine, cooking skill, allergies, intolerances, dietary pattern, calorie or macro targets when they mention them). Output practical options — not medical nutrition therapy.
 
-**Not your job:** Logging foods, estimating calories from arbitrary logs, or parsing /meal-style commands. If the user seems to be logging what they ate, you would not handle that here — but normally you will not see that in this mode.
+**Not your job:** Logging foods, estimating calories from arbitrary logs, or parsing /meal-style commands.
 
-**Tone:** Supportive, no food shame. Treat stated allergies or hard dietary limits as requirements. You are not a doctor or registered dietitian; for clinical conditions or prescribed diets, encourage professional care.
+**Tone:** Supportive, no food shame. Treat stated allergies or hard dietary limits as requirements.
 
-Keep replies focused; default under ~250 words unless they ask for a detailed week grid.`;
+Keep replies focused; default under ~250 words unless they ask for a detailed week grid.
+
+**Saving plans:** After your human-readable plan, you MUST append a fenced JSON block so Magnus can save it:
+
+\`\`\`json
+{"entries":[{"local_date":"YYYY-MM-DD","meal_slot":"breakfast|lunch|dinner|snack","title":"Short meal name","description":"optional note"}]}
+\`\`\`
+
+Use the anchor date and timezone provided. Include one entry per planned slot. Dates must be YYYY-MM-DD.`;
 
 /** True when the user is asking for structured meal planning (vs generic nutrition chat or meal logging). */
 const MEAL_PLANNER_PATTERN =
@@ -53,12 +68,21 @@ function optionalProfileBlock(ctx: AgentContext): string {
   return `\n\n${parts.join("\n")}`;
 }
 
+function planAnchorBlock(ctx: AgentContext): string {
+  const today = localDateKey(new Date(), ctx.timezone);
+  const weekEnd = offsetDateKey(today, 6);
+  const tz = timezoneAbbrev(ctx.timezone);
+  return `\n\nPlan anchor: today is **${today}** (${tz}). For a week plan use ${today} through ${weekEnd}.`;
+}
+
 /**
  * Returns a meal-planning reply when the message asks for day/week meal ideas; otherwise `null`.
- * Explicit meal-log syntax (`/meal`, `meal:`, etc.) yields `null` so the logging pipeline can own those turns.
  */
 export async function tryMealPlannerAgent(ctx: AgentContext): Promise<AgentResult | null> {
   if (isMealCommand(ctx.rawMessage)) {
+    return null;
+  }
+  if (matchesMealPlanReadMessage(ctx.rawMessage)) {
     return null;
   }
   if (!matchesMealPlannerMessage(ctx.rawMessage)) {
@@ -67,20 +91,60 @@ export async function tryMealPlannerAgent(ctx: AgentContext): Promise<AgentResul
 
   const prefs = ctx.healthPreferences?.trim() ? `\n\nHealth preferences (onboarding): ${ctx.healthPreferences.trim()}` : "";
   const profileBlock = optionalProfileBlock(ctx);
+  const anchor = planAnchorBlock(ctx);
   const msg = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
-    max_tokens: 1024,
+    max_tokens: 1536,
     system: `${buildSpecialistIdentity(ctx)}\n\n${MEAL_PLANNER_SYSTEM}`,
-    messages: buildAgentMessages(ctx, `${ctx.rawMessage}${prefs}${profileBlock}`),
+    messages: buildAgentMessages(ctx, `${ctx.rawMessage}${prefs}${profileBlock}${anchor}`),
   });
-  const text = textFromMessage(msg).trim() || "…";
+  const llmText = textFromMessage(msg).trim() || "…";
+  const displayText = stripMealPlanJsonBlock(llmText) || llmText;
+  const entries = extractMealPlanJson(llmText);
+
+  if (!entries?.length) {
+    return {
+      text: `${displayText}\n\n_(Plan not saved — JSON block missing. Ask again or say "show my meal plan" after a successful save.)_`,
+      metadata: {
+        specialist: "MealPlanner",
+        department: "nutrition",
+        pillar: "health",
+        sub_kind: "meal_plan",
+        meal_plan_saved: false,
+      },
+    };
+  }
+
+  const saved = await savePlanEntries(ctx.userProfileId, entries, "chat");
+  if (!saved.ok) {
+    return {
+      text: `${displayText}\n\n_(Could not save plan: ${saved.error})_`,
+      metadata: {
+        specialist: "MealPlanner",
+        department: "nutrition",
+        pillar: "health",
+        sub_kind: "meal_plan",
+        meal_plan_saved: false,
+        error: saved.error,
+      },
+    };
+  }
+
+  const dateRange =
+    saved.dates.length === 1
+      ? saved.dates[0]
+      : `${saved.dates[0]} → ${saved.dates[saved.dates.length - 1]}`;
+
   return {
-    text,
+    text: `${displayText}\n\n**Saved ${saved.savedCount} meal(s)** for ${dateRange}. Say "show my meal plan" anytime.`,
     metadata: {
       specialist: "MealPlanner",
       department: "nutrition",
       pillar: "health",
       sub_kind: "meal_plan",
+      meal_plan_saved: true,
+      saved_count: saved.savedCount,
+      plan_dates: saved.dates,
     },
   };
 }

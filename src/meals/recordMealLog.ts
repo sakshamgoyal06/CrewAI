@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { logger } from "../logger.js";
 import { localDateKey } from "../nutrition/localDate.js";
+import { linkPlanEntryOnLog } from "../nutrition/store/mealPlanStore.js";
 import { recomputeDailyRollup } from "../nutrition/store/mealRollupStore.js";
 import { supabase } from "../tools/clients.js";
 import { buildMealComponentsFromEstimate, type MealComponentForRow } from "./mealComponents.js";
@@ -27,6 +28,11 @@ export type RecordMealSessionResult =
       loggedAt: string;
       date: string;
       components: MealComponentForRow[];
+      planLink?: {
+        linked: boolean;
+        planTitle?: string;
+        matched: boolean;
+      };
     }
   | { ok: false; error: string };
 
@@ -124,6 +130,14 @@ export async function recordMealSession(input: RecordMealSessionInput): Promise<
 
   await recomputeDailyRollup(input.userProfileId, localDate);
 
+  const planLink = await linkPlanEntryOnLog({
+    userProfileId: input.userProfileId,
+    localDate,
+    mealSlot,
+    mealSessionId,
+    rawMealText: input.rawText,
+  });
+
   return {
     ok: true,
     mealSessionId,
@@ -131,6 +145,7 @@ export async function recordMealSession(input: RecordMealSessionInput): Promise<
     loggedAt,
     date: localDate,
     components,
+    planLink,
   };
 }
 

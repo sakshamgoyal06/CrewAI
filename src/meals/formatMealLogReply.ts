@@ -59,6 +59,7 @@ export function formatMealLogReply(input: {
   loggedDate: string;
   timezoneLabel: string;
   mealSlot?: MealSlot;
+  planLink?: { linked: boolean; planTitle?: string; matched: boolean };
   rawText: string;
   estimate: MealNutritionEstimate;
   components: MealComponentForRow[];
@@ -112,6 +113,15 @@ export function formatMealLogReply(input: {
       "",
       "_Set daily targets in Health onboarding or say e.g. \"set my protein target to 140g\" to see 🟢/🔴._",
     );
+  }
+
+  if (input.planLink?.linked) {
+    const title = input.planLink.planTitle ?? "planned meal";
+    if (input.planLink.matched) {
+      lines.push("", `**Plan:** matched ${title} ✓`);
+    } else {
+      lines.push("", `**Plan:** logged (planned: ${title})`);
+    }
   }
 
   lines.push("", `Source: ${input.estimate.source}`);

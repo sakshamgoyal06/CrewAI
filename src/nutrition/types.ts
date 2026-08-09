@@ -4,6 +4,20 @@ export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack" | "unspecified
 /** Kind of nutrition log entry. */
 export type MealLogKind = "meal" | "snack" | "drink" | "supplement" | "correction";
 
+export type MealPlanStatus = "planned" | "logged" | "skipped" | "swapped" | "partial";
+
+export type MealPlanEntryRow = {
+  id: string;
+  userProfileId: string;
+  localDate: string;
+  mealSlot: Exclude<MealSlot, "unspecified">;
+  title: string;
+  description: string | null;
+  status: MealPlanStatus;
+  linkedMealSessionId: string | null;
+  source: string;
+};
+
 export type MealDailyRollup = {
   userProfileId: string;
   localDate: string;

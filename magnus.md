@@ -112,12 +112,12 @@ shell or `.env`.
 | `src/youtube/` | Bookmarks, cue queue, and Magnus playlist state in Supabase |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
-| `src/agents/health/healthRouter.ts` | Health composite: meal log → history → targets → journal → Hevy write → fitness → nutrition |
+| `src/agents/health/healthRouter.ts` | Health composite: meal log → history → targets → journal → plan read → plan write → … |
 | `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
 | `src/agents/memory/` | `loadMemoryContext`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
 | `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
 | `src/meals/` | Meal parsing, estimate chain (web search → USDA → CalorieNinjas → optional LLM), `meal_logs` writes |
-| `src/nutrition/` | Local-date helpers, macro target parsing, `meal_daily_rollups`, meal history + target stores |
+| `src/nutrition/` | Local-date helpers, macro target parsing, `meal_daily_rollups`, meal history/target/plan stores |
 | `src/pillars/health/workouts/` | Hevy client, fitness agent, Hevy write agent |
 | `src/pillars/health/references/` | Reads committed program memory + Telegram journals |
 | `src/jobs/` | Morning Brief: prompt, context, cron (legacy re-export), timezone window. Optional. |
@@ -202,7 +202,7 @@ shell or `.env`.
 
 ## Database
 
-**Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`, `meal_daily_rollups`,
+**Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`,
 `user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries` (Phases 2–3:
 rolling summary + semantic facts), `magnus_youtube_bookmarks`, `magnus_youtube_cues`,
 `magnus_youtube_state` (includes `playlist_aliases` JSONB for pillar playlist ids).
@@ -214,7 +214,7 @@ rolling summary + semantic facts), `magnus_youtube_bookmarks`, `magnus_youtube_c
 Public tables use RLS with a `service_role_only` policy; the service role key bypasses it. The new
 Supabase `sb_secret_…` key format works as service role.
 
-`supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`, `meal_daily_rollups`,
+`supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`,
 `magnus_events`, `magnus_proactive_subscriptions`, `memory_summaries`, `magnus_youtube_*` (incl. `playlist_aliases`), and `magnus_chat_messages` type columns;
 older schema was applied directly to the project before those migrations existed.
 
@@ -296,4 +296,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (nutrition phase 0/1: local dates, rollups, history, targets)
+**Last updated:** 2026-08-09 (nutrition phase 2: persisted meal plans, plan-log linking)

@@ -7,6 +7,7 @@ import {
   formatHealthPreferencesForPrompt,
 } from "./healthOnboarding.js";
 import { tryMealPlannerAgent } from "./mealPlannerAgent.js";
+import { tryMealPlanReadAgent } from "./mealPlanReadAgent.js";
 import { tryMealHistoryAgent } from "./mealHistoryAgent.js";
 import { tryMealTargetAgent } from "./mealTargetAgent.js";
 import { tryLongTermHealthPlanningAgent } from "./longTermHealthPlanningAgent.js";
@@ -35,6 +36,7 @@ function withRouterMeta(
     | "meal_log"
     | "meal_history"
     | "meal_targets"
+    | "meal_plan_read"
     | "meal_plan"
     | "journal"
     | "long_term_health_planning"
@@ -92,6 +94,11 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
   const hevyWrite = await tryHevyWriteAgent(ctxWithPrefs);
   if (hevyWrite) {
     return withRouterMeta(hevyWrite, "hevy_write");
+  }
+
+  const mealPlanRead = await tryMealPlanReadAgent(ctxWithPrefs);
+  if (mealPlanRead) {
+    return withRouterMeta(mealPlanRead, "meal_plan_read");
   }
 
   const mealPlan = await tryMealPlannerAgent(ctxWithPrefs);
