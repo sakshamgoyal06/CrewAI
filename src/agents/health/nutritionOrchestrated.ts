@@ -6,6 +6,7 @@ import { completeMealLogFromPipeline, completeMealLogWithEstimate } from "../../
 import { estimateMealNutrition } from "../../meals/estimateMealNutrition.js";
 import { anthropic } from "../../tools/clients.js";
 import type { AgentContext, AgentResult } from "../types.js";
+import type { MealLogKind, MealSlot } from "../../meals/parseMealLogCommand.js";
 import { buildAgentMessages } from "../memory/memoryAgent.js";
 import {
   buildAggregateMealEstimate,
@@ -68,6 +69,7 @@ export async function runOrchestratedMealLogTurn(
   ctx: AgentContext,
   rawMealText: string,
   fullUserMessage: string,
+  options?: { mealSlot?: MealSlot; logKind?: MealLogKind },
 ): Promise<AgentResult> {
   try {
     const parsed = await extractMealComponentsFromMessage({
@@ -103,6 +105,9 @@ export async function runOrchestratedMealLogTurn(
       userProfileId: ctx.userProfileId,
       rawMealText,
       estimate: aggregate,
+      timezone: ctx.timezone,
+      mealSlot: options?.mealSlot,
+      logKind: options?.logKind,
     });
 
     if (!done.ok) {

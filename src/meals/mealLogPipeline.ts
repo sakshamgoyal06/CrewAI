@@ -1,7 +1,9 @@
+import { timezoneAbbrev } from "../nutrition/localDate.js";
 import { estimateMealNutrition } from "./estimateMealNutrition.js";
 import { formatMealLogReply, targetIndicators } from "./formatMealLogReply.js";
 import { loadDailyTargets, sumMealLogsForDay } from "./mealDaySummary.js";
 import type { MealComponentForRow } from "./mealComponents.js";
+import type { MealLogKind, MealSlot } from "./parseMealLogCommand.js";
 import { recordMealSession } from "./recordMealLog.js";
 import type { MealNutritionEstimate } from "./types.js";
 
@@ -40,6 +42,9 @@ export async function completeMealLogWithEstimate(input: {
   userProfileId: string;
   rawMealText: string;
   estimate: MealNutritionEstimate;
+  timezone?: string | null;
+  mealSlot?: MealSlot;
+  logKind?: MealLogKind;
 }): Promise<
   | { ok: true; reply: string; mealSessionId: string }
   | { ok: false; reply: string }
@@ -51,6 +56,9 @@ export async function completeMealLogWithEstimate(input: {
       rawText: input.rawMealText,
       estimate,
       sourceChannel: "telegram",
+      timezone: input.timezone,
+      mealSlot: input.mealSlot,
+      logKind: input.logKind,
     });
 
     if (!saved.ok) {
@@ -61,12 +69,14 @@ export async function completeMealLogWithEstimate(input: {
     const day = await sumMealLogsForDay(input.userProfileId, saved.date);
     const targets = await loadDailyTargets(input.userProfileId);
 
+    const tzLabel = timezoneAbbrev(input.timezone);
+
     if (estimate.calories === null) {
       const lines = [
         `**Meal** \`${saved.mealSessionId.slice(0, 8)}…\` — logged without calorie estimate.`,
         `Components: ${saved.components.length} row(s).`,
         "",
-        "**Today so far (UTC)**",
+        `**Today so far (${tzLabel})**`,
         `${Math.round(day.calories)} kcal · P ${day.protein_g}g · C ${day.carbs_g}g · F ${day.fat_g}g`,
       ];
       const ind = targetIndicators(day, targets);
@@ -83,6 +93,8 @@ export async function completeMealLogWithEstimate(input: {
     const reply = formatMealLogReply({
       mealSessionId: saved.mealSessionId,
       loggedDate: saved.date,
+      timezoneLabel: tzLabel,
+      mealSlot: input.mealSlot ?? "unspecified",
       rawText: input.rawMealText,
       estimate,
       components: saved.components,
@@ -106,6 +118,9 @@ export async function completeMealLogFromPipeline(input: {
   userProfileId: string;
   rawMealText: string;
   nutritionQuery: string;
+  timezone?: string | null;
+  mealSlot?: MealSlot;
+  logKind?: MealLogKind;
 }): Promise<
   | { ok: true; reply: string; mealSessionId: string }
   | { ok: false; reply: string }
@@ -116,6 +131,9 @@ export async function completeMealLogFromPipeline(input: {
       userProfileId: input.userProfileId,
       rawMealText: input.rawMealText,
       estimate,
+      timezone: input.timezone,
+      mealSlot: input.mealSlot,
+      logKind: input.logKind,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

@@ -1,9 +1,12 @@
 import { randomUUID } from "node:crypto";
 
 import { logger } from "../logger.js";
+import { localDateKey } from "../nutrition/localDate.js";
+import { recomputeDailyRollup } from "../nutrition/store/mealRollupStore.js";
 import { supabase } from "../tools/clients.js";
 import { buildMealComponentsFromEstimate, type MealComponentForRow } from "./mealComponents.js";
 import { consolidateMealNutritionEstimate } from "./mealItemConsolidate.js";
+import type { MealLogKind, MealSlot } from "./parseMealLogCommand.js";
 import type { MealNutritionEstimate } from "./types.js";
 
 export type RecordMealSessionInput = {
@@ -11,6 +14,9 @@ export type RecordMealSessionInput = {
   rawText: string;
   estimate: MealNutritionEstimate;
   sourceChannel?: "telegram" | "api" | "system";
+  timezone?: string | null;
+  mealSlot?: MealSlot;
+  logKind?: MealLogKind;
 };
 
 export type RecordMealSessionResult =
@@ -39,8 +45,8 @@ function jsonbSafe(value: unknown): unknown {
   }
 }
 
-function utcDateString(): string {
-  return new Date().toISOString().slice(0, 10);
+function legacyUtcDateString(instant: Date): string {
+  return instant.toISOString().slice(0, 10);
 }
 
 /** Legacy `meal_logs.calories` is often integer; views may depend on that type. */
@@ -56,8 +62,12 @@ function caloriesForDb(calories: number | null | undefined): number | null {
  */
 export async function recordMealSession(input: RecordMealSessionInput): Promise<RecordMealSessionResult> {
   const mealSessionId = randomUUID();
-  const loggedAt = new Date().toISOString();
-  const date = utcDateString();
+  const loggedAtInstant = new Date();
+  const loggedAt = loggedAtInstant.toISOString();
+  const localDate = localDateKey(loggedAtInstant, input.timezone);
+  const legacyDate = legacyUtcDateString(loggedAtInstant);
+  const mealSlot = input.mealSlot ?? "unspecified";
+  const logKind = input.logKind ?? (mealSlot === "snack" ? "snack" : "meal");
   const estimate = consolidateMealNutritionEstimate(input.estimate);
   const components = buildMealComponentsFromEstimate(estimate, input.rawText);
 
@@ -70,8 +80,11 @@ export async function recordMealSession(input: RecordMealSessionInput): Promise<
     };
     return {
       user_profile_id: input.userProfileId,
-      date,
-      meal_time: "unspecified",
+      date: legacyDate,
+      local_date: localDate,
+      meal_time: mealSlot === "unspecified" ? "unspecified" : mealSlot,
+      meal_slot: mealSlot,
+      log_kind: logKind,
       description: c.label.slice(0, 2000),
       raw_text: input.rawText,
       macros: jsonbSafe(macros),
@@ -109,12 +122,14 @@ export async function recordMealSession(input: RecordMealSessionInput): Promise<
     return { ok: false, error: "insert count mismatch" };
   }
 
+  await recomputeDailyRollup(input.userProfileId, localDate);
+
   return {
     ok: true,
     mealSessionId,
     rowIds,
     loggedAt,
-    date,
+    date: localDate,
     components,
   };
 }

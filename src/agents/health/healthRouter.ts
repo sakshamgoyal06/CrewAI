@@ -7,6 +7,8 @@ import {
   formatHealthPreferencesForPrompt,
 } from "./healthOnboarding.js";
 import { tryMealPlannerAgent } from "./mealPlannerAgent.js";
+import { tryMealHistoryAgent } from "./mealHistoryAgent.js";
+import { tryMealTargetAgent } from "./mealTargetAgent.js";
 import { tryLongTermHealthPlanningAgent } from "./longTermHealthPlanningAgent.js";
 import { tryAlternatesRecommenderAgent } from "./alternatesRecommenderAgent.js";
 import { tryNutritionAgent } from "./nutritionAgent.js";
@@ -30,6 +32,9 @@ export const HEALTH_GENERIC_ACK =
 function withRouterMeta(
   result: AgentResult,
   order:
+    | "meal_log"
+    | "meal_history"
+    | "meal_targets"
     | "meal_plan"
     | "journal"
     | "long_term_health_planning"
@@ -64,8 +69,19 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
       ctxWithPrefs,
       mealParsed.text,
       ctx.rawMessage,
+      { mealSlot: mealParsed.slot, logKind: mealParsed.logKind },
     );
-    return withRouterMeta(r, "nutrition");
+    return withRouterMeta(r, "meal_log");
+  }
+
+  const mealHistory = await tryMealHistoryAgent(ctxWithPrefs);
+  if (mealHistory) {
+    return withRouterMeta(mealHistory, "meal_history");
+  }
+
+  const mealTargets = await tryMealTargetAgent(ctxWithPrefs);
+  if (mealTargets) {
+    return withRouterMeta(mealTargets, "meal_targets");
   }
 
   const journal = await tryHealthJournalAgent(ctxWithPrefs);

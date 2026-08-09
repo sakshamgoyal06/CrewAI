@@ -36,6 +36,7 @@ describe("formatMealLogReply", () => {
     const text = formatMealLogReply({
       mealSessionId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
       loggedDate: "2026-04-12",
+      timezoneLabel: "UTC",
       rawText: "test meal",
       estimate: {
         calories: 70,
@@ -70,6 +71,7 @@ describe("formatMealLogReply", () => {
     const text = formatMealLogReply({
       mealSessionId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
       loggedDate: "2026-04-12",
+      timezoneLabel: "UTC",
       rawText: "50g rice",
       estimate: {
         calories: 100,
@@ -105,6 +107,7 @@ describe("formatMealLogReply", () => {
     const text = formatMealLogReply({
       mealSessionId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
       loggedDate: "2026-04-12",
+      timezoneLabel: "UTC",
       rawText: "bread; sauce; veg",
       estimate: {
         calories: 300,

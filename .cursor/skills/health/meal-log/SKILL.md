@@ -21,7 +21,9 @@ paths: "src/meals/**,src/agents/health/nutritionOrchestrated.ts,src/agents/healt
 
 ## Entry points
 
-- Telegram: `/meal …`, `meal: …`, `log meal: …`
+- Telegram: `/meal …`, `meal: …`, `log meal: …`, `log lunch: …`, `ate: …`, `just had: …`
+- History: "what did I eat today?", "undo last meal", "macros last 7 days"
+- Targets: Health onboarding Q5 (optional) or "set my targets: 2000 kcal, 140g protein"
 - Router: first match in `healthRouter.ts` for meal commands
 
 ## DB

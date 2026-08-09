@@ -23,20 +23,49 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Sums `meal_logs` for a user on `date` (YYYY-MM-DD, same convention as inserts). */
+/** Sums active `meal_logs` for a user on `localDate` (YYYY-MM-DD in user timezone). */
 export async function sumMealLogsForDay(
   userProfileId: string,
-  date: string,
+  localDate: string,
 ): Promise<DayNutritionTotals> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("meal_logs")
     .select("calories, protein_g, carbs_g, fat_g")
     .eq("user_profile_id", userProfileId)
-    .eq("date", date);
+    .is("deleted_at", null);
+
+  query = query.eq("local_date", localDate);
+
+  const { data, error } = await query;
+
+  if (error?.message?.includes("local_date") || error?.message?.includes("deleted_at")) {
+    const fallback = await supabase
+      .from("meal_logs")
+      .select("calories, protein_g, carbs_g, fat_g")
+      .eq("user_profile_id", userProfileId)
+      .eq("date", localDate);
+    if (fallback.error || !fallback.data?.length) {
+      return { date: localDate, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+    }
+    return sumRows(fallback.data, localDate);
+  }
 
   if (error || !data?.length) {
-    return { date, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+    return { date: localDate, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
   }
+
+  return sumRows(data, localDate);
+}
+
+function sumRows(
+  data: Array<{
+    calories: unknown;
+    protein_g: unknown;
+    carbs_g: unknown;
+    fat_g: unknown;
+  }>,
+  date: string,
+): DayNutritionTotals {
 
   let calories = 0;
   let protein_g = 0;
@@ -57,6 +86,9 @@ export async function sumMealLogsForDay(
     fat_g: Math.round(fat_g * 10) / 10,
   };
 }
+
+/** @deprecated Internal alias — prefer sumMealLogsForDay with local date. */
+export const sumMealLogsForLocalDay = sumMealLogsForDay;
 
 export async function loadDailyTargets(userProfileId: string): Promise<DailyTargets | null> {
   const { data, error } = await supabase

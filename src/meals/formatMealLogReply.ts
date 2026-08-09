@@ -1,3 +1,4 @@
+import type { MealSlot } from "./parseMealLogCommand.js";
 import type { MealNutritionEstimate } from "./types.js";
 import type { DayNutritionTotals, DailyTargets } from "./mealDaySummary.js";
 import type { MealComponentForRow } from "./mealComponents.js";
@@ -46,9 +47,18 @@ export function targetIndicators(day: DayNutritionTotals, t: DailyTargets | null
   return lines;
 }
 
+function slotLabel(slot: MealSlot): string | null {
+  if (slot === "unspecified") {
+    return null;
+  }
+  return slot.charAt(0).toUpperCase() + slot.slice(1);
+}
+
 export function formatMealLogReply(input: {
   mealSessionId: string;
   loggedDate: string;
+  timezoneLabel: string;
+  mealSlot?: MealSlot;
   rawText: string;
   estimate: MealNutritionEstimate;
   components: MealComponentForRow[];
@@ -57,11 +67,12 @@ export function formatMealLogReply(input: {
   targets: DailyTargets | null;
 }): string {
   const sid = input.mealSessionId.slice(0, 8);
-  const lines: string[] = [
-    `**Meal** \`${sid}…\` · ${input.loggedDate} (UTC day)`,
-    "",
-    "**Components**",
-  ];
+  const slot = input.mealSlot ?? "unspecified";
+  const slotPart = slotLabel(slot);
+  const header = slotPart
+    ? `**${slotPart}** \`${sid}…\` · ${input.loggedDate} (${input.timezoneLabel})`
+    : `**Meal** \`${sid}…\` · ${input.loggedDate} (${input.timezoneLabel})`;
+  const lines: string[] = [header, "", "**Components**"];
 
   if (input.components.length > 1) {
     lines.push(
@@ -89,7 +100,7 @@ export function formatMealLogReply(input: {
     "**This meal (total)**",
     `~${Math.round(input.mealTotals.calories)} kcal · P ${fmt(input.mealTotals.protein_g, "g")} · C ${fmt(input.mealTotals.carbs_g, "g")} · F ${fmt(input.mealTotals.fat_g, "g")}`,
     "",
-    "**Today so far (UTC, all logged meals)**",
+    `**Today so far (${input.timezoneLabel})**`,
     `${Math.round(input.day.calories)} kcal · P ${fmt(input.day.protein_g, "g")} · C ${fmt(input.day.carbs_g, "g")} · F ${fmt(input.day.fat_g, "g")}`,
   );
 
@@ -99,7 +110,7 @@ export function formatMealLogReply(input: {
   } else {
     lines.push(
       "",
-      "_Set daily targets on `user_health_profile` (calorie + macro columns) to see 🟢/🔴._",
+      "_Set daily targets in Health onboarding or say e.g. \"set my protein target to 140g\" to see 🟢/🔴._",
     );
   }
 
