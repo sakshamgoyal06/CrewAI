@@ -101,11 +101,25 @@ function ctx(raw: string) {
   };
 }
 
+function parserPlan(capability: string) {
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({
+          confidence: 0.95,
+          steps: [{ capability, args: {} }],
+        }),
+      },
+    ],
+  };
+}
+
 describe("routeHealthMessage", () => {
   beforeEach(() => {
     delete process.env.HEVY_API_KEY;
     delete process.env.MAGNUS_HEVY_API_KEY;
-    process.env.MAGNUS_PILLAR_STRATEGY_PARSER = "false";
+    process.env.MAGNUS_PILLAR_PLAN_COMPOSE = "false";
     sessionState.active = null;
     createMock.mockReset();
     createMock.mockResolvedValue({
@@ -113,39 +127,32 @@ describe("routeHealthMessage", () => {
     });
   });
 
-  it("routes hevy routine: to HevyWrite before Fitness when API key is unset", async () => {
+  it("routes hevy routine: to HevyWrite when parser selects hevy_write", async () => {
+    createMock.mockResolvedValueOnce(parserPlan("hevy_write"));
     const out = await routeHealthMessage(ctx("hevy routine: Push — bench press 3x10"));
-    expect(createMock).not.toHaveBeenCalled();
     expect(out.metadata).toMatchObject({
-      health_order: "hevy_write",
+      health_router: "pillar_plan",
       specialist: "HevyWrite",
       hevy_write: false,
     });
     expect(out.text).toMatch(/HEVY_API_KEY/i);
   });
 
-  it("routes meal planning asks to MealPlanner before Fitness", async () => {
+  it("routes meal planning asks to MealPlanner when parser selects meal_plan_create", async () => {
+    createMock.mockResolvedValueOnce(parserPlan("meal_plan_create"));
     const out = await routeHealthMessage(
       ctx("Plan my meals for the week — vegan, nut allergy, moderate protein."),
     );
-    expect(createMock).not.toHaveBeenCalled();
     expect(out.metadata).toMatchObject({
       specialist: "MealPlanner",
       meal_plan_step: "slots",
+      health_router: "pillar_plan",
     });
     expect(out.text).toMatch(/Which meals each day/i);
   });
 
-  it("routes cancel planning via pillar parser when strategy is on", async () => {
-    process.env.MAGNUS_PILLAR_STRATEGY_PARSER = "true";
-    createMock.mockResolvedValueOnce({
-      content: [
-        {
-          type: "text",
-          text: '{"confidence":0.95,"steps":[{"capability":"meal_plan_create","args":{}}]}',
-        },
-      ],
-    });
+  it("routes cancel planning via pillar parser", async () => {
+    createMock.mockResolvedValueOnce(parserPlan("meal_plan_create"));
     const out = await routeHealthMessage(ctx("cancel planning"));
     expect(out.text).toMatch(/cancelled/i);
     expect(out.metadata).toMatchObject({
@@ -155,8 +162,6 @@ describe("routeHealthMessage", () => {
   });
 
   it("answers draft meal plan questions during review without re-posting the draft", async () => {
-    process.env.MAGNUS_PILLAR_STRATEGY_PARSER = "true";
-    process.env.MAGNUS_PILLAR_PLAN_COMPOSE = "false";
     sessionState.active = {
       id: "sess-review",
       user_profile_id: "u1",
@@ -177,9 +182,7 @@ describe("routeHealthMessage", () => {
       updated_at: "",
       expires_at: "",
     };
-    createMock.mockResolvedValueOnce({
-      content: [{ type: "text", text: '{"confidence":0.95,"steps":[{"capability":"meal_plan_create","args":{}}]}' }],
-    });
+    createMock.mockResolvedValueOnce(parserPlan("meal_plan_create"));
     createMock.mockResolvedValueOnce({
       content: [{ type: "text", text: "Paneer at dinner hits protein well — fish would work if you prefer variety." }],
     });
@@ -194,50 +197,53 @@ describe("routeHealthMessage", () => {
     expect(out.text).not.toMatch(/\*\*Mon 9 Aug\*\*/);
   });
 
-  it("routes food swap asks to Alternates after Fitness declines", async () => {
+  it("routes food swap asks to Alternates when parser selects alternates", async () => {
+    createMock.mockResolvedValueOnce(parserPlan("alternates"));
     const out = await routeHealthMessage(
       ctx("What's a good vegan alternative to butter for baking?"),
     );
     expect(createMock).toHaveBeenCalledTimes(2);
-    expect(createMock.mock.calls[0]![0]).toMatchObject({
-      system: expect.not.stringContaining("Alternates Recommender"),
-    });
     expect(createMock.mock.calls[1]![0].system).toEqual(
       expect.stringContaining(ALTERNATES_RECOMMENDER_SYSTEM.slice(0, 40)),
     );
     expect(out.metadata).toMatchObject({
-      health_order: "nutrition",
+      health_order: "alternates",
       specialist: "AlternatesRecommender",
+      health_router: "pillar_plan",
     });
   });
 
-  it("routes long-horizon training planning before Fitness", async () => {
+  it("routes long-horizon training planning when parser selects long_term_planning", async () => {
+    createMock.mockResolvedValueOnce(parserPlan("long_term_planning"));
     const out = await routeHealthMessage(
       ctx("16-week base phase before my spring half — how to sequence volume?"),
     );
-    expect(createMock).toHaveBeenCalledTimes(1);
-    expect(String(createMock.mock.calls[0]![0].system)).toContain(
+    expect(createMock).toHaveBeenCalledTimes(2);
+    expect(String(createMock.mock.calls[1]![0].system)).toContain(
       LONG_TERM_HEALTH_PLANNING_SYSTEM.slice(0, 40),
     );
     expect(out.metadata).toMatchObject({
-      health_order: "long_term_health_planning",
+      health_order: "long_term_planning",
       specialist: "LongTermHealthPlanning",
       department: "long_term_health_planning",
       pillar: "health",
+      health_router: "pillar_plan",
     });
   });
 
-  it("prefers Fitness when both fitness and nutrition keywords appear", async () => {
+  it("prefers Fitness when parser selects fitness", async () => {
+    createMock.mockResolvedValueOnce(parserPlan("fitness"));
     await routeHealthMessage(
       ctx("Gym leg day then high protein meal — how to balance?"),
     );
-    expect(createMock).toHaveBeenCalledTimes(1);
-    expect(createMock.mock.calls[0][0]).toMatchObject({
+    expect(createMock).toHaveBeenCalledTimes(2);
+    expect(createMock.mock.calls[1]![0]).toMatchObject({
       system: expect.stringContaining(FITNESS_SYSTEM.slice(0, 40)),
     });
   });
 
-  it("routes to Nutrition when not fitness-owned but nutrition keywords match", async () => {
+  it("routes to Nutrition when parser selects nutrition_advice", async () => {
+    createMock.mockResolvedValueOnce(parserPlan("nutrition_advice"));
     await routeHealthMessage(
       ctx("How much protein per day on a cut? I'm allergic to dairy."),
     );
@@ -251,17 +257,20 @@ describe("routeHealthMessage", () => {
     });
   });
 
-  it("routes to Energy last when sleep/HRV/focus language matches after Fitness and Nutrition decline", async () => {
+  it("routes to Energy when parser selects energy", async () => {
+    createMock.mockResolvedValueOnce(parserPlan("energy"));
     await routeHealthMessage(ctx("HRV is low and I'm wiped — recovery tips?"));
     expect(createMock).toHaveBeenCalledTimes(2);
-    expect(createMock.mock.calls[1][0]).toMatchObject({
+    expect(createMock.mock.calls[1]![0]).toMatchObject({
       system: expect.stringContaining(ENERGY_SYSTEM.slice(0, 40)),
     });
   });
 
-  it("calls the sub-classifier then returns generic acknowledgement when no specialist matches", async () => {
+  it("returns generic acknowledgement when parser selects generic_ack", async () => {
+    createMock.mockResolvedValueOnce(parserPlan("generic_ack"));
     const out = await routeHealthMessage(ctx("health check"));
     expect(createMock).toHaveBeenCalledTimes(1);
     expect(out.metadata?.genericAck).toBe(true);
+    expect(out.metadata?.health_router).toBe("pillar_plan");
   });
 });

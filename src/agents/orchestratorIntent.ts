@@ -1,19 +1,16 @@
 /**
- * Silent intent classification. The user always talks to Magnus; this decides whether a pillar
- * specialist writes the answer or Magnus handles it himself.
+ * Silent intent classification. The user always talks to Magnus; this decides which pillar
+ * executes the turn. Hints carry structural signals; the classifier interprets them.
  */
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { parseIntent, type Intent } from "../intent.js";
 import { anthropic } from "../tools/clients.js";
-import { parseMealLogCommand } from "../meals/parseMealLogCommand.js";
-import { looksLikeYoutubeAction } from "./tools/youtubeActionDetect.js";
-import { looksLikeMagnusToolAction } from "./tools/magnusActionDetect.js";
 import {
-  looksLikeMagnusToolContinuation,
-  type RoutingChatTurn,
-} from "./routing/magnusToolContinuation.js";
-import { looksLikeHealthFitnessIntent, looksLikeWealthPortfolioIntent } from "./routing/pillarConsultationSignals.js";
+  buildIntentRoutingHints,
+  type IntentRoutingHints,
+} from "./routing/intentRoutingHints.js";
+import type { RoutingChatTurn } from "./routing/magnusToolContinuation.js";
 
 const MODEL = "claude-sonnet-4-6";
 
@@ -39,6 +36,12 @@ HEALTH does **not** own holistic day/schedule overviews ("what does tomorrow loo
 day", "what's on my calendar tomorrow") — those are GENERAL even if food or meals could be part of
 the answer.
 
+Use routing_hints when present:
+- explicit_meal_log → HEALTH
+- looks_like_youtube_action or looks_like_magnus_tool_action or looks_like_magnus_tool_continuation → GENERAL (Magnus has tools)
+- looks_like_wealth_portfolio_read → WEALTH when asking to read/show portfolio (not a Magnus list action)
+- looks_like_health_fitness_read → HEALTH when asking to read/review workouts or Hevy (not a Magnus tool action)
+
 When a message could fit two categories, choose the one the user is asking you to act on.
 Reply with only the category name.`;
 
@@ -51,65 +54,36 @@ function textFromMessage(msg: Message): string {
   return "";
 }
 
-async function classifyIntent(userMessage: string): Promise<Intent> {
+async function classifyIntent(
+  userMessage: string,
+  hints: IntentRoutingHints,
+): Promise<Intent> {
   const msg = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 16,
     system: CLASSIFY_SYSTEM,
-    messages: [{ role: "user", content: userMessage }],
+    messages: [
+      {
+        role: "user",
+        content: JSON.stringify({ message: userMessage.trim(), routing_hints: hints }, null, 2),
+      },
+    ],
   });
   return parseIntent(textFromMessage(msg));
 }
 
 /**
- * Classify, then apply deterministic corrections worth having:
- * - explicit meal log → HEALTH (even when the classifier reads it as small talk about food)
- * - YouTube / YT Music actions → GENERAL (Magnus has the tools; Happiness does not)
- * - list / LifeOS / Notion tool actions → GENERAL (pillar specialists are prompt-only)
- * - short continuations after a YouTube tool turn → GENERAL (pillar specialists have no tools)
+ * Classify with structural hints. Only hard override: explicit meal-log command format → HEALTH.
  */
 export async function resolveIntentNaturalLanguage(
   userMessage: string,
   options?: { recentTurns?: RoutingChatTurn[] },
 ): Promise<Intent> {
-  const intent = await classifyIntent(userMessage);
+  const hints = buildIntentRoutingHints(userMessage, options?.recentTurns ?? []);
 
-  if (intent !== "HEALTH" && parseMealLogCommand(userMessage).kind === "meal") {
+  if (hints.explicit_meal_log) {
     return "HEALTH";
   }
 
-  // Portfolio / Kite reads → Wealth specialist (before fitness pull/hevy coercion).
-  if (
-    intent !== "WEALTH" &&
-    looksLikeWealthPortfolioIntent(userMessage) &&
-    !looksLikeMagnusToolAction(userMessage)
-  ) {
-    return "WEALTH";
-  }
-
-  // Fitness / Hevy reads → Health specialist (has Hevy context). Combined check-in+log stays GENERAL + consultation.
-  if (
-    intent !== "HEALTH" &&
-    looksLikeHealthFitnessIntent(userMessage) &&
-    !looksLikeMagnusToolAction(userMessage)
-  ) {
-    return "HEALTH";
-  }
-
-  if (intent !== "GENERAL" && looksLikeYoutubeAction(userMessage)) {
-    return "GENERAL";
-  }
-
-  if (intent !== "GENERAL" && looksLikeMagnusToolAction(userMessage)) {
-    return "GENERAL";
-  }
-
-  if (
-    intent !== "GENERAL" &&
-    looksLikeMagnusToolContinuation(userMessage, options?.recentTurns ?? [])
-  ) {
-    return "GENERAL";
-  }
-
-  return intent;
+  return classifyIntent(userMessage, hints);
 }

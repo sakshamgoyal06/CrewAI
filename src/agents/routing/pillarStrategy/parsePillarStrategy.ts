@@ -194,11 +194,8 @@ export async function parsePillarExecutionPlan(
 /** @deprecated Use parsePillarExecutionPlan */
 export const parsePillarStrategy = parsePillarExecutionPlan;
 
+/** @deprecated Legacy env toggle removed — pillar strategy parser is always on. */
 export function pillarStrategyEnabled(): boolean {
-  const raw = process.env.MAGNUS_PILLAR_STRATEGY_PARSER?.trim().toLowerCase();
-  if (raw === "false" || raw === "0") {
-    return false;
-  }
   return true;
 }
 

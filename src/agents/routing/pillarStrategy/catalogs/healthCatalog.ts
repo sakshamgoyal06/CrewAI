@@ -4,6 +4,17 @@ export const HEALTH_CAPABILITY_CATALOG: CapabilityCatalog = {
   pillar: "HEALTH",
   capabilities: [
     {
+      id: "meal_log",
+      summary: "Log food via explicit meal command (meal:, log meal:, ate:, etc.)",
+      disambiguation:
+        "Deterministic gate before parser when format matches. NOT free-form food chat — use nutrition_advice.",
+    },
+    {
+      id: "meal_log_photo",
+      summary: "Log food from a Telegram meal photo attachment",
+      disambiguation: "Deterministic gate when mealPhoto.fileId is present.",
+    },
+    {
       id: "meal_log_correct",
       summary: "Correct or revise the most recent meal log (follow-up after logging)",
       disambiguation:

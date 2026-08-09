@@ -72,13 +72,7 @@ function optionalProfileBlock(ctx: AgentContext): string {
   return `\n\n${parts.join("\n")}`;
 }
 
-export async function tryLongTermHealthPlanningAgent(
-  ctx: AgentContext,
-): Promise<AgentResult | null> {
-  if (!matchesLongTermHealthPlanningMessage(ctx.rawMessage)) {
-    return null;
-  }
-
+export async function runLongTermHealthPlanningAgent(ctx: AgentContext): Promise<AgentResult> {
   const prefs = ctx.healthPreferences?.trim()
     ? `\n\nHealth preferences (onboarding): ${ctx.healthPreferences.trim()}`
     : "";
@@ -98,4 +92,14 @@ export async function tryLongTermHealthPlanningAgent(
       pillar: "health",
     },
   };
+}
+
+export async function tryLongTermHealthPlanningAgent(
+  ctx: AgentContext,
+): Promise<AgentResult | null> {
+  if (!matchesLongTermHealthPlanningMessage(ctx.rawMessage)) {
+    return null;
+  }
+
+  return runLongTermHealthPlanningAgent(ctx);
 }

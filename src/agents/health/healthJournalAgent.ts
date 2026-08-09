@@ -68,13 +68,7 @@ function textFromMessage(msg: Message): string {
   return "";
 }
 
-export async function tryHealthJournalAgent(
-  ctx: AgentContext,
-): Promise<AgentResult | null> {
-  if (!matchesHealthJournalMessage(ctx.rawMessage, ctx.slashCommandKey)) {
-    return null;
-  }
-
+export async function runHealthJournalAgent(ctx: AgentContext): Promise<AgentResult> {
   const payload =
     ctx.slashCommandKey === "journal"
       ? ctx.rawMessage.trim() || "today — summarize my day from what I shared."
@@ -129,4 +123,14 @@ export async function tryHealthJournalAgent(
       health_order: "journal",
     },
   };
+}
+
+export async function tryHealthJournalAgent(
+  ctx: AgentContext,
+): Promise<AgentResult | null> {
+  if (!matchesHealthJournalMessage(ctx.rawMessage, ctx.slashCommandKey)) {
+    return null;
+  }
+
+  return runHealthJournalAgent(ctx);
 }

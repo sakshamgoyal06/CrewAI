@@ -148,11 +148,7 @@ describe("parsePillarExecutionPlan", () => {
     expect(String(createMock.mock.calls[0]![0].system)).toContain("meal_plan_read");
   });
 
-  it("pillarStrategyEnabled defaults true unless env disables", () => {
-    delete process.env.MAGNUS_PILLAR_STRATEGY_PARSER;
+  it("pillarStrategyEnabled is always true", () => {
     expect(pillarStrategyEnabled()).toBe(true);
-    process.env.MAGNUS_PILLAR_STRATEGY_PARSER = "false";
-    expect(pillarStrategyEnabled()).toBe(false);
-    delete process.env.MAGNUS_PILLAR_STRATEGY_PARSER;
   });
 });

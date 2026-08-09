@@ -37,10 +37,7 @@ function textFromMessage(msg: Message): string {
   return "";
 }
 
-export async function tryEnergyAgent(ctx: AgentContext): Promise<AgentResult | null> {
-  if (!matchesEnergyMessage(ctx.rawMessage)) {
-    return null;
-  }
+export async function runEnergyAgent(ctx: AgentContext): Promise<AgentResult> {
   const msg = await anthropic.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 512,
@@ -58,4 +55,11 @@ export async function tryEnergyAgent(ctx: AgentContext): Promise<AgentResult | n
     text,
     metadata: { specialist: "Energy", department: "HEALTH" },
   };
+}
+
+export async function tryEnergyAgent(ctx: AgentContext): Promise<AgentResult | null> {
+  if (!matchesEnergyMessage(ctx.rawMessage)) {
+    return null;
+  }
+  return runEnergyAgent(ctx);
 }
