@@ -3,7 +3,7 @@
 **Purpose:** Single **target structure** for how every user query should flow: **one orchestrator**, then **one pillar**, then **one department**, then **specialist agents**. Use this when adding routes, prompts, or tools.  
 **Companion docs:** `MAGNUS_CORE_CONTEXT.md` (philosophy, four pillars), `docs/AGENT_ROSTER.md` (prompts & behaviour), `magnus.md` (runtime & DB).
 
-**Last updated:** 2026-04-12
+**Last updated:** 2026-08-09
 
 ---
 

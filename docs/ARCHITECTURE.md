@@ -83,8 +83,9 @@ Onboarding gates the pillar: until `user_health_profile.onboarding_completed_at`
 health turn continues the four-question flow, so advice starts from real constraints. Meal logging
 bypasses the gate — logging food should never be blocked.
 
-Program memory comes from `.cursor/skills/health/references/` (committed, bundled into the Docker
-image) plus journals in `magnus_daily_logs`.
+Program memory comes from `user_program_memory` in Supabase (seeded via
+`scripts/provision-owner-user.mts` from `scripts/seed-data/owner-health-program/`) plus journals in
+`magnus_daily_logs`. `.cursor/skills/health/references/` holds templates only — not runtime source.
 
 ## 5. Runtime modules
 

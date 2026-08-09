@@ -11,10 +11,12 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/product/TRD.md`** | Technical requirements — stack, interfaces, security, deploy |
 | **`docs/product/ARD.md`** | Architecture decisions (ADRs), principles, evolution |
 | **`docs/diagrams/ARCHITECTURE_DIAGRAMS.md`** | Mermaid diagrams: context, sequence, routing, deployment |
+| **`docs/TOOLS_AND_AGENTS.md`** | Repo diagram: agents, tools, proactive jobs, integrations |
+| **`docs/USER_QUERY_GUIDE.md`** | What users can ask → routing path and expected output |
 | **`docs/DATABASE_SCHEMA.md`** | Full Postgres + Redis schema, ERD, migration index |
 | **`docs/review/IMPARTIAL_REVIEW_2026-08-04.md`** | Third-party code review, grades, cleanup plan |
 | **`docs/review/REGRADE_2026-08-04.md`** | Post-security cleanup re-grade (B+ 84/100) |
-| **`docs/review/REGRADE_LIFEOS_2026-08-04.md`** | Post-LifeOS re-grade (A- 87/100) |
+| **`docs/review/AUDIT_2026-08-09.md`** | Full-repo audit: security, coherence, test results |
 | **`docs/ARCHITECTURE.md`** | What the system is: Magnus, four pillars, connections, ownership |
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
 | **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
@@ -320,4 +322,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (roadmap complete: parser-only routing, intent hints, meal log compose)
+**Last updated:** 2026-08-09 (repo audit: capability tests, TOOLS_AND_AGENTS, USER_QUERY_GUIDE)
