@@ -84,6 +84,8 @@ describe("manageProactiveMessages", () => {
   });
 
   it("creates custom reminder", async () => {
+    const futureAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
     vi.mocked(createCustomReminder).mockResolvedValue({
       ok: true,
       data: {
@@ -92,14 +94,14 @@ describe("manageProactiveMessages", () => {
         kind: "custom_reminder",
         enabled: true,
         triggerType: "one_shot",
-        schedule: { type: "one_shot", at: "2026-08-07T20:00:00.000Z" },
+        schedule: { type: "one_shot", at: futureAt },
         config: { message: "Call mom" },
         userInstruction: "Call mom",
         source: "user_chat",
         capBucket: "user_asked",
         cooldownHours: null,
         lastSentAt: null,
-        nextFireAt: "2026-08-07T20:00:00.000Z",
+        nextFireAt: futureAt,
         createdAt: "",
         updatedAt: "",
       },
@@ -110,7 +112,7 @@ describe("manageProactiveMessages", () => {
       timezone: "Asia/Kolkata",
       action: "create_reminder",
       message: "Call mom",
-      at: "2026-08-07T20:00:00",
+      at: futureAt.slice(0, 19),
     });
     expect(out).toContain("Reminder set");
     expect(createCustomReminder).toHaveBeenCalled();
