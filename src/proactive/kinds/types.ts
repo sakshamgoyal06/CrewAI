@@ -49,4 +49,5 @@ export type ProactiveMessageKind =
   | "meal_log_reminder"
   | "meal_adherence_nudge"
   | "meal_eod_reconciliation"
-  | "meal_gap_nudge";
+  | "meal_gap_nudge"
+  | "weekly_nutrition_review";

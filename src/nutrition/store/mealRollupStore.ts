@@ -5,6 +5,11 @@ import { logger } from "../../logger.js";
 import { loadDailyTargets } from "../../meals/mealDaySummary.js";
 import { supabase } from "../../tools/clients.js";
 import { loggableError } from "../../util/loggableError.js";
+import {
+  detectMealAnomalies,
+  offsetDateKey,
+  type RollupHistoryRow,
+} from "../analytics/anomalyDetector.js";
 import type { MealSlot } from "../types.js";
 import { fetchPlanAdherenceForDate } from "./mealPlanStore.js";
 
@@ -26,7 +31,43 @@ function isMealSlot(v: unknown): v is MealSlot {
   );
 }
 
+function parseFlags(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.filter((f): f is string => typeof f === "string");
+  }
+  return [];
+}
+
 export type RecomputeRollupResult = { ok: true } | { ok: false; error: string };
+
+async function fetchRecentRollups(
+  userProfileId: string,
+  endDate: string,
+  days: number,
+): Promise<RollupHistoryRow[]> {
+  const fromDate = offsetDateKey(endDate, -(days - 1));
+  const { data, error } = await supabase
+    .from("meal_daily_rollups")
+    .select("local_date, calories, protein_g, meal_count, snack_count, slots_missed, flags")
+    .eq("user_profile_id", userProfileId)
+    .gte("local_date", fromDate)
+    .lte("local_date", endDate)
+    .order("local_date", { ascending: true });
+
+  if (error) {
+    return [];
+  }
+
+  return (data ?? []).map((row) => ({
+    localDate: row.local_date as string,
+    calories: num(row.calories),
+    protein_g: num(row.protein_g),
+    mealCount: num(row.meal_count),
+    snackCount: num(row.snack_count),
+    slotsMissed: Array.isArray(row.slots_missed) ? (row.slots_missed as string[]) : [],
+    flags: parseFlags(row.flags),
+  }));
+}
 
 /**
  * Re-aggregate `meal_logs` for one user local date and upsert `meal_daily_rollups`.
@@ -38,7 +79,7 @@ export async function recomputeDailyRollup(
 ): Promise<RecomputeRollupResult> {
   const { data: rows, error: selectError } = await supabase
     .from("meal_logs")
-    .select("calories, protein_g, carbs_g, fat_g, meal_slot, log_kind")
+    .select("calories, protein_g, carbs_g, fat_g, meal_slot, log_kind, estimate_source")
     .eq("user_profile_id", userProfileId)
     .eq("local_date", localDate)
     .is("deleted_at", null);
@@ -63,6 +104,7 @@ export async function recomputeDailyRollup(
   let fat_g = 0;
   let mealCount = 0;
   let snackCount = 0;
+  let hasUnavailableEstimate = false;
   const slotsLogged = new Set<MealSlot>();
 
   for (const row of rows ?? []) {
@@ -70,6 +112,11 @@ export async function recomputeDailyRollup(
     protein_g += num(row.protein_g);
     carbs_g += num(row.carbs_g);
     fat_g += num(row.fat_g);
+
+    const source = row.estimate_source as string | null | undefined;
+    if (source === "unavailable" || (source == null && num(row.calories) === 0)) {
+      hasUnavailableEstimate = true;
+    }
 
     const kind = row.log_kind as string | undefined;
     if (kind === "snack") {
@@ -86,16 +133,23 @@ export async function recomputeDailyRollup(
 
   const targets = await loadDailyTargets(userProfileId);
   const planStats = await fetchPlanAdherenceForDate(userProfileId, localDate);
-  const flags: string[] = [];
-  if (targets?.daily_protein_g_target && protein_g < targets.daily_protein_g_target * 0.7) {
-    flags.push("protein_low");
-  }
-  if (targets?.daily_calorie_target && calories > targets.daily_calorie_target * 1.3) {
-    flags.push("calorie_spike");
-  }
-  if (planStats.adherenceScore !== null && planStats.adherenceScore < 0.5 && planStats.slotsPlanned.length >= 2) {
-    flags.push("plan_drift");
-  }
+  const recentRollups = await fetchRecentRollups(userProfileId, localDate, 14);
+
+  const flags = detectMealAnomalies({
+    localDate,
+    calories,
+    protein_g,
+    mealCount,
+    snackCount,
+    slotsLogged: [...slotsLogged],
+    slotsMissed: planStats.slotsMissed,
+    adherenceScore: planStats.adherenceScore,
+    slotsPlannedCount: planStats.slotsPlanned.length,
+    hasUnavailableEstimate,
+    targetCalories: targets?.daily_calorie_target ?? null,
+    targetProtein_g: targets?.daily_protein_g_target ?? null,
+    recentRollups,
+  });
 
   const payload = {
     user_profile_id: userProfileId,

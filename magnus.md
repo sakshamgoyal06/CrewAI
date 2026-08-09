@@ -117,7 +117,7 @@ shell or `.env`.
 | `src/agents/memory/` | `loadMemoryContext`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
 | `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
 | `src/meals/` | Meal parsing, estimate chain (web search → USDA → CalorieNinjas → optional LLM), `meal_logs` writes |
-| `src/nutrition/` | Local-date helpers, rollups/plan stores, **planning journey** (`meal_plan_sessions`), anomaly detection |
+| `src/nutrition/` | Local-date helpers, rollups/plan stores, **planning journey** (`meal_plan_sessions`), anomaly detection, weekly review, journal context |
 | `src/pillars/health/workouts/` | Hevy client, fitness agent, Hevy write agent |
 | `src/pillars/health/references/` | Reads committed program memory + Telegram journals |
 | `src/jobs/` | Morning Brief: prompt, context, cron (legacy re-export), timezone window. Optional. |
@@ -125,6 +125,7 @@ shell or `.env`.
 | `src/events/gymHevyReconcile.ts` | After grace window: sync event log from Hevy or nudge user |
 | `src/proactive/` | Magnus-initiated Telegram: outbound HTML, dedupe, kind registry, dispatcher, subscriptions |
 | `src/proactive/jobs/gymHevyReconcileJob.ts` | Cron: gym ↔ Hevy reconciliation for connected users |
+| `src/proactive/jobs/nutritionNightlyJob.ts` | Cron: EOD rollup recompute, anomaly flags, program-memory sync |
 | `src/tools/telegram.ts` | Telegraf bot, `/start` and `/help`, rate limit, update dedupe, webhook mount |
 | `src/tools/telegramWatchdog.ts` | Liveness probe; exits so the host restarts |
 | `src/config/telegramRuntime.ts` | Polling vs webhook, public URL derivation, handler timeout |
@@ -170,8 +171,9 @@ shell or `.env`.
    **event reminders** (`remind_at` on `magnus_events`, sets `reminded_at` after send), **gym ↔ Hevy
    reconcile** (3 hours after planned gym time: if Hevy has a session that day, mark the event log
    `done` with Hevy start/end and tell the user; otherwise ask once if they missed it / want to
-   postpone), **subscription dispatcher** (`evening_journal`, `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
-   `chat_inactivity`, `custom_reminder`, `meal_log_reminder`, `meal_adherence_nudge`, `meal_eod_reconciliation`, `meal_gap_nudge` via `magnus_proactive_subscriptions` — modular kind registry in
+   postpone), **nutrition nightly** (~23:00 local: recompute rollups, anomaly flags, sync persistent
+   lapse patterns to `program_learnings`; `MAGNUS_NUTRITION_NIGHTLY_ENABLED`), **subscription dispatcher** (`evening_journal`, `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
+   `chat_inactivity`, `custom_reminder`, `meal_log_reminder`, `meal_adherence_nudge`, `meal_eod_reconciliation`, `meal_gap_nudge`, `weekly_nutrition_review` via `magnus_proactive_subscriptions` — modular kind registry in
    `src/proactive/kinds/`). User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
    catalog kinds, create one-shot or daily custom reminders (`create_reminder` /
    `create_recurring_reminder`). Relative time parsing for one-shots (`tomorrow 8pm`, `in 30 minutes`).
@@ -298,4 +300,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (meal planning journey: gather → draft → lock)
+**Last updated:** 2026-08-09 (meal planning journey + nutrition phase 4 intelligence)
