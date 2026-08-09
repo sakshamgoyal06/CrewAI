@@ -26,6 +26,7 @@ import {
 } from "./parsePlanningSlots.js";
 import {
   MEAL_PLAN_DRAFT_SYSTEM,
+  buildDraftContextFromEntries,
   buildDraftUserPrompt,
 } from "./mealPlanningPrompt.js";
 import { loadFoodListContext, syncLockedPlanToFoodList } from "./foodListEnrichment.js";
@@ -48,12 +49,31 @@ const LOCK_RE = isFullLockCommand;
 
 const SKIP_RE = /^(?:skip|nothing\s+special|no(?:thing)?\s+different|same\s+as\s+usual)\.?$/i;
 
-function isMealPlanReviewQuestion(raw: string): boolean {
+const MEAL_PLAN_REVIEW_QA_SYSTEM = `You are the Meal Planner specialist reviewing a draft plan with the user.
+
+**Your job on this turn:** Answer their question or discuss the plan — do NOT regenerate or rewrite the whole plan.
+
+Rules:
+- Reference specific days/meals from the draft when relevant.
+- For "should I / would it be better / instead of" questions: give concise, practical advice (macros, routine, preferences). Mention what the draft currently has for that slot.
+- If they seem to want a change, explain the tradeoff and say they can ask you to **update** that slot (e.g. "swap Tuesday lunch to paneer") and you will revise the draft.
+- Respect dietary restrictions and avoid lists from health preferences.
+- Keep answers under ~200 words unless they asked for detail.
+- Do not claim the plan is saved/locked unless metadata says so.`;
+
+/** User wants a concrete plan edit — not Q&A. */
+function isMealPlanExplicitRevision(raw: string): boolean {
   const t = raw.trim();
-  if (/^\s*(?:why|what|how|when|where|did you|can you explain)\b/i.test(t)) {
-    return true;
+  if (LOCK_RE(t) || CANCEL_RE.test(t) || SKIP_RE.test(t)) {
+    return false;
   }
-  return /\?\s*$/.test(t) && t.length <= 140;
+  if (/^\s*(?:why|what|how|when|where|did you|can you explain)\b/i.test(t)) {
+    return false;
+  }
+  if (/\?\s*$/.test(t) && /\b(?:should i|would it|is it ok|could i|instead of)\b/i.test(t)) {
+    return false;
+  }
+  return /\b(?:change|swap|replace|update|switch|remove|add|make it|redo|revise|fix)\b/i.test(t);
 }
 
 async function resolveAvoidFoods(
@@ -482,24 +502,37 @@ async function answerMealPlanReviewQuestion(
 ): Promise<AgentResult> {
   const healthRow = await fetchUserHealthProfile(ctx.userProfileId);
   const avoid = parseAvoidFoodsFromRestrictions(healthRow?.dietary_restrictions ?? null);
-  const lines: string[] = [];
+  const draftDisplay = session.draft_display?.trim() ?? "";
+  const entryContext = buildDraftContextFromEntries(session.draft_entries);
 
-  if (/\blauki\b/i.test(raw) && avoid.some((f) => f.includes("lauki"))) {
-    lines.push(
-      "Your health profile lists **Avoid lauki** under dietary restrictions — drafts should stay lauki-free for the **whole** plan (both weeks), not just week 1.",
-    );
-  }
-  if (/\bwhy\b/i.test(raw) && /\blauki/i.test(raw)) {
-    lines.push(
-      "Week 1 was lauki-free because of that onboarding rule, not because you asked for it in today's message.",
-    );
-  }
-  if (lines.length === 0) {
-    lines.push("Here's the current draft — tell me what to change, or say **save plan** when it looks right.");
-  }
+  const userBlock = [
+    planAnchorBlock(ctx),
+    session.horizon_start && session.horizon_end
+      ? `Plan horizon: ${session.horizon_start} → ${session.horizon_end}`
+      : "",
+    `Slots: ${formatSlotsLabel(session.slots)}`,
+    ctx.healthPreferences?.trim() ? `Health preferences:\n${ctx.healthPreferences.trim()}` : "",
+    avoid.length ? `Hard avoid: ${avoid.join(", ")}` : "",
+    draftDisplay ? `Draft (display):\n${draftDisplay.slice(0, 4000)}` : "",
+    entryContext ? `\n${entryContext}` : "",
+    `\nUser message:\n${raw.trim()}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const msg = await anthropic.messages.create({
+    model: HEALTH_SPECIALIST_MODEL,
+    max_tokens: 1024,
+    system: `${buildSpecialistIdentity(ctx)}\n\n${MEAL_PLAN_REVIEW_QA_SYSTEM}`,
+    messages: [{ role: "user", content: userBlock }],
+  });
+
+  const answer = textFromMessage(msg).trim();
+  const footer =
+    "Reply with changes to apply, or **save plan** / **lock this in** when the draft looks right.";
 
   return {
-    text: [...lines, "", reviewPrompt(session)].join("\n"),
+    text: [answer, "", footer, "", reviewPrompt(session)].join("\n"),
     metadata: flowMeta(session, { meal_plan_question: true }),
   };
 }
@@ -571,35 +604,35 @@ async function handleReviewStep(
     return lockPlanEntries(ctx, session, session.draft_entries, false);
   }
 
-  if (isMealPlanReviewQuestion(raw)) {
-    return answerMealPlanReviewQuestion(ctx, session, raw);
-  }
-
   const deterministic = await tryDeterministicAvoidRevision(ctx, session, raw);
   if (deterministic) {
     return deterministic;
   }
 
-  const draft = await generateDraft(ctx, session, raw.trim());
-  if (!draft.ok) {
+  if (isMealPlanExplicitRevision(raw)) {
+    const draft = await generateDraft(ctx, session, raw.trim());
+    if (!draft.ok) {
+      return {
+        text: `I couldn't revise the draft (${draft.error}). Try shorter feedback or say **save plan** if the current draft works.`,
+        metadata: flowMeta(session, { meal_plan_saved: false }),
+      };
+    }
+
+    const next = await persistDraft(session, draft.display, draft.entries, raw.trim());
+    if (!next.ok) {
+      return {
+        text: `Draft ready but couldn't save session: ${next.error}`,
+        metadata: flowMeta(session, { meal_plan_saved: false }),
+      };
+    }
+
     return {
-      text: `I couldn't revise the draft (${draft.error}). Try shorter feedback or say **save plan** if the current draft works.`,
-      metadata: flowMeta(session, { meal_plan_saved: false }),
+      text: reviewPrompt(next.session),
+      metadata: flowMeta(next.session, { meal_plan_revised: true }),
     };
   }
 
-  const next = await persistDraft(session, draft.display, draft.entries, raw.trim());
-  if (!next.ok) {
-    return {
-      text: `Draft ready but couldn't save session: ${next.error}`,
-      metadata: flowMeta(session, { meal_plan_saved: false }),
-    };
-  }
-
-  return {
-    text: reviewPrompt(next.session),
-    metadata: flowMeta(next.session, { meal_plan_revised: true }),
-  };
+  return answerMealPlanReviewQuestion(ctx, session, raw);
 }
 
 async function advanceToDraft(

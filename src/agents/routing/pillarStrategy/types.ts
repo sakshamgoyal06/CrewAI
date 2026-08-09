@@ -25,7 +25,7 @@ export type PlanStepResult = {
   metadata: Record<string, unknown>;
 };
 
-/** Routing hints only — no profile, memory, or DB contents. */
+/** Routing hints — structural signals + recent turn previews (no profile/memory block). */
 export type RoutingHints = {
   has_meal_photo: boolean;
   explicit_meal_log: boolean;
@@ -34,6 +34,10 @@ export type RoutingHints = {
   previous_turn_intent: string | null;
   previous_turn_capability: string | null;
   previous_turn_was_meal_log: boolean;
+  /** User just locked a meal plan on the previous assistant turn. */
+  previous_turn_meal_plan_locked: boolean;
+  /** Last few chat turns (truncated) so the parser can disambiguate read vs create. */
+  recent_turns: Array<{ role: "user" | "assistant"; preview: string }>;
 };
 
 export type PillarId = Intent;

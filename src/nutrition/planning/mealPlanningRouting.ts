@@ -1,11 +1,7 @@
 /**
- * Deterministic routing for the multi-turn meal planning journey.
- * Must run before pillar LLM parsers so cancel/save/skip and active sessions
- * are handled without intent misclassification or silent timeouts.
+ * Helpers for the multi-turn meal planning journey (cancel phrases, message cleanup).
+ * Routing to create vs read vs continue is handled by the pillar strategy parser — not regex gates.
  */
-import { matchesMealPlannerMessage } from "../../agents/health/mealPlannerPatterns.js";
-import type { MealPlanSessionRow } from "./mealPlanningSessionStore.js";
-
 export const MEAL_PLAN_CANCEL_RE =
   /\b(?:cancel\s+(?:planning|plan)|never\s*mind|stop\s+planning|abort\s+plan)\b/i;
 
@@ -24,18 +20,4 @@ export function sanitizeMealPlanningUserMessage(rawMessage: string): string {
     return trimmed;
   }
   return trimmed.slice(0, Math.min(...markers)).trim();
-}
-
-/** Route to meal planning — active session, cancel, or new planning ask. */
-export function shouldRouteToMealPlanning(
-  rawMessage: string,
-  activeSession: MealPlanSessionRow | null,
-): boolean {
-  if (isMealPlanCancelMessage(rawMessage)) {
-    return true;
-  }
-  if (activeSession) {
-    return true;
-  }
-  return matchesMealPlannerMessage(rawMessage);
 }

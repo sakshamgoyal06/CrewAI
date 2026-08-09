@@ -19,6 +19,18 @@ vi.mock("../../../tools/clients.js", () => ({
   },
 }));
 
+const EMPTY_HINTS = {
+  has_meal_photo: false,
+  explicit_meal_log: false,
+  active_meal_plan_session: false,
+  meal_plan_session_step: null,
+  previous_turn_intent: null,
+  previous_turn_capability: null,
+  previous_turn_was_meal_log: false,
+  previous_turn_meal_plan_locked: false,
+  recent_turns: [],
+};
+
 describe("parsePillarExecutionPlan", () => {
   beforeEach(() => {
     createMock.mockReset();
@@ -51,15 +63,7 @@ describe("parsePillarExecutionPlan", () => {
     const plan = await parsePillarExecutionPlan(
       "HEALTH",
       "show my meal plan this week and give me the shopping list",
-      {
-        has_meal_photo: false,
-        explicit_meal_log: false,
-        active_meal_plan_session: false,
-        meal_plan_session_step: null,
-        previous_turn_intent: null,
-        previous_turn_capability: null,
-        previous_turn_was_meal_log: false,
-      },
+      EMPTY_HINTS,
     );
 
     expect(plan).toMatchObject({
@@ -84,15 +88,7 @@ describe("parsePillarExecutionPlan", () => {
       ],
     });
 
-    const plan = await parsePillarStrategy("HEALTH", "make meal plan for next 2 weeks", {
-      has_meal_photo: false,
-      explicit_meal_log: false,
-      active_meal_plan_session: false,
-      meal_plan_session_step: null,
-      previous_turn_intent: null,
-      previous_turn_capability: null,
-      previous_turn_was_meal_log: false,
-    });
+    const plan = await parsePillarStrategy("HEALTH", "make meal plan for next 2 weeks", EMPTY_HINTS);
 
     expect(plan.steps).toHaveLength(1);
     expect(plan.steps[0]).toMatchObject({
@@ -107,15 +103,7 @@ describe("parsePillarExecutionPlan", () => {
       content: [{ type: "text", text: '{"steps":[{"capability":"not_real","args":{}}],"confidence":0.9}' }],
     });
 
-    const plan = await parsePillarExecutionPlan("HEALTH", "hello", {
-      has_meal_photo: false,
-      explicit_meal_log: false,
-      active_meal_plan_session: false,
-      meal_plan_session_step: null,
-      previous_turn_intent: null,
-      previous_turn_capability: null,
-      previous_turn_was_meal_log: false,
-    });
+    const plan = await parsePillarExecutionPlan("HEALTH", "hello", EMPTY_HINTS);
 
     expect(plan.steps[0]?.capability).toBe("generic_ack");
     expect(plan.parser).toBe("deterministic");
@@ -129,6 +117,30 @@ describe("parsePillarExecutionPlan", () => {
       expect(isValidCapability("GENERAL", id)).toBe(true);
     }
     expect(isValidCapability("HEALTH", "calendar")).toBe(false);
+  });
+
+  it("parser prompt includes read-vs-create disambiguation rules", async () => {
+    createMock.mockResolvedValueOnce({
+      content: [
+        {
+          type: "text",
+          text: '{"confidence":0.9,"steps":[{"capability":"meal_plan_read","args":{"horizon_hint":"tomorrow"}}]}',
+        },
+      ],
+    });
+
+    await parsePillarExecutionPlan("HEALTH", "What's my meal plan for tomorrow", {
+      ...EMPTY_HINTS,
+      previous_turn_meal_plan_locked: true,
+      recent_turns: [
+        { role: "assistant", preview: "Plan locked — 42 meals saved" },
+        { role: "user", preview: "save plan" },
+      ],
+    });
+
+    const payload = JSON.parse(String(createMock.mock.calls[0]![0].messages[0].content));
+    expect(payload.routing_hints.previous_turn_meal_plan_locked).toBe(true);
+    expect(String(createMock.mock.calls[0]![0].system)).toContain("meal_plan_read");
   });
 
   it("pillarStrategyEnabled defaults true unless env disables", () => {

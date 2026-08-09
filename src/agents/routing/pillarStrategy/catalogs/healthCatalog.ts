@@ -36,15 +36,15 @@ export const HEALTH_CAPABILITY_CATALOG: CapabilityCatalog = {
     },
     {
       id: "meal_plan_create",
-      summary: "Start or continue multi-turn meal planning (draft new plan)",
+      summary: "Start or continue multi-turn meal planning (gather, draft, review, cancel, save)",
       disambiguation:
-        'CREATE/BUILD/MAKE/PLAN meals for a horizon (week, 2 weeks, dates). NOT "show what is planned". active_meal_plan_session=true usually continues this.',
+        'BUILD/MAKE/CREATE a new plan, continue active_meal_plan_session (any step including review Q&A and revisions), cancel planning, save/lock plan. NOT "show what is already planned" — use meal_plan_read for that.',
     },
     {
       id: "meal_plan_read",
-      summary: "Show existing locked plan for today/tomorrow/week",
+      summary: "Show existing locked/saved plan for today/tomorrow/week",
       disambiguation:
-        'READ only: "what\'s planned", "show my meal plan". NOT create/make/build plan.',
+        'READ only: "what\'s planned", "what am I eating tomorrow", "show my meal plan". Prefer this over meal_plan_create when previous_turn_meal_plan_locked=true or user asks to view, not build.',
     },
     {
       id: "meal_plan_skip",

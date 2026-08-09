@@ -145,7 +145,7 @@ export function parsePartialLockDates(
 }
 
 export function isFullLockCommand(raw: string): boolean {
-  return /^(?:yes|yep|yeah|save(?:\s+(?:it|plan|the\s+plan))?|lock(?:\s+(?:it|plan|the\s+plan))?|looks?\s+good|perfect|go\s+ahead|confirm|ship\s+it|that\s+works)\s*$/i.test(
+  return /^(?:yes|yep|yeah|save(?:\s+(?:it|plan|the\s+plan))?|lock(?:\s+(?:it|in|plan|the\s+plan))?|looks?\s+good|perfect|go\s+ahead|confirm|ship\s+it|that\s+works)\s*$/i.test(
     raw.trim(),
   );
 }

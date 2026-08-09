@@ -113,7 +113,7 @@ shell or `.env`.
 | `src/youtube/` | Bookmarks, cue queue, and Magnus playlist state in Supabase |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
-| `src/agents/health/healthRouter.ts` | Health composite: meal log/photo gates → **meal-plan journey gate** (active session, cancel, planning ask) → pillar strategy parser → capability executors (legacy regex chain when `MAGNUS_PILLAR_STRATEGY_PARSER=false`) |
+| `src/agents/health/healthRouter.ts` | Health composite: meal log/photo gates → pillar strategy parser → capability executors (legacy regex chain when `MAGNUS_PILLAR_STRATEGY_PARSER=false`) |
 | `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
 | `src/agents/memory/` | `loadMemoryContext`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
 | `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
@@ -203,18 +203,14 @@ shell or `.env`.
     (Mon-first table) before Hevy history.
 14. **Pillar execution plans** — When `MAGNUS_PILLAR_STRATEGY_PARSER=true` (default), each routed pillar
     runs a Haiku **plan parser** (`MAGNUS_PILLAR_STRATEGY_MODEL`, default `claude-haiku-4-5`) that sees
-    only the user message plus **routing hints** (no profile, memory, or DB). It returns an ordered
-    **steps[]** array (1–`MAGNUS_PILLAR_PLAN_MAX_STEPS`, default 4): each step has `capability`, `args`,
-    and `intent_summary`. **Step executors** run sequentially with full context and prior-step outcomes;
-    GENERAL steps use Magnus with capability-filtered tools. A **composer** (`MAGNUS_PILLAR_PLAN_COMPOSE`,
-    default on) merges multi-step results into one Telegram reply. Deterministic pre-gates stay before
-    the parser where unambiguous (explicit meal log, meal photo, Zerodha connect phrase).
-    Set `MAGNUS_PILLAR_STRATEGY_PARSER=false` for legacy Health regex routing only.
-15. **Meal-plan journey fast path** — Before intent classification and before the pillar LLM parser,
-    `shouldRouteToMealPlanning` sends **cancel planning**, any message while a `meal_plan_sessions` row
-    is active, and new planning asks straight to `executeMealPlanningCapability` (no misroute to GENERAL,
-    no silent timeout on cancel). Draft generation chunks horizons >7 days, retries JSON extraction,
-    and on failure keeps the session at **constraints** with **skip** / **cancel planning** recovery.
+    the user message, **routing hints**, and **recent turn previews** (no profile, memory, or DB rows).
+    It returns an ordered **steps[]** array (1–`MAGNUS_PILLAR_PLAN_MAX_STEPS`, default 4): each step has
+    `capability`, `args`, and `intent_summary`. **Step executors** run sequentially with full context and
+    prior-step outcomes; GENERAL steps use Magnus with capability-filtered tools. A **composer**
+    (`MAGNUS_PILLAR_PLAN_COMPOSE`, default on) merges multi-step results into one Telegram reply.
+    Deterministic pre-gates stay before the parser where unambiguous (explicit meal log, meal photo).
+    Meal-plan **create vs read** is parser-owned (no regex fast path). Review-step Q&A defaults to
+    answering questions about the draft; explicit change language triggers revision.
 
 ---
 
@@ -322,4 +318,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (meal-plan avoid-list enforcement + review questions)
+**Last updated:** 2026-08-09 (parser-owned meal-plan routing + review Q&A default)

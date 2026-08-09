@@ -73,21 +73,6 @@ vi.mock("../tools/routingContext.js", () => ({
   fetchRecentRoutingTurns: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../nutrition/planning/mealPlanningSessionStore.js", () => ({
-  getActiveMealPlanSession: vi.fn().mockResolvedValue(null),
-}));
-
-vi.mock("../pillars/health/references/loadHealthReferences.js", () => ({
-  loadHealthReferenceBlock: vi.fn().mockResolvedValue({ block: "", sources: [] }),
-}));
-
-vi.mock("./health/mealPlanningAgent.js", () => ({
-  executeMealPlanningCapability: vi.fn().mockResolvedValue({
-    text: "Meal planning cancelled. Your last locked plan (if any) is unchanged.",
-    metadata: { meal_plan_cancelled: true },
-  }),
-}));
-
 vi.mock("../pillars/wealth/zerodha/index.js", () => ({
   fetchKitePortfolioSnapshot: vi.fn().mockResolvedValue({
     ok: false,
@@ -98,7 +83,6 @@ vi.mock("../pillars/wealth/zerodha/index.js", () => ({
 }));
 
 import { loadMemoryContext } from "./memory/memoryAgent.js";
-import { executeMealPlanningCapability } from "./health/mealPlanningAgent.js";
 import { runOrchestratorReply } from "./magnusOrchestrator.js";
 
 const TURN = {
@@ -159,16 +143,5 @@ describe("runOrchestratorReply", () => {
     await runOrchestratorReply({ userMessage: "help me learn rust", ...TURN });
 
     expect(vi.mocked(loadMemoryContext)).toHaveBeenCalledTimes(1);
-  });
-
-  it("fast-paths cancel planning before intent classification", async () => {
-    const out = await runOrchestratorReply({ userMessage: "cancel planning", ...TURN });
-
-    expect(out.intent).toBe("HEALTH");
-    expect(out.replyText).toMatch(/cancelled/i);
-    expect(out.agentMetadata?.meal_planning_fast_path).toBe(true);
-    expect(vi.mocked(executeMealPlanningCapability)).toHaveBeenCalledOnce();
-    expect(createMock).not.toHaveBeenCalled();
-    expect(vi.mocked(loadMemoryContext)).not.toHaveBeenCalled();
   });
 });

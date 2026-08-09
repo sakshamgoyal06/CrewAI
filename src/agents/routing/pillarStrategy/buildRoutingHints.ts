@@ -23,7 +23,7 @@ function capabilityFromMetadata(meta: Record<string, unknown> | null | undefined
   return null;
 }
 
-/** Build routing hints without user profile, memory, or DB row contents. */
+/** Build routing hints — no health profile or memory block; includes recent turn previews. */
 export async function buildRoutingHints(ctx: AgentContext): Promise<RoutingHints> {
   const recent = await fetchRecentRoutingTurns(ctx.userProfileId, ctx.telegramUserId, 6);
   const lastAssistant = [...recent].reverse().find((t) => t.role === "assistant");
@@ -52,5 +52,12 @@ export async function buildRoutingHints(ctx: AgentContext): Promise<RoutingHints
       agentMeta?.meal_log === true ||
         (meta && (meta as Record<string, unknown>).intent === "meal_log"),
     ),
+    previous_turn_meal_plan_locked: Boolean(
+      agentMeta?.meal_plan_locked === true || agentMeta?.meal_plan_saved === true,
+    ),
+    recent_turns: recent.slice(-4).map((t) => ({
+      role: t.role === "assistant" ? ("assistant" as const) : ("user" as const),
+      preview: t.content.slice(0, 280),
+    })),
   };
 }

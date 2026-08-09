@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../tools/routingContext.js", () => ({
+  fetchRecentRoutingTurns: vi.fn().mockResolvedValue([]),
+}));
+
 import { ENERGY_SYSTEM } from "./energyAgent.js";
 import { routeHealthMessage } from "./healthRouter.js";
 import { ALTERNATES_RECOMMENDER_SYSTEM } from "./alternatesRecommenderAgent.js";
@@ -127,15 +131,22 @@ describe("routeHealthMessage", () => {
     expect(out.text).toMatch(/Which meals each day/i);
   });
 
-  it("routes cancel planning to MealPlanner even when pillar strategy is on", async () => {
+  it("routes cancel planning via pillar parser when strategy is on", async () => {
     process.env.MAGNUS_PILLAR_STRATEGY_PARSER = "true";
-    const out = await routeHealthMessage(ctx("cancel planning"));
-    expect(createMock).not.toHaveBeenCalled();
-    expect(out.metadata).toMatchObject({
-      health_router: "meal_plan_journey",
-      meal_plan_cancelled: true,
+    createMock.mockResolvedValueOnce({
+      content: [
+        {
+          type: "text",
+          text: '{"confidence":0.95,"steps":[{"capability":"meal_plan_create","args":{}}]}',
+        },
+      ],
     });
+    const out = await routeHealthMessage(ctx("cancel planning"));
     expect(out.text).toMatch(/cancelled/i);
+    expect(out.metadata).toMatchObject({
+      meal_plan_cancelled: true,
+      health_router: "pillar_plan",
+    });
   });
 
   it("routes food swap asks to Alternates after Fitness declines", async () => {

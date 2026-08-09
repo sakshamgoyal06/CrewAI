@@ -90,7 +90,7 @@ function normalizePlan(parsed: RawPlanJson, pillar: PillarId): PillarExecutionPl
 
 function buildSystemPrompt(pillar: PillarId): string {
   const catalog = getCapabilityCatalog(pillar);
-  return `You are the **${pillar} request parser** for Magnus. You do NOT see user profile, meal history, or memory — only the current message and routing hints.
+  return `You are the **${pillar} request parser** for Magnus. You do NOT see user profile, meal history, or memory — only the current message, routing hints, and recent turn previews.
 
 Your job: produce an **ordered execution plan** — one or more steps. Each step picks one capability id, optional structured args, and a short intent_summary (what this step should accomplish).
 
@@ -104,7 +104,12 @@ Rules:
 - "confidence" is 0.0–1.0 for the whole plan.
 - Single clear intent → one step. Multiple distinct actions ("and also", "then", comma-separated tool asks) → multiple steps in logical order.
 - READ before WRITE when order matters (e.g. show plan, then shopping list).
-- CREATE vs READ meal plans: "make/build/create/plan meals" → meal_plan_create; "show/what's planned" → meal_plan_read.
+- Use the **entire user message** plus **recent_turns** and **routing_hints** together — do not rely on keyword matching alone.
+- Meal plan CREATE vs READ (critical):
+  - **meal_plan_read**: user wants to see what is already planned/saved — "what's my meal plan", "what am I eating tomorrow", "show planned meals". Use even when the phrase contains "meal plan".
+  - **meal_plan_create**: user wants to build/draft a NEW plan OR continue an in-progress session (active_meal_plan_session=true). Includes gather, draft, review, cancel planning, save plan, and questions/revisions during review.
+  - previous_turn_meal_plan_locked=true + asking about upcoming meals → **meal_plan_read**, NOT create.
+  - active_meal_plan_session=true → **meal_plan_create** (continue journey; executor handles cancel, save, Q&A, revisions).
 - Meal corrections after a recent log → meal_log_correct (check previous_turn_was_meal_log).
 - Do NOT duplicate the same capability unless the user explicitly asked twice.
 
