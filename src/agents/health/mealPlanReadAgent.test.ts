@@ -27,4 +27,8 @@ describe("mealPlanReadAgent", () => {
   it("does not match planning asks (planner owns those)", () => {
     expect(matchesMealPlanReadMessage("plan my meals for the week")).toBe(false);
   });
+
+  it("matches today's meal plan asks", () => {
+    expect(matchesMealPlanReadMessage("So whats my todays meal plan?")).toBe(true);
+  });
 });

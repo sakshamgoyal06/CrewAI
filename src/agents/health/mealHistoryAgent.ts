@@ -1,4 +1,5 @@
 import { isMealCommand } from "../../meals/parseMealLogCommand.js";
+import { sanitizeMealLogRawText } from "../../meals/sanitizeMealLogRawText.js";
 import { formatMealBreakdown, targetIndicators } from "../../meals/formatMealLogReply.js";
 import { loadDailyTargets } from "../../meals/mealDaySummary.js";
 import { localDateKey, timezoneAbbrev } from "../../nutrition/localDate.js";
@@ -32,13 +33,16 @@ function offsetLocalDate(dateKey: string, days: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+const MEAL_SLOT_ONLY_RE =
+  /^(?:what about |how about |and )?(?:breakfast|lunch|dinner|snack)\??$/i;
+
 function formatSessionLine(index: number, session: Awaited<ReturnType<typeof getSessionsForLocalDate>>[number]): string {
   const slot =
     session.mealSlot !== "unspecified"
       ? `${session.mealSlot.charAt(0).toUpperCase()}${session.mealSlot.slice(1)}: `
       : "";
-  const text =
-    session.rawText.length > 80 ? `${session.rawText.slice(0, 80)}…` : session.rawText;
+  const cleaned = sanitizeMealLogRawText(session.rawText);
+  const text = cleaned.length > 80 ? `${cleaned.slice(0, 80)}…` : cleaned;
   return `${index + 1}. ${slot}${text} — ~${Math.round(session.calories)} kcal · P ${Math.round(session.protein_g)}g`;
 }
 
@@ -91,6 +95,12 @@ async function formatDayHistory(
 }
 
 export function matchesMealHistoryMessage(rawMessage: string): boolean {
+  if (/\bmeal\s+plan\b/i.test(rawMessage)) {
+    return false;
+  }
+  if (MEAL_SLOT_ONLY_RE.test(rawMessage.trim())) {
+    return false;
+  }
   return (
     MEAL_HISTORY_RE.test(rawMessage) ||
     UNDO_MEAL_RE.test(rawMessage) ||

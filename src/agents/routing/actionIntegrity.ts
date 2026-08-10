@@ -53,6 +53,23 @@ const NEGATED_WRITE_CONTEXT_RE =
 const FULL_COMPLETION_RE =
   /\b(?:all done|everything(?:'s| is) (?:set|saved|logged|updated)|fully (?:logged|saved|updated)|clean at \d+|is now clean)\b/i;
 
+const CALENDAR_SYNC_CLAIM_RE =
+  /\b(?:calendar (?:event )?(?:is )?(?:live|set|updated|synced)|(?:added|put)\s+(?:it\s+)?(?:to|on)\s+(?:your\s+)?calendar|on your calendar)\b/i;
+
+const CALENDAR_WRITE_TOOLS = new Set([
+  "create_calendar_event",
+  "update_calendar_event",
+  "delete_calendar_event",
+]);
+
+/** User request was satisfied without a new write (duplicate, already on list, read-only check). */
+const REQUEST_ALREADY_SATISFIED_RE =
+  /\b(?:already (?:on|in) (?:your )?(?:\w+list|list)|(?:is|was) already (?:on|there|in|your)|no duplicates? needed|nothing (?:new )?to add|didn'?t need to (?:add|save)|found (?:it )?(?:was )?already|you(?:'d| had) added (?:it )?before|added (?:it )?(?:at some point |before|previously|earlier))\b/i;
+
+/** Past-tense / historical mention of a prior add — not a claim that this turn saved. */
+const HISTORICAL_ADD_RE =
+  /\b(?:you(?:'ve| had)?|they|someone|it was) (?:added|saved|logged)\b|\badded (?:it )?(?:at some point|before|previously|earlier)\b/i;
+
 const MISLEADING_LINE_RE =
   /^(?:added|logged|saved|created|scheduled|all done|done)\b|^`checkin:/i;
 
@@ -73,6 +90,9 @@ export function claimsPersistence(text: string): boolean {
   if (!trimmed) {
     return false;
   }
+  if (REQUEST_ALREADY_SATISFIED_RE.test(trimmed) && !FIRST_PERSON_WRITE_RE.test(trimmed)) {
+    return false;
+  }
   const looksLikeWriteClaim =
     FIRST_PERSON_WRITE_RE.test(trimmed) ||
     ACTION_TO_TARGET_RE.test(trimmed) ||
@@ -84,7 +104,19 @@ export function claimsPersistence(text: string): boolean {
   if (NEGATED_WRITE_CONTEXT_RE.test(trimmed)) {
     return false;
   }
+  if (HISTORICAL_ADD_RE.test(trimmed) && !FIRST_PERSON_WRITE_RE.test(trimmed)) {
+    return false;
+  }
   return true;
+}
+
+/** True when the reply (or step outcome) shows the user's ask was met without a new write. */
+export function requestAlreadySatisfied(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+  return REQUEST_ALREADY_SATISFIED_RE.test(trimmed);
 }
 
 function isReadOnlyTool(name: string): boolean {
@@ -96,7 +128,14 @@ function hasSpecialistWriteEvidence(meta: Record<string, unknown>): boolean {
     return true;
   }
   if (meta.meal_log === true) {
-    return true;
+    if (typeof meta.meal_session_id === "string" && meta.meal_session_id.trim()) {
+      return true;
+    }
+    const sessionIds = meta.meal_session_ids;
+    if (Array.isArray(sessionIds) && sessionIds.some((id) => typeof id === "string" && id.trim())) {
+      return true;
+    }
+    return false;
   }
   if (meta.hevy_write === true) {
     return true;
@@ -156,9 +195,45 @@ export function hasSuccessfulWriteTool(meta: Record<string, unknown>): boolean {
   return false;
 }
 
+function hasSuccessfulCalendarWrite(meta: Record<string, unknown>): boolean {
+  if (typeof meta.google_event_id === "string" && meta.google_event_id.trim()) {
+    return true;
+  }
+  if (meta.calendar_synced === true) {
+    return true;
+  }
+  return toolOutcomes(meta).some((o) => o.ok && CALENDAR_WRITE_TOOLS.has(o.name));
+}
+
+function claimsCalendarSync(text: string): boolean {
+  return CALENDAR_SYNC_CLAIM_RE.test(text.trim());
+}
+
 function hasFailedWriteTool(meta: Record<string, unknown>): boolean {
   const outcomes = toolOutcomes(meta);
   return outcomes.some((o) => !o.ok && !isReadOnlyTool(o.name));
+}
+
+function stepResultsIndicateNoWriteNeeded(meta: Record<string, unknown>): boolean {
+  const results = meta.pillar_step_results;
+  if (!Array.isArray(results)) {
+    return false;
+  }
+  return results.some((row) => {
+    if (!row || typeof row !== "object") {
+      return false;
+    }
+    const preview = (row as { preview?: unknown }).preview;
+    return typeof preview === "string" && requestAlreadySatisfied(preview);
+  });
+}
+
+function onlyReadToolsSucceeded(meta: Record<string, unknown>): boolean {
+  const outcomes = toolOutcomes(meta);
+  if (outcomes.length === 0) {
+    return false;
+  }
+  return outcomes.every((o) => o.ok && isReadOnlyTool(o.name));
 }
 
 export function stripMisleadingClaimLines(text: string): string {
@@ -224,6 +299,33 @@ export function enforceActionIntegrity(input: ActionIntegrityInput): ActionInteg
   }
 
   if (!claimsPersistence(text)) {
+    const stripped = stripMisleadingClaimLines(text);
+    if (
+      stripped !== text &&
+      (requestAlreadySatisfied(stripped) || stepResultsIndicateNoWriteNeeded(meta))
+    ) {
+      return {
+        text: stripped,
+        metadata: { ...meta, action_integrity: "stripped_false_add_line" },
+        corrected: true,
+        reason: "stripped_false_add_line",
+      };
+    }
+    if (claimsCalendarSync(text) && !hasSuccessfulCalendarWrite(meta)) {
+      return {
+        text: stripMisleadingClaimLines(text).replace(
+          CALENDAR_SYNC_CLAIM_RE,
+          "event log updated",
+        ),
+        metadata: {
+          ...meta,
+          action_integrity: "calendar_claim_without_sync",
+          action_integrity_original_claim: true,
+        },
+        corrected: true,
+        reason: "calendar_claim_without_sync",
+      };
+    }
     return { text, metadata: meta, corrected: false };
   }
 
@@ -237,6 +339,22 @@ export function enforceActionIntegrity(input: ActionIntegrityInput): ActionInteg
       };
     }
     return { text, metadata: meta, corrected: false };
+  }
+
+  const stripped = stripMisleadingClaimLines(text);
+  const satisfiedWithoutWrite =
+    requestAlreadySatisfied(text) ||
+    requestAlreadySatisfied(stripped) ||
+    stepResultsIndicateNoWriteNeeded(meta) ||
+    (onlyReadToolsSucceeded(meta) && requestAlreadySatisfied(stripped || text));
+
+  if (satisfiedWithoutWrite) {
+    return {
+      text: stripped || text,
+      metadata: { ...meta, action_integrity: "no_write_needed" },
+      corrected: stripped !== text,
+      reason: stripped !== text ? "stripped_false_add_line" : undefined,
+    };
   }
 
   const promptOnly = meta.prompt_only === true;

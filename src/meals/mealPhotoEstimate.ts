@@ -7,7 +7,9 @@ import { anthropic } from "../tools/clients.js";
 import { HEALTH_SPECIALIST_MODEL } from "../agents/health/model.js";
 import type { TelegramPhotoPayload } from "./telegramPhotoDownload.js";
 
-const PHOTO_MEAL_SYSTEM = `You identify food in meal photos for logging. Output ONLY a concise meal log line the user could have typed — foods, rough portions, cooking method if visible. No markdown, no preamble. Under 120 words. If unclear, describe what you see and note uncertainty.`;
+const PHOTO_MEAL_SYSTEM = `You identify food in meal photos for logging.
+If the image is NOT food (books, screenshots, documents, receipts for non-food items, pets, etc.), output exactly: NOT_FOOD: <brief reason>
+Otherwise output ONLY a concise meal log line the user could have typed — foods, rough portions, cooking method if visible. No markdown, no preamble. Under 120 words. If unclear, describe what you see and note uncertainty.`;
 
 function textFromMessage(msg: Message): string {
   for (const block of msg.content) {

@@ -48,8 +48,20 @@ export async function executePillarPlan(
   const mergedMetadata: Record<string, unknown> = {
     magnus_voice_finalized: pillarPlanComposeEnabled() && !skipCompose,
   };
+  const mealSessionIds: string[] = [];
   for (const s of stepResults) {
     Object.assign(mergedMetadata, s.metadata);
+    const sessionId = s.metadata?.meal_session_id;
+    if (typeof sessionId === "string" && sessionId.trim()) {
+      mealSessionIds.push(sessionId);
+    }
+  }
+  if (mealSessionIds.length > 0) {
+    mergedMetadata.meal_session_ids = mealSessionIds;
+    mergedMetadata.meal_session_id = mealSessionIds[mealSessionIds.length - 1];
+    mergedMetadata.meal_log = true;
+  } else if (stepResults.some((s) => s.capability === "meal_log" || s.capability === "meal_log_correct")) {
+    mergedMetadata.meal_log = false;
   }
 
   return withPillarPlanMeta(

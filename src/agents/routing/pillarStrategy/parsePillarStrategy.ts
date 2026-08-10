@@ -125,7 +125,7 @@ GENERAL-specific:
     return `${sharedRules}
 
 HEALTH-specific — meal plan CREATE vs READ:
-- **meal_plan_read**: user wants to see what is already **locked/saved** — "what's my meal plan", "what am I eating tomorrow", "show planned meals" (food only).
+- **meal_plan_read**: user wants to see what is already **locked/saved** — "what's my meal plan", "what am I eating tomorrow", "show planned meals" (food only). Pass **date_hint** per step: "today", "tomorrow", "yesterday", or YYYY-MM-DD. Multi-day asks ("today and tomorrow") → one step per day with the correct date_hint each.
 - **meal_plan_create**: build/draft a NEW plan OR continue an in-progress session (active_meal_plan_session=true): gather, draft, review, cancel, save, revisions, and Q&A **about the draft meal plan shown in recent turns**.
 - active_meal_plan_session=true → meal_plan_create **only** when the user is continuing the planning journey or asking about the **draft menu** — NOT when they ask for a holistic day/schedule (calendar + full day). Those belong to GENERAL day_overview; if you only see a holistic day ask, use generic_ack.
 - previous_turn_meal_plan_locked=true + no active session + food-only view ask → **meal_plan_read**, NOT create.

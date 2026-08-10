@@ -31,6 +31,33 @@ describe("claimsPersistence", () => {
       }).corrected,
     ).toBe(false);
   });
+
+  it("ignores already-on-list replies without a new write", () => {
+    expect(
+      claimsPersistence(
+        "Musafir Cafe is already on your watchlist! Added it at some point previously — no duplicates needed.",
+      ),
+    ).toBe(false);
+    const out = enforceActionIntegrity({
+      text: "Added Musafir Cafe to your watchlist.\n\nMusafir Cafe is already on your watchlist — no duplicates needed.",
+      metadata: {
+        specialist: "Magnus",
+        pillar_capability: "lists",
+        pillar_step_results: [
+          {
+            step_index: 0,
+            capability: "lists",
+            preview:
+              "Musafir Cafe is already on your watchlist! Added it at some point previously — no duplicates needed.",
+          },
+        ],
+      },
+    });
+    expect(out.corrected).toBe(true);
+    expect(out.reason).toBe("stripped_false_add_line");
+    expect(out.text).not.toContain("haven't actually saved");
+    expect(out.text).toContain("already on your watchlist");
+  });
 });
 
 describe("classifyToolResult", () => {
@@ -125,6 +152,37 @@ describe("enforceActionIntegrity", () => {
     });
     expect(out.corrected).toBe(false);
     expect(out.text).toContain("curd added");
+  });
+
+  it("blocks meal log claims without meal_session_id", () => {
+    const out = enforceActionIntegrity({
+      text: "Got it! I've logged your full day: breakfast, lunch, and dinner.",
+      metadata: { specialist: "nutrition", meal_log: true, department: "HEALTH" },
+    });
+    expect(out.corrected).toBe(true);
+    expect(out.reason).toBe("no_write_evidence");
+  });
+
+  it("allows meal log claims when meal_session_id is present", () => {
+    const out = enforceActionIntegrity({
+      text: "Lunch logged — 408 kcal.",
+      metadata: {
+        specialist: "nutrition",
+        meal_log: true,
+        meal_session_id: "abc-123",
+      },
+    });
+    expect(out.corrected).toBe(false);
+  });
+
+  it("softens calendar sync claims without calendar tool evidence", () => {
+    const out = enforceActionIntegrity({
+      text: "Done! Calendar event is live for November 10.",
+      metadata: { specialist: "Magnus", tools_used: ["update_event"] },
+    });
+    expect(out.corrected).toBe(true);
+    expect(out.reason).toBe("calendar_claim_without_sync");
+    expect(out.text).not.toMatch(/calendar event is live/i);
   });
 });
 
