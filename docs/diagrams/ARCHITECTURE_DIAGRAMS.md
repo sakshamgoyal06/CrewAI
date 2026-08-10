@@ -2,7 +2,7 @@
 
 **Purpose:** Visual reference for system topology, request flow, data flow, and deployment.  
 **Companion:** `docs/ARCHITECTURE.md`, `docs/DATABASE_SCHEMA.md`, `magnus.md`  
-**Last updated:** 2026-08-04
+**Last updated:** 2026-08-09
 
 ---
 

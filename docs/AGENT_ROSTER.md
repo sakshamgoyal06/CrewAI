@@ -73,15 +73,36 @@ The model sees:
 
 ---
 
-## Status snapshot
+## Status snapshot (2026-08-09)
+
+
+| Area | In code today |
+|------|----------------|
+| Five intents | `src/intent.ts` — `HEALTH`, `WEALTH`, `HAPPINESS`, `WISDOM`, `GENERAL` |
+| Orchestrator | `magnusOrchestrator.ts` — classify → memory → plan parser → execute → compose |
+| Magnus tools | `magnusAgent.ts` — calendar, event log, YouTube, lists, LifeOS, Notion, Kite connect, proactive |
+| Health composite | `healthRouter.ts` — gates + sub-agents + meal planning journey |
+| Shallow pillars | `wealthAgent`, `happinessAgent`, `wisdomAgent` via `pillarSpecialist.ts` |
+| Memory | `memory/` — tiered context, user knowledge graph, post-turn maintenance |
+| Morning Brief | `jobs/morningBrief.ts` — cron, `/morningbrief`, `POST /internal/jobs/morning-brief` |
+| Proactive Telegram | `proactive/` — cron jobs + subscription kinds + `manage_proactive_messages` |
+| Capability catalogs | `routing/pillarStrategy/catalogs/` — parser steps per pillar |
+| Docs | `docs/TOOLS_AND_AGENTS.md`, `docs/USER_QUERY_GUIDE.md`, `docs/review/AUDIT_2026-08-09.md` |
+
+**Deferred / not in runtime:** Legacy nine-intent model (`NOTION`, `PLANNING`, `LEARNING`, …), Research agent as separate department, Trading write, semantic embeddings. See `magnus.md` Not built yet.
+
+**Historical note:** Sections §4–6 below describe LifeOS ritual agents and department specialists — many are **draft** targets; the live bot uses the five-intent pillar model above. Prefer `docs/TOOLS_AND_AGENTS.md` for what ships today.
+
+---
+
+## Status snapshot (archived 2026-04-12 — superseded)
 
 
 | Area                                  | In code today                                                                                                                                                                                                                                                                                                                     |
 | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Orchestrator classify + general reply | `src/magnus.ts`, `src/agents/magnusOrchestrator.ts`                                                                                                                                                                                                                                                                               |
-| Intent set                            | `src/intent.ts` (`HEALTH` … `NOTION`, `GENERAL`)                                                                                                                                                                                                                                                                                  |
-| Specialist agents                     | `src/agents/` — **Notion** (`knowledge/notionAgent.ts`) for `NOTION`; **Memory** (`memory/`); **Health** composite (`health/healthRouter.ts` → Fitness → Nutrition → Energy); **Planner** (`planning/plannerAgent.ts`) for `PLANNING`; **Research** (`intelligence/researchAgent.ts`) for `LEARNING` + GENERAL research sub-route |
-
+| Intent set                            | ~~`src/intent.ts` (`HEALTH` … `NOTION`, `GENERAL`)~~ → five intents only                                                                                                                                                                                                                                                          |
+| Specialist agents                     | ~~`src/agents/` — **Notion** (`knowledge/notionAgent.ts`) for `NOTION`; **Memory** (`memory/`); **Health** composite (`health/healthRouter.ts` → Fitness → Nutrition → Energy); **Planner** (`planning/plannerAgent.ts`) for `PLANNING`; **Research** (`intelligence/researchAgent.ts`) for `LEARNING` + GENERAL research sub-route~~ |
 
 **Current build:** **Memory**, **Notion**, **Morning Brief** (`src/jobs/` — cron + `/morningbrief` + `POST /internal/jobs/morning-brief`); **Research** shipped (gather + optional SerpAPI); **Health** includes **nutrition-orchestrated** meal parsing + logging (`src/agents/health/nutritionOrchestrated.ts`, `mealParserAgent.ts`).  
 **Deferred:** **Trading** (Wealth / broker) — not in this phase.

@@ -16,6 +16,7 @@ import {
   getPlanEntriesForRange,
   skipPlanSlot,
   swapPlanSlot,
+  switchPlanSlots,
 } from "../../nutrition/store/mealPlanStore.js";
 import type { MealSlot } from "../../nutrition/types.js";
 import type { AgentContext, AgentResult } from "../types.js";
@@ -49,6 +50,30 @@ function parsePlanSlot(raw: string): Exclude<MealSlot, "unspecified"> | null {
     return s;
   }
   return null;
+}
+
+function resolvePlanDateFromHint(
+  ctx: AgentContext,
+  dateHint: string | undefined,
+): { localDate: string; label: string } {
+  const today = localDateKey(new Date(), ctx.timezone);
+  const hint = dateHint?.toLowerCase().trim();
+
+  if (hint === "tomorrow") {
+    const d = offsetDateKey(today, 1);
+    return { localDate: d, label: "Tomorrow" };
+  }
+
+  if (hint === "yesterday") {
+    const d = offsetDateKey(today, -1);
+    return { localDate: d, label: "Yesterday" };
+  }
+
+  if (hint && /^\d{4}-\d{2}-\d{2}$/.test(hint)) {
+    return { localDate: hint, label: hint };
+  }
+
+  return { localDate: today, label: "Today" };
 }
 
 function resolvePlanDate(
@@ -252,17 +277,52 @@ export async function executeMealPlanReadCapability(
   }
 
   if (cap === "meal_plan_swap") {
+    const slot = parsePlanSlot(strArg(args, "slot") ?? "");
+    const exchangeWith = parsePlanSlot(
+      strArg(args, "exchange_with_slot") ?? strArg(args, "slot_b") ?? "",
+    );
+    const dateHint = strArg(args, "date_hint") ?? strArg(args, "when");
+    const { localDate, label } = resolvePlanDateFromHint(ctx, dateHint);
+
+    if (slot && exchangeWith) {
+      const result = await switchPlanSlots(ctx.userProfileId, localDate, slot, exchangeWith);
+      if (!result.ok) {
+        return {
+          text: `Could not switch slots: ${result.error}`,
+          metadata: { specialist: "MealPlanRead", meal_plan: "swap_failed" },
+        };
+      }
+      const entries = await getPlanEntriesForDate(ctx.userProfileId, localDate);
+      const titleA = entries.find((e) => e.meal_slot === slot)?.title ?? "—";
+      const titleB = entries.find((e) => e.meal_slot === exchangeWith)?.title ?? "—";
+      return {
+        text: `Switched **${slot}** and **${exchangeWith}** for ${label.toLowerCase()} (${localDate}):\n• **${slot}:** ${titleA}\n• **${exchangeWith}:** ${titleB}`,
+        metadata: {
+          specialist: "MealPlanRead",
+          meal_plan: "swapped",
+          local_date: localDate,
+          slots: [slot, exchangeWith],
+        },
+      };
+    }
+
     const swapMatch = raw.match(SWAP_PLAN_RE);
-    const slot = parsePlanSlot(strArg(args, "slot") ?? swapMatch?.[2] ?? "");
+    const resolvedSlot = slot ?? parsePlanSlot(swapMatch?.[2] ?? "");
     const newTitle = strArg(args, "new_title") ?? swapMatch?.[3]?.trim();
-    if (!slot || !newTitle) {
+    if (!resolvedSlot || !newTitle) {
       return {
         text: 'Try **"swap dinner for lentil soup"**.',
         metadata: { specialist: "MealPlanRead", meal_plan: "swap_failed" },
       };
     }
-    const { localDate, label } = resolvePlanDate(ctx, swapMatch?.[1], raw);
-    const result = await swapPlanSlot(ctx.userProfileId, localDate, slot, newTitle);
+    const legacyDate = resolvePlanDate(ctx, swapMatch?.[1], raw);
+    const swapDate = dateHint ? { localDate, label } : legacyDate;
+    const result = await swapPlanSlot(
+      ctx.userProfileId,
+      swapDate.localDate,
+      resolvedSlot,
+      newTitle,
+    );
     if (!result.ok) {
       return {
         text: `Could not swap: ${result.error}`,
@@ -270,8 +330,13 @@ export async function executeMealPlanReadCapability(
       };
     }
     return {
-      text: `Updated **${slot}** for ${label.toLowerCase()} (${localDate}) → ${newTitle}.`,
-      metadata: { specialist: "MealPlanRead", meal_plan: "swapped", local_date: localDate, slot },
+      text: `Updated **${resolvedSlot}** for ${swapDate.label.toLowerCase()} (${swapDate.localDate}) → ${newTitle}.`,
+      metadata: {
+        specialist: "MealPlanRead",
+        meal_plan: "swapped",
+        local_date: swapDate.localDate,
+        slot: resolvedSlot,
+      },
     };
   }
 

@@ -129,7 +129,9 @@ HEALTH-specific — meal plan CREATE vs READ:
 - **meal_plan_create**: build/draft a NEW plan OR continue an in-progress session (active_meal_plan_session=true): gather, draft, review, cancel, save, revisions, and Q&A **about the draft meal plan shown in recent turns**.
 - active_meal_plan_session=true → meal_plan_create **only** when the user is continuing the planning journey or asking about the **draft menu** — NOT when they ask for a holistic day/schedule (calendar + full day). Those belong to GENERAL day_overview; if you only see a holistic day ask, use generic_ack.
 - previous_turn_meal_plan_locked=true + no active session + food-only view ask → **meal_plan_read**, NOT create.
-- Meal corrections after a recent log → meal_log_correct (check previous_turn_was_meal_log).`;
+- Meal corrections after a recent log → meal_log_correct (check previous_turn_was_meal_log).
+- **meal_plan_swap** edits the locked plan: pass **new_title** to replace one slot, or **exchange_with_slot** with **slot** to switch two slots (e.g. lunch ↔ dinner). Use **date_hint** when not today.
+- **meal_plan_skip** skips a slot — pass **slot** and optional **date_hint** in args.`;
   }
 
   return sharedRules;

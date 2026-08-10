@@ -11,10 +11,13 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/product/TRD.md`** | Technical requirements — stack, interfaces, security, deploy |
 | **`docs/product/ARD.md`** | Architecture decisions (ADRs), principles, evolution |
 | **`docs/diagrams/ARCHITECTURE_DIAGRAMS.md`** | Mermaid diagrams: context, sequence, routing, deployment |
+| **`docs/TOOLS_AND_AGENTS.md`** | Repo diagram: agents, tools, proactive jobs, integrations |
+| **`docs/USER_QUERY_GUIDE.md`** | What users can ask → routing path and expected output |
 | **`docs/DATABASE_SCHEMA.md`** | Full Postgres + Redis schema, ERD, migration index |
 | **`docs/review/IMPARTIAL_REVIEW_2026-08-04.md`** | Third-party code review, grades, cleanup plan |
 | **`docs/review/REGRADE_2026-08-04.md`** | Post-security cleanup re-grade (B+ 84/100) |
-| **`docs/review/REGRADE_LIFEOS_2026-08-04.md`** | Post-LifeOS re-grade (A- 87/100) |
+| **`docs/review/GOLDEN_PATH_TEST_RESULTS.md`** | 100 golden-path integration tests — routing, tools, one voice |
+| **`docs/review/AUDIT_2026-08-09.md`** | Full-repo audit: security, coherence, test results |
 | **`docs/ARCHITECTURE.md`** | What the system is: Magnus, four pillars, connections, ownership |
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
 | **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
@@ -273,13 +276,14 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npm run google-calendar:auth` | One-time OAuth; prints the refresh token for the host |
 | `npm run youtube:auth` | One-time YouTube OAuth; prints refresh token to store in `user_integrations` |
 | `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
+| `npx tsx scripts/dev/validate-user-query-catalog.mts` | Validate 157 user-query routing hints against detectors |
 | `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
 | `npx tsx scripts/upsert-user-integrations.mts` | Update `user_integrations` for a user without wiping data |
 | `npx tsx scripts/reset-user-notion-lists.mts` | Reset list architecture + re-sync notion_registry for a user |
 | `npx tsx scripts/audit-notion-lifeos.mts` | Inventory LifeOS hub + accessible Notion databases |
 | `npx tsx scripts/nutrition/rebuild-rollups.mts` | Rebuild `meal_daily_rollups` from `meal_logs` |
 
-**Meal planning journey:** User says "plan my meals for the week" → … **Photo logging:** send a meal photo in Telegram (optional caption) → vision → meal log pipeline. **Meal log reply:** compact confirmation (~meal + today totals); say **meal breakdown** for per-item detail. **Templates:** …
+**Meal planning journey:** User says "plan my meals for the week" → … Locked plan edits via parser → **meal_plan_skip** / **meal_plan_swap** (replace one dish with `new_title`, or exchange two slots with `slot` + `exchange_with_slot`). **Photo logging:** …
 
 ---
 
@@ -320,4 +324,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (roadmap complete: parser-only routing, intent hints, meal log compose)
+**Last updated:** 2026-08-10 (meal plan: switch slots via meal_plan_swap parser args, not regex)

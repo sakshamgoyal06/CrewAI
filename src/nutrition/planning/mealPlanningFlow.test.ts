@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const messagesCreate = vi.fn();
 const sessionState = {
@@ -97,6 +97,8 @@ function ctx(raw: string) {
 
 describe("runMealPlanningTurn", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-09T12:00:00+05:30"));
     messagesCreate.mockReset();
     sessionState.session = {
       id: "sess-1",
@@ -114,6 +116,10 @@ describe("runMealPlanningTurn", () => {
       updated_at: "",
       expires_at: "",
     };
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("refreshes horizon when user restates a longer range at constraints", async () => {

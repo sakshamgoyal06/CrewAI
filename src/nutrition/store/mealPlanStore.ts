@@ -219,6 +219,59 @@ export async function swapPlanSlot(
   return { ok: true, entryId: inserted.id as string };
 }
 
+/** Exchange two planned slots on the same day (e.g. lunch ↔ dinner). */
+export async function switchPlanSlots(
+  userProfileId: string,
+  localDate: string,
+  slotA: Exclude<MealSlot, "unspecified">,
+  slotB: Exclude<MealSlot, "unspecified">,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (slotA === slotB) {
+    return { ok: false, error: "pick two different meal slots" };
+  }
+
+  const entries = await getPlanEntriesForDate(userProfileId, localDate);
+  const rowA = entries.find((e) => e.meal_slot === slotA);
+  const rowB = entries.find((e) => e.meal_slot === slotB);
+
+  if (!rowA || !rowB) {
+    const missing = !rowA ? slotA : slotB;
+    return { ok: false, error: `no planned ${missing} on ${localDate}` };
+  }
+
+  const now = new Date().toISOString();
+
+  const { error: errA } = await supabase
+    .from("meal_plan_entries")
+    .update({
+      title: rowB.title,
+      description: rowB.description,
+      updated_at: now,
+      metadata: { switched_with: slotB, previous_title: rowA.title },
+    })
+    .eq("id", rowA.id);
+
+  if (errA) {
+    return { ok: false, error: errA.message };
+  }
+
+  const { error: errB } = await supabase
+    .from("meal_plan_entries")
+    .update({
+      title: rowA.title,
+      description: rowA.description,
+      updated_at: now,
+      metadata: { switched_with: slotA, previous_title: rowB.title },
+    })
+    .eq("id", rowB.id);
+
+  if (errB) {
+    return { ok: false, error: errB.message };
+  }
+
+  return { ok: true };
+}
+
 export async function copyPlanWeek(
   userProfileId: string,
   sourceStartDate: string,
