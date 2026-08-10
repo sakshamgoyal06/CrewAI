@@ -169,7 +169,7 @@ shell or `.env`.
    routing in `metadata` (`delegated_agent`, `agent_metadata`). Columns `message_type`
    (`conversation` | `automated`) and `delivery_trigger` (`manual`, `scheduled`, `http`,
    `event_reminder`, `system`, …) classify normal chat vs Magnus-initiated outbound and why it
-   was sent.
+   was sent. **Project setup:** active `project_sessions` row → deterministic `project_setup` routing (incl. "lock it in"); action integrity treats draft session saves as valid — no false "haven't saved" on review turns.
 8. **Replies** — One reply per turn, chunked only for Telegram's size limit, sent as HTML.
 9. **Proactive Telegram** — Magnus can initiate messages without a user turn: in-process cron
    (`MAGNUS_PROACTIVE_CRON_ENABLED`, default on) runs scheduled jobs every
@@ -335,4 +335,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-10 (activity taxonomy: Operations · Goals · Projects; Accountability Agent; shared ops tools)
+**Last updated:** 2026-08-10 (project setup routing + draft action integrity)
