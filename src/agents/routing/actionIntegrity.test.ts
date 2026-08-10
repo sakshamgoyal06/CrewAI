@@ -154,6 +154,34 @@ describe("enforceActionIntegrity", () => {
     expect(out.text).toContain("curd added");
   });
 
+  it("does not rewrite project setup draft replies when session was persisted", () => {
+    const out = enforceActionIntegrity({
+      text: "Hey! I've set up your job search project. Reply **lock it in** to start.",
+      metadata: {
+        specialist: "Magnus",
+        project_setup: true,
+        project_setup_draft: true,
+        project_session_id: "24922aad-e0eb-4ad2-80cc-9d7d85551be1",
+        pillar_capability: "project_setup",
+      },
+    });
+    expect(out.corrected).toBe(false);
+    expect(out.text).not.toContain("haven't actually saved");
+  });
+
+  it("allows project lock claims when project_locked metadata is present", () => {
+    const out = enforceActionIntegrity({
+      text: "Locked **Job search**. Done when: Offer signed.",
+      metadata: {
+        specialist: "Magnus",
+        project_setup: true,
+        project_locked: true,
+        project_id: "abc-123",
+      },
+    });
+    expect(out.corrected).toBe(false);
+  });
+
   it("blocks meal log claims without meal_session_id", () => {
     const out = enforceActionIntegrity({
       text: "Got it! I've logged your full day: breakfast, lunch, and dinner.",

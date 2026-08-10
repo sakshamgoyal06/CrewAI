@@ -27,6 +27,9 @@ const EMPTY_HINTS = {
   explicit_meal_log: false,
   active_meal_plan_session: false,
   meal_plan_session_step: null,
+  active_project_session: false,
+  project_session_step: null,
+  active_projects: [],
   previous_turn_intent: null,
   previous_turn_capability: null,
   previous_turn_was_meal_log: false,
@@ -144,6 +147,19 @@ describe("parsePillarExecutionPlan", () => {
       },
     });
     expect(String(createMock.mock.calls[0]![0].system)).toContain("exchange_with_slot");
+  });
+
+  it("routes active project session to project_setup without LLM", async () => {
+    const plan = await parsePillarExecutionPlan("GENERAL", "Lock it in.", {
+      ...EMPTY_HINTS,
+      active_project_session: true,
+      project_session_step: "review",
+      active_projects: [],
+    });
+
+    expect(createMock).not.toHaveBeenCalled();
+    expect(plan.steps[0]?.capability).toBe("project_setup");
+    expect(plan.parser).toBe("deterministic");
   });
 
   it("falls back when LLM returns invalid capabilities", async () => {
