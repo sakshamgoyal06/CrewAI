@@ -247,7 +247,7 @@ Supabase `sb_secret_…` key format works as service role.
 
 `supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`, `meal_plan_sessions`,
 `projects`, `features`, `project_sessions`, `magnus_events`, `magnus_proactive_subscriptions`, `memory_summaries`, `magnus_youtube_*` (incl. `playlist_aliases`), and `magnus_chat_messages` type columns;
-older schema was applied directly to the project before those migrations existed.
+older schema was applied directly to the project before those migrations existed. **`20260810160000_projects_and_sessions.sql`** applied to hosted Supabase 2026-08-10 — upgrades legacy `projects`/`features` columns and adds `project_sessions`.
 
 ---
 
@@ -335,4 +335,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-10 (activity taxonomy: Operations · Goals · Projects; Accountability Agent; shared ops tools)
+**Last updated:** 2026-08-10 (projects migration applied to hosted Supabase)
