@@ -65,6 +65,27 @@ export const GENERAL_CAPABILITY_CATALOG: CapabilityCatalog = {
       summary: "Ordinary chat, cross-pillar Q&A, lookups without tools",
       disambiguation: "Default when no tool action needed.",
     },
+    {
+      id: "project_setup",
+      summary: "Start or continue planning a bounded project (outcome + deadline + checklist)",
+      disambiguation:
+        'User starting job search, trip, transformation, skill sprint, event — "plan Bali trip", "starting job search", "lose 10kg by June". active_project_session=true → continue setup.',
+    },
+    {
+      id: "project_manage",
+      summary: "Pause, resume, complete, abandon, or reprioritize an active project",
+      disambiguation: "Pause trip planning, mark job search complete, make X primary project.",
+    },
+    {
+      id: "project_status",
+      summary: "Synthesis of active projects — progress, blockers, next checklist items",
+      disambiguation: '"How\'s my job search?", "what\'s left on Bali?", project progress check.',
+    },
+    {
+      id: "goal_manage",
+      summary: "Add or list LifeOS goals (long-horizon SMART outcomes)",
+      disambiguation: "Set a goal, add annual goal — not the same as starting a project.",
+    },
   ],
 };
 
@@ -118,4 +139,8 @@ export const GENERAL_CAPABILITY_TOOLS: Record<string, string[]> = {
   journal_note: ["log_note"],
   zerodha_connect: ["connect_zerodha", "connect_kite"],
   conversation: [],
+  project_setup: [],
+  project_manage: ["list_items", "add_list_item", "update_list_item", "log_note"],
+  project_status: ["list_items", "list_lifeos_goals"],
+  goal_manage: ["add_goal", "list_lifeos_goals"],
 };

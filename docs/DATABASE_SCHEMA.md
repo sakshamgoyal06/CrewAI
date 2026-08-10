@@ -199,7 +199,8 @@ These exist on the hosted project (see `scripts/magnus_db_hardening.sql`). The a
 | `deviations`, `interventions` | Deviation tracking | schema only |
 | `workouts` | Gym session history | `fitnessAgent` (read), Hevy is primary write path |
 | `contacts`, `occasions`, `relationship_logs` | Relationships | schema only |
-| `projects`, `features` | Build/shipping | schema only |
+| `projects`, `features` | Bounded projects + milestones | **Written** — `src/projects/`; themes: custom, job_search, trip_plan, transformation, skill_sprint, event_plan |
+| `project_sessions` | Multi-turn project setup FSM | **Written** — mirrors meal_plan_sessions |
 | `learning_goals`, `learning_logs`, `learning_digest` | Learning | schema only |
 | `budget_categories`, `meal_plans`, `energy_logs` | Domain logs | schema only |
 | `weekly_reviews`, `watchlist` | Reviews, media | schema only |

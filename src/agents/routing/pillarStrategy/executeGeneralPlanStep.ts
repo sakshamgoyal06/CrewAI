@@ -7,6 +7,7 @@ import { GENERAL_CAPABILITY_TOOLS } from "./catalogs/generalCatalog.js";
 import { buildStepAgentContext } from "./buildStepAgentContext.js";
 import { executeDayOverviewCapability } from "./dayOverview.js";
 import { executePillarConsultationStep } from "./executePillarConsultation.js";
+import { executeProjectCapability } from "../../../projects/projectExecutor.js";
 import type { PillarPlanStep } from "./types.js";
 
 export async function executeGeneralPlanStep(
@@ -22,6 +23,15 @@ export async function executeGeneralPlanStep(
 
   if (step.capability === "day_overview") {
     return executeDayOverviewCapability(stepCtx, step.args);
+  }
+
+  if (
+    step.capability === "project_setup" ||
+    step.capability === "project_manage" ||
+    step.capability === "project_status" ||
+    step.capability === "goal_manage"
+  ) {
+    return executeProjectCapability(stepCtx, step.capability, step.args);
   }
 
   const allowedToolNames =

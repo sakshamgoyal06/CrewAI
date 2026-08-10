@@ -43,7 +43,24 @@ export async function runPillarSpecialist(input: {
   specialist: string;
   pillar: string;
   maxTokens?: number;
+  enableOpsTools?: boolean;
+  agent?: string;
+  capability?: string;
 }): Promise<AgentResult> {
+  if (input.enableOpsTools !== false) {
+    const { runAgentWithTools } = await import("./tools/runAgentWithTools.js");
+    return runAgentWithTools({
+      ctx: input.ctx,
+      system: input.system,
+      specialist: input.specialist,
+      pillar: input.pillar,
+      agent: input.agent ?? input.specialist.toUpperCase(),
+      capability: input.capability,
+      maxTokens: input.maxTokens,
+      enableOpsTools: true,
+    });
+  }
+
   const noToolsGuard =
     "\n\n**You have no tools.** Never claim to have added, removed, logged, saved, created, " +
     "scheduled, updated, or mirrored anything — not lists, playlists, calendars, check-ins, " +

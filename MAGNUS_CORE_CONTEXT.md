@@ -33,6 +33,8 @@ These rules are meant to hold across Notion, agents, and code. They should not b
 
 **Four pillars (conceptual):** Health, Wealth, Wisdom, Joy — each with one active “one thing” and a coherent score model (Joy as tank; others as progress toward goals).
 
+**Activity layer (2026-08):** **Operations** (BAU maintenance) · **Goals** (long-horizon SMART) · **Projects** (bounded initiatives). See `docs/product/ACTIVITY_TAXONOMY.md` and `docs/product/PROJECT_DEFINITION.md`.
+
 ---
 
 ## 3. Magnus vision — what the product *is*

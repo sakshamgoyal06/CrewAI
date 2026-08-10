@@ -15,5 +15,8 @@ export async function executeWisdomPlanStep(
     system: WISDOM_SYSTEM,
     specialist: "Wisdom",
     pillar: "wisdom",
+    agent: "WISDOM",
+    capability: step.capability,
+    enableOpsTools: true,
   });
 }

@@ -37,6 +37,14 @@ export type RoutingHints = {
   explicit_meal_log: boolean;
   active_meal_plan_session: boolean;
   meal_plan_session_step: string | null;
+  active_project_session: boolean;
+  project_session_step: string | null;
+  active_projects: Array<{
+    id: string;
+    title: string;
+    project_type: string;
+    priority_rank: number;
+  }>;
   previous_turn_intent: string | null;
   previous_turn_capability: string | null;
   previous_turn_was_meal_log: boolean;

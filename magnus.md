@@ -1,15 +1,18 @@
 # Magnus — project tracker
 
+**Release:** Magnus **v1.0** — see [`docs/product/MAGNUS_VERSIONS.md`](docs/product/MAGNUS_VERSIONS.md)  
 **This file is the source of truth** for what the code does and how to run it. Update it when you
 ship anything that changes behaviour, dependencies, environment, or the database.
 
 | Doc | Purpose |
 |-----|---------|
+| **`docs/product/MAGNUS_VERSIONS.md`** | v0 vs v1+ version history and bump policy |
 | **`docs/product/VISION.md`** | Long-term product vision and philosophy (prefer over stale sections in `MAGNUS_CORE_CONTEXT.md`) |
 | **`docs/product/BRD.md`** | Business requirements — stakeholders, objectives, scope |
 | **`docs/product/PRD.md`** | Product requirements — user stories, functional reqs |
 | **`docs/product/TRD.md`** | Technical requirements — stack, interfaces, security, deploy |
-| **`docs/product/ARD.md`** | Architecture decisions (ADRs), principles, evolution |
+| **`docs/product/ACTIVITY_TAXONOMY.md`** | Operations · Goals · Projects activity layer |
+| **`docs/product/PROJECT_DEFINITION.md`** | Project anatomy, lifecycle, UX |
 | **`docs/diagrams/ARCHITECTURE_DIAGRAMS.md`** | Mermaid diagrams: context, sequence, routing, deployment |
 | **`docs/TOOLS_AND_AGENTS.md`** | Repo diagram: agents, tools, proactive jobs, integrations |
 | **`docs/USER_QUERY_GUIDE.md`** | What users can ask → routing path and expected output |
@@ -40,14 +43,13 @@ call. No menu, no lane picker, no per-department commands.
 
 | Owner | Scope |
 |---|---|
-| **Magnus** (`GENERAL`) | The day and week, Google Calendar, YouTube / YT Music, journaling and logging, reminders, cross-pillar questions, ordinary conversation. The only agent with tools. |
+| **Magnus** (`GENERAL`) | The day and week, Google Calendar, YouTube / YT Music, journaling and logging, reminders, **projects & goals**, cross-pillar questions, ordinary conversation. Operations tools; Accountability Agent vets all writes. |
 | **Health** | Training, workouts, meals and macros, sleep, recovery, the health journal. Deep: sub-router, Hevy, nutrition providers, program memory, onboarding gate. |
 | **Wealth** | Budgeting, spending, saving, debt, net worth, financial goals, investing philosophy. **Zerodha (Kite Connect)** read-only: holdings, Coin MF, SIPs — see `docs/ZERODHA.md`. |
 | **Happiness** | Books, film, music, games, hobbies, creative practice, rest, travel, relationships. |
 | **Wisdom** | Learning plans, skills and craft, career direction and growth, shipping projects. |
 
-Wealth has **Zerodha integration** (Kite Connect OAuth, read-only portfolio context). Happiness and Wisdom remain single prompt-only agents sharing one runner
-(`src/agents/pillarSpecialist.ts`) — intentionally shallow until a pillar earns depth.
+Wealth has **Zerodha integration** (Kite Connect OAuth, read-only portfolio context). Happiness and Wisdom use shared **operations tools** (calendar, lists, events) via `runAgentWithTools`; pillar depth remains Health-first.
 
 ---
 
@@ -97,7 +99,9 @@ shell or `.env`.
 | `src/agents/routing/intentRoutingHints.ts` | Structural signals for top-level intent classifier (YouTube, Magnus tools, portfolio/Hevy reads) |
 | `src/agents/routing/pillarConsultationSignals.ts` | Pillar read signals for `pillar_consultation` GENERAL step |
 | `src/agents/routing/agentConsultation.ts` | Reconciler for `pillar_consultation` multi-pillar step |
-| `src/agents/routing/finalizeMagnusVoice.ts` | Orchestrator output parser — terminal Magnus voice when inner pipeline did not compose |
+| `src/projects/` | Projects layer: store, setup FSM, themes, executor, conflict service |
+| `src/agents/tools/runAgentWithTools.ts` | Pillar agents with shared operations tools |
+| `src/agents/routing/accountabilityAgent.ts` | Terminal vet + action ledger + Magnus voice |
 | `src/agents/routing/pillarStrategy/` | Capability catalogs → Haiku plan parser → step executors → composer (`composePillarPlanReply`) |
 | `src/agents/routing/pillarStrategy/dayOverview.ts` | Holistic day snapshot: calendar + commitments + meals |
 | `src/agents/magnusAgent.ts` | Magnus himself: calendar, YouTube, event log, journaling, reminders — tool loop (optional capability-filtered tools on GENERAL) |
@@ -160,7 +164,7 @@ shell or `.env`.
    to `HEALTH`. On `GENERAL`, the pillar plan parser may choose `pillar_consultation` (Magnus tools +
    pillar depth in one reply) or `day_overview` (calendar + commitments + meals). Pillar specialists
    are prompt-only except Health (capability executors) and Wealth (Kite read in executor).
-6. **Memory** — Loaded once per turn: recent chat as verbatim `messages[]` (configurable window), rolling summary for older turns, semantic facts from `memory_summaries`, plus structured profile/goals/logs. A **user graph** (`src/agents/memory/userKnowledge.ts`) is prepended ahead of the memory block: recent issues/wins from program learnings, identified patterns (DB + patterns list + semantic facts), full list inventory (slug + display name — no phrase aliases; Magnus matches by meaning or asks which list), integration status, and YouTube playlist pointers. Tunable via `MAGNUS_MEMORY_*` in `.env.example` (`MAGNUS_MEMORY_USER_KNOWLEDGE=false` disables the layer). Post-turn maintenance updates conversation summary and extracted facts.
+6. **Memory** — Loaded once per turn: recent chat, rolling summary, semantic facts, structured profile/goals/logs, **active projects block** in user knowledge. **Accountability Agent** at orchestrator exit: `action_ledger` + `accountability` metadata on tool turns. Tunable via `MAGNUS_MEMORY_*`.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
    routing in `metadata` (`delegated_agent`, `agent_metadata`). Columns `message_type`
    (`conversation` | `automated`) and `delivery_trigger` (`manual`, `scheduled`, `http`,
@@ -229,6 +233,7 @@ shell or `.env`.
 ## Database
 
 **Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`, `meal_plan_sessions`, `meal_plan_templates`,
+`user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries`, `projects`, `features`, `project_sessions`,
 `user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries` (Phases 2–3:
 rolling summary + semantic facts), `magnus_youtube_bookmarks`, `magnus_youtube_cues`,
 `magnus_youtube_state` (includes `playlist_aliases` JSONB for pillar playlist ids).
@@ -241,7 +246,7 @@ Public tables use RLS with a `service_role_only` policy; the service role key by
 Supabase `sb_secret_…` key format works as service role.
 
 `supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`, `meal_plan_sessions`,
-`magnus_events`, `magnus_proactive_subscriptions`, `memory_summaries`, `magnus_youtube_*` (incl. `playlist_aliases`), and `magnus_chat_messages` type columns;
+`projects`, `features`, `project_sessions`, `magnus_events`, `magnus_proactive_subscriptions`, `memory_summaries`, `magnus_youtube_*` (incl. `playlist_aliases`), and `magnus_chat_messages` type columns;
 older schema was applied directly to the project before those migrations existed.
 
 ---
@@ -330,4 +335,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-10 (vision photo routing + meal integrity + action integrity fixes)
+**Last updated:** 2026-08-10 (activity taxonomy: Operations · Goals · Projects; Accountability Agent; shared ops tools)

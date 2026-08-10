@@ -25,8 +25,7 @@ import { dispatchToAgent } from "./registry.js";
 import { intentToPillarRoute } from "./routing/intentToPillarRoute.js";
 import type { AgentContext } from "./types.js";
 import { fetchRecentRoutingTurns } from "../tools/routingContext.js";
-import { enforceActionIntegrity } from "./routing/actionIntegrity.js";
-import { finalizeMagnusVoice } from "./routing/finalizeMagnusVoice.js";
+import { vetAndCompose } from "./routing/accountabilityAgent.js";
 import {
   looksLikeMealSlotFollowUp,
   recentTurnWasMealContext,
@@ -49,15 +48,16 @@ async function finalizeOrchestratorReply(
   ctx: AgentContext,
   reply: OrchestratorReply,
 ): Promise<OrchestratorReply> {
-  const voiced = await finalizeMagnusVoice(ctx, reply.replyText, reply.agentMetadata ?? {});
-  const integrity = enforceActionIntegrity({
-    text: voiced.text,
-    metadata: voiced.metadata,
+  const composed = await vetAndCompose({
+    ctx,
+    text: reply.replyText,
+    metadata: reply.agentMetadata ?? {},
+    intent: reply.intent,
   });
   return {
     ...reply,
-    replyText: integrity.text,
-    agentMetadata: integrity.metadata,
+    replyText: composed.text,
+    agentMetadata: composed.metadata,
   };
 }
 

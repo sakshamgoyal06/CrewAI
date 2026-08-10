@@ -5,6 +5,7 @@ import { mealGapNudgeHandler } from "./mealGapNudge.js";
 import { mealLogReminderHandler } from "./mealLogReminder.js";
 import { weeklyNutritionReviewHandler } from "./weeklyNutritionReview.js";
 import { customReminderHandler } from "./customReminder.js";
+import { projectConflictReviewHandler } from "./projectConflictReview.js";
 import { chatInactivityHandler } from "./chatInactivity.js";
 import { driftGuardHandler } from "./driftGuard.js";
 import { eveningJournalHandler } from "./eveningJournal.js";
@@ -37,6 +38,7 @@ export function registerDefaultProactiveKinds(): void {
   registerProactiveKind(mealGapNudgeHandler);
   registerProactiveKind(weeklyNutritionReviewHandler);
   registerProactiveKind(customReminderHandler);
+  registerProactiveKind(projectConflictReviewHandler);
 }
 
 // Register on module load.
