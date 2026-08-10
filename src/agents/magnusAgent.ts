@@ -1340,3 +1340,9 @@ export async function runMagnusAgent(
     },
   };
 }
+
+/** Shared operations tool definitions — callable by Magnus and pillar agents. */
+export const OPERATIONS_TOOLS = TOOLS;
+
+/** Execute one operations tool by name. */
+export { runTool as runOperationsTool };

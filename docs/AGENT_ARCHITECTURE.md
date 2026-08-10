@@ -260,6 +260,13 @@ Today’s classifier uses `**src/intent.ts**` categories (`HEALTH`, `WEALTH`, `B
 
 `AgentContext` carries optional `pillar` and `department` (and `specialist`) for routing metadata — see `src/agents/types.ts`.
 
+### Accountability Agent + Operations tools (2026-08-10)
+
+- **Operations tools** — shared calendar, lists, event log, journal, LifeOS (`src/agents/magnusAgent.ts` exports `OPERATIONS_TOOLS`).
+- **All pillar specialists** may invoke operations tools via `runAgentWithTools` (`src/agents/tools/runAgentWithTools.ts`).
+- **Accountability Agent** — terminal `vetAndCompose` in `src/agents/routing/accountabilityAgent.ts`: action ledger in chat metadata, one Magnus voice.
+- **Projects** — horizontal context layer; see `docs/product/PROJECT_DEFINITION.md` and `src/projects/`.
+
 When you add a new specialist in code, update:
 
 1. This file (department + specialist row).

@@ -1,5 +1,7 @@
 import { parseMealLogCommand } from "../../../meals/parseMealLogCommand.js";
 import { getActiveMealPlanSession } from "../../../nutrition/planning/mealPlanningSessionStore.js";
+import { getActiveProjectSession } from "../../../projects/projectSessionStore.js";
+import { listActiveProjects } from "../../../projects/projectStore.js";
 import { fetchRecentRoutingTurns } from "../../../tools/routingContext.js";
 import { loadUserIntegrations } from "../../../users/userIntegrations.js";
 import type { AgentContext } from "../../types.js";
@@ -36,6 +38,16 @@ export async function buildRoutingHints(ctx: AgentContext): Promise<RoutingHints
       : undefined;
 
   const active = await getActiveMealPlanSession(ctx.userProfileId);
+
+  let projectSession: Awaited<ReturnType<typeof getActiveProjectSession>> = null;
+  let activeProjects: Awaited<ReturnType<typeof listActiveProjects>> = [];
+  try {
+    projectSession = await getActiveProjectSession(ctx.userProfileId);
+    activeProjects = await listActiveProjects(ctx.userProfileId);
+  } catch {
+    /* optional until migration / test mocks */
+  }
+
   const integrations = await loadUserIntegrations(ctx.userProfileId);
 
   const photoAnalysis = ctx.photoContext?.analysis;
@@ -48,6 +60,14 @@ export async function buildRoutingHints(ctx: AgentContext): Promise<RoutingHints
     explicit_meal_log: parseMealLogCommand(ctx.rawMessage).kind === "meal",
     active_meal_plan_session: Boolean(active),
     meal_plan_session_step: active?.step ?? null,
+    active_project_session: Boolean(projectSession),
+    project_session_step: projectSession?.step ?? null,
+    active_projects: activeProjects.map((p) => ({
+      id: p.id,
+      title: p.title,
+      project_type: p.project_type,
+      priority_rank: p.priority_rank,
+    })),
     previous_turn_intent:
       meta && typeof (meta as Record<string, unknown>).intent === "string"
         ? ((meta as Record<string, unknown>).intent as string)

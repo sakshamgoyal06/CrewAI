@@ -119,7 +119,11 @@ GENERAL-specific:
 - **pillar_consultation** when the turn needs Magnus tools AND pillar specialist depth in one reply. Set args.pillars to subset of ["HEALTH","WEALTH","HAPPINESS","WISDOM"]. Examples: log check-in + review workout, calendar edit + nutrition advice, list update + portfolio context.
 - **calendar** only when they want Google Calendar / schedule **without** also wanting meals and commitments woven in.
 - Holistic day asks are NEVER satisfied by conversation alone — use day_overview.
-- Use routing_hints integration flags (google_calendar_connected, etc.) — if calendar not connected, day_overview still runs but calendar section may be empty.`;
+- Use routing_hints integration flags (google_calendar_connected, etc.) — if calendar not connected, day_overview still runs but calendar section may be empty.
+- **project_setup** when starting or continuing a bounded initiative (active_project_session=true OR job search / trip / transformation / skill sprint / event planning). NOT for daily gym or BAU reminders.
+- **project_status** when user asks progress on an active project ("how's job search", "what's left on Bali").
+- **project_manage** when pausing, completing, abandoning, or reprioritizing a project.
+- **goal_manage** when setting a long-horizon SMART goal without a project wrapper.`;
   }
 
   if (pillar === "HEALTH") {

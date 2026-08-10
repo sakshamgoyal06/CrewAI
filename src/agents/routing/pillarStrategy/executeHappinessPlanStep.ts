@@ -15,5 +15,8 @@ export async function executeHappinessPlanStep(
     system: HAPPINESS_SYSTEM,
     specialist: "Happiness",
     pillar: "joy",
+    agent: "HAPPINESS",
+    capability: step.capability,
+    enableOpsTools: true,
   });
 }

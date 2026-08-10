@@ -32,6 +32,9 @@ const CHECKIN_LOG_RE =
 const PROACTIVE_RE =
   /\b(?:manage_proactive|proactive messages?)\b|\b(?:turn off|disable|stop|enable)\b.{0,40}\b(?:evening|morning|midday|drift|proactive|nudge|reminder|inactivity|stale)\b|\b(?:remind me)\b.{0,80}\b(?:at|tomorrow|tonight|every|daily)\b|\b(?:evening journal|drift guard|stale list|chat inactivity|don't forget to log)\b/i;
 
+const PROJECT_ACTION_RE =
+  /\b(?:job search|job hunting|plan(?:ning)?\s+(?:a\s+)?trip|vacation|lose \d+\s*kg|transformation|skill sprint|birthday party|project status|how'?s my .+ project|lock it in|pause .+ project|complete .+ project)\b/i;
+
 /** True when Magnus (GENERAL) must run tools — not Happiness/Wealth/Wisdom prompt-only paths. */
 export function looksLikeMagnusToolAction(message: string): boolean {
   const text = message.trim();
@@ -46,6 +49,7 @@ export function looksLikeMagnusToolAction(message: string): boolean {
     LIFEOS_ACTION_RE.test(text) ||
     EVENT_LOG_EXPLICIT_RE.test(text) ||
     CHECKIN_LOG_RE.test(text) ||
-    PROACTIVE_RE.test(text)
+    PROACTIVE_RE.test(text) ||
+    PROJECT_ACTION_RE.test(text)
   );
 }

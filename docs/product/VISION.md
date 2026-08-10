@@ -1,7 +1,7 @@
 # Magnus — Vision Document
 
 **Version:** 1.1  
-**Last updated:** 2026-08-04  
+**Last updated:** 2026-08-10  
 **Status:** Active — aligns `MAGNUS_CORE_CONTEXT.md` with current codebase  
 **Audience:** Product owner, contributors, future self
 
@@ -117,6 +117,13 @@ Subjective wellbeing sits above departmental KPIs. If everything looks green but
 | **Magnus** | This software — the bot and orchestrator |
 | **Joy / Happiness** | Same pillar — `HAPPINESS` in code, `joy` in DB events |
 | **Magnus (pillar)** | Cross-cutting work — calendar, logging, reminders (`GENERAL` intent) |
+| **Operations** | Activity layer — recurring/ad-hoc BAU (gym daily, bills, reminders); **not** `GENERAL` intent |
+| **Goals** | Activity layer — long-horizon SMART outcomes (`goals` table) |
+| **Projects** | Activity layer — bounded initiatives with outcome + deadline (`projects` table) |
+| **Operations tools** | Shared calendar, lists, event log, journal, LifeOS, proactive — any agent may invoke |
+| **Accountability Agent** | Terminal gate — vet tool claims, one Magnus voice, action ledger in metadata |
+
+See [`docs/product/ACTIVITY_TAXONOMY.md`](ACTIVITY_TAXONOMY.md) and [`docs/product/PROJECT_DEFINITION.md`](PROJECT_DEFINITION.md).
 
 ---
 
@@ -124,6 +131,8 @@ Subjective wellbeing sits above departmental KPIs. If everything looks green but
 
 | Doc | Purpose |
 |-----|---------|
+| `docs/product/ACTIVITY_TAXONOMY.md` | Operations · Goals · Projects taxonomy |
+| `docs/product/PROJECT_DEFINITION.md` | Project anatomy, lifecycle, UX |
 | `docs/product/BRD.md` | Business requirements |
 | `docs/product/PRD.md` | Product requirements |
 | `docs/product/TRD.md` | Technical requirements |

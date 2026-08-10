@@ -71,6 +71,7 @@ export type UserKnowledgeLayer = {
   playlistAliases: UserKnowledgePlaylistAlias[];
   userGraph: UserGraph;
   gaps: string[];
+  activeProjectsBlock?: string;
 };
 
 export type LoadUserKnowledgeOptions = {
@@ -382,6 +383,20 @@ export async function loadUserKnowledgeLayer(
 
   gaps.push(...listKnowledge.gaps);
 
+  let activeProjectsBlock: string | undefined;
+  try {
+    const { buildActiveProjectSummaries, formatProjectsMemoryBlock } = await import(
+      "../../projects/projectExecutor.js"
+    );
+    const summaries = await buildActiveProjectSummaries(userProfileId);
+    const block = formatProjectsMemoryBlock(summaries);
+    if (block.trim()) {
+      activeProjectsBlock = block;
+    }
+  } catch {
+    /* projects module optional until migration applied */
+  }
+
   return {
     lists: listKnowledge.lists,
     listSamples: listKnowledge.listSamples,
@@ -389,6 +404,7 @@ export async function loadUserKnowledgeLayer(
     playlistAliases,
     userGraph,
     gaps,
+    activeProjectsBlock,
   };
 }
 
@@ -442,6 +458,9 @@ export function formatUserKnowledgeBlock(
   }
   if (patterns) {
     parts.push(patterns);
+  }
+  if (layer.activeProjectsBlock?.trim()) {
+    parts.push(layer.activeProjectsBlock.trim());
   }
   if (layer.userGraph.rollingContext) {
     parts.push(`Rolling context (7–30d): ${layer.userGraph.rollingContext}`);
