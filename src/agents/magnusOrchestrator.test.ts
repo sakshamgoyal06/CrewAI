@@ -73,6 +73,10 @@ vi.mock("../tools/routingContext.js", () => ({
   fetchRecentRoutingTurns: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock("../projects/projectSessionPrelude.js", () => ({
+  tryResolveActiveProjectSessionTurn: vi.fn().mockResolvedValue({ handled: false }),
+}));
+
 vi.mock("./routing/pillarStrategy/buildRoutingHints.js", () => ({
   buildRoutingHints: vi.fn().mockResolvedValue({
     has_meal_photo: false,
@@ -82,6 +86,9 @@ vi.mock("./routing/pillarStrategy/buildRoutingHints.js", () => ({
     explicit_meal_log: false,
     active_meal_plan_session: false,
     meal_plan_session_step: null,
+    active_project_session: false,
+    project_session_step: null,
+    active_projects: [],
     previous_turn_intent: null,
     previous_turn_capability: null,
     previous_turn_was_meal_log: false,

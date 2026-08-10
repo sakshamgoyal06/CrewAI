@@ -1,11 +1,12 @@
 /**
  * Multi-turn project setup: intent → scope → checklist → milestones → review → lock.
+ * Turn actions parsed by LLM (parseProjectSetupTurn) — not regex.
  */
 import type { AgentContext, AgentResult } from "../agents/types.js";
 import { createCustomList } from "../lists/listService.js";
 import { fetchListBySlug } from "../lists/listStore.js";
 import { insertListItem } from "../lists/listStore.js";
-import { getProjectTheme, inferThemeFromMessage } from "./themes/index.js";
+import { getProjectTheme } from "./themes/index.js";
 import {
   createProject,
   createProjectMilestones,
@@ -20,42 +21,10 @@ import {
 } from "./projectSessionStore.js";
 import type { ProjectSessionRow } from "./types.js";
 import {
-  PROJECT_CANCEL_RE,
-  PROJECT_LOCK_RE,
-  PROJECT_SKIP_RE,
-} from "./projectSetupSignals.js";
-
-function parseDateFromText(text: string): string | null {
-  const iso = text.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
-  if (iso) {
-    return iso[1]!;
-  }
-  const month = text.match(
-    /\b(?:by|before|until|deadline)\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s*,?\s*(20\d{2}))?\b/i,
-  );
-  if (month) {
-    const months: Record<string, string> = {
-      jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
-      jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
-    };
-    const mKey = month[1]!.slice(0, 3).toLowerCase();
-    const mm = months[mKey];
-    const dd = month[2]!.padStart(2, "0");
-    const yyyy = month[3] ?? String(new Date().getFullYear());
-    if (mm) {
-      return `${yyyy}-${mm}-${dd}`;
-    }
-  }
-  return null;
-}
-
-function extractTitle(raw: string, themeLabel: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.length > 4 && trimmed.length < 120) {
-    return trimmed.slice(0, 120);
-  }
-  return themeLabel;
-}
+  parseProjectSetupTurn,
+  projectSetupIntentActionable,
+  type ParsedProjectSetupTurn,
+} from "./parseProjectSetupTurn.js";
 
 function formatDraftReview(session: ProjectSessionRow, themeLabel: string): string {
   const lines = [
@@ -73,7 +42,7 @@ function formatDraftReview(session: ProjectSessionRow, themeLabel: string): stri
       ? session.draft_milestones.map((m: string) => `• ${m}`)
       : ["• (none yet)"]),
     "",
-    'Reply **lock it in** to start, or tell me what to change.',
+    "Tell me when to **lock it in**, what to change, or that you want to **cancel**.",
   ];
   return lines.filter(Boolean).join("\n");
 }
@@ -165,28 +134,94 @@ async function lockSessionToProject(
     metadata: {
       specialist: "Magnus",
       pillar_compose: false,
+      project_setup: true,
       project_locked: true,
       project_id: project.id,
+      project_setup_parser: "llm",
     },
   };
 }
 
-export async function runProjectSetupFlow(ctx: AgentContext): Promise<AgentResult> {
-  const raw = ctx.rawMessage.trim();
-  if (PROJECT_CANCEL_RE.test(raw)) {
-    const session = await getActiveProjectSession(ctx.userProfileId);
+function draftMetadata(session: ProjectSessionRow, parsed: ParsedProjectSetupTurn): Record<string, unknown> {
+  return {
+    specialist: "Magnus",
+    project_setup: true,
+    project_setup_draft: true,
+    project_session_id: session.id,
+    project_setup_intent: parsed.intent,
+    project_setup_parser: parsed.parser,
+    project_setup_confidence: parsed.confidence,
+  };
+}
+
+async function applyDraftPatch(
+  session: ProjectSessionRow,
+  parsed: ParsedProjectSetupTurn,
+  themeDefaults: ReturnType<typeof getProjectTheme>,
+): Promise<ProjectSessionRow> {
+  const patch: Parameters<typeof updateProjectSession>[1] = {
+    status: "draft",
+    step: "review",
+  };
+
+  if (parsed.title) {
+    patch.draft_title = parsed.title;
+  }
+  if (parsed.outcome) {
+    patch.draft_outcome = parsed.outcome;
+  }
+  if (parsed.target_date !== undefined) {
+    patch.draft_target_date = parsed.target_date;
+  }
+  if (parsed.checklist) {
+    patch.draft_checklist = parsed.checklist;
+  } else if (!session.draft_checklist.length) {
+    patch.draft_checklist = themeDefaults.defaultChecklist;
+  }
+  if (parsed.milestones) {
+    patch.draft_milestones = parsed.milestones;
+  } else if (!session.draft_milestones.length) {
+    patch.draft_milestones = themeDefaults.defaultMilestones;
+  }
+
+  await updateProjectSession(session.id, patch);
+  return (await getActiveProjectSession(session.user_profile_id))!;
+}
+
+export async function runProjectSetupFlow(
+  ctx: AgentContext,
+  preParsed?: ParsedProjectSetupTurn,
+): Promise<AgentResult> {
+  let session = await getActiveProjectSession(ctx.userProfileId);
+  const parsed =
+    preParsed ??
+    (await parseProjectSetupTurn({
+      message: ctx.rawMessage,
+      session,
+      fallbackThemeId: session?.project_type,
+    }));
+
+  if (
+    parsed.intent === "cancel_setup" &&
+    projectSetupIntentActionable(parsed)
+  ) {
     if (session) {
       await abandonProjectSession(session.id);
     }
     return {
       text: "Cancelled project planning.",
-      metadata: { specialist: "Magnus", project_setup: true, pillar_compose: true },
+      metadata: {
+        specialist: "Magnus",
+        project_setup: true,
+        pillar_compose: true,
+        project_setup_intent: parsed.intent,
+        project_setup_parser: parsed.parser,
+      },
     };
   }
 
-  const themeId = inferThemeFromMessage(raw);
+  const themeId = session?.project_type ?? parsed.theme_id;
   const theme = getProjectTheme(themeId);
-  let session = await getActiveProjectSession(ctx.userProfileId);
 
   if (!session) {
     const created = await createProjectSession(ctx.userProfileId, themeId);
@@ -200,74 +235,47 @@ export async function runProjectSetupFlow(ctx: AgentContext): Promise<AgentResul
     await updateProjectSession(session.id, {
       project_type: themeId,
       primary_pillar: theme.primaryPillar.toLowerCase(),
-      draft_checklist: theme.defaultChecklist,
-      draft_milestones: theme.defaultMilestones,
-      draft_outcome: theme.defaultOutcomePrompt,
-      step: "scope",
+      draft_checklist: parsed.checklist ?? theme.defaultChecklist,
+      draft_milestones: parsed.milestones ?? theme.defaultMilestones,
+      draft_outcome: parsed.outcome ?? theme.defaultOutcomePrompt,
+      draft_title: parsed.title ?? theme.label,
+      draft_target_date: parsed.target_date,
+      step: parsed.intent === "provide_scope" ? "review" : "scope",
+      status: "draft",
     });
     session = (await getActiveProjectSession(ctx.userProfileId))!;
   }
 
-  if (session.step === "review" || session.status === "draft") {
-    if (PROJECT_LOCK_RE.test(raw)) {
-      return lockSessionToProject(ctx, session);
-    }
+  if (parsed.intent === "lock" && projectSetupIntentActionable(parsed)) {
+    return lockSessionToProject(ctx, session);
   }
 
-  const step = session.step;
-
-  if (step === "intent" || step === "scope") {
-    const title = extractTitle(raw, theme.label);
-    const outcome =
-      raw.match(/\b(?:done when|goal is|outcome is|finish when)\s*[:\-]?\s*(.+)/i)?.[1]?.trim() ??
-      session.draft_outcome ??
-      theme.defaultOutcomePrompt;
-    const targetDate = parseDateFromText(raw) ?? session.draft_target_date;
-
+  if (parsed.intent === "skip_defaults") {
     await updateProjectSession(session.id, {
-      status: "draft",
       step: "review",
-      draft_title: title !== theme.label ? title : session.draft_title ?? title,
-      draft_outcome: outcome,
-      draft_target_date: targetDate,
+      status: "draft",
       draft_checklist:
         session.draft_checklist.length > 0 ? session.draft_checklist : theme.defaultChecklist,
       draft_milestones:
         session.draft_milestones.length > 0 ? session.draft_milestones : theme.defaultMilestones,
     });
-
     const updated = (await getActiveProjectSession(ctx.userProfileId))!;
     return {
       text: formatDraftReview(updated, theme.label),
-      metadata: {
-        specialist: "Magnus",
-        project_setup: true,
-        project_setup_draft: true,
-        project_session_id: session.id,
-      },
+      metadata: draftMetadata(updated, parsed),
     };
   }
 
-  if (PROJECT_LOCK_RE.test(raw)) {
-    return lockSessionToProject(ctx, session);
-  }
-
-  if (PROJECT_SKIP_RE.test(raw)) {
-    await updateProjectSession(session.id, { step: "review", status: "draft" });
-    const updated = (await getActiveProjectSession(ctx.userProfileId))!;
+  if (parsed.intent === "revise_draft" || parsed.intent === "provide_scope") {
+    const updated = await applyDraftPatch(session, parsed, theme);
     return {
       text: formatDraftReview(updated, theme.label),
-      metadata: { specialist: "Magnus", project_setup: true, project_setup_draft: true },
+      metadata: draftMetadata(updated, parsed),
     };
   }
 
   return {
     text: formatDraftReview(session, theme.label),
-    metadata: {
-      specialist: "Magnus",
-      project_setup: true,
-      project_setup_draft: true,
-      project_session_id: session.id,
-    },
+    metadata: draftMetadata(session, parsed),
   };
 }
