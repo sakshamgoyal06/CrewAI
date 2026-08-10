@@ -1,8 +1,34 @@
 # Magnus — Version history
 
-**Current release:** **Magnus v1.0** (2026-08-10)
+**Current release:** **Magnus v1.0** (2026-08-10)  
+**Roadmap target:** **Beta rollout** — November 2026 (post-Diwali)
 
 Magnus uses **major versions** for product-line shifts: new architecture, new constructs, or breaking behavioural promises. Minor fixes and incremental pillar depth ship inside the current major unless they explicitly change the product contract.
+
+---
+
+## Roadmap (v1 → beta)
+
+| Version | Focus | Exit criteria |
+|---------|--------|---------------|
+| **v1** (in progress) | Finalise architecture, default project themes, context switching & idle behaviour, logging & nudging | Magnus is a **true companion**: knows your goals, helps plan and manage, fulfils projects, keeps you on track, logs reliably, nudges at the right time. All tools linked; accuracy thoroughly tested. |
+| **v2** | Onboarding journey for new users | Alpha users; **MVP validation** |
+| **v3** | UI; move off Telegram chat | Dedicated product surface (not chat-only) |
+| **v4** | Polish, cost optimisation, user graph | Clean action lines and pipelines; production-grade reliability |
+| **v4 end / v5** | Beta rollout | External beta users — **target November 2026, post-Diwali** |
+
+### v1 — remaining work (companion-ready)
+
+v1.0 shipped the activity taxonomy, Accountability Agent, shared ops tools, and project setup FSM. **v1 completes when:**
+
+- Architecture is **finalised** (routing, memory, accountability, proactive — no major structural rewrites)
+- **Default project themes** defined, implemented, and **tested** (job search, trip, transformation, skill sprint, event plan, custom)
+- **Context switching** and **idle-time** behaviour validated (draft sessions, turn hand-offs, inactivity nudges)
+- **Logging and nudging** closed: what gets logged, when Magnus reminds, proactive catalog aligned
+- **Tool coverage** for plan → execute → track loop (calendar, lists, events, LifeOS, projects, proactive)
+- **Accuracy & trust**: golden-path and integration tests; no false save claims; accountability correct on drafts
+
+**v1 north star:** One user (you) can run real projects end-to-end in Telegram with confidence Magnus knows goals, plans with you, executes writes, and nudges without noise.
 
 ---
 
@@ -73,9 +99,11 @@ v0 explicitly **did not** ship: projects execution, cross-agent tools, activity 
 
 | Bump | When |
 |------|------|
-| **Major (v2, v3, …)** | New product construct, architecture revamp, or breaking user-facing contract |
-| **Minor (v1.1, …)** | New themes, pillar depth, integrations — same activity model |
+| **Major (v2, v3, …)** | Roadmap milestone above — onboarding (v2), UI (v3), polish/graph (v4), beta scale (v5) |
+| **Minor (v1.1, …)** | Themes, proactive kinds, pillar depth, integrations — same activity model and architecture |
 | **Patch** | Bugfixes, prompt tuning, migration fixes — no new product promises |
+
+**Release cadence intent:** v1 completes companion-ready for owner; v2 opens alpha; v3+ expands surface and scale toward **November 2026 post-Diwali beta**.
 
 When starting a major version:
 

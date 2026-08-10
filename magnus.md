@@ -6,7 +6,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 
 | Doc | Purpose |
 |-----|---------|
-| **`docs/product/MAGNUS_VERSIONS.md`** | v0 vs v1+ version history and bump policy |
+| **`docs/product/MAGNUS_VERSIONS.md`** | v0 vs v1+ history, roadmap (v1→beta), bump policy |
 | **`docs/product/VISION.md`** | Long-term product vision and philosophy (prefer over stale sections in `MAGNUS_CORE_CONTEXT.md`) |
 | **`docs/product/BRD.md`** | Business requirements — stakeholders, objectives, scope |
 | **`docs/product/PRD.md`** | Product requirements — user stories, functional reqs |
@@ -335,4 +335,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-10 (project setup routing + draft action integrity)
+**Last updated:** 2026-08-10 (v1→beta roadmap in MAGNUS_VERSIONS.md)
