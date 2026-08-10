@@ -200,9 +200,10 @@ shell or `.env`.
 12. **Intent routing** — Only Magnus (`GENERAL`) has tools. YouTube actions, list/LifeOS/Notion
     phrases, and short continuations after a Magnus tool turn coerce to `GENERAL`. Pillar specialists
     are prompt-only and must not claim tool actions (see `pillarSpecialist.ts` guard). Health has
-    sub-router depth; Wealth loads Kite read-only portfolio context. Meal photos with book/list
-    captions skip the `meal_log_photo` gate; vision returns `NOT_FOOD:` for non-meal images. Short
-    meal-slot follow-ups (`Dinner?`) after meal context route to HEALTH `meal_plan_read`.
+    sub-router depth; Wealth loads Kite read-only portfolio context. **Photo turns:** `src/vision/`
+    analyzes caption + recent chat, infers purpose (`meal_log`, `list_items`, …) and routes to the
+    correct pillar; `meal_log_photo` only when purpose is food. Short meal-slot follow-ups (`Dinner?`)
+    after meal context route to HEALTH `meal_plan_read`.
 13. **Gym schedule** — Fitness turns inject today's session from locked `weekly_schedule` program memory
     (Mon-first table) before Hevy history.
 14. **Pillar execution plans** — Every routed pillar runs a Haiku **plan parser**
@@ -215,8 +216,11 @@ shell or `.env`.
     (`MAGNUS_PILLAR_PLAN_COMPOSE`, default on) re-voices every step output (single- and multi-step).
     `finalizeMagnusVoice` at the orchestrator boundary catches any path that did not already compose.
     Terminal confirmations (e.g. cancel planning, OAuth links) set `pillar_compose: false`. Deterministic
-    pre-gates stay before the parser where unambiguous (explicit meal log, meal photo) — then through
-    compose like other capabilities. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
+    pre-gates stay before the parser where unambiguous (explicit meal log, **food** meal photo) — then through
+    compose like other capabilities. **Photo attachments:** every Telegram photo runs context-aware vision
+    (`src/vision/`) using caption + recent turns — infers purpose (meal_log, list_items, receipt, …) and
+    routes to the right pillar (not blindly HEALTH). Vision summary is appended to the user message for
+    parsers and agents; meal_log_photo only when purpose is food. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
     loads calendar + event log + planned meals. Review-step meal Q&A answers without re-posting the draft.
     Happiness/Wisdom catalogs include multiple capabilities (recommendations, travel, learning plan, etc.).
 
@@ -326,4 +330,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-10 (action integrity: no disclaimer when item already on list / no write needed)
+**Last updated:** 2026-08-10 (vision photo routing + meal integrity + action integrity fixes)

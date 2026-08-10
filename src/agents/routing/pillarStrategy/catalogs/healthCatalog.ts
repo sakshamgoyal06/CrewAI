@@ -12,7 +12,8 @@ export const HEALTH_CAPABILITY_CATALOG: CapabilityCatalog = {
     {
       id: "meal_log_photo",
       summary: "Log food from a Telegram meal photo attachment",
-      disambiguation: "Deterministic gate when mealPhoto.fileId is present.",
+      disambiguation:
+        "Deterministic gate when a photo is attached AND vision classifies it as food (photo_purpose=meal_log). NOT book covers, receipts, or list screenshots.",
     },
     {
       id: "meal_log_correct",

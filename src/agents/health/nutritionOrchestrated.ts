@@ -254,7 +254,7 @@ export async function runMealPhotoLogTurn(ctx: AgentContext): Promise<AgentResul
   }
 
   try {
-    const photo = await downloadTelegramPhoto(fileId);
+    const photo = ctx.photoContext?.downloaded ?? (await downloadTelegramPhoto(fileId));
     const description = await describeMealFromPhoto({
       photo,
       caption: ctx.mealPhoto?.caption ?? ctx.rawMessage,

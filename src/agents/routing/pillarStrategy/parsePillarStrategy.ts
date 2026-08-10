@@ -115,6 +115,7 @@ Shape:
 
 GENERAL-specific:
 - **day_overview** when the user wants the **whole day** — calendar, schedule, commitments, and meals together. Examples: "what does my day/tomorrow look like", "entire day tomorrow", "what's on tomorrow", "walk me through Monday". Pass date_hint in args when clear: "today", "tomorrow", "yesterday", or YYYY-MM-DD.
+- **lists** when the user sends a **photo of items to save** (routing_hints.photo_purpose=list_items) — add detected titles from photo_extracted_items to the list they asked for (readlist, watchlist, etc.) using recent_turns for which list.
 - **pillar_consultation** when the turn needs Magnus tools AND pillar specialist depth in one reply. Set args.pillars to subset of ["HEALTH","WEALTH","HAPPINESS","WISDOM"]. Examples: log check-in + review workout, calendar edit + nutrition advice, list update + portfolio context.
 - **calendar** only when they want Google Calendar / schedule **without** also wanting meals and commitments woven in.
 - Holistic day asks are NEVER satisfied by conversation alone — use day_overview.
@@ -125,6 +126,8 @@ GENERAL-specific:
     return `${sharedRules}
 
 HEALTH-specific — meal plan CREATE vs READ:
+- **meal_log_photo** only when routing_hints.has_meal_photo=true AND photo_purpose=meal_log (food/drink to log). Non-food photos must NOT use meal_log_photo even if a photo is attached.
+- When has_meal_photo=true and photo_purpose is list_items, document, receipt, etc. → **generic_ack** (wrong pillar; orchestrator should have routed elsewhere).
 - **meal_plan_read**: user wants to see what is already **locked/saved** — "what's my meal plan", "what am I eating tomorrow", "show planned meals" (food only). Pass **date_hint** per step: "today", "tomorrow", "yesterday", or YYYY-MM-DD. Multi-day asks ("today and tomorrow") → one step per day with the correct date_hint each.
 - **meal_plan_create**: build/draft a NEW plan OR continue an in-progress session (active_meal_plan_session=true): gather, draft, review, cancel, save, revisions, and Q&A **about the draft meal plan shown in recent turns**.
 - active_meal_plan_session=true → meal_plan_create **only** when the user is continuing the planning journey or asking about the **draft menu** — NOT when they ask for a holistic day/schedule (calendar + full day). Those belong to GENERAL day_overview; if you only see a holistic day ask, use generic_ack.
