@@ -333,7 +333,7 @@ export function createTelegramRuntime(onMessage: TelegramTextHandler): TelegramR
 
     const caption = "caption" in ctx.message ? ctx.message.caption?.trim() : undefined;
     await deliverToMagnusHandler(onMessage, ctx, {
-      text: caption || "[meal photo]",
+      text: caption || "[photo]",
       mealPhoto: { fileId: largest.file_id, caption: caption ?? null },
     });
   });

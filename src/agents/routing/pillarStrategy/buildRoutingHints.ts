@@ -38,8 +38,13 @@ export async function buildRoutingHints(ctx: AgentContext): Promise<RoutingHints
   const active = await getActiveMealPlanSession(ctx.userProfileId);
   const integrations = await loadUserIntegrations(ctx.userProfileId);
 
+  const photoAnalysis = ctx.photoContext?.analysis;
+
   return {
     has_meal_photo: Boolean(ctx.mealPhoto?.fileId),
+    photo_purpose: photoAnalysis?.purpose ?? null,
+    photo_description_preview: photoAnalysis?.description?.slice(0, 240) ?? null,
+    photo_extracted_items: photoAnalysis?.extracted_items?.slice(0, 24) ?? [],
     explicit_meal_log: parseMealLogCommand(ctx.rawMessage).kind === "meal",
     active_meal_plan_session: Boolean(active),
     meal_plan_session_step: active?.step ?? null,

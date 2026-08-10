@@ -42,8 +42,10 @@ export type AgentContext = {
   specialist?: string;
   /** Set when the user message came from a Telegram `/command` (payload only in `rawMessage`). */
   slashCommandKey?: string;
-  /** Telegram meal photo for vision-based logging. */
+  /** Telegram photo attachment (any pillar). */
   mealPhoto?: { fileId: string; caption?: string | null };
+  /** Downloaded photo + context-aware vision analysis for this turn. */
+  photoContext?: import("../vision/types.js").PhotoContext;
   /** Parsed execution plan from request parser — executor runs steps sequentially. */
   pillarStrategy?: import("./routing/pillarStrategy/types.js").PillarExecutionPlan;
 };

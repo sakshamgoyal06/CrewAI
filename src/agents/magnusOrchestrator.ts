@@ -31,7 +31,9 @@ import {
   looksLikeMealSlotFollowUp,
   recentTurnWasMealContext,
 } from "./routing/mealPlanFollowUp.js";
-import { healthDeterministicCapability } from "./routing/pillarStrategy/healthDeterministicGates.js";
+import { augmentMessageWithPhotoContext } from "../vision/augmentMessageWithPhoto.js";
+import { buildPhotoContext } from "../vision/buildPhotoContext.js";
+import { isMealPhotoPurpose, resolvePhotoIntent } from "../vision/resolvePhotoIntent.js";
 
 export type OrchestratorReply = {
   replyText: string;
@@ -110,28 +112,35 @@ export async function runOrchestratorReply(input: {
     input.userProfileId,
     input.telegramUserId,
   );
-  const photoForcesHealth =
-    Boolean(input.mealPhoto?.fileId) &&
-    healthDeterministicCapability({
-      userProfileId: input.userProfileId,
-      telegramUserId: input.telegramUserId,
-      timezone: input.timezone,
-      rawMessage: input.userMessage,
-      intent: "HEALTH",
-      mealPhoto: input.mealPhoto,
-    }) === "meal_log_photo";
-  const intent = photoForcesHealth
-    ? ("HEALTH" as Intent)
+
+  const photoTurnPreviews = recentTurns.slice(-6).map((t) => ({
+    role: t.role === "assistant" ? ("assistant" as const) : ("user" as const),
+    preview: t.content.slice(0, 280),
+  }));
+
+  const photoContext = input.mealPhoto?.fileId
+    ? await buildPhotoContext({
+        photo: input.mealPhoto,
+        recentTurns: photoTurnPreviews,
+      })
+    : undefined;
+
+  const effectiveUserMessage = photoContext
+    ? augmentMessageWithPhotoContext(input.userMessage, photoContext)
+    : input.userMessage;
+
+  const intent = photoContext
+    ? resolvePhotoIntent(photoContext)
     : looksLikeMealSlotFollowUp(input.userMessage) &&
         recentTurnWasMealContext(recentTurns)
       ? ("HEALTH" as Intent)
-      : await resolveIntentNaturalLanguage(input.userMessage, { recentTurns });
+      : await resolveIntentNaturalLanguage(effectiveUserMessage, { recentTurns });
 
   if (
     intent === "HEALTH" &&
     !healthProfile &&
-    !isMealCommand(input.userMessage) &&
-    !input.mealPhoto?.fileId
+    !isMealCommand(effectiveUserMessage) &&
+    !isMealPhotoPurpose(photoContext)
   ) {
     const started = await startHealthOnboarding({
       userMessage: input.userMessage,
@@ -142,7 +151,7 @@ export async function runOrchestratorReply(input: {
       userProfileId: input.userProfileId,
       telegramUserId: input.telegramUserId,
       timezone: input.timezone,
-      rawMessage: input.userMessage,
+      rawMessage: effectiveUserMessage,
       intent: "HEALTH",
     };
     return finalizeOrchestratorReply(ctx, {
@@ -169,7 +178,7 @@ export async function runOrchestratorReply(input: {
   const memoryPackage = await buildMemoryPackage({
     memory,
     intent,
-    rawMessage: input.userMessage,
+    rawMessage: effectiveUserMessage,
     userProfileId: input.userProfileId,
   });
   const memoryBlock = memoryPackage.memoryBlock;
@@ -180,8 +189,9 @@ export async function runOrchestratorReply(input: {
     timezone: input.timezone,
     northStarGoal: input.northStarGoal,
     displayName: input.displayName,
-    rawMessage: input.userMessage,
+    rawMessage: effectiveUserMessage,
     mealPhoto: input.mealPhoto,
+    photoContext,
     intent,
     memoryBlock,
     memoryPackage,
@@ -194,6 +204,7 @@ export async function runOrchestratorReply(input: {
       module: "magnusOrchestrator",
       intent,
       pillar: pillarRoute.pillar,
+      photoPurpose: photoContext?.analysis.purpose ?? null,
       memoryGapCount: memory.gaps.length,
       memoryRecentTurns: memory.recentSignals.recentChatTurns.length,
     },
@@ -205,7 +216,17 @@ export async function runOrchestratorReply(input: {
     return finalizeOrchestratorReply(ctx, {
       replyText: magnus.text,
       intent,
-      agentMetadata: magnus.metadata,
+      agentMetadata: {
+        ...magnus.metadata,
+        ...(photoContext
+          ? {
+              photo_vision: {
+                purpose: photoContext.analysis.purpose,
+                confidence: photoContext.analysis.confidence,
+              },
+            }
+          : {}),
+      },
       memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
     });
   }
@@ -220,6 +241,14 @@ export async function runOrchestratorReply(input: {
         pillar: pillarRoute.pillar,
         department: pillarRoute.department,
         ...delegated.result.metadata,
+        ...(photoContext
+          ? {
+              photo_vision: {
+                purpose: photoContext.analysis.purpose,
+                confidence: photoContext.analysis.confidence,
+              },
+            }
+          : {}),
       },
       memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
     });
