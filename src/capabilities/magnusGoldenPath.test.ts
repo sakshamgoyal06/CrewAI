@@ -172,8 +172,6 @@ vi.mock("../agents/health/mealPlanningAgent.js", () => ({
 }));
 
 vi.mock("../agents/health/mealPlanReadAgent.js", () => ({
-  matchesMealPlanReadMessage: vi.fn().mockReturnValue(false),
-  tryMealPlanReadAgent: vi.fn().mockResolvedValue(null),
   executeMealPlanReadCapability: vi.fn().mockImplementation(async (_ctx, cap) => ({
     text: `Meal plan read (${cap}).`,
     metadata: { specialist: "MealPlanRead", meal_plan: cap },

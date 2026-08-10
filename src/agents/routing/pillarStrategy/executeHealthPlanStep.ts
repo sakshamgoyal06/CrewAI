@@ -73,7 +73,6 @@ export async function executeHealthPlanStep(
     case "meal_plan_read":
     case "meal_plan_skip":
     case "meal_plan_swap":
-    case "meal_plan_switch_slots":
     case "meal_plan_copy_week":
     case "meal_plan_template_save":
     case "meal_plan_template_apply":

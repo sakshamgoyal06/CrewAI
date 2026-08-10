@@ -103,6 +103,46 @@ describe("parsePillarExecutionPlan", () => {
     expect(plan.confidence).toBe(0.92);
   });
 
+  it("accepts meal_plan_swap with exchange_with_slot from parser JSON", async () => {
+    createMock.mockResolvedValueOnce({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            confidence: 0.93,
+            steps: [
+              {
+                capability: "meal_plan_swap",
+                args: {
+                  slot: "lunch",
+                  exchange_with_slot: "dinner",
+                  date_hint: "today",
+                },
+                intent_summary: "Switch lunch and dinner for today",
+              },
+            ],
+          }),
+        },
+      ],
+    });
+
+    const plan = await parsePillarExecutionPlan(
+      "HEALTH",
+      "switch lunch and dinner for today",
+      EMPTY_HINTS,
+    );
+
+    expect(plan.steps[0]).toMatchObject({
+      capability: "meal_plan_swap",
+      args: {
+        slot: "lunch",
+        exchange_with_slot: "dinner",
+        date_hint: "today",
+      },
+    });
+    expect(String(createMock.mock.calls[0]![0].system)).toContain("exchange_with_slot");
+  });
+
   it("falls back when LLM returns invalid capabilities", async () => {
     createMock.mockResolvedValueOnce({
       content: [{ type: "text", text: '{"steps":[{"capability":"not_real","args":{}}],"confidence":0.9}' }],

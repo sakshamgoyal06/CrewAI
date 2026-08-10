@@ -283,7 +283,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npx tsx scripts/audit-notion-lifeos.mts` | Inventory LifeOS hub + accessible Notion databases |
 | `npx tsx scripts/nutrition/rebuild-rollups.mts` | Rebuild `meal_daily_rollups` from `meal_logs` |
 
-**Meal planning journey:** User says "plan my meals for the week" → … Locked plan edits: **skip** a slot, **swap dinner for X** (replace one dish), or **switch lunch and dinner** (exchange two slots on the same day). **Photo logging:** …
+**Meal planning journey:** User says "plan my meals for the week" → … Locked plan edits via parser → **meal_plan_skip** / **meal_plan_swap** (replace one dish with `new_title`, or exchange two slots with `slot` + `exchange_with_slot`). **Photo logging:** …
 
 ---
 
@@ -324,4 +324,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-10 (meal plan: switch lunch and dinner on locked plan)
+**Last updated:** 2026-08-10 (meal plan: switch slots via meal_plan_swap parser args, not regex)

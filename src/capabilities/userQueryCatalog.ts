@@ -206,7 +206,7 @@ export const USER_QUERY_CATALOG: UserQueryExpectation[] = [
     category: "health_meal_plan",
     query: "switch lunch and dinner for today",
     idealIntent: "HEALTH",
-    idealCapability: "meal_plan_switch_slots",
+    idealCapability: "meal_plan_swap",
     hints: {},
   },
   {

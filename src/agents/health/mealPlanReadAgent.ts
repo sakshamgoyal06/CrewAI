@@ -30,9 +30,6 @@ const SKIP_PLAN_RE =
 const SWAP_PLAN_RE =
   /\b(?:swap)\s+(?:(today|tomorrow)\s+)?(breakfast|lunch|dinner|snack)\s+(?:for|with)\s+(.+)$/i;
 
-const SWITCH_SLOTS_RE =
-  /\b(?:switch|swap)\s+(?:(today|tomorrow)\s+)?(?:my\s+)?(breakfast|lunch|dinner|snack)\s+and\s+(breakfast|lunch|dinner|snack)(?:\s+for\s+(?:today|tomorrow))?/i;
-
 const COPY_WEEK_RE =
   /\b(?:repeat|copy)\s+(?:last\s+week(?:'s)?\s+plan|my\s+(?:last\s+)?week(?:'s)?\s+(?:meal\s+)?plan)\b/i;
 
@@ -53,6 +50,30 @@ function parsePlanSlot(raw: string): Exclude<MealSlot, "unspecified"> | null {
     return s;
   }
   return null;
+}
+
+function resolvePlanDateFromHint(
+  ctx: AgentContext,
+  dateHint: string | undefined,
+): { localDate: string; label: string } {
+  const today = localDateKey(new Date(), ctx.timezone);
+  const hint = dateHint?.toLowerCase().trim();
+
+  if (hint === "tomorrow") {
+    const d = offsetDateKey(today, 1);
+    return { localDate: d, label: "Tomorrow" };
+  }
+
+  if (hint === "yesterday") {
+    const d = offsetDateKey(today, -1);
+    return { localDate: d, label: "Yesterday" };
+  }
+
+  if (hint && /^\d{4}-\d{2}-\d{2}$/.test(hint)) {
+    return { localDate: hint, label: hint };
+  }
+
+  return { localDate: today, label: "Today" };
 }
 
 function resolvePlanDate(
@@ -88,7 +109,6 @@ export function matchesMealPlanReadMessage(rawMessage: string): boolean {
     MEAL_PLAN_SHOW_RE.test(rawMessage) ||
     SKIP_PLAN_RE.test(rawMessage) ||
     SWAP_PLAN_RE.test(rawMessage) ||
-    SWITCH_SLOTS_RE.test(rawMessage) ||
     COPY_WEEK_RE.test(rawMessage) ||
     SAVE_TEMPLATE_RE.test(rawMessage) ||
     APPLY_TEMPLATE_RE.test(rawMessage) ||
@@ -101,7 +121,6 @@ export type MealPlanReadCapability =
   | "meal_plan_read"
   | "meal_plan_skip"
   | "meal_plan_swap"
-  | "meal_plan_switch_slots"
   | "meal_plan_copy_week"
   | "meal_plan_template_save"
   | "meal_plan_template_apply"
@@ -258,17 +277,52 @@ export async function executeMealPlanReadCapability(
   }
 
   if (cap === "meal_plan_swap") {
+    const slot = parsePlanSlot(strArg(args, "slot") ?? "");
+    const exchangeWith = parsePlanSlot(
+      strArg(args, "exchange_with_slot") ?? strArg(args, "slot_b") ?? "",
+    );
+    const dateHint = strArg(args, "date_hint") ?? strArg(args, "when");
+    const { localDate, label } = resolvePlanDateFromHint(ctx, dateHint);
+
+    if (slot && exchangeWith) {
+      const result = await switchPlanSlots(ctx.userProfileId, localDate, slot, exchangeWith);
+      if (!result.ok) {
+        return {
+          text: `Could not switch slots: ${result.error}`,
+          metadata: { specialist: "MealPlanRead", meal_plan: "swap_failed" },
+        };
+      }
+      const entries = await getPlanEntriesForDate(ctx.userProfileId, localDate);
+      const titleA = entries.find((e) => e.meal_slot === slot)?.title ?? "—";
+      const titleB = entries.find((e) => e.meal_slot === exchangeWith)?.title ?? "—";
+      return {
+        text: `Switched **${slot}** and **${exchangeWith}** for ${label.toLowerCase()} (${localDate}):\n• **${slot}:** ${titleA}\n• **${exchangeWith}:** ${titleB}`,
+        metadata: {
+          specialist: "MealPlanRead",
+          meal_plan: "swapped",
+          local_date: localDate,
+          slots: [slot, exchangeWith],
+        },
+      };
+    }
+
     const swapMatch = raw.match(SWAP_PLAN_RE);
-    const slot = parsePlanSlot(strArg(args, "slot") ?? swapMatch?.[2] ?? "");
+    const resolvedSlot = slot ?? parsePlanSlot(swapMatch?.[2] ?? "");
     const newTitle = strArg(args, "new_title") ?? swapMatch?.[3]?.trim();
-    if (!slot || !newTitle) {
+    if (!resolvedSlot || !newTitle) {
       return {
         text: 'Try **"swap dinner for lentil soup"**.',
         metadata: { specialist: "MealPlanRead", meal_plan: "swap_failed" },
       };
     }
-    const { localDate, label } = resolvePlanDate(ctx, swapMatch?.[1], raw);
-    const result = await swapPlanSlot(ctx.userProfileId, localDate, slot, newTitle);
+    const legacyDate = resolvePlanDate(ctx, swapMatch?.[1], raw);
+    const swapDate = dateHint ? { localDate, label } : legacyDate;
+    const result = await swapPlanSlot(
+      ctx.userProfileId,
+      swapDate.localDate,
+      resolvedSlot,
+      newTitle,
+    );
     if (!result.ok) {
       return {
         text: `Could not swap: ${result.error}`,
@@ -276,42 +330,12 @@ export async function executeMealPlanReadCapability(
       };
     }
     return {
-      text: `Updated **${slot}** for ${label.toLowerCase()} (${localDate}) → ${newTitle}.`,
-      metadata: { specialist: "MealPlanRead", meal_plan: "swapped", local_date: localDate, slot },
-    };
-  }
-
-  if (cap === "meal_plan_switch_slots") {
-    const switchMatch = raw.match(SWITCH_SLOTS_RE);
-    const slotA = parsePlanSlot(
-      strArg(args, "slot_a") ?? strArg(args, "slot") ?? switchMatch?.[2] ?? "",
-    );
-    const slotB = parsePlanSlot(strArg(args, "slot_b") ?? switchMatch?.[3] ?? "");
-    if (!slotA || !slotB) {
-      return {
-        text: 'Try **"switch lunch and dinner"** or **"swap lunch and dinner for today"**.',
-        metadata: { specialist: "MealPlanRead", meal_plan: "switch_failed" },
-      };
-    }
-    const when = switchMatch?.[1] ?? (/\bfor\s+today\b/i.test(raw) ? "today" : undefined);
-    const { localDate, label } = resolvePlanDate(ctx, when, raw);
-    const result = await switchPlanSlots(ctx.userProfileId, localDate, slotA, slotB);
-    if (!result.ok) {
-      return {
-        text: `Could not switch slots: ${result.error}`,
-        metadata: { specialist: "MealPlanRead", meal_plan: "switch_failed" },
-      };
-    }
-    const entries = await getPlanEntriesForDate(ctx.userProfileId, localDate);
-    const titleA = entries.find((e) => e.meal_slot === slotA)?.title ?? "—";
-    const titleB = entries.find((e) => e.meal_slot === slotB)?.title ?? "—";
-    return {
-      text: `Switched **${slotA}** and **${slotB}** for ${label.toLowerCase()} (${localDate}):\n• **${slotA}:** ${titleA}\n• **${slotB}:** ${titleB}`,
+      text: `Updated **${resolvedSlot}** for ${swapDate.label.toLowerCase()} (${swapDate.localDate}) → ${newTitle}.`,
       metadata: {
         specialist: "MealPlanRead",
-        meal_plan: "switched_slots",
-        local_date: localDate,
-        slots: [slotA, slotB],
+        meal_plan: "swapped",
+        local_date: swapDate.localDate,
+        slot: resolvedSlot,
       },
     };
   }
@@ -370,10 +394,6 @@ export async function tryMealPlanReadAgent(ctx: AgentContext): Promise<AgentResu
 
   if (SWAP_PLAN_RE.test(raw)) {
     return executeMealPlanReadCapability(ctx, "meal_plan_swap");
-  }
-
-  if (SWITCH_SLOTS_RE.test(raw)) {
-    return executeMealPlanReadCapability(ctx, "meal_plan_switch_slots");
   }
 
   if (!MEAL_PLAN_SHOW_RE.test(raw)) {
