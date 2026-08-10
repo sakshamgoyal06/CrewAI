@@ -41,8 +41,12 @@ export async function composePillarPlanReply(
     stepResults.length === 1 && stepResults.every((s) => isMealPlanQuestionStep(s));
   const isDayOverview =
     stepResults.length === 1 && stepResults.every((s) => s.metadata?.day_overview === true);
-  const isConsultationMerge =
-    stepResults.length === 1 && stepResults[0]?.capability === "consultation";
+  const isConsultationMerge = stepResults.some((s) => s.capability === "pillar_consultation");
+  const isMultiMealLog =
+    stepResults.length > 1 &&
+    stepResults.every((s) => s.capability === "meal_log" || s.capability === "meal_log_correct");
+  const isMultiMealPlanRead =
+    stepResults.length > 1 && stepResults.every((s) => s.capability === "meal_plan_read");
 
   const system = `You compose the final Telegram reply for Magnus after internal specialists executed a plan.
 
@@ -73,8 +77,22 @@ This turn is a **day overview** (calendar + commitments + meals). Weave the sect
   if (isConsultationMerge) {
     const consultSystem = `${system}
 
-This turn merged Magnus and pillar specialist notes. One voice, one message — keep all factual content, remove duplicate greetings or specialist framing.`;
+This turn merged Magnus and pillar specialist notes. One voice, one message — keep all factual content, remove duplicate greetings or specialist framing. Do NOT invent schedule items, times, or commitments not present in step outcomes.`;
     return composeWithLlm(ctx, stepResults, consultSystem);
+  }
+
+  if (isMultiMealLog) {
+    const mealLogSystem = `${system}
+
+This turn logged multiple meals in separate steps. Only claim a meal was logged when its step outcome shows a successful save with kcal/macros. If a step shows an error or no save, say that meal was not logged. Sum today's totals only from successfully logged steps.`;
+    return composeWithLlm(ctx, stepResults, mealLogSystem);
+  }
+
+  if (isMultiMealPlanRead) {
+    const planReadSystem = `${system}
+
+This turn read meal plans for multiple days. Present each day's plan from step outcomes exactly — do NOT say a day has no plan when a step outcome lists meals for that date.`;
+    return composeWithLlm(ctx, stepResults, planReadSystem);
   }
 
   return composeWithLlm(ctx, stepResults, system);

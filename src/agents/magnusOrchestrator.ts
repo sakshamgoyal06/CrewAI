@@ -27,6 +27,11 @@ import type { AgentContext } from "./types.js";
 import { fetchRecentRoutingTurns } from "../tools/routingContext.js";
 import { enforceActionIntegrity } from "./routing/actionIntegrity.js";
 import { finalizeMagnusVoice } from "./routing/finalizeMagnusVoice.js";
+import {
+  looksLikeMealSlotFollowUp,
+  recentTurnWasMealContext,
+} from "./routing/mealPlanFollowUp.js";
+import { healthDeterministicCapability } from "./routing/pillarStrategy/healthDeterministicGates.js";
 
 export type OrchestratorReply = {
   replyText: string;
@@ -105,9 +110,22 @@ export async function runOrchestratorReply(input: {
     input.userProfileId,
     input.telegramUserId,
   );
-  const intent = input.mealPhoto?.fileId
+  const photoForcesHealth =
+    Boolean(input.mealPhoto?.fileId) &&
+    healthDeterministicCapability({
+      userProfileId: input.userProfileId,
+      telegramUserId: input.telegramUserId,
+      timezone: input.timezone,
+      rawMessage: input.userMessage,
+      intent: "HEALTH",
+      mealPhoto: input.mealPhoto,
+    }) === "meal_log_photo";
+  const intent = photoForcesHealth
     ? ("HEALTH" as Intent)
-    : await resolveIntentNaturalLanguage(input.userMessage, { recentTurns });
+    : looksLikeMealSlotFollowUp(input.userMessage) &&
+        recentTurnWasMealContext(recentTurns)
+      ? ("HEALTH" as Intent)
+      : await resolveIntentNaturalLanguage(input.userMessage, { recentTurns });
 
   if (
     intent === "HEALTH" &&

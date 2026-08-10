@@ -126,6 +126,37 @@ describe("enforceActionIntegrity", () => {
     expect(out.corrected).toBe(false);
     expect(out.text).toContain("curd added");
   });
+
+  it("blocks meal log claims without meal_session_id", () => {
+    const out = enforceActionIntegrity({
+      text: "Got it! I've logged your full day: breakfast, lunch, and dinner.",
+      metadata: { specialist: "nutrition", meal_log: true, department: "HEALTH" },
+    });
+    expect(out.corrected).toBe(true);
+    expect(out.reason).toBe("no_write_evidence");
+  });
+
+  it("allows meal log claims when meal_session_id is present", () => {
+    const out = enforceActionIntegrity({
+      text: "Lunch logged — 408 kcal.",
+      metadata: {
+        specialist: "nutrition",
+        meal_log: true,
+        meal_session_id: "abc-123",
+      },
+    });
+    expect(out.corrected).toBe(false);
+  });
+
+  it("softens calendar sync claims without calendar tool evidence", () => {
+    const out = enforceActionIntegrity({
+      text: "Done! Calendar event is live for November 10.",
+      metadata: { specialist: "Magnus", tools_used: ["update_event"] },
+    });
+    expect(out.corrected).toBe(true);
+    expect(out.reason).toBe("calendar_claim_without_sync");
+    expect(out.text).not.toMatch(/calendar event is live/i);
+  });
 });
 
 describe("stripMisleadingClaimLines", () => {

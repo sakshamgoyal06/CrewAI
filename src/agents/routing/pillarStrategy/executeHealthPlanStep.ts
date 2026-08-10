@@ -19,6 +19,7 @@ import {
 import { runNutritionCapability } from "../../health/nutritionAgent.js";
 import { tryHevyWriteAgent } from "../../../pillars/health/workouts/agents/hevyWriteAgent.js";
 import { parseMealLogCommand } from "../../../meals/parseMealLogCommand.js";
+import { sanitizeMealLogRawText } from "../../../meals/sanitizeMealLogRawText.js";
 import { runFitnessCapability } from "../../../pillars/health/workouts/agents/fitnessAgent.js";
 import type { PillarPlanStep } from "./types.js";
 import { buildStepAgentContext } from "./buildStepAgentContext.js";
@@ -33,17 +34,25 @@ export async function executeHealthPlanStep(
 
   switch (cap) {
     case "meal_log": {
+      const original = ctx.originalUserMessage?.trim() || ctx.rawMessage.trim();
       const mealParsed = parseMealLogCommand(stepCtx.rawMessage);
       const rawText =
         mealParsed.kind === "meal"
           ? mealParsed.text
           : typeof step.args.meal_text === "string" && step.args.meal_text.trim()
             ? step.args.meal_text.trim()
-            : stepCtx.rawMessage.trim();
-      return runOrchestratedMealLogTurn(stepCtx, rawText, stepCtx.rawMessage, {
-        mealSlot: mealParsed.kind === "meal" ? mealParsed.slot : undefined,
-        logKind: mealParsed.kind === "meal" ? mealParsed.logKind : undefined,
-      });
+            : typeof step.intent_summary === "string" && step.intent_summary.trim()
+              ? step.intent_summary.trim()
+              : stepCtx.rawMessage.trim();
+      return runOrchestratedMealLogTurn(
+        stepCtx,
+        sanitizeMealLogRawText(rawText),
+        original,
+        {
+          mealSlot: mealParsed.kind === "meal" ? mealParsed.slot : undefined,
+          logKind: mealParsed.kind === "meal" ? mealParsed.logKind : undefined,
+        },
+      );
     }
 
     case "meal_log_photo":

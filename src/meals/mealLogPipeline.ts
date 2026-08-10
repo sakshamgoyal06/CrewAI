@@ -6,6 +6,7 @@ import type { MealComponentForRow } from "./mealComponents.js";
 import type { MealLogKind, MealSlot } from "./parseMealLogCommand.js";
 import { recordMealSession } from "./recordMealLog.js";
 import type { MealNutritionEstimate } from "./types.js";
+import { sanitizeMealLogRawText } from "./sanitizeMealLogRawText.js";
 
 /** @internal — covered by `mealLogPipeline.saveFailure.test.ts` */
 export function formatMealLogSaveFailure(message: string): string {
@@ -53,7 +54,7 @@ export async function completeMealLogWithEstimate(input: {
     const estimate = input.estimate;
     const saved = await recordMealSession({
       userProfileId: input.userProfileId,
-      rawText: input.rawMealText,
+      rawText: sanitizeMealLogRawText(input.rawMealText),
       estimate,
       sourceChannel: "telegram",
       timezone: input.timezone,

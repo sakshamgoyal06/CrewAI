@@ -117,7 +117,7 @@ export async function runOrchestratedMealLogTurn(
         metadata: {
           specialist: "nutrition",
           department: "HEALTH",
-          meal_log: true,
+          meal_log: false,
           meal_parser_pipeline: true,
           error: true,
           pillar_compose: true,
@@ -150,7 +150,7 @@ export async function runOrchestratedMealLogTurn(
         metadata: {
           specialist: "nutrition",
           department: "HEALTH",
-          meal_log: true,
+          meal_log: false,
           fallback_direct_pipeline: true,
           error: true,
           pillar_compose: true,
@@ -260,6 +260,19 @@ export async function runMealPhotoLogTurn(ctx: AgentContext): Promise<AgentResul
       caption: ctx.mealPhoto?.caption ?? ctx.rawMessage,
       healthPreferences: ctx.healthPreferences ?? null,
     });
+
+    if (description.startsWith("NOT_FOOD:")) {
+      const reason = description.slice("NOT_FOOD:".length).trim() || "not a meal";
+      return {
+        text: `That doesn't look like a meal photo (${reason}). Paste the text here or describe what you need and I'll help.`,
+        metadata: {
+          specialist: "MealPhoto",
+          meal_log: false,
+          not_food_photo: true,
+          pillar_compose: false,
+        },
+      };
+    }
 
     const slotHint = ctx.rawMessage.match(/\b(breakfast|lunch|dinner|snack)\b/i)?.[1]?.toLowerCase();
     const mealSlot =

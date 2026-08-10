@@ -9,6 +9,7 @@ import { buildRoutingHints } from "../routing/pillarStrategy/buildRoutingHints.j
 import { executeHealthStrategy, healthDeterministicCapability } from "../routing/pillarStrategy/executeHealthStrategy.js";
 import { parsePillarExecutionPlan } from "../routing/pillarStrategy/parsePillarStrategy.js";
 import { planFromSingleCapability } from "../routing/pillarStrategy/types.js";
+import { looksLikeMealSlotFollowUp } from "../routing/mealPlanFollowUp.js";
 import { HEALTH_GENERIC_ACK } from "./healthConstants.js";
 
 /** @deprecated Import from healthConstants.js */
@@ -40,6 +41,17 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
       const plan = deterministicHealthPlan("meal_log");
       return executeHealthStrategy({ ...ctxWithPrefs, pillarStrategy: plan }, plan);
     }
+  }
+
+  if (looksLikeMealSlotFollowUp(ctx.rawMessage)) {
+    const slot = ctx.rawMessage.trim().match(/\b(breakfast|lunch|dinner|snack)\b/i)?.[1]?.toLowerCase();
+    const plan = planFromSingleCapability(
+      "meal_plan_read",
+      { slot, date_hint: "today" },
+      1,
+      "deterministic",
+    );
+    return executeHealthStrategy({ ...ctxWithPrefs, pillarStrategy: plan }, plan);
   }
 
   const hints = await buildRoutingHints(ctxWithPrefs);

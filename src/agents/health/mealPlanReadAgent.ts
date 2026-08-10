@@ -22,7 +22,7 @@ import type { MealSlot } from "../../nutrition/types.js";
 import type { AgentContext, AgentResult } from "../types.js";
 
 const MEAL_PLAN_SHOW_RE =
-  /\b(?:what(?:'s| is)\s+(?:planned|on\s+the\s+plan)|show\s+(?:my\s+)?(?:meal\s+)?plan|meal\s+plan\s+(?:for|on)|planned\s+meals?|what\s+(?:am\s+i|are\s+we)\s+(?:eating|having)\s+(?:today|tomorrow|this\s+week))\b/i;
+  /\b(?:what(?:'s| is)\s+(?:planned|on\s+the\s+plan)|show\s+(?:my\s+)?(?:meal\s+)?plan|meal\s+plan\s+(?:for|on)|planned\s+meals?|what\s+(?:am\s+i|are\s+we)\s+(?:eating|having)\s+(?:today|tomorrow|this\s+week)|today(?:'?s|s)?\s+meal\s+plan|tomorrow(?:'?s|s)?\s+meal\s+plan)\b/i;
 
 const SKIP_PLAN_RE =
   /\b(?:skip)\s+(?:(today|tomorrow)\s+)?(breakfast|lunch|dinner|snack)\b/i;
@@ -59,6 +59,10 @@ function resolvePlanDateFromHint(
   const today = localDateKey(new Date(), ctx.timezone);
   const hint = dateHint?.toLowerCase().trim();
 
+  if (hint === "today" || hint === "tonight") {
+    return { localDate: today, label: "Today" };
+  }
+
   if (hint === "tomorrow") {
     const d = offsetDateKey(today, 1);
     return { localDate: d, label: "Tomorrow" };
@@ -74,6 +78,18 @@ function resolvePlanDateFromHint(
   }
 
   return { localDate: today, label: "Today" };
+}
+
+const MULTI_DAY_PLAN_RE =
+  /\b(?:today|tonight)\b[\s\S]{0,80}\b(?:tomorrow)\b|\b(?:tomorrow)\b[\s\S]{0,80}\b(?:today|tonight)\b/i;
+
+function parsePlanSlotFromArgs(args: Record<string, unknown>, raw: string): MealSlot | null {
+  const fromArgs = strArg(args, "slot") ?? strArg(args, "meal_slot");
+  if (fromArgs) {
+    return parsePlanSlot(fromArgs);
+  }
+  const slotOnly = raw.trim().match(/^(?:breakfast|lunch|dinner|snack)\??$/i)?.[0];
+  return slotOnly ? parsePlanSlot(slotOnly) : null;
 }
 
 function resolvePlanDate(
@@ -340,8 +356,31 @@ export async function executeMealPlanReadCapability(
     };
   }
 
-  const { localDate, label } = resolvePlanDate(ctx, undefined, raw);
-  const horizon = strArg(args, "horizon_hint") ?? raw.toLowerCase();
+  const horizon = strArg(args, "horizon_hint") ?? strArg(args, "date_hint") ?? raw.toLowerCase();
+  const dateHint = strArg(args, "date_hint") ?? strArg(args, "horizon_hint");
+  const slotFilter = parsePlanSlotFromArgs(args, raw);
+
+  if (cap === "meal_plan_read" && MULTI_DAY_PLAN_RE.test(raw) && !dateHint) {
+    const tomorrow = offsetDateKey(today, 1);
+    const todayText = formatPlanDay(
+      await getPlanEntriesForDate(ctx.userProfileId, today),
+      "Today",
+      today,
+    );
+    const tomorrowText = formatPlanDay(
+      await getPlanEntriesForDate(ctx.userProfileId, tomorrow),
+      "Tomorrow",
+      tomorrow,
+    );
+    return {
+      text: `${todayText}\n\n${tomorrowText}\n\n_${tz}_`,
+      metadata: {
+        specialist: "MealPlanRead",
+        meal_plan: "multi_day",
+        local_dates: [today, tomorrow],
+      },
+    };
+  }
 
   if (cap === "meal_plan_read" && (/\bthis\s+week\b/.test(horizon) || horizon.includes("week"))) {
     const end = offsetDateKey(today, 6);
@@ -353,11 +392,28 @@ export async function executeMealPlanReadCapability(
     };
   }
 
-  const entries = await getPlanEntriesForDate(ctx.userProfileId, localDate);
-  const text = formatPlanDay(entries, label, localDate);
+  const resolvedDate = dateHint
+    ? resolvePlanDateFromHint(ctx, dateHint)
+    : resolvePlanDate(ctx, undefined, raw);
+  const planLocalDate = resolvedDate.localDate;
+  const planLabel = resolvedDate.label;
+
+  let entries = await getPlanEntriesForDate(ctx.userProfileId, planLocalDate);
+  if (slotFilter) {
+    entries = entries.filter((e) => e.meal_slot === slotFilter);
+  }
+  const text =
+    slotFilter && entries.length === 1
+      ? `**${planLabel} — ${slotFilter.charAt(0).toUpperCase()}${slotFilter.slice(1)}** (${planLocalDate})\n\n• ${entries[0]!.title}`
+      : formatPlanDay(entries, planLabel, planLocalDate);
   return {
     text: `${text}\n\n_${tz}_`,
-    metadata: { specialist: "MealPlanRead", meal_plan: "day", local_date: localDate },
+    metadata: {
+      specialist: "MealPlanRead",
+      meal_plan: "day",
+      local_date: planLocalDate,
+      ...(slotFilter ? { slot: slotFilter } : {}),
+    },
   };
 }
 

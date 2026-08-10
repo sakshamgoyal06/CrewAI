@@ -53,6 +53,15 @@ const NEGATED_WRITE_CONTEXT_RE =
 const FULL_COMPLETION_RE =
   /\b(?:all done|everything(?:'s| is) (?:set|saved|logged|updated)|fully (?:logged|saved|updated)|clean at \d+|is now clean)\b/i;
 
+const CALENDAR_SYNC_CLAIM_RE =
+  /\b(?:calendar (?:event )?(?:is )?(?:live|set|updated|synced)|(?:added|put)\s+(?:it\s+)?(?:to|on)\s+(?:your\s+)?calendar|on your calendar)\b/i;
+
+const CALENDAR_WRITE_TOOLS = new Set([
+  "create_calendar_event",
+  "update_calendar_event",
+  "delete_calendar_event",
+]);
+
 const MISLEADING_LINE_RE =
   /^(?:added|logged|saved|created|scheduled|all done|done)\b|^`checkin:/i;
 
@@ -96,7 +105,14 @@ function hasSpecialistWriteEvidence(meta: Record<string, unknown>): boolean {
     return true;
   }
   if (meta.meal_log === true) {
-    return true;
+    if (typeof meta.meal_session_id === "string" && meta.meal_session_id.trim()) {
+      return true;
+    }
+    const sessionIds = meta.meal_session_ids;
+    if (Array.isArray(sessionIds) && sessionIds.some((id) => typeof id === "string" && id.trim())) {
+      return true;
+    }
+    return false;
   }
   if (meta.hevy_write === true) {
     return true;
@@ -154,6 +170,20 @@ export function hasSuccessfulWriteTool(meta: Record<string, unknown>): boolean {
   }
 
   return false;
+}
+
+function hasSuccessfulCalendarWrite(meta: Record<string, unknown>): boolean {
+  if (typeof meta.google_event_id === "string" && meta.google_event_id.trim()) {
+    return true;
+  }
+  if (meta.calendar_synced === true) {
+    return true;
+  }
+  return toolOutcomes(meta).some((o) => o.ok && CALENDAR_WRITE_TOOLS.has(o.name));
+}
+
+function claimsCalendarSync(text: string): boolean {
+  return CALENDAR_SYNC_CLAIM_RE.test(text.trim());
 }
 
 function hasFailedWriteTool(meta: Record<string, unknown>): boolean {
@@ -224,6 +254,21 @@ export function enforceActionIntegrity(input: ActionIntegrityInput): ActionInteg
   }
 
   if (!claimsPersistence(text)) {
+    if (claimsCalendarSync(text) && !hasSuccessfulCalendarWrite(meta)) {
+      return {
+        text: stripMisleadingClaimLines(text).replace(
+          CALENDAR_SYNC_CLAIM_RE,
+          "event log updated",
+        ),
+        metadata: {
+          ...meta,
+          action_integrity: "calendar_claim_without_sync",
+          action_integrity_original_claim: true,
+        },
+        corrected: true,
+        reason: "calendar_claim_without_sync",
+      };
+    }
     return { text, metadata: meta, corrected: false };
   }
 
