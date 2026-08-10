@@ -62,6 +62,14 @@ const CALENDAR_WRITE_TOOLS = new Set([
   "delete_calendar_event",
 ]);
 
+/** User request was satisfied without a new write (duplicate, already on list, read-only check). */
+const REQUEST_ALREADY_SATISFIED_RE =
+  /\b(?:already (?:on|in) (?:your )?(?:\w+list|list)|(?:is|was) already (?:on|there|in|your)|no duplicates? needed|nothing (?:new )?to add|didn'?t need to (?:add|save)|found (?:it )?(?:was )?already|you(?:'d| had) added (?:it )?before|added (?:it )?(?:at some point |before|previously|earlier))\b/i;
+
+/** Past-tense / historical mention of a prior add — not a claim that this turn saved. */
+const HISTORICAL_ADD_RE =
+  /\b(?:you(?:'ve| had)?|they|someone|it was) (?:added|saved|logged)\b|\badded (?:it )?(?:at some point|before|previously|earlier)\b/i;
+
 const MISLEADING_LINE_RE =
   /^(?:added|logged|saved|created|scheduled|all done|done)\b|^`checkin:/i;
 
@@ -82,6 +90,9 @@ export function claimsPersistence(text: string): boolean {
   if (!trimmed) {
     return false;
   }
+  if (REQUEST_ALREADY_SATISFIED_RE.test(trimmed) && !FIRST_PERSON_WRITE_RE.test(trimmed)) {
+    return false;
+  }
   const looksLikeWriteClaim =
     FIRST_PERSON_WRITE_RE.test(trimmed) ||
     ACTION_TO_TARGET_RE.test(trimmed) ||
@@ -93,7 +104,19 @@ export function claimsPersistence(text: string): boolean {
   if (NEGATED_WRITE_CONTEXT_RE.test(trimmed)) {
     return false;
   }
+  if (HISTORICAL_ADD_RE.test(trimmed) && !FIRST_PERSON_WRITE_RE.test(trimmed)) {
+    return false;
+  }
   return true;
+}
+
+/** True when the reply (or step outcome) shows the user's ask was met without a new write. */
+export function requestAlreadySatisfied(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+  return REQUEST_ALREADY_SATISFIED_RE.test(trimmed);
 }
 
 function isReadOnlyTool(name: string): boolean {
@@ -191,6 +214,28 @@ function hasFailedWriteTool(meta: Record<string, unknown>): boolean {
   return outcomes.some((o) => !o.ok && !isReadOnlyTool(o.name));
 }
 
+function stepResultsIndicateNoWriteNeeded(meta: Record<string, unknown>): boolean {
+  const results = meta.pillar_step_results;
+  if (!Array.isArray(results)) {
+    return false;
+  }
+  return results.some((row) => {
+    if (!row || typeof row !== "object") {
+      return false;
+    }
+    const preview = (row as { preview?: unknown }).preview;
+    return typeof preview === "string" && requestAlreadySatisfied(preview);
+  });
+}
+
+function onlyReadToolsSucceeded(meta: Record<string, unknown>): boolean {
+  const outcomes = toolOutcomes(meta);
+  if (outcomes.length === 0) {
+    return false;
+  }
+  return outcomes.every((o) => o.ok && isReadOnlyTool(o.name));
+}
+
 export function stripMisleadingClaimLines(text: string): string {
   const kept = text
     .split("\n")
@@ -254,6 +299,18 @@ export function enforceActionIntegrity(input: ActionIntegrityInput): ActionInteg
   }
 
   if (!claimsPersistence(text)) {
+    const stripped = stripMisleadingClaimLines(text);
+    if (
+      stripped !== text &&
+      (requestAlreadySatisfied(stripped) || stepResultsIndicateNoWriteNeeded(meta))
+    ) {
+      return {
+        text: stripped,
+        metadata: { ...meta, action_integrity: "stripped_false_add_line" },
+        corrected: true,
+        reason: "stripped_false_add_line",
+      };
+    }
     if (claimsCalendarSync(text) && !hasSuccessfulCalendarWrite(meta)) {
       return {
         text: stripMisleadingClaimLines(text).replace(
@@ -282,6 +339,22 @@ export function enforceActionIntegrity(input: ActionIntegrityInput): ActionInteg
       };
     }
     return { text, metadata: meta, corrected: false };
+  }
+
+  const stripped = stripMisleadingClaimLines(text);
+  const satisfiedWithoutWrite =
+    requestAlreadySatisfied(text) ||
+    requestAlreadySatisfied(stripped) ||
+    stepResultsIndicateNoWriteNeeded(meta) ||
+    (onlyReadToolsSucceeded(meta) && requestAlreadySatisfied(stripped || text));
+
+  if (satisfiedWithoutWrite) {
+    return {
+      text: stripped || text,
+      metadata: { ...meta, action_integrity: "no_write_needed" },
+      corrected: stripped !== text,
+      reason: stripped !== text ? "stripped_false_add_line" : undefined,
+    };
   }
 
   const promptOnly = meta.prompt_only === true;

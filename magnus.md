@@ -200,7 +200,9 @@ shell or `.env`.
 12. **Intent routing** — Only Magnus (`GENERAL`) has tools. YouTube actions, list/LifeOS/Notion
     phrases, and short continuations after a Magnus tool turn coerce to `GENERAL`. Pillar specialists
     are prompt-only and must not claim tool actions (see `pillarSpecialist.ts` guard). Health has
-    sub-router depth; Wealth loads Kite read-only portfolio context.
+    sub-router depth; Wealth loads Kite read-only portfolio context. Meal photos with book/list
+    captions skip the `meal_log_photo` gate; vision returns `NOT_FOOD:` for non-meal images. Short
+    meal-slot follow-ups (`Dinner?`) after meal context route to HEALTH `meal_plan_read`.
 13. **Gym schedule** — Fitness turns inject today's session from locked `weekly_schedule` program memory
     (Mon-first table) before Hevy history.
 14. **Pillar execution plans** — Every routed pillar runs a Haiku **plan parser**
@@ -324,4 +326,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-10 (meal plan: switch slots via meal_plan_swap parser args, not regex)
+**Last updated:** 2026-08-10 (action integrity: no disclaimer when item already on list / no write needed)

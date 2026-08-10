@@ -31,6 +31,33 @@ describe("claimsPersistence", () => {
       }).corrected,
     ).toBe(false);
   });
+
+  it("ignores already-on-list replies without a new write", () => {
+    expect(
+      claimsPersistence(
+        "Musafir Cafe is already on your watchlist! Added it at some point previously — no duplicates needed.",
+      ),
+    ).toBe(false);
+    const out = enforceActionIntegrity({
+      text: "Added Musafir Cafe to your watchlist.\n\nMusafir Cafe is already on your watchlist — no duplicates needed.",
+      metadata: {
+        specialist: "Magnus",
+        pillar_capability: "lists",
+        pillar_step_results: [
+          {
+            step_index: 0,
+            capability: "lists",
+            preview:
+              "Musafir Cafe is already on your watchlist! Added it at some point previously — no duplicates needed.",
+          },
+        ],
+      },
+    });
+    expect(out.corrected).toBe(true);
+    expect(out.reason).toBe("stripped_false_add_line");
+    expect(out.text).not.toContain("haven't actually saved");
+    expect(out.text).toContain("already on your watchlist");
+  });
 });
 
 describe("classifyToolResult", () => {

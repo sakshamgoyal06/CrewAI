@@ -47,6 +47,8 @@ export async function composePillarPlanReply(
     stepResults.every((s) => s.capability === "meal_log" || s.capability === "meal_log_correct");
   const isMultiMealPlanRead =
     stepResults.length > 1 && stepResults.every((s) => s.capability === "meal_plan_read");
+  const isListsStep =
+    stepResults.length === 1 && stepResults[0]?.capability === "lists";
 
   const system = `You compose the final Telegram reply for Magnus after internal specialists executed a plan.
 
@@ -93,6 +95,13 @@ This turn logged multiple meals in separate steps. Only claim a meal was logged 
 
 This turn read meal plans for multiple days. Present each day's plan from step outcomes exactly — do NOT say a day has no plan when a step outcome lists meals for that date.`;
     return composeWithLlm(ctx, stepResults, planReadSystem);
+  }
+
+  if (isListsStep) {
+    const listsSystem = `${system}
+
+This turn used list tools. If the step outcome says an item is **already on** a list, say that clearly — do NOT also claim you added it this turn. Only confirm a new add when the tool outcome shows a fresh save.`;
+    return composeWithLlm(ctx, stepResults, listsSystem);
   }
 
   return composeWithLlm(ctx, stepResults, system);
