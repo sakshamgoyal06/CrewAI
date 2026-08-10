@@ -19,12 +19,11 @@ import {
   updateProjectSession,
 } from "./projectSessionStore.js";
 import type { ProjectSessionRow } from "./types.js";
-
-const CANCEL_RE =
-  /\b(?:cancel|never mind|nevermind|stop planning|forget it|abort)\b/i;
-const LOCK_RE =
-  /^(?:yes|yep|looks good|lock it(?: in)?|confirm|go ahead|ship it|let'?s do it)\.?$/i;
-const SKIP_RE = /^(?:skip|nothing else|same as default)\.?$/i;
+import {
+  PROJECT_CANCEL_RE,
+  PROJECT_LOCK_RE,
+  PROJECT_SKIP_RE,
+} from "./projectSetupSignals.js";
 
 function parseDateFromText(text: string): string | null {
   const iso = text.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
@@ -174,7 +173,7 @@ async function lockSessionToProject(
 
 export async function runProjectSetupFlow(ctx: AgentContext): Promise<AgentResult> {
   const raw = ctx.rawMessage.trim();
-  if (CANCEL_RE.test(raw)) {
+  if (PROJECT_CANCEL_RE.test(raw)) {
     const session = await getActiveProjectSession(ctx.userProfileId);
     if (session) {
       await abandonProjectSession(session.id);
@@ -210,7 +209,7 @@ export async function runProjectSetupFlow(ctx: AgentContext): Promise<AgentResul
   }
 
   if (session.step === "review" || session.status === "draft") {
-    if (LOCK_RE.test(raw)) {
+    if (PROJECT_LOCK_RE.test(raw)) {
       return lockSessionToProject(ctx, session);
     }
   }
@@ -240,25 +239,35 @@ export async function runProjectSetupFlow(ctx: AgentContext): Promise<AgentResul
     const updated = (await getActiveProjectSession(ctx.userProfileId))!;
     return {
       text: formatDraftReview(updated, theme.label),
-      metadata: { specialist: "Magnus", project_setup: true, project_session_id: session.id },
+      metadata: {
+        specialist: "Magnus",
+        project_setup: true,
+        project_setup_draft: true,
+        project_session_id: session.id,
+      },
     };
   }
 
-  if (LOCK_RE.test(raw)) {
+  if (PROJECT_LOCK_RE.test(raw)) {
     return lockSessionToProject(ctx, session);
   }
 
-  if (SKIP_RE.test(raw)) {
+  if (PROJECT_SKIP_RE.test(raw)) {
     await updateProjectSession(session.id, { step: "review", status: "draft" });
     const updated = (await getActiveProjectSession(ctx.userProfileId))!;
     return {
       text: formatDraftReview(updated, theme.label),
-      metadata: { specialist: "Magnus", project_setup: true },
+      metadata: { specialist: "Magnus", project_setup: true, project_setup_draft: true },
     };
   }
 
   return {
     text: formatDraftReview(session, theme.label),
-    metadata: { specialist: "Magnus", project_setup: true },
+    metadata: {
+      specialist: "Magnus",
+      project_setup: true,
+      project_setup_draft: true,
+      project_session_id: session.id,
+    },
   };
 }

@@ -143,6 +143,17 @@ function hasSpecialistWriteEvidence(meta: Record<string, unknown>): boolean {
   if (meta.meal_plan_saved === true || meta.meal_plan_locked === true) {
     return true;
   }
+  if (meta.project_locked === true && typeof meta.project_id === "string" && meta.project_id.trim()) {
+    return true;
+  }
+  if (
+    typeof meta.project_session_id === "string" &&
+    meta.project_session_id.trim() &&
+    meta.project_setup === true &&
+    meta.project_locked !== true
+  ) {
+    return true;
+  }
   const mealPlanTag = meta.meal_plan;
   if (
     typeof mealPlanTag === "string" &&
@@ -161,6 +172,34 @@ function isMealPlanDraftReply(meta: Record<string, unknown>): boolean {
       meta.meal_plan_drafted === true ||
       meta.meal_plan_question === true)
   );
+}
+
+/** Draft project setup — session persisted; no locked project row expected this turn. */
+function isProjectSetupDraftReply(meta: Record<string, unknown>): boolean {
+  if (meta.project_locked === true) {
+    return false;
+  }
+  if (meta.project_setup_draft === true || meta.project_setup === true) {
+    if (typeof meta.project_session_id === "string" && meta.project_session_id.trim()) {
+      return true;
+    }
+  }
+  const results = meta.pillar_step_results;
+  if (!Array.isArray(results)) {
+    return false;
+  }
+  return results.some((row) => {
+    if (!row || typeof row !== "object") {
+      return false;
+    }
+    const capability = (row as { capability?: unknown }).capability;
+    const preview = (row as { preview?: unknown }).preview;
+    return (
+      capability === "project_setup" &&
+      typeof preview === "string" &&
+      /\b(?:lock it in|done when:)\b/i.test(preview)
+    );
+  });
 }
 
 function toolOutcomes(meta: Record<string, unknown>): ToolOutcome[] {
@@ -275,6 +314,10 @@ export function enforceActionIntegrity(input: ActionIntegrityInput): ActionInteg
   }
 
   if (isMealPlanDraftReply(meta)) {
+    return { text, metadata: meta, corrected: false };
+  }
+
+  if (isProjectSetupDraftReply(meta)) {
     return { text, metadata: meta, corrected: false };
   }
 
