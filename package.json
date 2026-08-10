@@ -1,7 +1,7 @@
 {
   "name": "magnus",
-  "version": "0.0.1",
-  "description": "Magnus — orchestrator agent",
+  "version": "1.0.0",
+  "description": "Magnus v1 — AI chief of staff with Operations · Goals · Projects",
   "private": true,
   "type": "module",
   "scripts": {

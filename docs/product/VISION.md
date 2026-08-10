@@ -2,6 +2,7 @@
 
 **Version:** 1.1  
 **Last updated:** 2026-08-10  
+**Magnus release:** v1.0  
 **Status:** Active — aligns `MAGNUS_CORE_CONTEXT.md` with current codebase  
 **Audience:** Product owner, contributors, future self
 
@@ -131,6 +132,7 @@ See [`docs/product/ACTIVITY_TAXONOMY.md`](ACTIVITY_TAXONOMY.md) and [`docs/produ
 
 | Doc | Purpose |
 |-----|---------|
+| `docs/product/MAGNUS_VERSIONS.md` | v0 / v1 version history and bump policy |
 | `docs/product/ACTIVITY_TAXONOMY.md` | Operations · Goals · Projects taxonomy |
 | `docs/product/PROJECT_DEFINITION.md` | Project anatomy, lifecycle, UX |
 | `docs/product/BRD.md` | Business requirements |

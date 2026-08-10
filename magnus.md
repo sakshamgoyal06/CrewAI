@@ -1,10 +1,12 @@
 # Magnus — project tracker
 
+**Release:** Magnus **v1.0** — see [`docs/product/MAGNUS_VERSIONS.md`](docs/product/MAGNUS_VERSIONS.md)  
 **This file is the source of truth** for what the code does and how to run it. Update it when you
 ship anything that changes behaviour, dependencies, environment, or the database.
 
 | Doc | Purpose |
 |-----|---------|
+| **`docs/product/MAGNUS_VERSIONS.md`** | v0 vs v1+ version history and bump policy |
 | **`docs/product/VISION.md`** | Long-term product vision and philosophy (prefer over stale sections in `MAGNUS_CORE_CONTEXT.md`) |
 | **`docs/product/BRD.md`** | Business requirements — stakeholders, objectives, scope |
 | **`docs/product/PRD.md`** | Product requirements — user stories, functional reqs |
