@@ -28,6 +28,12 @@ export type PlanStepResult = {
 /** Routing hints — structural signals + recent turn previews (no profile/memory block). */
 export type RoutingHints = {
   has_meal_photo: boolean;
+  /** Vision-inferred purpose when user sent a photo (null if no photo). */
+  photo_purpose: string | null;
+  /** Truncated vision description for parser disambiguation. */
+  photo_description_preview: string | null;
+  /** Item titles/names extracted from the photo (books, foods, …). */
+  photo_extracted_items: string[];
   explicit_meal_log: boolean;
   active_meal_plan_session: boolean;
   meal_plan_session_step: string | null;

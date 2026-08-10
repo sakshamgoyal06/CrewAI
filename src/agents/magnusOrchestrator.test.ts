@@ -76,6 +76,9 @@ vi.mock("../tools/routingContext.js", () => ({
 vi.mock("./routing/pillarStrategy/buildRoutingHints.js", () => ({
   buildRoutingHints: vi.fn().mockResolvedValue({
     has_meal_photo: false,
+    photo_purpose: null,
+    photo_description_preview: null,
+    photo_extracted_items: [],
     explicit_meal_log: false,
     active_meal_plan_session: false,
     meal_plan_session_step: null,

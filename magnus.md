@@ -213,8 +213,11 @@ shell or `.env`.
     (`MAGNUS_PILLAR_PLAN_COMPOSE`, default on) re-voices every step output (single- and multi-step).
     `finalizeMagnusVoice` at the orchestrator boundary catches any path that did not already compose.
     Terminal confirmations (e.g. cancel planning, OAuth links) set `pillar_compose: false`. Deterministic
-    pre-gates stay before the parser where unambiguous (explicit meal log, meal photo) — then through
-    compose like other capabilities. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
+    pre-gates stay before the parser where unambiguous (explicit meal log, **food** meal photo) — then through
+    compose like other capabilities. **Photo attachments:** every Telegram photo runs context-aware vision
+    (`src/vision/`) using caption + recent turns — infers purpose (meal_log, list_items, receipt, …) and
+    routes to the right pillar (not blindly HEALTH). Vision summary is appended to the user message for
+    parsers and agents; meal_log_photo only when purpose is food. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
     loads calendar + event log + planned meals. Review-step meal Q&A answers without re-posting the draft.
     Happiness/Wisdom catalogs include multiple capabilities (recommendations, travel, learning plan, etc.).
 
@@ -324,4 +327,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-10 (meal plan: switch slots via meal_plan_swap parser args, not regex)
+**Last updated:** 2026-08-10 (context-aware photo vision across all pillars; meal photos gated by purpose)
