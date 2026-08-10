@@ -33,6 +33,7 @@ import {
 import { augmentMessageWithPhotoContext } from "../vision/augmentMessageWithPhoto.js";
 import { buildPhotoContext } from "../vision/buildPhotoContext.js";
 import { isMealPhotoPurpose, resolvePhotoIntent } from "../vision/resolvePhotoIntent.js";
+import { tryResolveActiveProjectSessionTurn } from "../projects/projectSessionPrelude.js";
 
 export type OrchestratorReply = {
   replyText: string;
@@ -211,6 +212,21 @@ export async function runOrchestratorReply(input: {
     "turn routed",
   );
 
+  const sessionPrelude = await tryResolveActiveProjectSessionTurn(ctx);
+  if (sessionPrelude.handled) {
+    return finalizeOrchestratorReply(ctx, {
+      replyText: sessionPrelude.result.text,
+      intent: "GENERAL",
+      agentMetadata: {
+        ...sessionPrelude.result.metadata,
+        pillar_router: "project_setup_prelude",
+      },
+      memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
+    });
+  }
+
+  const abandonedProjectSession = sessionPrelude.sessionAbandoned === true;
+
   if (intent === "GENERAL") {
     const magnus = await executeGeneralStrategy(ctx);
     return finalizeOrchestratorReply(ctx, {
@@ -218,6 +234,7 @@ export async function runOrchestratorReply(input: {
       intent,
       agentMetadata: {
         ...magnus.metadata,
+        ...(abandonedProjectSession ? { project_session_abandoned: true } : {}),
         ...(photoContext
           ? {
               photo_vision: {
@@ -241,6 +258,7 @@ export async function runOrchestratorReply(input: {
         pillar: pillarRoute.pillar,
         department: pillarRoute.department,
         ...delegated.result.metadata,
+        ...(abandonedProjectSession ? { project_session_abandoned: true } : {}),
         ...(photoContext
           ? {
               photo_vision: {

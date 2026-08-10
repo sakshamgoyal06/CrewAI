@@ -149,17 +149,28 @@ describe("parsePillarExecutionPlan", () => {
     expect(String(createMock.mock.calls[0]![0].system)).toContain("exchange_with_slot");
   });
 
-  it("routes active project session to project_setup without LLM", async () => {
-    const plan = await parsePillarExecutionPlan("GENERAL", "Lock it in.", {
+  it("does not hijack day_overview when a project draft session exists", async () => {
+    createMock.mockResolvedValueOnce({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            confidence: 0.9,
+            steps: [{ capability: "day_overview", args: { date_hint: "tomorrow" } }],
+          }),
+        },
+      ],
+    });
+
+    const plan = await parsePillarExecutionPlan("GENERAL", "What does my day look like tomorrow?", {
       ...EMPTY_HINTS,
       active_project_session: true,
       project_session_step: "review",
       active_projects: [],
     });
 
-    expect(createMock).not.toHaveBeenCalled();
-    expect(plan.steps[0]?.capability).toBe("project_setup");
-    expect(plan.parser).toBe("deterministic");
+    expect(plan.steps[0]?.capability).toBe("day_overview");
+    expect(plan.parser).toBe("llm");
   });
 
   it("falls back when LLM returns invalid capabilities", async () => {

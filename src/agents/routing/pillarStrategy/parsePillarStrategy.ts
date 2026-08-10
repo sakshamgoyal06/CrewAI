@@ -8,7 +8,6 @@ import {
 } from "./catalogs/index.js";
 import type { PillarExecutionPlan, PillarId, PillarPlanStep, RoutingHints } from "./types.js";
 import { planFromSingleCapability } from "./types.js";
-import { shouldContinueProjectSetup } from "../../../projects/projectSetupSignals.js";
 
 const PARSER_MODEL = process.env.MAGNUS_PILLAR_STRATEGY_MODEL?.trim() || "claude-haiku-4-5";
 
@@ -121,7 +120,7 @@ GENERAL-specific:
 - **calendar** only when they want Google Calendar / schedule **without** also wanting meals and commitments woven in.
 - Holistic day asks are NEVER satisfied by conversation alone — use day_overview.
 - Use routing_hints integration flags (google_calendar_connected, etc.) — if calendar not connected, day_overview still runs but calendar section may be empty.
-- **project_setup** when starting or continuing a bounded initiative (active_project_session=true OR job search / trip / transformation / skill sprint / event planning). NOT for daily gym or BAU reminders. **active_project_session=true always → project_setup** (including "lock it in", cancel, revisions) — never project_manage until the project row exists.
+- **project_setup** when starting or **clearly continuing** a bounded initiative draft (lock, revise checklist, confirm scope). Also when user starts job search / trip / transformation / skill sprint / event planning. NOT for daily gym, meals, calendar, or day_overview — **active_project_session=true does NOT hijack operations**. If the user asks about tomorrow's schedule, gym, or meals while a draft exists, use day_overview / calendar / HEALTH — abandon is handled separately before this parser runs.
 - **project_status** when user asks progress on an active project ("how's job search", "what's left on Bali").
 - **project_manage** when pausing, completing, abandoning, or reprioritizing an **existing locked project** (must exist in active_projects). NOT for locking a draft session.
 - **goal_manage** when setting a long-horizon SMART goal without a project wrapper.`;
@@ -164,10 +163,6 @@ export async function parsePillarExecutionPlan(
   userMessage: string,
   hints: RoutingHints,
 ): Promise<PillarExecutionPlan> {
-  if (pillar === "GENERAL" && shouldContinueProjectSetup(hints)) {
-    return planFromSingleCapability("project_setup", {}, 1, "deterministic");
-  }
-
   const userPayload = JSON.stringify(
     {
       message: userMessage.trim(),
