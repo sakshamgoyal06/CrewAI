@@ -1,6 +1,5 @@
 import type { AgentContext } from "../../types.js";
 import { parseMealLogCommand } from "../../../meals/parseMealLogCommand.js";
-import { sanitizeMealLogRawText } from "../../../meals/sanitizeMealLogRawText.js";
 
 const NON_MEAL_PHOTO_CAPTION_RE =
   /\b(?:book|books|readlist|read\s+list|watchlist|screenshot|instagram|invoice|document|receipt(?!\s+for\s+(?:food|meal)))\b/i;
