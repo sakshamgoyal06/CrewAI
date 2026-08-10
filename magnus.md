@@ -283,7 +283,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npx tsx scripts/audit-notion-lifeos.mts` | Inventory LifeOS hub + accessible Notion databases |
 | `npx tsx scripts/nutrition/rebuild-rollups.mts` | Rebuild `meal_daily_rollups` from `meal_logs` |
 
-**Meal planning journey:** User says "plan my meals for the week" → … **Photo logging:** send a meal photo in Telegram (optional caption) → vision → meal log pipeline. **Meal log reply:** compact confirmation (~meal + today totals); say **meal breakdown** for per-item detail. **Templates:** …
+**Meal planning journey:** User says "plan my meals for the week" → … Locked plan edits: **skip** a slot, **swap dinner for X** (replace one dish), or **switch lunch and dinner** (exchange two slots on the same day). **Photo logging:** …
 
 ---
 
@@ -324,4 +324,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-09 (repo audit: capability tests, TOOLS_AND_AGENTS, USER_QUERY_GUIDE)
+**Last updated:** 2026-08-10 (meal plan: switch lunch and dinner on locked plan)

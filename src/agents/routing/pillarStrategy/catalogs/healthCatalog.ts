@@ -65,7 +65,13 @@ export const HEALTH_CAPABILITY_CATALOG: CapabilityCatalog = {
     {
       id: "meal_plan_swap",
       summary: "Swap a planned slot to a different meal",
-      disambiguation: "swap dinner for X.",
+      disambiguation: "swap dinner for X (replace one slot with a new dish). NOT lunch-and-dinner exchange.",
+    },
+    {
+      id: "meal_plan_switch_slots",
+      summary: "Exchange two planned meal slots on the same day",
+      disambiguation:
+        "switch/swap lunch and dinner, swap breakfast and lunch for today — exchange slot contents, not replace with a new title.",
     },
     {
       id: "meal_plan_copy_week",

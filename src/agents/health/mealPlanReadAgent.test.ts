@@ -13,6 +13,12 @@ describe("mealPlanReadAgent", () => {
     expect(matchesMealPlanReadMessage("swap dinner for fish curry")).toBe(true);
   });
 
+  it("matches switch two slots on the same day", () => {
+    expect(matchesMealPlanReadMessage("switch lunch and dinner")).toBe(true);
+    expect(matchesMealPlanReadMessage("swap lunch and dinner for today")).toBe(true);
+    expect(matchesMealPlanReadMessage("switch my lunch and dinner tomorrow")).toBe(true);
+  });
+
   it("does not match meal log commands", () => {
     expect(matchesMealPlanReadMessage("log lunch: rice")).toBe(false);
   });

@@ -9,6 +9,7 @@ import { buildRoutingHints } from "../routing/pillarStrategy/buildRoutingHints.j
 import { executeHealthStrategy, healthDeterministicCapability } from "../routing/pillarStrategy/executeHealthStrategy.js";
 import { parsePillarExecutionPlan } from "../routing/pillarStrategy/parsePillarStrategy.js";
 import { planFromSingleCapability } from "../routing/pillarStrategy/types.js";
+import { tryMealPlanReadAgent } from "./mealPlanReadAgent.js";
 import { HEALTH_GENERIC_ACK } from "./healthConstants.js";
 
 /** @deprecated Import from healthConstants.js */
@@ -43,6 +44,14 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
   }
 
   const hints = await buildRoutingHints(ctxWithPrefs);
+
+  if (!hints.active_meal_plan_session) {
+    const mealPlanRead = await tryMealPlanReadAgent(ctxWithPrefs);
+    if (mealPlanRead) {
+      return mealPlanRead;
+    }
+  }
+
   const plan = await parsePillarExecutionPlan("HEALTH", ctx.rawMessage, hints);
   return executeHealthStrategy({ ...ctxWithPrefs, pillarStrategy: plan }, plan);
 }
