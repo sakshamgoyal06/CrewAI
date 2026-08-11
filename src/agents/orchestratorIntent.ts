@@ -17,7 +17,8 @@ const MODEL = "claude-sonnet-4-6";
 const CLASSIFY_SYSTEM = `Classify a message to a personal assistant into exactly one category.
 
 HEALTH — training, workouts, the gym, food and meals, nutrition, sleep, recovery, energy, injury,
-body composition, or logging any of these.
+body composition, or logging any of these. Meal **plan** (future menu) and meal **log** (food eaten)
+are separate stores — only logged meals count toward daily calories.
 WEALTH — money: budgeting, spending, saving, debt, net worth, investing, financial goals.
 HAPPINESS — leisure and people: books, film, music for enjoyment, games, hobbies, creative
 practice, rest, travel and trips, friends, family, relationships. Taste talk without acting on

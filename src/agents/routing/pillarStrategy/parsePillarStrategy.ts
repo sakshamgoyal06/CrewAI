@@ -8,6 +8,7 @@ import {
 } from "./catalogs/index.js";
 import type { PillarExecutionPlan, PillarId, PillarPlanStep, RoutingHints } from "./types.js";
 import { planFromSingleCapability } from "./types.js";
+import { MEAL_DATA_ARCHITECTURE, MEAL_PLAN_VS_LOG_RULES } from "../../../meals/mealPlanVsLog.js";
 
 const PARSER_MODEL = process.env.MAGNUS_PILLAR_STRATEGY_MODEL?.trim() || "claude-haiku-4-5";
 
@@ -128,6 +129,9 @@ GENERAL-specific:
 
   if (pillar === "HEALTH") {
     return `${sharedRules}
+
+${MEAL_PLAN_VS_LOG_RULES}
+${MEAL_DATA_ARCHITECTURE}
 
 HEALTH-specific — meal plan vs meal log (never mix):
 - **meal_log** / **meal_log_photo** / **meal_log_correct**: food the user **ate** — writes meal_logs; only these count toward daily calorie totals.

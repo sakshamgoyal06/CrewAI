@@ -56,7 +56,7 @@ export async function buildNutritionJournalContext(input: {
   }
 
   const parts = [
-    `\n\nNutrition today (${localDate}):`,
+    `\n\nNutrition today (${localDate}) — logged meals only (not the meal plan menu):`,
     `${Math.round(calories)} kcal`,
     `${Math.round(protein * 10) / 10}g protein`,
   ];

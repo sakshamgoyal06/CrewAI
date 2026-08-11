@@ -1,7 +1,7 @@
 /**
  * LLM prompts for meal planning draft generation and revision.
  */
-import { MEAL_PLAN_VS_LOG_RULES } from "../../meals/mealPlanVsLog.js";
+import { MEAL_DATA_ARCHITECTURE, MEAL_PLAN_VS_LOG_RULES } from "../../meals/mealPlanVsLog.js";
 import { formatSlotsLabel, type PlannedSlot } from "./parsePlanningSlots.js";
 import type { MealPlanEntryInput } from "../parseMealPlanJson.js";
 
@@ -12,6 +12,7 @@ export const MEAL_PLAN_DRAFT_SYSTEM = `You are the Meal Planner specialist for M
 **Tone:** Supportive, no food shame. Treat allergies and hard dietary limits as requirements.
 
 ${MEAL_PLAN_VS_LOG_RULES}
+${MEAL_DATA_ARCHITECTURE}
 
 **Planning output:** Do not present planned meals as logged or include them in daily calorie totals. Saving the plan does not log food eaten.
 

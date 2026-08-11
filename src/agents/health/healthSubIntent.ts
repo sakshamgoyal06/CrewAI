@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 
 import type { HealthSubIntent } from "../types.js";
+import { MEAL_DATA_ARCHITECTURE } from "../../meals/mealPlanVsLog.js";
 
 /** Fast path: exercise / training language → Fitness may handle without a classifier-only path for acceptance. */
 const FITNESS_KEYWORD_RE =
@@ -14,7 +15,8 @@ FITNESS | NUTRITION | ENERGY | OTHER
 
 Definitions:
 - FITNESS: exercise, training, running, gym, strength, cardio, steps, sport, workouts, PRs.
-- NUTRITION: meals, food, macros, diet, calories, eating, hydration as food, supplements as diet.
+- NUTRITION: meals, food, macros, diet, calories, eating, hydration as food, supplements as diet. Meal **plan** (future menu) and meal **log** (what was eaten) are both NUTRITION but use different stores — never treat a plan as logged food.
+${MEAL_DATA_ARCHITECTURE}
 - ENERGY: sleep, fatigue, tiredness, HRV, recovery, stress, burnout, focus when not about exercise.
 - OTHER: general health chat that does not clearly fit the three buckets.`;
 
