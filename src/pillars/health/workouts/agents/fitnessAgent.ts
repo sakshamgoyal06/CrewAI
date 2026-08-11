@@ -7,6 +7,10 @@ import {
   formatHevyWorkoutsForPrompt,
   hevyApiKeyForUser,
 } from "../hevy/index.js";
+import {
+  computeLatestSessionVolumeKg,
+  formatSessionVolumeLine,
+} from "../hevy/workoutVolume.js";
 import { logger } from "../../../../logger.js";
 import { anthropic, supabase } from "../../../../tools/clients.js";
 import { buildAgentMessages } from "../../../../agents/memory/memoryAgent.js";
@@ -28,7 +32,7 @@ export const FITNESS_SYSTEM = `You are the Fitness specialist for Magnus within 
 
 Scope: workouts, training, movement habits, and performance (runs, gym, strength, cardio, steps). Adapt suggestions to the user's stated energy and schedule. Do not diagnose, treat, or make medical claims. If the user mentions injury, sharp pain, or anything that could need clinical care, encourage seeing a qualified professional and keep guidance general and non-alarmist.
 
-Hevy (when the user uses Hevy): Context includes recent Hevy sessions with **full set detail** (weight×reps or duration per exercise) — read-only in this chat turn. Writes use **structured prefixes** in a separate message: \`hevy routine: …\` (create), \`hevy routine update: <routine-uuid> — …\` (replace an existing routine; uuid from Hevy or from Magnus after create), or \`hevy workout: …\` (log). Same via \`/hevy …\`. You cannot call those APIs from this reply; give the plan in text and tell them which prefix to use.
+Hevy (when the user uses Hevy): Context includes recent Hevy sessions with **full set detail** (weight×reps or duration per exercise) — read-only in this chat turn. When present, a **computed session volume** line (working-set tonnage from Hevy set data) is authoritative — cite it if the user asks for total volume; **never estimate or guess volume**. Writes use **structured prefixes** in a separate message: \`hevy routine: …\` (create), \`hevy routine update: <routine-uuid> — …\` (replace an existing routine; uuid from Hevy or from Magnus after create), or \`hevy workout: …\` (log). Same via \`/hevy …\`. You cannot call those write APIs from this reply; give the plan in text and tell them which prefix to use.
 
 **Weekly schedule:** When a locked weekly schedule block is present in context, today's session from that table is authoritative. State it first. Only override for recovery rules (fatigue gate, injury) — not because recent Hevy history suggests a different rotation.
 
@@ -105,6 +109,10 @@ async function loadWorkoutContext(
       if (workoutBlock) {
         parts.push(workoutBlock);
       }
+      const sessionVolumeKg = computeLatestSessionVolumeKg(workouts);
+      if (sessionVolumeKg != null) {
+        parts.push(formatSessionVolumeLine(sessionVolumeKg));
+      }
       const routineBlock = formatHevyRoutinesForPrompt(routines);
       if (routineBlock) {
         parts.push(routineBlock);
@@ -120,6 +128,7 @@ async function loadWorkoutContext(
           workout_source: "hevy",
           workout_rows: workouts.length,
           hevy_routine_rows: routines.length,
+          ...(sessionVolumeKg != null ? { workout_volume_kg: sessionVolumeKg } : {}),
           ...(rRes.ok ? {} : { hevy_routines_error: rRes.error }),
         },
       };

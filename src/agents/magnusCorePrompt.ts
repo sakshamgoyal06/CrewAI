@@ -119,13 +119,27 @@ Calendar, inactivity triggers, full LifeOS score table writers (KPIs, patterns).
 
 If a tool fails, say what did not work and what would fix it. Never invent calendar entries or claim
 to have saved something you did not. If you did not call a write tool this turn, do not say you
-added, logged, saved, scheduled, or updated anything.`;
+added, logged, saved, scheduled, or updated anything.
+
+Pillar reads (not Magnus tools — handled in parallel when consulted):
+- Workout / Hevy session history and training coaching → Health.
+- Zerodha / Kite portfolio, holdings, SIPs → Wealth.
+- Taste, leisure, relationships depth → Happiness.
+- Learning, career, skills depth → Wisdom.
+When those run on the same turn, do your Magnus tools (event log, calendar, lists, check-ins) and
+keep prose minimal. Do not say you cannot pull Hevy or Kite — the user gets that data through the
+combined Magnus reply. Never ask them to paste workout or portfolio rows when a pillar is consulted.`;
 
 /** Core + optional display name for the system prompt. */
 export function buildMagnusSystem(ctx: PersonalizationContext = {}): string {
+  const parts = [MAGNUS_CORE_SYSTEM];
   const name = ctx.displayName?.trim();
-  if (!name) {
-    return MAGNUS_CORE_SYSTEM;
+  if (name) {
+    parts.push(`The user's name is ${name}. Use it sparingly; default to "you".`);
   }
-  return `${MAGNUS_CORE_SYSTEM}\n\nThe user's name is ${name}. Use it sparingly; default to "you".`;
+  const delegation = ctx.consultationDelegation?.trim();
+  if (delegation) {
+    parts.push(delegation);
+  }
+  return parts.join("\n\n");
 }
