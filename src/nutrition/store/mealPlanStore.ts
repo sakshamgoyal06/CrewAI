@@ -346,13 +346,18 @@ function titlesSimilar(planned: string, logged: string): boolean {
   if (!aWords.size || !bWords.length) {
     return false;
   }
+  const logNorm = b.trim();
+  const planNorm = a.trim();
+  if (logNorm.length >= 5 && planNorm.includes(logNorm)) {
+    return true;
+  }
   let overlap = 0;
   for (const w of bWords) {
     if (aWords.has(w)) {
       overlap += 1;
     }
   }
-  return overlap >= 1;
+  return overlap >= 2;
 }
 
 /** Link a meal log to today's planned slot when titles clearly match. */

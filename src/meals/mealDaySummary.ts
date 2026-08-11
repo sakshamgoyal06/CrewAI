@@ -23,6 +23,39 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Distinct meal sessions (one log action) for a user on `localDate`. */
+export async function countMealLogSessionsForDay(
+  userProfileId: string,
+  localDate: string,
+): Promise<number> {
+  let query = supabase
+    .from("meal_logs")
+    .select("meal_session_id")
+    .eq("user_profile_id", userProfileId)
+    .is("deleted_at", null)
+    .eq("local_date", localDate);
+
+  const { data, error } = await query;
+
+  if (error?.message?.includes("local_date") || error?.message?.includes("deleted_at")) {
+    const fallback = await supabase
+      .from("meal_logs")
+      .select("meal_session_id")
+      .eq("user_profile_id", userProfileId)
+      .eq("date", localDate);
+    if (fallback.error || !fallback.data?.length) {
+      return 0;
+    }
+    return new Set(fallback.data.map((r) => r.meal_session_id).filter(Boolean)).size;
+  }
+
+  if (error || !data?.length) {
+    return 0;
+  }
+
+  return new Set(data.map((r) => r.meal_session_id).filter(Boolean)).size;
+}
+
 /** Sums active `meal_logs` for a user on `localDate` (YYYY-MM-DD in user timezone). */
 export async function sumMealLogsForDay(
   userProfileId: string,

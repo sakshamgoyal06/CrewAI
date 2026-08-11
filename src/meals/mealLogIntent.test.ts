@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  extractPastMealFoodText,
   isMealLogScaffoldingText,
   isMealPlanningIntent,
   normalizeMealLogText,
@@ -29,10 +30,8 @@ describe("isMealPlanningIntent", () => {
 });
 
 describe("normalizeMealLogText", () => {
-  it("strips Log breakfast: prefix", () => {
-    expect(normalizeMealLogText("Log breakfast: masala omelette and 2 bread")).toBe(
-      "masala omelette and 2 bread",
-    );
+  it("rejects parser Log breakfast: scaffolding", () => {
+    expect(normalizeMealLogText("Log breakfast: masala omelette and 2 bread")).toBeNull();
   });
 
   it("rejects meta scaffolding", () => {
@@ -44,5 +43,14 @@ describe("normalizeMealLogText", () => {
 describe("isMealLogScaffoldingText", () => {
   it("flags parser log-slot lines without food", () => {
     expect(isMealLogScaffoldingText("Log afternoon tea")).toBe(true);
+  });
+});
+
+describe("extractPastMealFoodText", () => {
+  it("pulls food from I ate / I had messages", () => {
+    expect(extractPastMealFoodText("I ate a samosa just now, and a tea")).toBe(
+      "a samosa just now, and a tea",
+    );
+    expect(extractPastMealFoodText("I had 2 parathas with raita")).toBe("2 parathas with raita");
   });
 });

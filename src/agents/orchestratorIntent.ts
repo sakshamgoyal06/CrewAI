@@ -37,7 +37,7 @@ day", "what's on my calendar tomorrow") — those are GENERAL even if food or me
 the answer.
 
 Use routing_hints when present:
-- explicit_meal_log → HEALTH
+- explicit_meal_log or looks_like_meal_log_read → HEALTH (logging food eaten, or reading **logged** meal history/macros — never the meal **plan** menu)
 - looks_like_youtube_action or looks_like_magnus_tool_action or looks_like_magnus_tool_continuation → GENERAL (Magnus has tools)
 - looks_like_wealth_portfolio_read → WEALTH when asking to read/show portfolio (not a Magnus list action)
 - looks_like_health_fitness_read → HEALTH when asking to read/review workouts or Hevy (not a Magnus tool action)
@@ -73,7 +73,7 @@ async function classifyIntent(
 }
 
 /**
- * Classify with structural hints. Only hard override: explicit meal-log command format → HEALTH.
+ * Classify with structural hints. Hard overrides: explicit meal-log command or meal-log read → HEALTH.
  */
 export async function resolveIntentNaturalLanguage(
   userMessage: string,
@@ -81,7 +81,7 @@ export async function resolveIntentNaturalLanguage(
 ): Promise<Intent> {
   const hints = buildIntentRoutingHints(userMessage, options?.recentTurns ?? []);
 
-  if (hints.explicit_meal_log) {
+  if (hints.explicit_meal_log || hints.looks_like_meal_log_read) {
     return "HEALTH";
   }
 

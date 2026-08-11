@@ -88,6 +88,7 @@ type MealLogReplyInput = {
   components: MealComponentForRow[];
   mealTotals: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
   day: DayNutritionTotals;
+  daySessionCount: number;
   targets: DailyTargets | null;
 };
 
@@ -96,11 +97,12 @@ export function formatMealLogReplyCompact(input: MealLogReplyInput): string {
   const slot = input.mealSlot ?? "unspecified";
   const slotPart = slotLabel(slot);
   const header = slotPart ? `**${slotPart} logged**` : "**Meal logged**";
-  const lines: string[] = [header, macroLine(input.mealTotals)];
-
-  lines.push(
-    `**Today (logged):** ${Math.round(input.day.calories)} kcal · P ${fmt(input.day.protein_g, "g")}`,
-  );
+  const entryLabel = input.daySessionCount === 1 ? "entry" : "entries";
+  const lines: string[] = [
+    header,
+    `**This meal:** ${macroLine(input.mealTotals)}`,
+    `**Today (logged, ${input.daySessionCount} ${entryLabel}):** ${Math.round(input.day.calories)} kcal · P ${fmt(input.day.protein_g, "g")}`,
+  ];
 
   const targets = targetIndicatorsCompact(input.day, input.targets);
   if (targets) {

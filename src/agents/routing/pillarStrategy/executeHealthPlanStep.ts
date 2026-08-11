@@ -20,7 +20,7 @@ import { runNutritionCapability } from "../../health/nutritionAgent.js";
 import { tryHevyWriteAgent } from "../../../pillars/health/workouts/agents/hevyWriteAgent.js";
 import { parseMealLogCommand, type MealLogKind, type MealSlot } from "../../../meals/parseMealLogCommand.js";
 import { sanitizeMealLogRawText } from "../../../meals/sanitizeMealLogRawText.js";
-import { isMealPlanningIntent, normalizeMealLogText } from "../../../meals/mealLogIntent.js";
+import { isMealPlanningIntent, extractPastMealFoodText, normalizeMealLogText } from "../../../meals/mealLogIntent.js";
 import { runFitnessCapability } from "../../../pillars/health/workouts/agents/fitnessAgent.js";
 import type { PillarPlanStep } from "./types.js";
 import { buildStepAgentContext } from "./buildStepAgentContext.js";
@@ -50,13 +50,14 @@ export async function executeHealthPlanStep(
       }
       const mealParsed = parseMealLogCommand(stepCtx.rawMessage);
       const rawCandidate =
-        mealParsed.kind === "meal"
+        extractPastMealFoodText(original) ??
+        (mealParsed.kind === "meal"
           ? mealParsed.text
           : typeof step.args.meal_text === "string" && step.args.meal_text.trim()
             ? step.args.meal_text.trim()
             : typeof step.intent_summary === "string" && step.intent_summary.trim()
               ? step.intent_summary.trim()
-              : stepCtx.rawMessage.trim();
+              : stepCtx.rawMessage.trim());
       const rawText = normalizeMealLogText(rawCandidate);
       if (!rawText) {
         return {

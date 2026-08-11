@@ -13,6 +13,10 @@ const MEAL_PLANNING_RE =
 const LOG_SLOT_PREFIX_RE =
   /^log\s+(?:breakfast|lunch|dinner|snack|afternoon\s+tea|tea)\s*:?\s*/i;
 
+/** Parser/step scaffolding from multi-step meal_log — never real food the user ate. */
+const PARSER_LOG_SLOT_LINE_RE =
+  /^log\s+(?:breakfast|lunch|dinner|snack|afternoon\s+tea|tea)\b/i;
+
 /** User is describing future/planned eating — must not write meal_logs. */
 export function isMealPlanningIntent(message: string): boolean {
   const t = message.trim();
@@ -37,13 +41,24 @@ export function isMealLogScaffoldingText(text: string): boolean {
   if (isMealCalorieDisputeMessage(t)) {
     return true;
   }
-  if (/^log\s+(?:afternoon\s+)?tea\b/i.test(t)) {
+  if (PARSER_LOG_SLOT_LINE_RE.test(t)) {
     return true;
   }
-  if (/^log\s+samosa\s+and\s+tea\s+as\s+a\s+meal\b/i.test(t)) {
+  if (/^log\s+.+\s+as\s+a\s+meal\b/i.test(t)) {
     return true;
   }
   return false;
+}
+
+/** Prefer the user's own words when they said what they ate (not parser step text). */
+export function extractPastMealFoodText(message: string): string | null {
+  const t = sanitizeMealLogRawText(message).trim();
+  const m = t.match(/^\s*(?:i|we)\s+(?:just\s+)?(?:ate|had|eaten)\s+(.+)$/i);
+  if (!m?.[1]) {
+    return null;
+  }
+  const food = m[1].replace(/[.!?]+$/, "").trim();
+  return food.length >= 2 ? food : null;
 }
 
 /** Strip log-slot prefixes and scaffolding; null when nothing valid to log. */

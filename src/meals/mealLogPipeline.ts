@@ -1,7 +1,7 @@
 import { timezoneAbbrev } from "../nutrition/localDate.js";
 import { estimateMealNutrition } from "./estimateMealNutrition.js";
 import { formatMealLogReplyCompact, targetIndicatorsCompact } from "./formatMealLogReply.js";
-import { loadDailyTargets, sumMealLogsForDay } from "./mealDaySummary.js";
+import { countMealLogSessionsForDay, loadDailyTargets, sumMealLogsForDay } from "./mealDaySummary.js";
 import { mealLogComposeHeadline, type MealLogComposeEntry } from "./mealLogCompose.js";
 import type { MealComponentForRow } from "./mealComponents.js";
 import type { MealLogKind, MealSlot } from "./parseMealLogCommand.js";
@@ -68,7 +68,10 @@ export async function completeMealLogWithEstimate(input: {
     }
 
     const mealTotals = sumMealTotals(saved.components);
-    const day = await sumMealLogsForDay(input.userProfileId, saved.date);
+    const [day, daySessionCount] = await Promise.all([
+      sumMealLogsForDay(input.userProfileId, saved.date),
+      countMealLogSessionsForDay(input.userProfileId, saved.date),
+    ]);
     const targets = await loadDailyTargets(input.userProfileId);
 
     const tzLabel = timezoneAbbrev(input.timezone);
@@ -79,10 +82,11 @@ export async function completeMealLogWithEstimate(input: {
         slot !== "unspecified"
           ? slot.charAt(0).toUpperCase() + slot.slice(1)
           : "Meal";
+      const entryLabel = daySessionCount === 1 ? "entry" : "entries";
       const lines = [
         `**${slotPart} logged** (no calorie estimate).`,
         "",
-        `**Today (${tzLabel}):** ${Math.round(day.calories)} kcal · P ${day.protein_g}g`,
+        `**Today (logged, ${daySessionCount} ${entryLabel}):** ${Math.round(day.calories)} kcal · P ${day.protein_g}g`,
       ];
       const ind = targetIndicatorsCompact(day, targets);
       if (ind) {
@@ -112,6 +116,7 @@ export async function completeMealLogWithEstimate(input: {
       components: saved.components,
       mealTotals,
       day,
+      daySessionCount,
       targets,
     });
 
@@ -139,7 +144,7 @@ export async function completeMealLogFromPipeline(input: {
   mealSlot?: MealSlot;
   logKind?: MealLogKind;
 }): Promise<
-  | { ok: true; reply: string; mealSessionId: string }
+  | { ok: true; reply: string; mealSessionId: string; compose: MealLogComposeEntry }
   | { ok: false; reply: string }
 > {
   try {
