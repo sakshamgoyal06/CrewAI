@@ -1,6 +1,12 @@
 import { anthropic } from "../../../tools/clients.js";
 import { logger } from "../../../logger.js";
 import { loggableError } from "../../../util/loggableError.js";
+import { localDateKey } from "../../../nutrition/localDate.js";
+import { sumMealLogsForDay } from "../../../meals/mealDaySummary.js";
+import {
+  formatMultiMealLogReply,
+  type MealLogComposeEntry,
+} from "../../../meals/mealLogCompose.js";
 import type { AgentContext } from "../../types.js";
 import type { PillarExecutionPlan, PlanStepResult } from "./types.js";
 import { pillarPlanComposeEnabled } from "./parsePillarStrategy.js";
@@ -22,6 +28,51 @@ function formatStepOutcomes(stepResults: PlanStepResult[]): string {
  */
 function isMealPlanQuestionStep(step: PlanStepResult): boolean {
   return step.metadata?.meal_plan_question === true;
+}
+
+function mealComposeFromStep(step: PlanStepResult): MealLogComposeEntry | null {
+  const sessionId = step.metadata?.meal_session_id;
+  if (typeof sessionId !== "string" || !sessionId.trim()) {
+    return null;
+  }
+  const compose = step.metadata?.meal_log_compose;
+  if (!compose || typeof compose !== "object") {
+    return null;
+  }
+  const row = compose as MealLogComposeEntry;
+  if (
+    typeof row.headline !== "string" ||
+    !row.totals ||
+    typeof row.totals.calories !== "number"
+  ) {
+    return null;
+  }
+  return row;
+}
+
+async function composeMultiMealLogReply(
+  ctx: AgentContext,
+  stepResults: PlanStepResult[],
+): Promise<string | null> {
+  const entries = stepResults
+    .map((s) => mealComposeFromStep(s))
+    .filter((e): e is MealLogComposeEntry => e !== null);
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const localDate = localDateKey(new Date(), ctx.timezone);
+  const dayTotals = await sumMealLogsForDay(ctx.userProfileId, localDate);
+  return formatMultiMealLogReply({
+    entries,
+    dayTotals: {
+      calories: dayTotals.calories,
+      protein_g: dayTotals.protein_g,
+      carbs_g: dayTotals.carbs_g,
+      fat_g: dayTotals.fat_g,
+    },
+  });
 }
 
 export async function composePillarPlanReply(
@@ -96,9 +147,13 @@ Rules:
   }
 
   if (isMultiMealLog) {
+    const deterministic = await composeMultiMealLogReply(ctx, stepResults);
+    if (deterministic) {
+      return deterministic;
+    }
     const mealLogSystem = `${system}
 
-This turn logged multiple meals in separate steps. Only claim a meal was logged when its step outcome shows a successful save with kcal/macros. If a step shows an error or no save, say that meal was not logged. Sum today's totals only from successfully logged steps.`;
+This turn logged multiple meals in separate steps. Only claim a meal was logged when its step outcome shows a successful save with kcal/macros. If a step shows an error or no save, say that meal was not logged. Do NOT invent meals. Use the authoritative day total if provided — never add step totals to a running "Today" line from prior steps.`;
     return composeWithLlm(ctx, stepResults, mealLogSystem);
   }
 

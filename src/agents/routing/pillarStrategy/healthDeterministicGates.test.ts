@@ -54,4 +54,11 @@ describe("healthDeterministicCapability photo gates", () => {
     );
     expect(cap).toBeNull();
   });
+
+  it("routes calorie total disputes to meal_history", () => {
+    const cap = healthDeterministicCapability(
+      ctx({ rawMessage: "It is not 1930 calories." }),
+    );
+    expect(cap).toBe("meal_history");
+  });
 });

@@ -18,7 +18,7 @@ import {
 } from "../../health/nutritionOrchestrated.js";
 import { runNutritionCapability } from "../../health/nutritionAgent.js";
 import { tryHevyWriteAgent } from "../../../pillars/health/workouts/agents/hevyWriteAgent.js";
-import { parseMealLogCommand } from "../../../meals/parseMealLogCommand.js";
+import { parseMealLogCommand, type MealLogKind, type MealSlot } from "../../../meals/parseMealLogCommand.js";
 import { sanitizeMealLogRawText } from "../../../meals/sanitizeMealLogRawText.js";
 import { runFitnessCapability } from "../../../pillars/health/workouts/agents/fitnessAgent.js";
 import type { PillarPlanStep } from "./types.js";
@@ -44,13 +44,29 @@ export async function executeHealthPlanStep(
             : typeof step.intent_summary === "string" && step.intent_summary.trim()
               ? step.intent_summary.trim()
               : stepCtx.rawMessage.trim();
+      const argSlot = step.args.meal_slot;
+      const mealSlot: MealSlot | undefined =
+        typeof argSlot === "string" &&
+        ["breakfast", "lunch", "dinner", "snack", "unspecified"].includes(argSlot)
+          ? (argSlot as MealSlot)
+          : mealParsed.kind === "meal"
+            ? mealParsed.slot
+            : undefined;
+      const argLogKind = step.args.log_kind;
+      const logKind: MealLogKind | undefined =
+        typeof argLogKind === "string" &&
+        ["meal", "snack", "drink", "supplement", "correction"].includes(argLogKind)
+          ? (argLogKind as MealLogKind)
+          : mealParsed.kind === "meal"
+            ? mealParsed.logKind
+            : undefined;
       return runOrchestratedMealLogTurn(
         stepCtx,
         sanitizeMealLogRawText(rawText),
         original,
         {
-          mealSlot: mealParsed.kind === "meal" ? mealParsed.slot : undefined,
-          logKind: mealParsed.kind === "meal" ? mealParsed.logKind : undefined,
+          mealSlot,
+          logKind,
         },
       );
     }

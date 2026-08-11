@@ -1,5 +1,7 @@
 import type { AgentContext } from "../../types.js";
 import { parseMealLogCommand } from "../../../meals/parseMealLogCommand.js";
+import { isMealCalorieDisputeMessage } from "../../../meals/mealCalorieDispute.js";
+import { buildFullDayMealRecountPlan } from "../../../meals/mealDayRecount.js";
 import { isMealPhotoPurpose } from "../../../vision/resolvePhotoIntent.js";
 
 const NON_MEAL_PHOTO_CAPTION_RE =
@@ -7,6 +9,9 @@ const NON_MEAL_PHOTO_CAPTION_RE =
 
 /** Deterministic gates before LLM parser — unambiguous entry points. */
 export function healthDeterministicCapability(ctx: AgentContext): string | null {
+  if (isMealCalorieDisputeMessage(ctx.rawMessage)) {
+    return "meal_history";
+  }
   if (isMealPhotoPurpose(ctx.photoContext)) {
     return "meal_log_photo";
   }

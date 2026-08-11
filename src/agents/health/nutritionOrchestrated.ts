@@ -134,6 +134,7 @@ export async function runOrchestratedMealLogTurn(
         meal_parser_pipeline: true,
         orchestrated_meal_log: true,
         meal_session_id: done.mealSessionId,
+        meal_log_compose: done.compose,
         pillar_compose: true,
       },
     };
@@ -165,6 +166,7 @@ export async function runOrchestratedMealLogTurn(
         meal_log: true,
         fallback_direct_pipeline: true,
         meal_session_id: fb.mealSessionId,
+        meal_log_compose: fb.compose,
         pillar_compose: true,
       },
     };

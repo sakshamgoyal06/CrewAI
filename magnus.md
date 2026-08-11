@@ -224,7 +224,7 @@ shell or `.env`.
     compose like other capabilities. **Photo attachments:** every Telegram photo runs context-aware vision
     (`src/vision/`) using caption + recent turns — infers purpose (meal_log, list_items, receipt, …) and
     routes to the right pillar (not blindly HEALTH). Vision summary is appended to the user message for
-    parsers and agents; meal_log_photo only when purpose is food. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
+    parsers and agents; meal_log_photo only when purpose is food. **Full-day meal recount** ("For breakfast… For lunch… Then another tea") deterministically splits into one `meal_log` step per occasion, **soft-deletes earlier same-day logs** before saving (replace, don't stack), and multi-step compose uses **saved step metadata + DB day total** (no LLM-invented meals or arithmetic). Calorie-total disputes route to `meal_history`, not `meal_log`. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
     loads calendar + event log + planned meals. Review-step meal Q&A answers without re-posting the draft.
     Happiness/Wisdom catalogs include multiple capabilities (recommendations, travel, learning plan, etc.).
 
