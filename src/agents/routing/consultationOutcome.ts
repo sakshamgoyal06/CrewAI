@@ -226,7 +226,7 @@ export function stripStaleCapabilityDenials(
  */
 export function magnusTextForConsultationMerge(
   magnusText: string,
-  magnusMeta: Record<string, unknown>,
+  _magnusMeta: Record<string, unknown>,
   summary: ConsultationOutcomeSummary,
 ): string {
   const stripped = stripStaleCapabilityDenials(magnusText, summary);
