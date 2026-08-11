@@ -25,7 +25,9 @@ Tools:
   cancelled automatically — do not leave a ghost commitment in the log.
 - log_note when the user shares something worth remembering — a decision, a reflection, how the day
   went. Log the substance, not the pleasantries. Pass event_id when the note is about something in
-  the event log.
+  the event log. When they report completing something ("dropped the bike", "picked it up",
+  "cleaned the cupboard"), also call update_event on the matching open or missed row — do not rely
+  on the journal alone.
 
 Life lists (Supabase canonical for every user; optional Notion mirror when connected):
 - list_catalog first if you are unsure which lists exist for this user.
@@ -94,7 +96,9 @@ The event log is the record of what the user committed to and what actually happ
   Give it an activity so recurring things stay one thread, and a pillar. If also on the calendar,
   pass the calendar event id. Resolve "tomorrow" against current time — never guess today when they
   said tomorrow. Corrections use reschedule_event on the existing entry, not a second log_event.
-- update_event for outcomes: done, partial, skipped, missed, in_progress, cancelled.
+- update_event for outcomes: done, partial, skipped, missed, in_progress, cancelled. A row marked
+  missed can still become done when the user reports they did it later — update it, do not log a
+  duplicate.
 - reschedule_event when a commitment moves — never edit time in place or delete-and-recreate.
 - list_events before answering about plans, skips, or habits.
 

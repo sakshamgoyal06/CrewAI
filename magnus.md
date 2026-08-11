@@ -116,10 +116,10 @@ shell or `.env`.
 | `src/agents/routing/actionIntegrity.ts` | Blocks false save/add/log claims unless tools actually succeeded |
 | `src/agents/tools/listTool.ts` | List catalog + `recommend_list_items` filters |
 | `src/lists/` | List catalog templates, Supabase store, service orchestration, optional Notion mirror |
-| `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event |
+| `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event; auto-reconciles open/missed event rows when the note reports completion |
 | `src/lists/listService.ts` | List catalog + `log_daily_checkin` / `get_daily_checkin` writers (checkins list + LifeOS dual-write) |
 | `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
-| `src/events/` | Event log domain: timezone helpers, Supabase store, calendar sync, formatting |
+| `src/events/` | Event log domain: timezone helpers, Supabase store, calendar sync, formatting, **completion reconcile** (`eventCompletionReconcile.ts` — journal text → `missed`/`planned` → `done`) |
 | `src/youtube/` | Bookmarks, cue queue, and Magnus playlist state in Supabase |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
@@ -131,7 +131,7 @@ shell or `.env`.
 | `src/nutrition/` | Local-date helpers, rollups/plan stores, **planning journey** (`meal_plan_sessions`), anomaly detection, weekly review, journal context |
 | `src/pillars/health/workouts/` | Hevy client, fitness agent, Hevy write agent |
 | `src/pillars/health/references/` | Reads committed program memory + Telegram journals |
-| `src/jobs/` | Morning Brief: prompt, context, cron (legacy re-export), timezone window. Optional. |
+| `src/jobs/` | Morning Brief: prompt, context (reconciles recent journals before missed sweep), cron (legacy re-export), timezone window. Optional. |
 | `src/events/gymHevyMatch.ts` | Match planned gym events to Hevy workouts (session label, local date) |
 | `src/events/gymHevyReconcile.ts` | After grace window: sync event log from Hevy or nudge user |
 | `src/proactive/` | Magnus-initiated Telegram: outbound HTML, dedupe, kind registry, dispatcher, subscriptions |
@@ -335,4 +335,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-10 (project setup LLM intent parser)
+**Last updated:** 2026-08-11 (event completion reconcile from journal + morning brief)
