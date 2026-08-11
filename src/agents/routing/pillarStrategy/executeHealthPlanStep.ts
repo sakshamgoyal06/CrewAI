@@ -20,7 +20,8 @@ import { runNutritionCapability } from "../../health/nutritionAgent.js";
 import { tryHevyWriteAgent } from "../../../pillars/health/workouts/agents/hevyWriteAgent.js";
 import { parseMealLogCommand, type MealLogKind, type MealSlot } from "../../../meals/parseMealLogCommand.js";
 import { sanitizeMealLogRawText } from "../../../meals/sanitizeMealLogRawText.js";
-import { isMealPlanningIntent, extractPastMealFoodText, normalizeMealLogText } from "../../../meals/mealLogIntent.js";
+import { isMealPlanningIntent, isMealSlotCorrectionMessage, extractPastMealFoodText, normalizeMealLogText } from "../../../meals/mealLogIntent.js";
+import { localDateKey } from "../../../nutrition/localDate.js";
 import { runFitnessCapability } from "../../../pillars/health/workouts/agents/fitnessAgent.js";
 import type { PillarPlanStep } from "./types.js";
 import { buildStepAgentContext } from "./buildStepAgentContext.js";
@@ -102,12 +103,41 @@ export async function executeHealthPlanStep(
       return runMealPhotoLogTurn(stepCtx);
 
     case "meal_log_correct": {
+      const original = ctx.originalUserMessage?.trim() || ctx.rawMessage.trim();
+      if (isMealSlotCorrectionMessage(original)) {
+        const today = localDateKey(new Date(), stepCtx.timezone);
+        const dayView = await executeMealHistoryCapability(stepCtx, "meal_day_breakdown");
+        return {
+          text: `${dayView.text}\n\nI can't auto-fix meal **timing** from that message — it would corrupt your log. Send a **full-day recount** to replace today's entries, e.g.:\n\n"For breakfast I had tea. For lunch parathas, raita, sabzi and tea. Evening samosa and tea. Dinner rice and daal."`,
+          metadata: {
+            specialist: "MealHistory",
+            meal_log: false,
+            meal_slot_correction_blocked: true,
+            pillar_compose: false,
+            magnus_voice_finalized: true,
+            local_date: today,
+          },
+        };
+      }
       const correctionText =
-        typeof step.args.correction_text === "string" && step.args.correction_text.trim()
+        extractPastMealFoodText(original) ??
+        (typeof step.args.correction_text === "string" && step.args.correction_text.trim()
           ? step.args.correction_text.trim()
-          : stepCtx.rawMessage.trim();
+          : stepCtx.rawMessage.trim());
+      const normalized = normalizeMealLogText(correctionText);
+      if (!normalized) {
+        return {
+          text: "I couldn't log that correction — tell me what you **ate** (e.g. \"I had rice and daal for dinner\"), or send a full-day recount.",
+          metadata: {
+            specialist: "nutrition",
+            meal_log: false,
+            meal_log_correct_rejected: true,
+            pillar_compose: false,
+          },
+        };
+      }
       await softDeleteMostRecentSession(stepCtx.userProfileId, stepCtx.timezone);
-      return runOrchestratedMealLogTurn(stepCtx, correctionText, ctx.rawMessage);
+      return runOrchestratedMealLogTurn(stepCtx, normalized, original);
     }
 
     case "meal_history":

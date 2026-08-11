@@ -61,6 +61,21 @@ export function extractPastMealFoodText(message: string): string | null {
   return food.length >= 2 ? food : null;
 }
 
+/** User is correcting timing/slots for already-logged meals — not logging new food. */
+const MEAL_SLOT_CORRECTION_RE =
+  /\b(?:was\s+(?:in|at)|not\s+(?:mid|in)\s*(?:morning|afternoon)|should\s+be|wrong\s+(?:slot|meal)|in\s+(?:the\s+)?evening|at\s+lunch|lunch\s+had|had\s+a\s+tea\s+too|move(?:d)?\s+(?:it\s+)?to)\b/i;
+
+export function isMealSlotCorrectionMessage(message: string): boolean {
+  const t = message.trim();
+  if (!t || isMealLogScaffoldingText(t)) {
+    return false;
+  }
+  if (extractPastMealFoodText(t)) {
+    return false;
+  }
+  return MEAL_SLOT_CORRECTION_RE.test(t);
+}
+
 /** Strip log-slot prefixes and scaffolding; null when nothing valid to log. */
 export function normalizeMealLogText(text: string): string | null {
   let t = sanitizeMealLogRawText(text).trim();

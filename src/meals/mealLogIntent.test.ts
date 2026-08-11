@@ -4,6 +4,7 @@ import {
   extractPastMealFoodText,
   isMealLogScaffoldingText,
   isMealPlanningIntent,
+  isMealSlotCorrectionMessage,
   normalizeMealLogText,
 } from "./mealLogIntent.js";
 
@@ -52,5 +53,19 @@ describe("extractPastMealFoodText", () => {
       "a samosa just now, and a tea",
     );
     expect(extractPastMealFoodText("I had 2 parathas with raita")).toBe("2 parathas with raita");
+  });
+});
+
+describe("isMealSlotCorrectionMessage", () => {
+  it("detects timing corrections without new food", () => {
+    expect(
+      isMealSlotCorrectionMessage(
+        "Samosa and tea was in evening and not mid morning. And lunch had a tea too",
+      ),
+    ).toBe(true);
+  });
+
+  it("allows new meal logs with ate/had", () => {
+    expect(isMealSlotCorrectionMessage("For dinner i just ate rice and daal")).toBe(false);
   });
 });

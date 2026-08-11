@@ -1,6 +1,5 @@
 import type { AgentContext } from "../../types.js";
 import { isMealCalorieDisputeMessage } from "../../../meals/mealCalorieDispute.js";
-import { buildFullDayMealRecountPlan } from "../../../meals/mealDayRecount.js";
 import { isMealPlanningIntent } from "../../../meals/mealLogIntent.js";
 import { parseMealLogCommand } from "../../../meals/parseMealLogCommand.js";
 import { isMealPhotoPurpose } from "../../../vision/resolvePhotoIntent.js";
