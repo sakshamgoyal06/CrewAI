@@ -160,12 +160,16 @@ vi.mock("../agents/health/nutritionOrchestrated.js", () => ({
   runMealPhotoLogTurn: (...args: unknown[]) => mealPhotoMock(...args),
 }));
 
-vi.mock("../agents/health/mealHistoryAgent.js", () => ({
-  executeMealHistoryCapability: vi.fn().mockImplementation(async (_ctx, cap) => ({
-    text: `Meal history (${cap}).`,
-    metadata: { specialist: "MealHistory", meal_history: cap },
-  })),
-}));
+vi.mock("../agents/health/mealHistoryAgent.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../agents/health/mealHistoryAgent.js")>();
+  return {
+    ...actual,
+    executeMealHistoryCapability: vi.fn().mockImplementation(async (_ctx, cap) => ({
+      text: `Meal history (${cap}).`,
+      metadata: { specialist: "MealHistory", meal_history: cap, pillar_compose: false },
+    })),
+  };
+});
 
 vi.mock("../agents/health/mealTargetAgent.js", () => ({
   executeMealTargetCapability: vi.fn().mockImplementation(async (_ctx, cap) => ({

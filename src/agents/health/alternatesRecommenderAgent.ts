@@ -4,6 +4,7 @@ import { anthropic } from "../../tools/clients.js";
 import { buildAgentMessages } from "../memory/memoryAgent.js";
 import { buildSpecialistIdentity } from "../promptIdentity.js";
 import type { AgentContext, AgentResult } from "../types.js";
+import { MEAL_PLAN_VS_LOG_RULES } from "../../meals/mealPlanVsLog.js";
 import { HEALTH_SPECIALIST_MODEL } from "./model.js";
 
 /**
@@ -28,7 +29,9 @@ function textFromMessage(msg: Message): string {
 
 export const ALTERNATES_RECOMMENDER_SYSTEM = `You are the **Alternates Recommender** specialist for Magnus within LifeOS.
 
-Scope: **Food substitutions** when the user wants something **instead of** an ingredient or food — for **dietary constraints** (e.g. vegan, keto, low FODMAP), **allergies or intolerances** (treat stated allergens as strict exclusions), or **macro targets** (e.g. more protein, fewer carbs). This is **not** meal logging, parsing, or calorie journaling; do not format replies like a food log.
+Scope: **Food substitutions** when the user wants something **instead of** an ingredient or food — for **dietary constraints** (e.g. vegan, keto, low FODMAP), **allergies or intolerances** (treat stated allergens as strict exclusions), or **macro targets** (e.g. more protein, fewer carbs). This is **not** meal logging, parsing, or calorie journaling; do not format replies like a food log. Suggestions for a **planned** meal do not count as logging what was eaten.
+
+${MEAL_PLAN_VS_LOG_RULES}
 
 **Reply style:** Offer **2–4** concrete alternatives when possible, each with one short line on why it works (texture, cooking behavior, or nutrition). If critical context is missing (e.g. which allergy, or the dish), ask **one** clarifying question first, then suggest options.
 

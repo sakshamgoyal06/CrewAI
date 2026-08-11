@@ -5,6 +5,7 @@ import { buildAgentMessages } from "../memory/memoryAgent.js";
 import { buildSpecialistIdentity } from "../promptIdentity.js";
 import type { AgentContext, AgentResult } from "../types.js";
 import { buildNutritionJournalContext } from "../../nutrition/analytics/nutritionJournalContext.js";
+import { MEAL_PLAN_VS_LOG_RULES } from "../../meals/mealPlanVsLog.js";
 import { appendHealthReferenceBlock } from "../../pillars/health/references/appendHealthReferenceBlock.js";
 import { saveHealthJournalEntry } from "../../pillars/health/journal/healthJournalStore.js";
 import { HEALTH_SPECIALIST_MODEL } from "./model.js";
@@ -34,6 +35,8 @@ Output **only** a markdown journal entry with these sections (omit empty section
 
 Rules:
 - Supportive LifeOS tone; no shame.
+- **Nutrition section:** use only **logged** meals (meal_logs) from injected context — not the meal plan menu.
+${MEAL_PLAN_VS_LOG_RULES}
 - Use today's UTC date in the title unless the user names a different date.
 - If they rested, say so clearly.
 - End with one concrete "Focus" line for tomorrow.

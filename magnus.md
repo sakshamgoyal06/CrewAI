@@ -95,7 +95,7 @@ shell or `.env`.
 | `src/index.ts` | Boot: clients → capability log → Telegram runtime → health server → watchdog → graceful shutdown |
 | `src/magnus.ts` | Turn handler: allowlist gate, chat persistence, typing indicator, orchestrator call. Starts the Morning Brief cron. |
 | `src/agents/magnusOrchestrator.ts` | Classify → memory → parse/execute/compose per pillar; GENERAL uses parser plan (incl. day_overview, pillar_consultation); `finalizeMagnusVoice` at exit |
-| `src/agents/orchestratorIntent.ts` | Five-way classifier with structural **routing hints** (`intentRoutingHints.ts`); only hard override: explicit meal log → HEALTH |
+| `src/agents/orchestratorIntent.ts` | Five-way classifier with structural **routing hints** (`intentRoutingHints.ts`); hard overrides: explicit meal log or meal-log read → HEALTH |
 | `src/agents/routing/intentRoutingHints.ts` | Structural signals for top-level intent classifier (YouTube, Magnus tools, portfolio/Hevy reads) |
 | `src/agents/routing/pillarConsultationSignals.ts` | Pillar read signals for `pillar_consultation` GENERAL step |
 | `src/agents/routing/agentConsultation.ts` | Reconciler for `pillar_consultation` multi-pillar step |
@@ -160,8 +160,8 @@ shell or `.env`.
 4. **Dedupe** — `update_id` claimed in Redis for 24h, so webhook retries never double-reply.
 5. **Classification** — Five intents. `GENERAL` is Magnus's own work, not a fallback bucket.
    The classifier receives **routing hints** (explicit meal log, YouTube/Magnus-tool signals,
-   portfolio/Hevy read signals) with the message; only explicit meal-log command format hard-overrides
-   to `HEALTH`. On `GENERAL`, the pillar plan parser may choose `pillar_consultation` (Magnus tools +
+   portfolio/Hevy read signals) with the message; explicit meal-log command or **logged-meal read**
+   (breakdown, history, macros — not the meal plan menu) hard-overrides to `HEALTH`. On `GENERAL`, the pillar plan parser may choose `pillar_consultation` (Magnus tools +
    pillar depth in one reply) or `day_overview` (calendar + commitments + meals). Pillar specialists
    are prompt-only except Health (capability executors) and Wealth (Kite read in executor).
 6. **Memory** — Loaded once per turn: recent chat, rolling summary, semantic facts, structured profile/goals/logs, **active projects block** in user knowledge. **Accountability Agent** at orchestrator exit: `action_ledger` + `accountability` metadata on tool turns. Tunable via `MAGNUS_MEMORY_*`.
@@ -224,7 +224,7 @@ shell or `.env`.
     compose like other capabilities. **Photo attachments:** every Telegram photo runs context-aware vision
     (`src/vision/`) using caption + recent turns — infers purpose (meal_log, list_items, receipt, …) and
     routes to the right pillar (not blindly HEALTH). Vision summary is appended to the user message for
-    parsers and agents; meal_log_photo only when purpose is food. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
+    parsers and agents; meal_log_photo only when purpose is food. **Full-day meal recount** ("For breakfast… For lunch… Then another tea") deterministically splits into one `meal_log` step per occasion, **soft-deletes earlier same-day logs** before saving (replace, don't stack), and multi-step compose uses **saved step metadata + DB day total** (no LLM-invented meals or arithmetic). **Meal plan vs log:** shared rules in `src/meals/mealPlanVsLog.ts` (`MEAL_PLAN_VS_LOG_RULES`, `MEAL_DATA_ARCHITECTURE`) injected into nutrition, parser, planning, compose, Magnus core, health subclassifier, and journal prompts. `meal_plan_*` = future menu (`meal_plan_entries`, no calorie totals); `meal_log` = eaten food (`meal_logs`, only source of daily kcal). Future-tense menus ("I'll eat", "will be") route to planning, not `meal_log`. Parser scaffolding (`Log breakfast:`, "Log afternoon tea") is rejected. Plan slots mark **logged** only when the saved meal clearly matches the plan title. `meal_day_breakdown` / meal history use deterministic output (`pillar_compose: false`) from `meal_logs` only. `day_overview` shows logged and planned meals in separate sections. Calorie-total disputes route to `meal_history`, not `meal_log`. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
     loads calendar + event log + planned meals. Review-step meal Q&A answers without re-posting the draft.
     Happiness/Wisdom catalogs include multiple capabilities (recommendations, travel, learning plan, etc.).
 
@@ -335,4 +335,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-11 (pillar consultation compose architecture; deterministic Hevy volume)
+**Last updated:** 2026-08-11 (meal day breakdown routing; block slot corrections as logs; pillar_consultation compose fix)

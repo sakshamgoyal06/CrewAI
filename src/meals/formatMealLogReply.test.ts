@@ -85,11 +85,12 @@ describe("formatMealLogReplyCompact", () => {
       components: sampleComponents,
       mealTotals: { calories: 70, protein_g: 6, carbs_g: 0.5, fat_g: 5 },
       day: { date: "2026-04-12", calories: 70, protein_g: 6, carbs_g: 0.5, fat_g: 5 },
+      daySessionCount: 1,
       targets: null,
     });
     expect(text).toContain("Meal logged");
     expect(text).toContain("70 kcal");
-    expect(text).toContain("Today:");
+    expect(text).toContain("Today (logged, 1 entry)");
     expect(text).toContain("meal breakdown");
     expect(text).not.toContain("Source:");
     expect(text).not.toContain("aaaaaaaa");
@@ -108,6 +109,7 @@ describe("formatMealLogReplyCompact", () => {
       components: sampleComponents,
       mealTotals: { calories: 70, protein_g: 6, carbs_g: 0.5, fat_g: 5 },
       day: { date: "2026-04-12", calories: 70, protein_g: 6, carbs_g: 0.5, fat_g: 5 },
+      daySessionCount: 1,
       targets: null,
     });
     expect(text).toContain("Lunch logged");

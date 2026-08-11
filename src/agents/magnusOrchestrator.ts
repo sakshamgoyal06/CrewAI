@@ -21,6 +21,7 @@ import {
   startHealthOnboarding,
 } from "./health/healthOnboarding.js";
 import { isMealCommand } from "../meals/parseMealLogCommand.js";
+import { isMealDayBreakdownRequest } from "./health/mealHistoryAgent.js";
 import { dispatchToAgent } from "./registry.js";
 import { intentToPillarRoute } from "./routing/intentToPillarRoute.js";
 import type { AgentContext } from "./types.js";
@@ -132,7 +133,9 @@ export async function runOrchestratorReply(input: {
 
   const intent = photoContext
     ? resolvePhotoIntent(photoContext)
-    : looksLikeMealSlotFollowUp(input.userMessage) &&
+    : isMealDayBreakdownRequest(effectiveUserMessage)
+      ? ("HEALTH" as Intent)
+      : looksLikeMealSlotFollowUp(input.userMessage) &&
         recentTurnWasMealContext(recentTurns)
       ? ("HEALTH" as Intent)
       : await resolveIntentNaturalLanguage(effectiveUserMessage, { recentTurns });

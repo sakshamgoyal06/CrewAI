@@ -302,6 +302,29 @@ export async function softDeleteMealSession(
   return { ok: true, localDate };
 }
 
+/** Soft-delete every meal session on a local calendar day (e.g. before a full-day recount). */
+export async function softDeleteSessionsForLocalDate(
+  userProfileId: string,
+  localDate: string,
+  timezone?: string | null,
+): Promise<{ ok: true; deleted: number } | { ok: false; error: string }> {
+  const sessions = await getSessionsForLocalDate(userProfileId, localDate);
+  if (!sessions.length) {
+    return { ok: true, deleted: 0 };
+  }
+
+  let deleted = 0;
+  for (const session of sessions) {
+    const result = await softDeleteMealSession(userProfileId, session.mealSessionId, timezone);
+    if (!result.ok) {
+      return result;
+    }
+    deleted += 1;
+  }
+
+  return { ok: true, deleted };
+}
+
 export async function softDeleteMostRecentSession(
   userProfileId: string,
   timezone?: string | null,

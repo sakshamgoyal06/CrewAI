@@ -307,7 +307,7 @@ export async function fetchMorningBriefContext(
           todayPlannedMeals: meals.plannedSlotsToday.map((slot) => ({
             slot,
             title: meals.plannedTitlesToday[slot] ?? "",
-            status: meals.plannedSlotsMissedToday.includes(slot) ? "planned" : "logged",
+            status: meals.mealsLoggedTodaySlots.includes(slot) ? "logged" : "planned",
           })),
           caloriesSoFarToday: meals.caloriesSoFarToday,
         }

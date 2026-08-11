@@ -120,7 +120,7 @@ export async function runOrchestratedMealLogTurn(
           meal_log: false,
           meal_parser_pipeline: true,
           error: true,
-          pillar_compose: true,
+          pillar_compose: false,
         },
       };
     }
@@ -134,7 +134,9 @@ export async function runOrchestratedMealLogTurn(
         meal_parser_pipeline: true,
         orchestrated_meal_log: true,
         meal_session_id: done.mealSessionId,
-        pillar_compose: true,
+        meal_log_compose: done.compose,
+        pillar_compose: false,
+        magnus_voice_finalized: true,
       },
     };
   } catch (err) {
@@ -153,7 +155,7 @@ export async function runOrchestratedMealLogTurn(
           meal_log: false,
           fallback_direct_pipeline: true,
           error: true,
-          pillar_compose: true,
+          pillar_compose: false,
         },
       };
     }
@@ -165,7 +167,9 @@ export async function runOrchestratedMealLogTurn(
         meal_log: true,
         fallback_direct_pipeline: true,
         meal_session_id: fb.mealSessionId,
-        pillar_compose: true,
+        meal_log_compose: fb.compose,
+        pillar_compose: false,
+        magnus_voice_finalized: true,
       },
     };
   }

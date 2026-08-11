@@ -1,7 +1,8 @@
 import { timezoneAbbrev } from "../nutrition/localDate.js";
 import { estimateMealNutrition } from "./estimateMealNutrition.js";
 import { formatMealLogReplyCompact, targetIndicatorsCompact } from "./formatMealLogReply.js";
-import { loadDailyTargets, sumMealLogsForDay } from "./mealDaySummary.js";
+import { countMealLogSessionsForDay, loadDailyTargets, sumMealLogsForDay } from "./mealDaySummary.js";
+import { mealLogComposeHeadline, type MealLogComposeEntry } from "./mealLogCompose.js";
 import type { MealComponentForRow } from "./mealComponents.js";
 import type { MealLogKind, MealSlot } from "./parseMealLogCommand.js";
 import { recordMealSession } from "./recordMealLog.js";
@@ -47,7 +48,7 @@ export async function completeMealLogWithEstimate(input: {
   mealSlot?: MealSlot;
   logKind?: MealLogKind;
 }): Promise<
-  | { ok: true; reply: string; mealSessionId: string }
+  | { ok: true; reply: string; mealSessionId: string; compose: MealLogComposeEntry }
   | { ok: false; reply: string }
 > {
   try {
@@ -67,7 +68,10 @@ export async function completeMealLogWithEstimate(input: {
     }
 
     const mealTotals = sumMealTotals(saved.components);
-    const day = await sumMealLogsForDay(input.userProfileId, saved.date);
+    const [day, daySessionCount] = await Promise.all([
+      sumMealLogsForDay(input.userProfileId, saved.date),
+      countMealLogSessionsForDay(input.userProfileId, saved.date),
+    ]);
     const targets = await loadDailyTargets(input.userProfileId);
 
     const tzLabel = timezoneAbbrev(input.timezone);
@@ -78,16 +82,27 @@ export async function completeMealLogWithEstimate(input: {
         slot !== "unspecified"
           ? slot.charAt(0).toUpperCase() + slot.slice(1)
           : "Meal";
+      const entryLabel = daySessionCount === 1 ? "entry" : "entries";
       const lines = [
         `**${slotPart} logged** (no calorie estimate).`,
         "",
-        `**Today (${tzLabel}):** ${Math.round(day.calories)} kcal · P ${day.protein_g}g`,
+        `**Today (logged, ${daySessionCount} ${entryLabel}):** ${Math.round(day.calories)} kcal · P ${day.protein_g}g`,
       ];
       const ind = targetIndicatorsCompact(day, targets);
       if (ind) {
         lines.push(ind);
       }
-      return { ok: true, reply: lines.join("\n"), mealSessionId: saved.mealSessionId };
+      const compose: MealLogComposeEntry = {
+        mealSlot: input.mealSlot ?? "unspecified",
+        headline: mealLogComposeHeadline(input.mealSlot ?? "unspecified", input.rawMealText),
+        totals: mealTotals,
+      };
+      return {
+        ok: true,
+        reply: lines.join("\n"),
+        mealSessionId: saved.mealSessionId,
+        compose,
+      };
     }
 
     const reply = formatMealLogReplyCompact({
@@ -101,10 +116,16 @@ export async function completeMealLogWithEstimate(input: {
       components: saved.components,
       mealTotals,
       day,
+      daySessionCount,
       targets,
     });
 
-    return { ok: true, reply, mealSessionId: saved.mealSessionId };
+    const compose: MealLogComposeEntry = {
+      mealSlot: input.mealSlot ?? "unspecified",
+      headline: mealLogComposeHeadline(input.mealSlot ?? "unspecified", input.rawMealText),
+      totals: mealTotals,
+    };
+    return { ok: true, reply, mealSessionId: saved.mealSessionId, compose };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, reply: `Meal log failed: ${msg}` };
@@ -123,7 +144,7 @@ export async function completeMealLogFromPipeline(input: {
   mealSlot?: MealSlot;
   logKind?: MealLogKind;
 }): Promise<
-  | { ok: true; reply: string; mealSessionId: string }
+  | { ok: true; reply: string; mealSessionId: string; compose: MealLogComposeEntry }
   | { ok: false; reply: string }
 > {
   try {

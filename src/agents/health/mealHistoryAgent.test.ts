@@ -13,5 +13,6 @@ describe("mealHistoryAgent routing guards", () => {
 
   it("still matches logged meal history asks", () => {
     expect(matchesMealHistoryMessage("what did I eat today")).toBe(true);
+    expect(matchesMealHistoryMessage("Meal breakdown for entire day")).toBe(true);
   });
 });

@@ -1,6 +1,9 @@
 /**
  * Orchestrate a parsed pillar execution plan: sequential step executors → composer.
  */
+import { localDateKey } from "../../../nutrition/localDate.js";
+import { softDeleteSessionsForLocalDate } from "../../../nutrition/store/mealHistoryStore.js";
+import { isFullDayMealRecount } from "../../../meals/mealDayRecount.js";
 import type { AgentContext, AgentResult } from "../../types.js";
 import {
   composePillarPlanReply,
@@ -17,6 +20,17 @@ export async function executePillarPlan(
   plan: PillarExecutionPlan,
   extraMeta?: Record<string, unknown>,
 ): Promise<AgentResult> {
+  const originalMessage = ctx.originalUserMessage?.trim() || ctx.rawMessage.trim();
+  const isMultiMealLog =
+    pillar === "HEALTH" &&
+    plan.steps.length > 1 &&
+    plan.steps.every((s) => s.capability === "meal_log" || s.capability === "meal_log_correct");
+
+  if (isMultiMealLog && isFullDayMealRecount(originalMessage)) {
+    const localDate = localDateKey(new Date(), ctx.timezone);
+    await softDeleteSessionsForLocalDate(ctx.userProfileId, localDate, ctx.timezone);
+  }
+
   const stepResults: PlanStepResult[] = [];
 
   for (let i = 0; i < plan.steps.length; i += 1) {

@@ -3,9 +3,12 @@
  * Used by GENERAL day_overview capability (parser-owned, not regex routing).
  */
 import { startOfLocalDay } from "../../../events/eventTime.js";
+import { formatLoggedMealsDay } from "../../../meals/formatLoggedMealsDay.js";
+import { sumMealLogsForDay } from "../../../meals/mealDaySummary.js";
 import { localDateKey, timezoneAbbrev } from "../../../nutrition/localDate.js";
 import { offsetDateKey } from "../../../nutrition/parseMealPlanJson.js";
 import { formatPlanDay, getPlanEntriesForDate } from "../../../nutrition/store/mealPlanStore.js";
+import { getSessionsForLocalDate } from "../../../nutrition/store/mealHistoryStore.js";
 import { readCalendarEvents } from "../../tools/calendarTool.js";
 import { listEventsTool } from "../../tools/eventLogTool.js";
 import type { AgentContext, AgentResult } from "../../types.js";
@@ -55,7 +58,8 @@ export async function executeDayOverviewCapability(
   const rangeEnd = startOfLocalDay(new Date(), tz, offsetDays + 1);
   const tzAbbrev = timezoneAbbrev(tz);
 
-  const [calendarText, eventLogText, mealEntries] = await Promise.all([
+  const [calendarText, eventLogText, mealEntries, loggedSessions, loggedDayTotals] =
+    await Promise.all([
     readCalendarEvents({
       startIso: rangeStart.toISOString(),
       endIso: rangeEnd.toISOString(),
@@ -69,9 +73,17 @@ export async function executeDayOverviewCapability(
       to: localDate,
     }),
     getPlanEntriesForDate(ctx.userProfileId, localDate),
+    getSessionsForLocalDate(ctx.userProfileId, localDate),
+    sumMealLogsForDay(ctx.userProfileId, localDate),
   ]);
 
-  const mealsText = formatPlanDay(mealEntries, label, localDate);
+  const plannedMealsText = formatPlanDay(mealEntries, label, localDate);
+  const loggedMealsText = formatLoggedMealsDay(
+    loggedSessions,
+    loggedDayTotals,
+    label,
+    localDate,
+  );
 
   const sections = [
     `**${label}** (${localDate}, ${tzAbbrev})`,
@@ -82,8 +94,11 @@ export async function executeDayOverviewCapability(
     "**Commitments (event log)**",
     eventLogText.trim() || "No logged commitments for this day.",
     "",
-    "**Meals (plan)**",
-    mealsText.trim() || "No meals planned for this day.",
+    "**Meals — logged** (counts toward daily calories)",
+    loggedMealsText.trim(),
+    "",
+    "**Meals — planned** (menu only; not counted until logged)",
+    plannedMealsText.trim() || "No meals planned for this day.",
   ];
 
   const userGraphNote =

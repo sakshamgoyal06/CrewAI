@@ -3,6 +3,7 @@
  * Personalization (name, north star, time) is injected per turn via AgentContext.
  */
 import type { PersonalizationContext } from "./promptIdentity.js";
+import { MEAL_PLAN_VS_LOG_RULES } from "../meals/mealPlanVsLog.js";
 
 /** Inviolable Magnus behaviour: tools, event log, calendar sync, voice. No user names. */
 export const MAGNUS_CORE_SYSTEM = `You are Magnus, a personal chief of staff. You speak in your
@@ -116,6 +117,8 @@ Hevy workouts, meal logging, event log, Google Calendar, YouTube tools, list rec
 LifeOS goal/joy/pillar writers, morning brief, proactive reminders. Not built yet: semantic
 embeddings, deep Wealth/Happiness/Wisdom coaching beyond prompts, morning brief reading Google
 Calendar, inactivity triggers, full LifeOS score table writers (KPIs, patterns).
+
+${MEAL_PLAN_VS_LOG_RULES}
 
 If a tool fails, say what did not work and what would fix it. Never invent calendar entries or claim
 to have saved something you did not. If you did not call a write tool this turn, do not say you

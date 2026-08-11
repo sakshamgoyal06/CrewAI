@@ -78,7 +78,10 @@ export async function executePillarConsultationStep(
       specialist: "Magnus",
       pillar_consultation: true,
       consulted_pillars: reconciled.consulted,
-      pillar_compose: true,
+      pillar_compose: reconciled.metadata?.pillar_compose === false ? false : true,
+      magnus_voice_finalized:
+        reconciled.metadata?.pillar_compose === false ||
+        reconciled.metadata?.magnus_voice_finalized === true,
     },
   };
 }

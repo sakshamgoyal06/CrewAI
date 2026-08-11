@@ -18,8 +18,10 @@ import {
 } from "../../health/nutritionOrchestrated.js";
 import { runNutritionCapability } from "../../health/nutritionAgent.js";
 import { tryHevyWriteAgent } from "../../../pillars/health/workouts/agents/hevyWriteAgent.js";
-import { parseMealLogCommand } from "../../../meals/parseMealLogCommand.js";
+import { parseMealLogCommand, type MealLogKind, type MealSlot } from "../../../meals/parseMealLogCommand.js";
 import { sanitizeMealLogRawText } from "../../../meals/sanitizeMealLogRawText.js";
+import { isMealPlanningIntent, isMealSlotCorrectionMessage, extractPastMealFoodText, normalizeMealLogText } from "../../../meals/mealLogIntent.js";
+import { localDateKey } from "../../../nutrition/localDate.js";
 import { runFitnessCapability } from "../../../pillars/health/workouts/agents/fitnessAgent.js";
 import type { PillarPlanStep } from "./types.js";
 import { buildStepAgentContext } from "./buildStepAgentContext.js";
@@ -35,22 +37,64 @@ export async function executeHealthPlanStep(
   switch (cap) {
     case "meal_log": {
       const original = ctx.originalUserMessage?.trim() || ctx.rawMessage.trim();
+      if (isMealPlanningIntent(original)) {
+        return {
+          text: "That sounds like a **meal plan** (future meals), not food you've eaten yet. Say what you **ate** to log it, or ask to see your **meal plan**.",
+          metadata: {
+            specialist: "nutrition",
+            department: "HEALTH",
+            meal_log: false,
+            meal_planning_blocked: true,
+            pillar_compose: false,
+          },
+        };
+      }
       const mealParsed = parseMealLogCommand(stepCtx.rawMessage);
-      const rawText =
-        mealParsed.kind === "meal"
+      const rawCandidate =
+        extractPastMealFoodText(original) ??
+        (mealParsed.kind === "meal"
           ? mealParsed.text
           : typeof step.args.meal_text === "string" && step.args.meal_text.trim()
             ? step.args.meal_text.trim()
             : typeof step.intent_summary === "string" && step.intent_summary.trim()
               ? step.intent_summary.trim()
-              : stepCtx.rawMessage.trim();
+              : stepCtx.rawMessage.trim());
+      const rawText = normalizeMealLogText(rawCandidate);
+      if (!rawText) {
+        return {
+          text: "I couldn't log that — it didn't look like food you ate. Tell me what you **had** (e.g. \"I ate a samosa and tea\").",
+          metadata: {
+            specialist: "nutrition",
+            department: "HEALTH",
+            meal_log: false,
+            meal_log_rejected: true,
+            pillar_compose: false,
+          },
+        };
+      }
+      const argSlot = step.args.meal_slot;
+      const mealSlot: MealSlot | undefined =
+        typeof argSlot === "string" &&
+        ["breakfast", "lunch", "dinner", "snack", "unspecified"].includes(argSlot)
+          ? (argSlot as MealSlot)
+          : mealParsed.kind === "meal"
+            ? mealParsed.slot
+            : undefined;
+      const argLogKind = step.args.log_kind;
+      const logKind: MealLogKind | undefined =
+        typeof argLogKind === "string" &&
+        ["meal", "snack", "drink", "supplement", "correction"].includes(argLogKind)
+          ? (argLogKind as MealLogKind)
+          : mealParsed.kind === "meal"
+            ? mealParsed.logKind
+            : undefined;
       return runOrchestratedMealLogTurn(
         stepCtx,
         sanitizeMealLogRawText(rawText),
         original,
         {
-          mealSlot: mealParsed.kind === "meal" ? mealParsed.slot : undefined,
-          logKind: mealParsed.kind === "meal" ? mealParsed.logKind : undefined,
+          mealSlot,
+          logKind,
         },
       );
     }
@@ -59,17 +103,47 @@ export async function executeHealthPlanStep(
       return runMealPhotoLogTurn(stepCtx);
 
     case "meal_log_correct": {
+      const original = ctx.originalUserMessage?.trim() || ctx.rawMessage.trim();
+      if (isMealSlotCorrectionMessage(original)) {
+        const today = localDateKey(new Date(), stepCtx.timezone);
+        const dayView = await executeMealHistoryCapability(stepCtx, "meal_day_breakdown");
+        return {
+          text: `${dayView.text}\n\nI can't auto-fix meal **timing** from that message — it would corrupt your log. Send a **full-day recount** to replace today's entries, e.g.:\n\n"For breakfast I had tea. For lunch parathas, raita, sabzi and tea. Evening samosa and tea. Dinner rice and daal."`,
+          metadata: {
+            specialist: "MealHistory",
+            meal_log: false,
+            meal_slot_correction_blocked: true,
+            pillar_compose: false,
+            magnus_voice_finalized: true,
+            local_date: today,
+          },
+        };
+      }
       const correctionText =
-        typeof step.args.correction_text === "string" && step.args.correction_text.trim()
+        extractPastMealFoodText(original) ??
+        (typeof step.args.correction_text === "string" && step.args.correction_text.trim()
           ? step.args.correction_text.trim()
-          : stepCtx.rawMessage.trim();
+          : stepCtx.rawMessage.trim());
+      const normalized = normalizeMealLogText(correctionText);
+      if (!normalized) {
+        return {
+          text: "I couldn't log that correction — tell me what you **ate** (e.g. \"I had rice and daal for dinner\"), or send a full-day recount.",
+          metadata: {
+            specialist: "nutrition",
+            meal_log: false,
+            meal_log_correct_rejected: true,
+            pillar_compose: false,
+          },
+        };
+      }
       await softDeleteMostRecentSession(stepCtx.userProfileId, stepCtx.timezone);
-      return runOrchestratedMealLogTurn(stepCtx, correctionText, ctx.rawMessage);
+      return runOrchestratedMealLogTurn(stepCtx, normalized, original);
     }
 
     case "meal_history":
     case "meal_history_undo":
     case "meal_breakdown":
+    case "meal_day_breakdown":
       return executeMealHistoryCapability(stepCtx, cap);
 
     case "meal_targets_show":

@@ -1,5 +1,12 @@
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
 import { parseMealLogCommand } from "../../meals/parseMealLogCommand.js";
+import { buildFullDayMealRecountPlan } from "../../meals/mealDayRecount.js";
+import { isMealCalorieDisputeMessage } from "../../meals/mealCalorieDispute.js";
+import { isMealPlanningIntent } from "../../meals/mealLogIntent.js";
+import {
+  executeMealHistoryCapability,
+  isMealDayBreakdownRequest,
+} from "./mealHistoryAgent.js";
 import {
   fetchUserHealthProfile,
   formatHealthPreferencesForPrompt,
@@ -31,6 +38,13 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
   };
 
   const deterministic = healthDeterministicCapability(ctxWithPrefs);
+  if (deterministic === "meal_history" && isMealCalorieDisputeMessage(ctx.rawMessage)) {
+    const plan = deterministicHealthPlan("meal_history");
+    return executeHealthStrategy({ ...ctxWithPrefs, pillarStrategy: plan }, plan);
+  }
+  if (isMealDayBreakdownRequest(ctx.rawMessage)) {
+    return executeMealHistoryCapability(ctxWithPrefs, "meal_day_breakdown");
+  }
   if (deterministic === "meal_log_photo") {
     const plan = deterministicHealthPlan("meal_log_photo");
     return executeHealthStrategy({ ...ctxWithPrefs, pillarStrategy: plan }, plan);
@@ -52,6 +66,11 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
       "deterministic",
     );
     return executeHealthStrategy({ ...ctxWithPrefs, pillarStrategy: plan }, plan);
+  }
+
+  const recountPlan = buildFullDayMealRecountPlan(ctx.rawMessage);
+  if (recountPlan && !isMealPlanningIntent(ctx.rawMessage)) {
+    return executeHealthStrategy({ ...ctxWithPrefs, pillarStrategy: recountPlan }, recountPlan);
   }
 
   const hints = await buildRoutingHints(ctxWithPrefs);

@@ -17,7 +17,8 @@ const MODEL = "claude-sonnet-4-6";
 const CLASSIFY_SYSTEM = `Classify a message to a personal assistant into exactly one category.
 
 HEALTH — training, workouts, the gym, food and meals, nutrition, sleep, recovery, energy, injury,
-body composition, or logging any of these.
+body composition, or logging any of these. Meal **plan** (future menu) and meal **log** (food eaten)
+are separate stores — only logged meals count toward daily calories.
 WEALTH — money: budgeting, spending, saving, debt, net worth, investing, financial goals.
 HAPPINESS — leisure and people: books, film, music for enjoyment, games, hobbies, creative
 practice, rest, travel and trips, friends, family, relationships. Taste talk without acting on
@@ -37,7 +38,7 @@ day", "what's on my calendar tomorrow") — those are GENERAL even if food or me
 the answer.
 
 Use routing_hints when present:
-- explicit_meal_log → HEALTH
+- explicit_meal_log or looks_like_meal_log_read → HEALTH (logging food eaten, or reading **logged** meal history/macros — never the meal **plan** menu)
 - looks_like_youtube_action or looks_like_magnus_tool_action or looks_like_magnus_tool_continuation → GENERAL (Magnus has tools)
 - looks_like_wealth_portfolio_read → WEALTH when asking to read/show portfolio (not a Magnus list action)
 - looks_like_health_fitness_read → HEALTH when asking to read/review workouts or Hevy (not a Magnus tool action)
@@ -73,7 +74,7 @@ async function classifyIntent(
 }
 
 /**
- * Classify with structural hints. Only hard override: explicit meal-log command format → HEALTH.
+ * Classify with structural hints. Hard overrides: explicit meal-log command or meal-log read → HEALTH.
  */
 export async function resolveIntentNaturalLanguage(
   userMessage: string,
@@ -81,7 +82,7 @@ export async function resolveIntentNaturalLanguage(
 ): Promise<Intent> {
   const hints = buildIntentRoutingHints(userMessage, options?.recentTurns ?? []);
 
-  if (hints.explicit_meal_log) {
+  if (hints.explicit_meal_log || hints.looks_like_meal_log_read) {
     return "HEALTH";
   }
 
