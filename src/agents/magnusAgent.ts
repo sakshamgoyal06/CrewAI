@@ -1261,7 +1261,11 @@ async function runTool(
 
 export async function runMagnusAgent(
   ctx: AgentContext,
-  options?: { allowedToolNames?: string[]; originalUserMessage?: string },
+  options?: {
+    allowedToolNames?: string[];
+    originalUserMessage?: string;
+    consultationDelegation?: string;
+  },
 ): Promise<AgentResult> {
   const userTurn =
     options?.originalUserMessage && options.originalUserMessage !== ctx.rawMessage
@@ -1285,7 +1289,10 @@ export async function runMagnusAgent(
     const msg = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system: buildMagnusSystem({ displayName: ctx.displayName }),
+      system: buildMagnusSystem({
+        displayName: ctx.displayName,
+        consultationDelegation: options?.consultationDelegation,
+      }),
       tools,
       messages,
     });

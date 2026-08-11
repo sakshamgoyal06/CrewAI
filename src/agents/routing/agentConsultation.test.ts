@@ -60,7 +60,7 @@ describe("reconcileConsultationOutputs", () => {
     const out = reconcileConsultationOutputs({
       userMessage: "I am done with the workout. Read hevy, review, and log",
       magnus: {
-        text: "Logged to daily check-ins.",
+        text: "Logged to daily check-ins.\n\nI don't have direct Hevy access to pull your session data.",
         metadata: {
           specialist: "Magnus",
           tools_used: ["log_daily_checkin"],
@@ -87,7 +87,9 @@ describe("reconcileConsultationOutputs", () => {
     expect(out.primarySource).toBe("HEALTH");
     expect(out.text).toContain("Pull A");
     expect(out.text).toContain("check-ins");
+    expect(out.text.toLowerCase()).not.toMatch(/don't have direct hevy/);
     expect(out.reason).toBe("merged_hevy_review_and_magnus_write");
+    expect(out.metadata.consultation_compose_context).toBeTruthy();
   });
 
   it("keeps magnus when pillars only generic or empty", () => {

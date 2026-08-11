@@ -4,6 +4,8 @@
  */
 export type PersonalizationContext = {
   displayName?: string | null;
+  /** Injected on pillar_consultation turns — tells Magnus what parallel pillars handle. */
+  consultationDelegation?: string | null;
 };
 
 /** One line injected into specialist / ritual prompts. User-agnostic when no name is set. */

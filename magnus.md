@@ -331,8 +331,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
   `chat_inactivity` (no Telegram messages for 3+ days) are opt-in catalog kinds with LLM gate+compose.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube (turn-handler smoke in `src/magnus.smoke.test.ts` only).
 - **Notion list mirror** — Supabase canonical; OAuth reconnect now wipes legacy LifeOS hub/registry and provisions a fresh **Magnus** page (no discover fallback to old DBs). Say connect Notion again after deploy if relink stuck on old LifeOS.
-**Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries.
+**Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries. **Session volume** (working-set tonnage) is computed deterministically from Hevy set data (`workoutVolume.ts`); agents must not guess volume. **Pillar consultation** (`pillar_consultation`): Magnus tools + pillar specialists run in parallel; `consultationOutcome.ts` builds a structured fulfillment summary, strips stale capability denials (e.g. Magnus saying it cannot pull Hevy when Health loaded it), and `composePillarPlanReply` composes one voice from user intent + delegation map.
 
 ---
 
-**Last updated:** 2026-08-10 (project setup LLM intent parser)
+**Last updated:** 2026-08-11 (pillar consultation compose architecture; deterministic Hevy volume)

@@ -77,9 +77,21 @@ This turn is a **day overview** (calendar + commitments + meals). Weave the sect
   }
 
   if (isConsultationMerge) {
+    const consultContext = stepResults
+      .map((s) => s.metadata?.consultation_compose_context)
+      .find((c) => typeof c === "string" && c.trim());
     const consultSystem = `${system}
 
-This turn merged Magnus and pillar specialist notes. One voice, one message — keep all factual content, remove duplicate greetings or specialist framing. Do NOT invent schedule items, times, or commitments not present in step outcomes.`;
+This turn is a **pillar consultation** — Magnus tools and pillar specialists ran in parallel on one user request.
+
+${consultContext ? `Structured outcome (authoritative):\n${consultContext}\n` : ""}
+Rules:
+- One voice, one message. The architecture succeeded when pillars loaded data and/or Magnus tools completed writes.
+- Answer the user's full request (e.g. review workout AND log it) — not each agent draft separately.
+- When Hevy or Kite data appears in step outcomes, present it confidently — never say Magnus cannot pull it.
+- Strip any stale "I don't have Hevy/Kite access" disclaimers from step drafts.
+- Confirm Magnus tool actions (event log, check-in) briefly when they succeeded.
+- Only state workout total volume (kg) if a step outcome includes "Session volume (working sets, computed from Hevy)" — never estimate or guess volume.`;
     return composeWithLlm(ctx, stepResults, consultSystem);
   }
 

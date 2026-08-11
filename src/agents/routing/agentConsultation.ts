@@ -4,23 +4,21 @@
 import type { AgentResult } from "../types.js";
 import { hasSuccessfulWriteTool } from "./actionIntegrity.js";
 import {
+  buildConsultationOutcomeSummary,
+  formatConsultationOutcomeForCompose,
+  magnusTextForConsultationMerge,
+  slimConsultationOutcomeForMeta,
+  type ConsultationReconcileInput,
+  type PillarConsultationCandidate,
+} from "./consultationOutcome.js";
+import {
   messageHasPillarSignal,
   type ConsultablePillarIntent,
 } from "./pillarConsultationSignals.js";
 
+export type { ConsultationReconcileInput, PillarConsultationCandidate } from "./consultationOutcome.js";
+
 export type ConsultedSource = "magnus" | ConsultablePillarIntent;
-
-export type PillarConsultationCandidate = {
-  intent: ConsultablePillarIntent;
-  agentName: string;
-  result: AgentResult;
-};
-
-export type ConsultationReconcileInput = {
-  userMessage: string;
-  magnus: AgentResult;
-  pillars: PillarConsultationCandidate[];
-};
 
 export type ConsultationReconcileOutcome = {
   text: string;
@@ -168,6 +166,9 @@ const AGENT_NAME_BY_INTENT: Record<ConsultablePillarIntent, string> = {
 export function reconcileConsultationOutputs(
   input: ConsultationReconcileInput,
 ): ConsultationReconcileOutcome {
+  const outcomeSummary = buildConsultationOutcomeSummary(input);
+  const composeContext = formatConsultationOutcomeForCompose(outcomeSummary);
+  const slimOutcome = slimConsultationOutcomeForMeta(outcomeSummary);
   const consulted: ConsultedSource[] = ["magnus"];
   const magnusMeta = input.magnus.metadata ?? {};
   const magnusWrote = hasSuccessfulWriteTool(magnusMeta);
@@ -210,12 +211,19 @@ export function reconcileConsultationOutputs(
   const fitnessTurn = healthMeta.health_order === "fitness";
 
   if (magnusWrote && hevyLoaded && fitnessTurn && healthCandidate) {
+    const magnusSlice = magnusTextForConsultationMerge(
+      input.magnus.text,
+      magnusMeta,
+      outcomeSummary,
+    );
     return {
-      text: mergeTexts([healthCandidate.result.text, input.magnus.text]),
+      text: mergeTexts([healthCandidate.result.text, magnusSlice]),
       metadata: {
         ...healthMeta,
         ...magnusMeta,
         specialist: healthMeta.specialist ?? "Fitness",
+        consultation_outcome: slimOutcome,
+        consultation_compose_context: composeContext,
         consultation: {
           consulted,
           primary: "HEALTH",
@@ -272,6 +280,8 @@ export function reconcileConsultationOutputs(
     text: top.text,
     metadata: {
       ...top.metadata,
+      consultation_outcome: slimOutcome,
+      consultation_compose_context: composeContext,
       consultation: {
         consulted,
         primary: top.source,
