@@ -37,6 +37,12 @@ export const HEALTH_CAPABILITY_CATALOG: CapabilityCatalog = {
       disambiguation: 'User asks for breakdown/detail of last meal.',
     },
     {
+      id: "meal_day_breakdown",
+      summary: "Full-day breakdown of logged meals only (not planned menu)",
+      disambiguation:
+        '"meal breakdown for entire day", "all meals today" — meal_logs only, never meal_plan_entries.',
+    },
+    {
       id: "meal_targets_show",
       summary: "Show daily macro/calorie targets on file",
       disambiguation: "Display targets, not set them.",

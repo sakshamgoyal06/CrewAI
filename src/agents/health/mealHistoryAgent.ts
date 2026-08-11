@@ -18,6 +18,13 @@ import type { AgentContext, AgentResult } from "../types.js";
 const MEAL_BREAKDOWN_RE =
   /\b(?:meal\s+breakdown|breakdown\s+(?:last\s+)?meal|last\s+meal\s+(?:breakdown|detail|details)|component\s+breakdown|item\s+breakdown)\b/i;
 
+const MEAL_DAY_BREAKDOWN_RE =
+  /\b(?:meal\s+breakdown|breakdown)\b[\s\S]{0,40}\b(?:entire|whole|full)\s+day\b|\b(?:entire|whole|full)\s+day\b[\s\S]{0,40}\b(?:meal\s+breakdown|breakdown|meals?)\b|\ball\s+meals?\s+today\b/i;
+
+export function isMealDayBreakdownRequest(rawMessage: string): boolean {
+  return MEAL_DAY_BREAKDOWN_RE.test(rawMessage.trim());
+}
+
 const MEAL_HISTORY_RE =
   /\b(?:what\s+did\s+i\s+eat|meals?\s+(?:today|yesterday|this\s+week)|food\s+log|eating\s+history|show\s+(?:my\s+)?meals?|macros?\s+(?:today|yesterday|last\s+\d+\s+days?)|nutrition\s+(?:today|yesterday|summary|recap)|today(?:'s)?\s+(?:meals?|food|macros?)|yesterday(?:'s)?\s+(?:meals?|food|macros?))\b/i;
 
@@ -79,11 +86,13 @@ async function formatDayHistory(
   };
 
   const lines = [
-    `**${label}** (${localDate}, ${tz}) — ${sessions.length} meal(s)`,
+    `**${label} — logged only** (${localDate}, ${tz}) — ${sessions.length} meal(s)`,
+    "",
+    "_Planned meals are not included until you log what you ate._",
     "",
     ...sessions.map((s, i) => formatSessionLine(i, s)),
     "",
-    `**Total:** ${day.calories} kcal · P ${day.protein_g}g · C ${day.carbs_g}g · F ${day.fat_g}g`,
+    `**Logged total:** ${day.calories} kcal · P ${day.protein_g}g · C ${day.carbs_g}g · F ${day.fat_g}g`,
   ];
 
   const ind = targetIndicators(day, targets);
@@ -104,11 +113,29 @@ export function matchesMealHistoryMessage(rawMessage: string): boolean {
   return (
     MEAL_HISTORY_RE.test(rawMessage) ||
     UNDO_MEAL_RE.test(rawMessage) ||
+    MEAL_DAY_BREAKDOWN_RE.test(rawMessage) ||
     MEAL_BREAKDOWN_RE.test(rawMessage)
   );
 }
 
-export type MealHistoryCapability = "meal_history" | "meal_history_undo" | "meal_breakdown";
+export type MealHistoryCapability =
+  | "meal_history"
+  | "meal_history_undo"
+  | "meal_breakdown"
+  | "meal_day_breakdown";
+
+function resolveMealHistoryCapability(raw: string): MealHistoryCapability {
+  if (UNDO_MEAL_RE.test(raw)) {
+    return "meal_history_undo";
+  }
+  if (MEAL_DAY_BREAKDOWN_RE.test(raw)) {
+    return "meal_day_breakdown";
+  }
+  if (MEAL_BREAKDOWN_RE.test(raw)) {
+    return "meal_breakdown";
+  }
+  return "meal_history";
+}
 
 export async function executeMealHistoryCapability(
   ctx: AgentContext,
@@ -131,6 +158,20 @@ export async function executeMealHistoryCapability(
         specialist: "MealHistory",
         meal_history: "undo",
         meal_session_id: result.mealSessionId,
+      },
+    };
+  }
+
+  if (cap === "meal_day_breakdown") {
+    const today = localDateKey(new Date(), ctx.timezone);
+    const text = await formatDayHistory(ctx, today, "Today");
+    return {
+      text,
+      metadata: {
+        specialist: "MealHistory",
+        meal_history: "day_breakdown",
+        local_date: today,
+        pillar_compose: false,
       },
     };
   }
@@ -161,6 +202,7 @@ export async function executeMealHistoryCapability(
         specialist: "MealHistory",
         meal_history: "breakdown",
         meal_session_id: session.mealSessionId,
+        pillar_compose: false,
       },
     };
   }
@@ -173,7 +215,7 @@ export async function executeMealHistoryCapability(
     const text = await formatDayHistory(ctx, yesterday, "Yesterday");
     return {
       text,
-      metadata: { specialist: "MealHistory", meal_history: "yesterday", local_date: yesterday },
+      metadata: { specialist: "MealHistory", meal_history: "yesterday", local_date: yesterday, pillar_compose: false },
     };
   }
 
@@ -192,14 +234,14 @@ export async function executeMealHistoryCapability(
     ].join("\n");
     return {
       text,
-      metadata: { specialist: "MealHistory", meal_history: "range", from, to: today },
+      metadata: { specialist: "MealHistory", meal_history: "range", from, to: today, pillar_compose: false },
     };
   }
 
   const text = await formatDayHistory(ctx, today, "Today");
   return {
     text,
-    metadata: { specialist: "MealHistory", meal_history: "today", local_date: today },
+    metadata: { specialist: "MealHistory", meal_history: "today", local_date: today, pillar_compose: false },
   };
 }
 
@@ -209,13 +251,18 @@ export async function tryMealHistoryAgent(ctx: AgentContext): Promise<AgentResul
   }
 
   const raw = ctx.rawMessage.trim();
+  const cap = resolveMealHistoryCapability(raw);
 
-  if (UNDO_MEAL_RE.test(raw)) {
-    return executeMealHistoryCapability(ctx, "meal_history_undo");
+  if (cap === "meal_history_undo") {
+    return executeMealHistoryCapability(ctx, cap);
   }
 
-  if (MEAL_BREAKDOWN_RE.test(raw)) {
-    return executeMealHistoryCapability(ctx, "meal_breakdown");
+  if (cap === "meal_day_breakdown") {
+    return executeMealHistoryCapability(ctx, cap);
+  }
+
+  if (cap === "meal_breakdown") {
+    return executeMealHistoryCapability(ctx, cap);
   }
 
   if (!MEAL_HISTORY_RE.test(raw)) {

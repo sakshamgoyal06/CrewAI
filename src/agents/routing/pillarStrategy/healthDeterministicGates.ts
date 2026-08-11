@@ -1,7 +1,8 @@
 import type { AgentContext } from "../../types.js";
-import { parseMealLogCommand } from "../../../meals/parseMealLogCommand.js";
 import { isMealCalorieDisputeMessage } from "../../../meals/mealCalorieDispute.js";
 import { buildFullDayMealRecountPlan } from "../../../meals/mealDayRecount.js";
+import { isMealPlanningIntent } from "../../../meals/mealLogIntent.js";
+import { parseMealLogCommand } from "../../../meals/parseMealLogCommand.js";
 import { isMealPhotoPurpose } from "../../../vision/resolvePhotoIntent.js";
 
 const NON_MEAL_PHOTO_CAPTION_RE =
@@ -23,6 +24,9 @@ export function healthDeterministicCapability(ctx: AgentContext): string | null 
     return "meal_log_photo";
   }
   if (parseMealLogCommand(ctx.rawMessage).kind === "meal") {
+    if (isMealPlanningIntent(ctx.rawMessage)) {
+      return null;
+    }
     return "meal_log";
   }
   return null;

@@ -20,6 +20,7 @@ import { runNutritionCapability } from "../../health/nutritionAgent.js";
 import { tryHevyWriteAgent } from "../../../pillars/health/workouts/agents/hevyWriteAgent.js";
 import { parseMealLogCommand, type MealLogKind, type MealSlot } from "../../../meals/parseMealLogCommand.js";
 import { sanitizeMealLogRawText } from "../../../meals/sanitizeMealLogRawText.js";
+import { isMealPlanningIntent, normalizeMealLogText } from "../../../meals/mealLogIntent.js";
 import { runFitnessCapability } from "../../../pillars/health/workouts/agents/fitnessAgent.js";
 import type { PillarPlanStep } from "./types.js";
 import { buildStepAgentContext } from "./buildStepAgentContext.js";
@@ -35,8 +36,20 @@ export async function executeHealthPlanStep(
   switch (cap) {
     case "meal_log": {
       const original = ctx.originalUserMessage?.trim() || ctx.rawMessage.trim();
+      if (isMealPlanningIntent(original)) {
+        return {
+          text: "That sounds like a **meal plan** (future meals), not food you've eaten yet. Say what you **ate** to log it, or ask to see your **meal plan**.",
+          metadata: {
+            specialist: "nutrition",
+            department: "HEALTH",
+            meal_log: false,
+            meal_planning_blocked: true,
+            pillar_compose: false,
+          },
+        };
+      }
       const mealParsed = parseMealLogCommand(stepCtx.rawMessage);
-      const rawText =
+      const rawCandidate =
         mealParsed.kind === "meal"
           ? mealParsed.text
           : typeof step.args.meal_text === "string" && step.args.meal_text.trim()
@@ -44,6 +57,19 @@ export async function executeHealthPlanStep(
             : typeof step.intent_summary === "string" && step.intent_summary.trim()
               ? step.intent_summary.trim()
               : stepCtx.rawMessage.trim();
+      const rawText = normalizeMealLogText(rawCandidate);
+      if (!rawText) {
+        return {
+          text: "I couldn't log that — it didn't look like food you ate. Tell me what you **had** (e.g. \"I ate a samosa and tea\").",
+          metadata: {
+            specialist: "nutrition",
+            department: "HEALTH",
+            meal_log: false,
+            meal_log_rejected: true,
+            pillar_compose: false,
+          },
+        };
+      }
       const argSlot = step.args.meal_slot;
       const mealSlot: MealSlot | undefined =
         typeof argSlot === "string" &&
@@ -86,6 +112,7 @@ export async function executeHealthPlanStep(
     case "meal_history":
     case "meal_history_undo":
     case "meal_breakdown":
+    case "meal_day_breakdown":
       return executeMealHistoryCapability(stepCtx, cap);
 
     case "meal_targets_show":

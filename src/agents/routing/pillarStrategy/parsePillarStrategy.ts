@@ -132,8 +132,8 @@ GENERAL-specific:
 HEALTH-specific — meal plan vs meal log (never mix):
 - **meal_log** / **meal_log_photo** / **meal_log_correct**: food the user **ate** — writes meal_logs; only these count toward daily calorie totals.
 - **meal_plan_create** / **meal_plan_read** / skip / swap / templates / shopping: **planned menu only** — meal_plan_entries; titles and slots, NOT daily totals. Do not use meal_log for "what's planned" or "plan my week".
-- **meal_history** / **meal_breakdown** / **meal_history_undo**: read or undo **logged** meals only (meal_logs).
-- When the user recounts a full day of eating in one message (breakfast + lunch + …), use multiple **meal_log** steps — not meal_plan_create.
+- **meal_history** / **meal_breakdown** / **meal_day_breakdown** / **meal_history_undo**: read or undo **logged** meals only (meal_logs). meal_day_breakdown = full-day logged summary. Never include meal_plan_entries or planned menus in calorie totals.
+- When the user describes **future** meals ("I'll eat", "will be", "today breakfast ill eat"), use **meal_plan_create** — NOT meal_log.
 - **meal_log_photo** only when routing_hints.has_meal_photo=true AND photo_purpose=meal_log (food/drink to log). Non-food photos must NOT use meal_log_photo even if a photo is attached.
 - When has_meal_photo=true and photo_purpose is list_items, document, receipt, etc. → **generic_ack** (wrong pillar; orchestrator should have routed elsewhere).
 - **meal_plan_read**: user wants to see what is already **locked/saved** — "what's my meal plan", "what am I eating tomorrow", "show planned meals" (food only). Pass **date_hint** per step: "today", "tomorrow", "yesterday", or YYYY-MM-DD. Multi-day asks ("today and tomorrow") → one step per day with the correct date_hint each.

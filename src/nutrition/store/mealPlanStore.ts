@@ -355,7 +355,7 @@ function titlesSimilar(planned: string, logged: string): boolean {
   return overlap >= 1;
 }
 
-/** Link a meal log to today's planned slot when one exists. */
+/** Link a meal log to today's planned slot when titles clearly match. */
 export async function linkPlanEntryOnLog(input: {
   userProfileId: string;
   localDate: string;
@@ -381,6 +381,10 @@ export async function linkPlanEntryOnLog(input: {
   }
 
   const matched = titlesSimilar(plan.title as string, input.rawMealText);
+  if (!matched) {
+    return { linked: false, matched: false, planTitle: plan.title as string };
+  }
+
   const now = new Date().toISOString();
 
   await supabase
@@ -401,7 +405,7 @@ export async function linkPlanEntryOnLog(input: {
   return {
     linked: true,
     planTitle: plan.title as string,
-    matched,
+    matched: true,
   };
 }
 
