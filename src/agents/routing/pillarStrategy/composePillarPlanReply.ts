@@ -1,8 +1,9 @@
 import { anthropic } from "../../../tools/clients.js";
 import { logger } from "../../../logger.js";
 import { loggableError } from "../../../util/loggableError.js";
-import { localDateKey } from "../../../nutrition/localDate.js";
+import { MEAL_LOG_ONLY_TOTALS_RULE, MEAL_PLAN_VS_LOG_RULES } from "../../../meals/mealPlanVsLog.js";
 import { sumMealLogsForDay } from "../../../meals/mealDaySummary.js";
+import { localDateKey } from "../../../nutrition/localDate.js";
 import {
   formatMultiMealLogReply,
   type MealLogComposeEntry,
@@ -153,14 +154,18 @@ Rules:
     }
     const mealLogSystem = `${system}
 
-This turn logged multiple meals in separate steps. Only claim a meal was logged when its step outcome shows a successful save with kcal/macros. If a step shows an error or no save, say that meal was not logged. Do NOT invent meals. Use the authoritative day total if provided — never add step totals to a running "Today" line from prior steps.`;
+${MEAL_PLAN_VS_LOG_RULES}
+
+This turn logged multiple meals in separate steps. Only claim a meal was logged when its step outcome shows a successful save with kcal/macros. If a step shows an error or no save, say that meal was not logged. Do NOT invent meals. ${MEAL_LOG_ONLY_TOTALS_RULE} Never add planned meals to logged totals.`;
     return composeWithLlm(ctx, stepResults, mealLogSystem);
   }
 
   if (isMultiMealPlanRead) {
     const planReadSystem = `${system}
 
-This turn read meal plans for multiple days. Present each day's plan from step outcomes exactly — do NOT say a day has no plan when a step outcome lists meals for that date.`;
+${MEAL_PLAN_VS_LOG_RULES}
+
+This turn read meal plans for multiple days. Present each day's **planned** menu from step outcomes exactly — dish titles and slots only. Do NOT include calorie totals unless the step outcome explicitly shows them. Do NOT say a day has no plan when a step outcome lists meals for that date. Planned meals are not logged meals.`;
     return composeWithLlm(ctx, stepResults, planReadSystem);
   }
 

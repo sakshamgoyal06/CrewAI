@@ -99,7 +99,7 @@ export function formatMealLogReplyCompact(input: MealLogReplyInput): string {
   const lines: string[] = [header, macroLine(input.mealTotals)];
 
   lines.push(
-    `**Today:** ${Math.round(input.day.calories)} kcal · P ${fmt(input.day.protein_g, "g")}`,
+    `**Today (logged):** ${Math.round(input.day.calories)} kcal · P ${fmt(input.day.protein_g, "g")}`,
   );
 
   const targets = targetIndicatorsCompact(input.day, input.targets);

@@ -1,6 +1,7 @@
 /**
  * LLM prompts for meal planning draft generation and revision.
  */
+import { MEAL_PLAN_VS_LOG_RULES } from "../../meals/mealPlanVsLog.js";
 import { formatSlotsLabel, type PlannedSlot } from "./parsePlanningSlots.js";
 import type { MealPlanEntryInput } from "../parseMealPlanJson.js";
 
@@ -9,6 +10,10 @@ export const MEAL_PLAN_DRAFT_SYSTEM = `You are the Meal Planner specialist for M
 **Scope:** Build a structured meal plan for the requested dates and slots from the user's goals and constraints. Practical home-friendly ideas — not medical nutrition therapy.
 
 **Tone:** Supportive, no food shame. Treat allergies and hard dietary limits as requirements.
+
+${MEAL_PLAN_VS_LOG_RULES}
+
+**Planning output:** Do not present planned meals as logged or include them in daily calorie totals. Saving the plan does not log food eaten.
 
 **Output format:** First write a concise human-readable plan (day-by-day or grouped — under ~300 words). Then append a fenced JSON block:
 

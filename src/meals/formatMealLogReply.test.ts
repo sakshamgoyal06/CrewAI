@@ -89,7 +89,7 @@ describe("formatMealLogReplyCompact", () => {
     });
     expect(text).toContain("Meal logged");
     expect(text).toContain("70 kcal");
-    expect(text).toContain("Today:");
+    expect(text).toContain("Today (logged)");
     expect(text).toContain("meal breakdown");
     expect(text).not.toContain("Source:");
     expect(text).not.toContain("aaaaaaaa");

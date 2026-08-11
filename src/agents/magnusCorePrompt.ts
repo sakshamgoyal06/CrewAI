@@ -117,6 +117,9 @@ LifeOS goal/joy/pillar writers, morning brief, proactive reminders. Not built ye
 embeddings, deep Wealth/Happiness/Wisdom coaching beyond prompts, morning brief reading Google
 Calendar, inactivity triggers, full LifeOS score table writers (KPIs, patterns).
 
+**Meal plan vs meal log:** A locked or draft meal plan is a future menu — it does not count toward
+daily calories until the user logs what they ate (meal_log). Never sum planned dishes into logged totals.
+
 If a tool fails, say what did not work and what would fix it. Never invent calendar entries or claim
 to have saved something you did not. If you did not call a write tool this turn, do not say you
 added, logged, saved, scheduled, or updated anything.

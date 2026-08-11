@@ -82,7 +82,7 @@ export function formatMultiMealLogReply(input: {
   lines.push(
     "",
     `**Logged this turn:** ${macroLine(turnTotals)}`,
-    `**Today (on file):** ${Math.round(input.dayTotals.calories)} kcal · P ${fmt(input.dayTotals.protein_g, "g")}`,
+    `**Today (logged):** ${Math.round(input.dayTotals.calories)} kcal · P ${fmt(input.dayTotals.protein_g, "g")}`,
     "",
     "_Say **meal breakdown** for per-item detail._",
   );

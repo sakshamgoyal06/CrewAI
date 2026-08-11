@@ -29,7 +29,7 @@ describe("formatMultiMealLogReply", () => {
     expect(text).toContain("Snack — tea");
     expect(text).toContain("Logged this turn");
     expect(text).toContain("~694 kcal");
-    expect(text).toContain("Today (on file):** 694 kcal");
+    expect(text).toContain("Today (logged):** 694 kcal");
     expect(text).not.toContain("1930");
     expect(text).not.toContain("Afternoon tea");
   });

@@ -224,7 +224,7 @@ shell or `.env`.
     compose like other capabilities. **Photo attachments:** every Telegram photo runs context-aware vision
     (`src/vision/`) using caption + recent turns — infers purpose (meal_log, list_items, receipt, …) and
     routes to the right pillar (not blindly HEALTH). Vision summary is appended to the user message for
-    parsers and agents; meal_log_photo only when purpose is food. **Full-day meal recount** ("For breakfast… For lunch… Then another tea") deterministically splits into one `meal_log` step per occasion, **soft-deletes earlier same-day logs** before saving (replace, don't stack), and multi-step compose uses **saved step metadata + DB day total** (no LLM-invented meals or arithmetic). Calorie-total disputes route to `meal_history`, not `meal_log`. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
+    parsers and agents; meal_log_photo only when purpose is food. **Full-day meal recount** ("For breakfast… For lunch… Then another tea") deterministically splits into one `meal_log` step per occasion, **soft-deletes earlier same-day logs** before saving (replace, don't stack), and multi-step compose uses **saved step metadata + DB day total** (no LLM-invented meals or arithmetic). **Meal plan vs log:** `meal_plan_*` = future menu (`meal_plan_entries`, no calorie totals); `meal_log` = eaten food (`meal_logs`, only source of daily kcal). `day_overview` shows logged and planned meals in separate sections. Calorie-total disputes route to `meal_history`, not `meal_log`. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
     loads calendar + event log + planned meals. Review-step meal Q&A answers without re-posting the draft.
     Happiness/Wisdom catalogs include multiple capabilities (recommendations, travel, learning plan, etc.).
 
@@ -335,4 +335,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-11 (pillar consultation compose architecture; deterministic Hevy volume)
+**Last updated:** 2026-08-11 (full-day meal recount replace; deterministic multi-meal compose totals)

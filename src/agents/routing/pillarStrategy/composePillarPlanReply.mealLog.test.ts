@@ -78,7 +78,7 @@ describe("composePillarPlanReply multi-meal log", () => {
     );
 
     expect(text).toContain("Logged this turn");
-    expect(text).toContain("Today (on file):** 694 kcal");
+    expect(text).toContain("Today (logged):** 694 kcal");
     expect(createMock).not.toHaveBeenCalled();
   });
 });

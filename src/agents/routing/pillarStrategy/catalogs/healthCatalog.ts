@@ -5,9 +5,9 @@ export const HEALTH_CAPABILITY_CATALOG: CapabilityCatalog = {
   capabilities: [
     {
       id: "meal_log",
-      summary: "Log food via explicit meal command (meal:, log meal:, ate:, etc.)",
+      summary: "Log food the user actually ate (meal:, log meal:, ate:, full-day recount)",
       disambiguation:
-        "Deterministic gate before parser when format matches. NOT free-form food chat — use nutrition_advice.",
+        "Writes meal_logs with calories/macros — ONLY path that counts toward daily totals. NOT meal planning or showing a plan.",
     },
     {
       id: "meal_log_photo",
@@ -50,13 +50,13 @@ export const HEALTH_CAPABILITY_CATALOG: CapabilityCatalog = {
       id: "meal_plan_create",
       summary: "Start or continue multi-turn meal planning (gather, draft, review, cancel, save)",
       disambiguation:
-        'BUILD/MAKE/CREATE a new plan, continue active_meal_plan_session for gather/draft/review (Q&A about the **draft menu**, revisions, cancel, save). NOT holistic day/schedule asks (calendar + whole day) — those are GENERAL day_overview.',
+        "BUILD/MAKE/CREATE a future menu (meal_plan_entries). Does NOT log food eaten or add to calorie totals. NOT meal_log.",
     },
     {
       id: "meal_plan_read",
       summary: "Show existing locked/saved plan for today/tomorrow/week",
       disambiguation:
-        'READ only: "what\'s planned", "what am I eating tomorrow", "show my meal plan". Prefer this over meal_plan_create when previous_turn_meal_plan_locked=true or user asks to view, not build.',
+        "READ planned menu titles only — NOT logged calories. NOT meal_log or meal_history.",
     },
     {
       id: "meal_plan_skip",
