@@ -54,6 +54,9 @@ const connectKiteMock = vi.hoisted(() => vi.fn());
 const dayOverviewMock = vi.hoisted(() => vi.fn());
 const mealLogMock = vi.hoisted(() => vi.fn());
 const mealPhotoMock = vi.hoisted(() => vi.fn());
+const redisGetMock = vi.hoisted(() => vi.fn());
+const redisSetMock = vi.hoisted(() => vi.fn());
+const redisDelMock = vi.hoisted(() => vi.fn());
 
 function textReply(text: string) {
   return { content: [{ type: "text" as const, text }] };
@@ -87,6 +90,11 @@ vi.mock("../tools/clients.js", async (importOriginal) => {
     anthropic: {
       ...mod.anthropic,
       messages: { create: createMock },
+    },
+    redis: {
+      get: redisGetMock,
+      set: redisSetMock,
+      del: redisDelMock,
     },
   };
 });
@@ -353,6 +361,12 @@ describe("magnus golden path (100 user asks)", () => {
   beforeEach(() => {
     process.env.MAGNUS_PILLAR_PLAN_COMPOSE = "false";
     state.anthropicCalls = 0;
+    redisGetMock.mockReset();
+    redisGetMock.mockResolvedValue(null);
+    redisSetMock.mockReset();
+    redisSetMock.mockResolvedValue("OK");
+    redisDelMock.mockReset();
+    redisDelMock.mockResolvedValue(1);
     createMock.mockReset();
     createMock.mockImplementation(async (params: {
       max_tokens?: number;
