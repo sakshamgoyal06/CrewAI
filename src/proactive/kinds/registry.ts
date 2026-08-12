@@ -10,7 +10,6 @@ import { chatInactivityHandler } from "./chatInactivity.js";
 import { driftGuardHandler } from "./driftGuard.js";
 import { eveningJournalHandler } from "./eveningJournal.js";
 import { monthlyGoalReviewHandler } from "./monthlyGoalReview.js";
-import { morningOrientationHandler } from "./morningOrientation.js";
 import { middayEncouragementHandler } from "./middayEncouragement.js";
 import { staleListNudgeHandler } from "./staleListNudge.js";
 import { weekPlanningHandler } from "./weekPlanning.js";
@@ -31,7 +30,6 @@ export function listProactiveKinds(): ProactiveKindHandler[] {
 }
 
 export function registerDefaultProactiveKinds(): void {
-  registerProactiveKind(morningOrientationHandler);
   registerProactiveKind(eveningJournalHandler);
   registerProactiveKind(weekPlanningHandler);
   registerProactiveKind(weeklyWrapHandler);

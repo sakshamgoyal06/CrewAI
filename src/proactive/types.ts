@@ -8,7 +8,6 @@ export type ProactiveMessageKind =
   | "event_reminder"
   | "gym_hevy_reconcile"
   | "evening_journal"
-  | "morning_orientation"
   | "week_planning"
   | "weekly_wrap"
   | "monthly_goal_review"

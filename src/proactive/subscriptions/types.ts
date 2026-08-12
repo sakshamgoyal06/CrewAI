@@ -86,7 +86,6 @@ export function rowToSubscription(row: ProactiveSubscriptionRow): ProactiveSubsc
 }
 
 export const CATALOG_KINDS = [
-  "morning_orientation",
   "evening_journal",
   "week_planning",
   "weekly_wrap",
@@ -104,7 +103,6 @@ export const CATALOG_KINDS = [
 
 /** Rhythm kinds enabled by default when provisioning the owner user. */
 export const RHYTHM_DEFAULT_ENABLED_KINDS: CatalogProactiveKind[] = [
-  "morning_orientation",
   "evening_journal",
   "week_planning",
   "weekly_wrap",
@@ -118,7 +116,6 @@ export function isCatalogKind(kind: string): kind is CatalogProactiveKind {
 }
 
 export const CATALOG_KIND_LABELS: Record<CatalogProactiveKind, string> = {
-  morning_orientation: "Morning orientation check-in",
   evening_journal: "Evening review / journal",
   week_planning: "Monday week planning",
   weekly_wrap: "Friday weekly wrap-up",
@@ -135,7 +132,6 @@ export const CATALOG_KIND_LABELS: Record<CatalogProactiveKind, string> = {
 };
 
 export const DEFAULT_CATALOG_SCHEDULE: Record<CatalogProactiveKind, ProactiveSchedule> = {
-  morning_orientation: { type: "recurring_local", localHour: 7, windowMinutes: 30 },
   evening_journal: { type: "recurring_local", localHour: 21, windowMinutes: 14 },
   week_planning: { type: "recurring_local", localHour: 8, windowMinutes: 20 },
   weekly_wrap: { type: "recurring_local", localHour: 18, windowMinutes: 20 },
@@ -152,7 +148,6 @@ export const DEFAULT_CATALOG_SCHEDULE: Record<CatalogProactiveKind, ProactiveSch
 };
 
 export const DEFAULT_CATALOG_CAP: Record<CatalogProactiveKind, ProactiveCapBucket> = {
-  morning_orientation: "scheduled",
   evening_journal: "scheduled",
   week_planning: "scheduled",
   weekly_wrap: "scheduled",
@@ -169,7 +164,6 @@ export const DEFAULT_CATALOG_CAP: Record<CatalogProactiveKind, ProactiveCapBucke
 };
 
 export const DEFAULT_CATALOG_TRIGGER: Record<CatalogProactiveKind, ProactiveTriggerType> = {
-  morning_orientation: "recurring",
   evening_journal: "recurring",
   week_planning: "recurring",
   weekly_wrap: "recurring",

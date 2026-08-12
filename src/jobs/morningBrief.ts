@@ -69,7 +69,7 @@ async function defaultInvokeClaude(system: string, user: string): Promise<string
   const { anthropic } = await import("../tools/clients.js");
   const msg = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 2048,
+    max_tokens: 400,
     system,
     messages: [{ role: "user", content: user }],
   });
