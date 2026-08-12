@@ -12,6 +12,9 @@ import { NUTRITION_SYSTEM } from "./nutritionPrompt.js";
 import { FITNESS_SYSTEM } from "../../pillars/health/workouts/agents/fitnessAgent.js";
 
 const createMock = vi.fn();
+const redisGet = vi.hoisted(() => vi.fn());
+const redisSet = vi.hoisted(() => vi.fn());
+const redisDel = vi.hoisted(() => vi.fn());
 const sessionState = {
   active: null as Record<string, unknown> | null,
 };
@@ -89,7 +92,11 @@ vi.mock("../../tools/clients.js", () => ({
       };
     },
   },
-  redis: {},
+  redis: {
+    get: redisGet,
+    set: redisSet,
+    del: redisDel,
+  },
 }));
 
 function ctx(raw: string) {
@@ -121,6 +128,12 @@ describe("routeHealthMessage", () => {
     delete process.env.MAGNUS_HEVY_API_KEY;
     process.env.MAGNUS_PILLAR_PLAN_COMPOSE = "false";
     sessionState.active = null;
+    redisGet.mockReset();
+    redisGet.mockResolvedValue(null);
+    redisSet.mockReset();
+    redisSet.mockResolvedValue("OK");
+    redisDel.mockReset();
+    redisDel.mockResolvedValue(1);
     createMock.mockReset();
     createMock.mockResolvedValue({
       content: [{ type: "text", text: "mock reply" }],
