@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   extractPastMealFoodText,
+  inferMealLogCandidate,
   isMealLogScaffoldingText,
   isMealPlanningIntent,
   isMealSlotCorrectionMessage,
@@ -53,6 +54,36 @@ describe("extractPastMealFoodText", () => {
       "a samosa just now, and a tea",
     );
     expect(extractPastMealFoodText("I had 2 parathas with raita")).toBe("2 parathas with raita");
+  });
+
+  it("finds ate/had after a meal-slot preamble", () => {
+    expect(
+      extractPastMealFoodText("For breakfast today, I ate 2 besan cheelas, ketchup, and a tea"),
+    ).toBe("2 besan cheelas, ketchup, and a tea");
+  });
+
+  it("handles present-tense having", () => {
+    expect(
+      extractPastMealFoodText("For breakfast today, I am having 2 besan cheelas, ketchup, and a tea"),
+    ).toBe("2 besan cheelas, ketchup, and a tea");
+  });
+});
+
+describe("inferMealLogCandidate", () => {
+  it("proposes food text when phrasing is ambiguous", () => {
+    expect(
+      inferMealLogCandidate("For breakfast today, I am having 2 besan cheelas and tea"),
+    ).toEqual(
+      expect.objectContaining({ foodText: expect.stringContaining("besan cheelas") }),
+    );
+  });
+});
+
+describe("isMealPlanningIntent", () => {
+  it("does not treat present having as meal planning", () => {
+    expect(
+      isMealPlanningIntent("For breakfast today, I am having 2 besan cheelas and tea"),
+    ).toBe(false);
   });
 });
 

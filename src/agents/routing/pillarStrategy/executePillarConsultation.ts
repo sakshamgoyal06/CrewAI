@@ -3,6 +3,7 @@
  */
 import { dispatchToAgent } from "../../registry.js";
 import { runMagnusAgent } from "../../magnusAgent.js";
+import { magnusAllowedToolsForConsultation } from "../consultationMagnusTools.js";
 import { reconcileConsultationOutputs } from "../agentConsultation.js";
 import { buildMagnusConsultationDelegationBlock } from "../consultationOutcome.js";
 import type { ConsultablePillarIntent } from "../pillarConsultationSignals.js";
@@ -43,6 +44,7 @@ export async function executePillarConsultationStep(
     runMagnusAgent(stepCtx, {
       originalUserMessage: ctx.rawMessage,
       consultationDelegation,
+      allowedToolNames: magnusAllowedToolsForConsultation(ctx.rawMessage),
     }),
     ...pillars.map(async (pillarIntent) => {
       const route = intentToPillarRoute(pillarIntent);
