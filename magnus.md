@@ -135,6 +135,7 @@ shell or `.env`.
 | `src/events/gymHevyMatch.ts` | Match planned gym events to Hevy workouts (session label, local date) |
 | `src/events/gymHevyReconcile.ts` | After grace window: sync event log from Hevy or nudge user |
 | `src/proactive/` | Magnus-initiated Telegram: outbound HTML, dedupe, kind registry, dispatcher, subscriptions |
+| `src/proactive/rhythm/` | Day/week/month rhythm summaries for proactive check-ins |
 | `src/proactive/jobs/gymHevyReconcileJob.ts` | Cron: gym ↔ Hevy reconciliation for connected users |
 | `src/proactive/jobs/nutritionNightlyJob.ts` | Cron: EOD rollup recompute, anomaly flags, program-memory sync |
 | `src/tools/telegram.ts` | Telegraf bot, `/start` and `/help`, rate limit, update dedupe, webhook mount |
@@ -181,7 +182,7 @@ shell or `.env`.
    postpone), **nutrition nightly** (~23:00 local: recompute rollups, anomaly flags, sync persistent
    lapse patterns to `program_learnings`; `MAGNUS_NUTRITION_NIGHTLY_ENABLED`), **subscription dispatcher** (`evening_journal`, `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
    `chat_inactivity`, `custom_reminder`, `meal_log_reminder`, `meal_adherence_nudge`, `meal_eod_reconciliation`, `meal_gap_nudge`, `weekly_nutrition_review` via `magnus_proactive_subscriptions` — modular kind registry in
-   `src/proactive/kinds/`). User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
+   `src/proactive/kinds/`). **Rhythm cadence** (catalog kinds): `morning_orientation` (~7:30 local, one-line intention/energy), `evening_journal` (~21:00, day summary + EOD review), `week_planning` (Monday ~8:00), `weekly_wrap` (Friday ~18:00, includes nutrition week slice), `monthly_goal_review` (1st of month ~10:00). Owner provision seeds these enabled via `seedDefaultRhythmSubscriptions`. User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
    catalog kinds, create one-shot or daily custom reminders (`create_reminder` /
    `create_recurring_reminder`). Relative time parsing for one-shots (`tomorrow 8pm`, `in 30 minutes`).
    LLM gate+compose (Haiku) for evening journal, drift guard, midday encouragement, stale list nudges,
@@ -339,4 +340,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-12 (YouTube playlist disambiguation; meal-log confirm + phrasing; plan-match staple check; pillar_consultation tool filter)
+**Last updated:** 2026-08-12 (Rhythm proactive kinds: morning orientation, week planning, weekly wrap, monthly goal review; enriched evening review)
