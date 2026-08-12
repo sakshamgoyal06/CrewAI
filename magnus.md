@@ -199,8 +199,10 @@ shell or `.env`.
     Google” → one consent; `GET /oauth/google/callback` stores the same refresh token on
     `google_calendar_refresh_token` and `google_youtube_refresh_token`. Host needs a **Web**
     OAuth client (`GOOGLE_CLIENT_ID` / `SECRET`). YouTube playlists resolve by pillar name
-    (`wisdom`, `wealth`, `magnus`, …) or `PL…` id; aliases cached in `magnus_youtube_state.playlist_aliases`.
-    Bulk actions: `clear` (empty playlist), `dedupe` (remove duplicate videos).
+    (`wisdom`, `wealth`, `magnus`, …), free-text title (fuzzy match), or `PL…` id; aliases cached in
+    `magnus_youtube_state.playlist_aliases`. When the exact playlist is missing or `add` has no
+    `playlist_id`, the tool lists close matches (or all playlists) for the user to pick — never
+    silently defaults to Magnus on add. Bulk actions: `clear` (empty playlist), `dedupe` (remove duplicate videos).
 12. **Intent routing** — Only Magnus (`GENERAL`) has tools. YouTube actions, list/LifeOS/Notion
     phrases, and short continuations after a Magnus tool turn coerce to `GENERAL`. Pillar specialists
     are prompt-only and must not claim tool actions (see `pillarSpecialist.ts` guard). Health has
@@ -216,7 +218,9 @@ shell or `.env`.
     an ordered **steps[]** array (1–`MAGNUS_PILLAR_PLAN_MAX_STEPS`, default 4). **Architecture:
     input parse → execute → output parse (compose)** — one Magnus voice at terminal exit. **Step executors**
     run sequentially with full context and prior-step outcomes; GENERAL steps use Magnus with
-    capability-filtered tools or `day_overview` / `pillar_consultation`. A **composer**
+    capability-filtered tools or `day_overview` / `pillar_consultation`. On `pillar_consultation`,
+    Magnus only receives tools the user message actually needs (`consultationMagnusTools.ts`) — e.g.
+    no YouTube tools on gym+meal plan turns. A **composer**
     (`MAGNUS_PILLAR_PLAN_COMPOSE`, default on) re-voices every step output (single- and multi-step).
     `finalizeMagnusVoice` at the orchestrator boundary catches any path that did not already compose.
     Terminal confirmations (e.g. cancel planning, OAuth links) set `pillar_compose: false`. Deterministic
@@ -224,7 +228,7 @@ shell or `.env`.
     compose like other capabilities. **Photo attachments:** every Telegram photo runs context-aware vision
     (`src/vision/`) using caption + recent turns — infers purpose (meal_log, list_items, receipt, …) and
     routes to the right pillar (not blindly HEALTH). Vision summary is appended to the user message for
-    parsers and agents; meal_log_photo only when purpose is food. **Full-day meal recount** ("For breakfast… For lunch… Then another tea") deterministically splits into one `meal_log` step per occasion, **soft-deletes earlier same-day logs** before saving (replace, don't stack), and multi-step compose uses **saved step metadata + DB day total** (no LLM-invented meals or arithmetic). **Meal plan vs log:** shared rules in `src/meals/mealPlanVsLog.ts` (`MEAL_PLAN_VS_LOG_RULES`, `MEAL_DATA_ARCHITECTURE`) injected into nutrition, parser, planning, compose, Magnus core, health subclassifier, and journal prompts. `meal_plan_*` = future menu (`meal_plan_entries`, no calorie totals); `meal_log` = eaten food (`meal_logs`, only source of daily kcal). Future-tense menus ("I'll eat", "will be") route to planning, not `meal_log`. Parser scaffolding (`Log breakfast:`, "Log afternoon tea") is rejected. Plan slots mark **logged** only when the saved meal clearly matches the plan title. `meal_day_breakdown` / meal history use deterministic output (`pillar_compose: false`) from `meal_logs` only. `day_overview` shows logged and planned meals in separate sections. Calorie-total disputes route to `meal_history`, not `meal_log`. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
+    parsers and agents; meal_log_photo only when purpose is food. **Full-day meal recount** ("For breakfast… For lunch… Then another tea") deterministically splits into one `meal_log` step per occasion, **soft-deletes earlier same-day logs** before saving (replace, don't stack), and multi-step compose uses **saved step metadata + DB day total** (no LLM-invented meals or arithmetic). **Meal plan vs log:** shared rules in `src/meals/mealPlanVsLog.ts` (`MEAL_PLAN_VS_LOG_RULES`, `MEAL_DATA_ARCHITECTURE`) injected into nutrition, parser, planning, compose, Magnus core, health subclassifier, and journal prompts. `meal_plan_*` = future menu (`meal_plan_entries`, no calorie totals); `meal_log` = eaten food (`meal_logs`, only source of daily kcal). Future-tense menus ("I'll eat", "will be") route to planning, not `meal_log`. Present-tense eating ("I'm having…") and `I ate/had` anywhere in the message are accepted. When meal routing fires but text cannot be normalized, Magnus asks **yes/no** to confirm logging (Redis `meal_log_pending`). Parser scaffolding (`Log breakfast:`, "Log afternoon tea") is rejected. Plan slots mark **logged** only when the saved meal clearly matches the plan title (staple conflicts like rice vs chapati block a false "Plan matched"). `meal_day_breakdown` / meal history use deterministic output (`pillar_compose: false`) from `meal_logs` only. `day_overview` shows logged and planned meals in separate sections. Calorie-total disputes route to `meal_history`, not `meal_log`. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
     loads calendar + event log + planned meals. Review-step meal Q&A answers without re-posting the draft.
     Happiness/Wisdom catalogs include multiple capabilities (recommendations, travel, learning plan, etc.).
 
@@ -335,4 +339,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-11 (meal day breakdown routing; block slot corrections as logs; pillar_consultation compose fix)
+**Last updated:** 2026-08-12 (YouTube playlist disambiguation; meal-log confirm + phrasing; plan-match staple check; pillar_consultation tool filter)

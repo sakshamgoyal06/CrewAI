@@ -338,7 +338,42 @@ export function formatPlanWeek(entries: MealPlanEntryRow[], fromDate: string, to
   return lines.join("\n").trim();
 }
 
+const STAPLE_GROUPS = [
+  ["rice", "chawal", "katori"],
+  ["chapati", "roti", "paratha", "bread", "naan", "puri"],
+  ["pasta", "noodles", "spaghetti"],
+] as const;
+
+function stapleGroupHits(text: string): Set<number> {
+  const norm = text.toLowerCase();
+  const hits = new Set<number>();
+  for (let i = 0; i < STAPLE_GROUPS.length; i += 1) {
+    const group = STAPLE_GROUPS[i]!;
+    if (group.some((w) => norm.includes(w))) {
+      hits.add(i);
+    }
+  }
+  return hits;
+}
+
+function stapleConflict(planned: string, logged: string): boolean {
+  const planStaples = stapleGroupHits(planned);
+  const logStaples = stapleGroupHits(logged);
+  if (!planStaples.size || !logStaples.size) {
+    return false;
+  }
+  for (const g of planStaples) {
+    if (logStaples.has(g)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function titlesSimilar(planned: string, logged: string): boolean {
+  if (stapleConflict(planned, logged)) {
+    return false;
+  }
   const a = planned.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
   const b = logged.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
   const aWords = new Set(a.split(/\s+/).filter((w) => w.length > 2));
@@ -357,7 +392,7 @@ function titlesSimilar(planned: string, logged: string): boolean {
       overlap += 1;
     }
   }
-  return overlap >= 2;
+  return overlap >= 3;
 }
 
 /** Link a meal log to today's planned slot when titles clearly match. */

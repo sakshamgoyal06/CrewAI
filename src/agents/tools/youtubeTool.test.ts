@@ -176,6 +176,60 @@ describe("youtube_playlist", () => {
     expect(out).toContain("PLmagnus");
   });
 
+  it("requires explicit playlist on add when playlist_id omitted", async () => {
+    listPlaylists.mockResolvedValue([
+      {
+        playlistId: "PLworkout",
+        title: "High Energy Workout Mix",
+        itemCount: 57,
+        privacyStatus: "private",
+        url: "https://www.youtube.com/playlist?list=PLworkout",
+      },
+      {
+        playlistId: "PLmagnus",
+        title: "Magnus",
+        itemCount: 5,
+        privacyStatus: "private",
+        url: "https://www.youtube.com/playlist?list=PLmagnus",
+      },
+    ]);
+    getVideo.mockResolvedValue(sampleVideo);
+
+    const out = await youtubePlaylistTool({
+      action: "add",
+      userProfileId: "user-1",
+      videoId: "dQw4w9WgXcQ",
+    });
+    expect(out).toContain("Which playlist");
+    expect(out).toContain("High Energy Workout Mix");
+    expect(addToPlaylist).not.toHaveBeenCalled();
+  });
+
+  it("resolves free-text playlist title on add", async () => {
+    listPlaylists.mockResolvedValue([
+      {
+        playlistId: "PLworkout",
+        title: "High Energy Workout Mix",
+        itemCount: 57,
+        privacyStatus: "private",
+        url: "https://www.youtube.com/playlist?list=PLworkout",
+      },
+    ]);
+    getVideo.mockResolvedValue(sampleVideo);
+    addToPlaylist.mockResolvedValue({ title: sampleVideo.title, videoId: sampleVideo.videoId });
+
+    const out = await youtubePlaylistTool({
+      action: "add",
+      playlistId: "High Energy Workout Mix",
+      userProfileId: "user-1",
+      videoId: "dQw4w9WgXcQ",
+    });
+    expect(addToPlaylist).toHaveBeenCalledWith(
+      expect.objectContaining({ playlistId: "PLworkout", userProfileId: "user-1" }),
+    );
+    expect(out).toContain("Added");
+  });
+
   it("resolves wisdom alias and dedupes", async () => {
     getYoutubeState.mockResolvedValue({
       ok: true,

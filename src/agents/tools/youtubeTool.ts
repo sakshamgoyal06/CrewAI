@@ -33,7 +33,7 @@ import {
   removeCueItem,
   upsertBookmark,
 } from "../../youtube/youtubeStore.js";
-import { resolvePlaylistRef } from "../../youtube/playlistResolve.js";
+import { resolvePlaylistRef, formatPlaylistDisambiguation } from "../../youtube/playlistResolve.js";
 
 const NOT_CONFIGURED =
   "YouTube is not connected for this user. Ask me to connect Google (one link covers Calendar and YouTube), or set YOUTUBE_API_KEY on the host for search-only. See docs/YOUTUBE.md.";
@@ -117,13 +117,26 @@ async function resolveVideo(input: {
 
 async function resolvePlaylistForTool(
   userProfileId: string,
-  playlistId?: string,
+  playlistId: string | undefined,
+  options?: { requireExplicit?: boolean; actionHint?: string },
 ): Promise<{ playlistId: string; title: string } | { error: string }> {
-  const resolved = await resolvePlaylistRef(userProfileId, playlistId);
-  if ("error" in resolved) {
-    return resolved;
+  const resolved = await resolvePlaylistRef(userProfileId, playlistId, {
+    requireExplicit: options?.requireExplicit,
+  });
+  if (!resolved.ok) {
+    if (resolved.suggestions?.length || resolved.listAll) {
+      return {
+        error: formatPlaylistDisambiguation({
+          requestedName: resolved.requestedName,
+          suggestions: resolved.suggestions ?? [],
+          listAll: resolved.listAll,
+          actionHint: options?.actionHint,
+        }),
+      };
+    }
+    return { error: resolved.error };
   }
-  return { playlistId: resolved.playlistId, title: resolved.title };
+  return { playlistId: resolved.playlist.playlistId, title: resolved.playlist.title };
 }
 
 async function clearPlaylistItems(input: {
@@ -279,7 +292,9 @@ export async function youtubePlaylistTool(input: {
     }
     case "load":
     case "get": {
-      const resolved = await resolvePlaylistForTool(uid, input.playlistId);
+      const resolved = await resolvePlaylistForTool(uid, input.playlistId, {
+        actionHint: "load",
+      });
       if ("error" in resolved) {
         return `Could not resolve playlist: ${resolved.error}`;
       }
@@ -319,7 +334,10 @@ export async function youtubePlaylistTool(input: {
       return `Created playlist "${created.title}" (${created.privacyStatus}) ${created.url} [playlist_id: ${created.playlistId}].`;
     }
     case "add": {
-      const resolved = await resolvePlaylistForTool(uid, input.playlistId);
+      const resolved = await resolvePlaylistForTool(uid, input.playlistId, {
+        requireExplicit: !input.playlistId?.trim(),
+        actionHint: "add to",
+      });
       if ("error" in resolved) {
         return `Could not resolve playlist: ${resolved.error}`;
       }
@@ -342,7 +360,10 @@ export async function youtubePlaylistTool(input: {
     }
     case "clear":
     case "empty": {
-      const resolved = await resolvePlaylistForTool(uid, input.playlistId);
+      const resolved = await resolvePlaylistForTool(uid, input.playlistId, {
+        requireExplicit: !input.playlistId?.trim(),
+        actionHint: "clear",
+      });
       if ("error" in resolved) {
         return `Could not resolve playlist: ${resolved.error}`;
       }
@@ -354,7 +375,10 @@ export async function youtubePlaylistTool(input: {
     }
     case "dedupe":
     case "dedup": {
-      const resolved = await resolvePlaylistForTool(uid, input.playlistId);
+      const resolved = await resolvePlaylistForTool(uid, input.playlistId, {
+        requireExplicit: !input.playlistId?.trim(),
+        actionHint: "dedupe",
+      });
       if ("error" in resolved) {
         return `Could not resolve playlist: ${resolved.error}`;
       }

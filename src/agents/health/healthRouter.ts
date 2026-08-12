@@ -4,6 +4,11 @@ import { buildFullDayMealRecountPlan } from "../../meals/mealDayRecount.js";
 import { isMealCalorieDisputeMessage } from "../../meals/mealCalorieDispute.js";
 import { isMealPlanningIntent } from "../../meals/mealLogIntent.js";
 import {
+  getMealLogPending,
+  isMealLogConfirmationNo,
+  isMealLogConfirmationYes,
+} from "../../meals/mealLogPending.js";
+import {
   executeMealHistoryCapability,
   isMealDayBreakdownRequest,
 } from "./mealHistoryAgent.js";
@@ -36,6 +41,15 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
     healthPreferences,
     healthReferenceBlock,
   };
+
+  const mealLogPending = await getMealLogPending(ctx.userProfileId);
+  if (
+    mealLogPending &&
+    (isMealLogConfirmationYes(ctx.rawMessage) || isMealLogConfirmationNo(ctx.rawMessage))
+  ) {
+    const plan = deterministicHealthPlan("meal_log");
+    return executeHealthStrategy({ ...ctxWithPrefs, pillarStrategy: plan }, plan);
+  }
 
   const deterministic = healthDeterministicCapability(ctxWithPrefs);
   if (deterministic === "meal_history" && isMealCalorieDisputeMessage(ctx.rawMessage)) {

@@ -76,9 +76,12 @@ YouTube / YT Music and Google Calendar (per-user Google connection; one consent 
 - youtube_search to find songs or videos. Prefer kind=song for music.
 - youtube_recommend for real links — seed with a video_id, a mood/query, or omit both for trending.
 - youtube_playlist to list, load, create, or edit playlists. playlist_id accepts pillar names
-  (magnus, wisdom, wealth, happiness, health) or a YouTube id (PL…). Actions: clear (empty all
-  items), dedupe (remove duplicate videos). Load before removing one item (need playlist_item_id).
-  When a tool returns "Added … to playlist", the video is on YouTube — do not claim it failed.
+  (magnus, wisdom, wealth, happiness, health), a YouTube id (PL…), or a playlist title. Actions:
+  clear (empty all items), dedupe (remove duplicate videos). Load before removing one item (need
+  playlist_item_id). When a tool returns "Added … to playlist", the video is on YouTube — do not
+  claim it failed. If the exact playlist name is not found, the tool lists close matches — ask the
+  user to pick one (by number or name) or create a new playlist. Never add to the Magnus playlist
+  unless they asked for Magnus or did not name a playlist and chose from the list.
 - youtube_bookmark for a Magnus shortlist (and like on YouTube when connected). Action "liked" reads
   YouTube likes.
 - youtube_cue for an up-next queue: add, list, next, skip, remove, clear.

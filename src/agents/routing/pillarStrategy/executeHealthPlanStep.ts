@@ -20,7 +20,15 @@ import { runNutritionCapability } from "../../health/nutritionAgent.js";
 import { tryHevyWriteAgent } from "../../../pillars/health/workouts/agents/hevyWriteAgent.js";
 import { parseMealLogCommand, type MealLogKind, type MealSlot } from "../../../meals/parseMealLogCommand.js";
 import { sanitizeMealLogRawText } from "../../../meals/sanitizeMealLogRawText.js";
-import { isMealPlanningIntent, isMealSlotCorrectionMessage, extractPastMealFoodText, normalizeMealLogText } from "../../../meals/mealLogIntent.js";
+import { isMealPlanningIntent, isMealSlotCorrectionMessage, extractPastMealFoodText, extractMealSlotFromMessage, inferMealLogCandidate, normalizeMealLogText } from "../../../meals/mealLogIntent.js";
+import {
+  clearMealLogPending,
+  formatMealLogConfirmationPrompt,
+  getMealLogPending,
+  isMealLogConfirmationNo,
+  isMealLogConfirmationYes,
+  setMealLogPending,
+} from "../../../meals/mealLogPending.js";
 import { localDateKey } from "../../../nutrition/localDate.js";
 import { runFitnessCapability } from "../../../pillars/health/workouts/agents/fitnessAgent.js";
 import type { PillarPlanStep } from "./types.js";
@@ -37,6 +45,37 @@ export async function executeHealthPlanStep(
   switch (cap) {
     case "meal_log": {
       const original = ctx.originalUserMessage?.trim() || ctx.rawMessage.trim();
+
+      const pending = await getMealLogPending(ctx.userProfileId);
+      if (pending) {
+        if (isMealLogConfirmationYes(original)) {
+          await clearMealLogPending(ctx.userProfileId);
+          return runOrchestratedMealLogTurn(
+            stepCtx,
+            sanitizeMealLogRawText(pending.rawText),
+            pending.originalMessage,
+            {
+              mealSlot: pending.mealSlot,
+              logKind: pending.logKind,
+            },
+          );
+        }
+        if (isMealLogConfirmationNo(original)) {
+          await clearMealLogPending(ctx.userProfileId);
+          return {
+            text: "Okay — I won't log that meal.",
+            metadata: {
+              specialist: "nutrition",
+              department: "HEALTH",
+              meal_log: false,
+              meal_log_pending_cancelled: true,
+              pillar_compose: false,
+            },
+          };
+        }
+        await clearMealLogPending(ctx.userProfileId);
+      }
+
       if (isMealPlanningIntent(original)) {
         return {
           text: "That sounds like a **meal plan** (future meals), not food you've eaten yet. Say what you **ate** to log it, or ask to see your **meal plan**.",
@@ -61,6 +100,32 @@ export async function executeHealthPlanStep(
               : stepCtx.rawMessage.trim());
       const rawText = normalizeMealLogText(rawCandidate);
       if (!rawText) {
+        const candidate = inferMealLogCandidate(original);
+        if (candidate) {
+          const mealSlot =
+            mealParsed.kind === "meal"
+              ? mealParsed.slot
+              : candidate.mealSlot ?? extractMealSlotFromMessage(original);
+          await setMealLogPending(ctx.userProfileId, {
+            rawText: candidate.foodText,
+            originalMessage: original,
+            mealSlot: mealSlot !== "unspecified" ? mealSlot : candidate.mealSlot,
+            logKind: mealParsed.kind === "meal" ? mealParsed.logKind : undefined,
+          });
+          return {
+            text: formatMealLogConfirmationPrompt({
+              foodText: candidate.foodText,
+              mealSlot: mealSlot !== "unspecified" ? mealSlot : candidate.mealSlot,
+            }),
+            metadata: {
+              specialist: "nutrition",
+              department: "HEALTH",
+              meal_log: false,
+              meal_log_pending: true,
+              pillar_compose: false,
+            },
+          };
+        }
         return {
           text: "I couldn't log that — it didn't look like food you ate. Tell me what you **had** (e.g. \"I ate a samosa and tea\").",
           metadata: {

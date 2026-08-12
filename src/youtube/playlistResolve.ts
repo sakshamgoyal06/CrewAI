@@ -32,6 +32,25 @@ export type ResolvedPlaylist = {
   fromCache: boolean;
 };
 
+export type PlaylistCandidate = {
+  playlistId: string;
+  title: string;
+  itemCount?: number;
+  score: number;
+};
+
+export type PlaylistResolveResult =
+  | { ok: true; playlist: ResolvedPlaylist }
+  | {
+      ok: false;
+      error: string;
+      /** Close title matches when the requested name was not exact. */
+      suggestions?: PlaylistCandidate[];
+      /** True when no name was given — show the user's playlists to pick from. */
+      listAll?: boolean;
+      requestedName?: string;
+    };
+
 function normalizeAlias(raw: string): string | null {
   const t = raw.trim().toLowerCase();
   if (!t) {
@@ -41,6 +60,111 @@ function normalizeAlias(raw: string): string | null {
     return "happiness";
   }
   return PILLAR_PLAYLIST_ALIASES.includes(t as PillarPlaylistAlias) ? t : null;
+}
+
+function normalizeTitleText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Score how well a playlist title matches a free-text query (0–100). */
+export function scorePlaylistTitle(query: string, title: string): number {
+  const q = normalizeTitleText(query);
+  const t = normalizeTitleText(title);
+  if (!q || !t) {
+    return 0;
+  }
+  if (t === q) {
+    return 100;
+  }
+  if (t.includes(q) || q.includes(t)) {
+    return 85;
+  }
+  const qWords = q.split(" ").filter((w) => w.length > 2);
+  const tWords = new Set(t.split(" ").filter((w) => w.length > 2));
+  if (!qWords.length) {
+    return 0;
+  }
+  let overlap = 0;
+  for (const w of qWords) {
+    if (tWords.has(w)) {
+      overlap += 1;
+    }
+  }
+  return Math.round((overlap / qWords.length) * 75);
+}
+
+const STRONG_MATCH_THRESHOLD = 78;
+
+export function formatPlaylistDisambiguation(input: {
+  requestedName?: string;
+  suggestions: PlaylistCandidate[];
+  listAll?: boolean;
+  actionHint?: string;
+}): string {
+  const action = input.actionHint ?? "use";
+  const lines: string[] = [];
+
+  if (input.requestedName?.trim()) {
+    lines.push(
+      `I couldn't find an exact playlist named "${input.requestedName.trim()}".`,
+    );
+    if (input.suggestions.length > 0) {
+      lines.push(`Did you mean one of these? Reply with the number or exact name to ${action}:`);
+    } else {
+      lines.push(`Here are your YouTube playlists — reply with a number or name to ${action}, or ask me to create a new one:`);
+    }
+  } else if (input.listAll) {
+    lines.push(
+      `Which playlist should I ${action}? Here are your YouTube playlists — reply with the number or name, or ask me to create a new one:`,
+    );
+  } else {
+    lines.push(`Pick a playlist (reply with the number or name) to ${action}:`);
+  }
+
+  for (let i = 0; i < input.suggestions.length; i += 1) {
+    const s = input.suggestions[i]!;
+    const count =
+      s.itemCount === undefined ? "" : ` · ${s.itemCount} item${s.itemCount === 1 ? "" : "s"}`;
+    lines.push(`${i + 1}. ${s.title}${count} [playlist_id: ${s.playlistId}]`);
+  }
+
+  return lines.join("\n");
+}
+
+export async function rankPlaylistsByTitle(
+  userProfileId: string,
+  query: string,
+  maxResults = 5,
+): Promise<PlaylistCandidate[]> {
+  const playlists = await listPlaylists({ maxResults: 50, userProfileId });
+  const scored = playlists
+    .map((p) => ({
+      playlistId: p.playlistId,
+      title: p.title,
+      itemCount: p.itemCount,
+      score: scorePlaylistTitle(query, p.title),
+    }))
+    .filter((p) => p.score > 0)
+    .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+
+  return scored.slice(0, maxResults);
+}
+
+export async function listAllPlaylistCandidates(
+  userProfileId: string,
+  maxResults = 8,
+): Promise<PlaylistCandidate[]> {
+  const playlists = await listPlaylists({ maxResults, userProfileId });
+  return playlists.map((p) => ({
+    playlistId: p.playlistId,
+    title: p.title,
+    itemCount: p.itemCount,
+    score: 0,
+  }));
 }
 
 function aliasFromCachedState(
@@ -63,34 +187,31 @@ async function findPlaylistByTitle(
   userProfileId: string,
   alias: string,
 ): Promise<{ playlistId: string; title: string } | null> {
-  const playlists = await listPlaylists({ maxResults: 50, userProfileId });
-  const wanted = alias.toLowerCase();
-  const exact = playlists.find((p) => p.title.trim().toLowerCase() === wanted);
-  if (exact) {
-    return { playlistId: exact.playlistId, title: exact.title };
-  }
-  const contains = playlists.find((p) => p.title.trim().toLowerCase().includes(wanted));
-  if (contains) {
-    return { playlistId: contains.playlistId, title: contains.title };
+  const ranked = await rankPlaylistsByTitle(userProfileId, alias, 1);
+  if (ranked.length > 0 && ranked[0]!.score >= STRONG_MATCH_THRESHOLD) {
+    return { playlistId: ranked[0]!.playlistId, title: ranked[0]!.title };
   }
   return null;
 }
 
 async function ensureMagnusPlaylistRef(
   userProfileId: string,
-): Promise<ResolvedPlaylist | { error: string }> {
+): Promise<PlaylistResolveResult> {
   const state = await getYoutubeState(userProfileId);
   if (!state.ok) {
-    return { error: state.error };
+    return { ok: false, error: state.error };
   }
   if (state.data?.magnus_playlist_id) {
     const existing = await getPlaylist(state.data.magnus_playlist_id, userProfileId);
     if (existing) {
       return {
-        playlistId: existing.playlistId,
-        title: existing.title,
-        alias: "magnus",
-        fromCache: true,
+        ok: true,
+        playlist: {
+          playlistId: existing.playlistId,
+          title: existing.title,
+          alias: "magnus",
+          fromCache: true,
+        },
       };
     }
   }
@@ -112,7 +233,7 @@ async function ensureMagnusPlaylistRef(
     playlistTitle: created.title,
   });
   if (!saved.ok) {
-    return { error: saved.error };
+    return { ok: false, error: saved.error };
   }
   await setPlaylistAlias({
     userProfileId,
@@ -121,10 +242,56 @@ async function ensureMagnusPlaylistRef(
     title: created.title,
   });
   return {
-    playlistId: created.playlistId,
-    title: created.title,
-    alias: "magnus",
-    fromCache: false,
+    ok: true,
+    playlist: {
+      playlistId: created.playlistId,
+      title: created.title,
+      alias: "magnus",
+      fromCache: false,
+    },
+  };
+}
+
+async function resolveFreeTextTitle(
+  userProfileId: string,
+  raw: string,
+): Promise<PlaylistResolveResult> {
+  const ranked = await rankPlaylistsByTitle(userProfileId, raw, 5);
+  if (ranked.length === 1 && ranked[0]!.score >= STRONG_MATCH_THRESHOLD) {
+    const top = ranked[0]!;
+    return {
+      ok: true,
+      playlist: {
+        playlistId: top.playlistId,
+        title: top.title,
+        fromCache: false,
+      },
+    };
+  }
+  if (ranked.length > 0 && ranked[0]!.score >= STRONG_MATCH_THRESHOLD) {
+    const top = ranked[0]!;
+    const second = ranked[1];
+    if (!second || top.score - second.score >= 12) {
+      return {
+        ok: true,
+        playlist: {
+          playlistId: top.playlistId,
+          title: top.title,
+          fromCache: false,
+        },
+      };
+    }
+  }
+
+  const suggestions =
+    ranked.length > 0 ? ranked : await listAllPlaylistCandidates(userProfileId, 8);
+
+  return {
+    ok: false,
+    error: `No exact playlist match for "${raw}".`,
+    suggestions,
+    listAll: ranked.length === 0,
+    requestedName: raw,
   };
 }
 
@@ -134,65 +301,93 @@ async function ensureMagnusPlaylistRef(
 export async function resolvePlaylistRef(
   userProfileId: string,
   ref: string | undefined,
-): Promise<ResolvedPlaylist | { error: string }> {
+  options?: { requireExplicit?: boolean },
+): Promise<PlaylistResolveResult> {
   const raw = ref?.trim();
-  if (!raw || raw.toLowerCase() === "magnus") {
-    const magnus = await ensureMagnusPlaylistRef(userProfileId);
-    if ("error" in magnus) {
-      return magnus;
+
+  if (!raw) {
+    if (options?.requireExplicit) {
+      const suggestions = await listAllPlaylistCandidates(userProfileId, 8);
+      return {
+        ok: false,
+        error: "No playlist specified.",
+        suggestions,
+        listAll: true,
+      };
     }
+    const magnus = await ensureMagnusPlaylistRef(userProfileId);
     return magnus;
+  }
+
+  if (raw.toLowerCase() === "magnus") {
+    return ensureMagnusPlaylistRef(userProfileId);
   }
 
   if (PLAYLIST_ID_RE.test(raw)) {
     const meta = await getPlaylist(raw, userProfileId);
     return {
-      playlistId: raw,
-      title: meta?.title ?? raw,
-      fromCache: false,
+      ok: true,
+      playlist: {
+        playlistId: raw,
+        title: meta?.title ?? raw,
+        fromCache: false,
+      },
     };
   }
 
   const alias = normalizeAlias(raw);
-  if (!alias) {
-    return { error: `Unknown playlist "${raw}". Use a pillar name (wisdom, wealth, magnus) or a playlist id (PL…).` };
-  }
-
-  if (alias === "magnus") {
-    return ensureMagnusPlaylistRef(userProfileId);
-  }
-
-  const state = await getYoutubeState(userProfileId);
-  if (!state.ok) {
-    return { error: state.error };
-  }
-
-  const cached = aliasFromCachedState(state.data, alias);
-  if (cached) {
-    const meta = await getPlaylist(cached.playlistId, userProfileId);
-    if (meta) {
-      return { ...cached, title: meta.title, fromCache: true };
+  if (alias) {
+    if (alias === "magnus") {
+      return ensureMagnusPlaylistRef(userProfileId);
     }
-  }
 
-  const found = await findPlaylistByTitle(userProfileId, alias);
-  if (!found) {
+    const state = await getYoutubeState(userProfileId);
+    if (!state.ok) {
+      return { ok: false, error: state.error };
+    }
+
+    const cached = aliasFromCachedState(state.data, alias);
+    if (cached) {
+      const meta = await getPlaylist(cached.playlistId, userProfileId);
+      if (meta) {
+        return {
+          ok: true,
+          playlist: { ...cached, title: meta.title, fromCache: true },
+        };
+      }
+    }
+
+    const found = await findPlaylistByTitle(userProfileId, alias);
+    if (!found) {
+      const suggestions = await rankPlaylistsByTitle(userProfileId, alias, 5);
+      const fallback =
+        suggestions.length > 0 ? suggestions : await listAllPlaylistCandidates(userProfileId, 8);
+      return {
+        ok: false,
+        error: `No YouTube playlist titled "${alias}" found.`,
+        suggestions: fallback,
+        listAll: suggestions.length === 0,
+        requestedName: alias,
+      };
+    }
+
+    await setPlaylistAlias({
+      userProfileId,
+      alias,
+      playlistId: found.playlistId,
+      title: found.title,
+    });
+
     return {
-      error: `No YouTube playlist titled "${alias}" found. Create one or pass the playlist id (PL…).`,
+      ok: true,
+      playlist: {
+        playlistId: found.playlistId,
+        title: found.title,
+        alias,
+        fromCache: false,
+      },
     };
   }
 
-  await setPlaylistAlias({
-    userProfileId,
-    alias,
-    playlistId: found.playlistId,
-    title: found.title,
-  });
-
-  return {
-    playlistId: found.playlistId,
-    title: found.title,
-    alias,
-    fromCache: false,
-  };
+  return resolveFreeTextTitle(userProfileId, raw);
 }
