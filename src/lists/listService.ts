@@ -585,6 +585,11 @@ const CHECKIN_EXTRA_KEYS = {
   joy_score: "Joy Score",
   feeling: "How Are You Feeling",
   pattern_flags: "Pattern Flags",
+  morning_intention: "Morning Intention",
+  energy_level: "Energy Level",
+  week_priorities: "Week Priorities",
+  weekly_win: "Weekly Win",
+  weekly_slip: "Weekly Slip",
 } as const;
 
 function buildCheckinExtra(input: {
@@ -595,6 +600,11 @@ function buildCheckinExtra(input: {
   joy_score?: number;
   feeling?: string;
   pattern_flags?: string;
+  morning_intention?: string;
+  energy_level?: number;
+  week_priorities?: string;
+  weekly_win?: string;
+  weekly_slip?: string;
 }): Record<string, unknown> {
   const extra: Record<string, unknown> = {};
   if (input.day_rating != null && String(input.day_rating).trim()) {
@@ -617,6 +627,21 @@ function buildCheckinExtra(input: {
   }
   if (input.pattern_flags?.trim()) {
     extra[CHECKIN_EXTRA_KEYS.pattern_flags] = input.pattern_flags.trim();
+  }
+  if (input.morning_intention?.trim()) {
+    extra[CHECKIN_EXTRA_KEYS.morning_intention] = input.morning_intention.trim();
+  }
+  if (input.energy_level != null && Number.isFinite(input.energy_level)) {
+    extra[CHECKIN_EXTRA_KEYS.energy_level] = input.energy_level;
+  }
+  if (input.week_priorities?.trim()) {
+    extra[CHECKIN_EXTRA_KEYS.week_priorities] = input.week_priorities.trim();
+  }
+  if (input.weekly_win?.trim()) {
+    extra[CHECKIN_EXTRA_KEYS.weekly_win] = input.weekly_win.trim();
+  }
+  if (input.weekly_slip?.trim()) {
+    extra[CHECKIN_EXTRA_KEYS.weekly_slip] = input.weekly_slip.trim();
   }
   return extra;
 }
@@ -705,6 +730,11 @@ export async function logDailyCheckin(input: {
   joy_score?: number;
   feeling?: string;
   pattern_flags?: string;
+  morning_intention?: string;
+  energy_level?: number;
+  week_priorities?: string;
+  weekly_win?: string;
+  weekly_slip?: string;
   health_status?: string;
   wealth_status?: string;
   wisdom_status?: string;
@@ -729,7 +759,7 @@ export async function logDailyCheckin(input: {
     input.wisdom_status?.trim();
 
   if (!hasContent) {
-    return "Nothing to log — provide notes, pillar scores, or a day rating.";
+    return "Nothing to log — provide notes, pillar scores, intention, or a day rating.";
   }
 
   const existing = await fetchCheckinItem(input.userProfileId, list.id, dateKey);

@@ -8,6 +8,7 @@ import {
   DEFAULT_CATALOG_SCHEDULE,
   DEFAULT_CATALOG_TRIGGER,
   isCatalogKind,
+  RHYTHM_DEFAULT_ENABLED_KINDS,
   rowToSubscription,
   type ProactiveCapBucket,
   type ProactiveSchedule,
@@ -124,6 +125,22 @@ export async function upsertCatalogSubscription(input: {
     return { ok: false, error: error?.message ?? "upsert failed" };
   }
   return { ok: true, data: rowToSubscription(data as ProactiveSubscriptionRow) };
+}
+
+/** Enable default rhythm catalog subscriptions for a newly provisioned owner. */
+export async function seedDefaultRhythmSubscriptions(
+  userProfileId: string,
+  deps?: { client?: SupabaseClient },
+): Promise<void> {
+  for (const kind of RHYTHM_DEFAULT_ENABLED_KINDS) {
+    await upsertCatalogSubscription({
+      userProfileId,
+      kind,
+      enabled: true,
+      source: "system_default",
+      deps,
+    });
+  }
 }
 
 export async function createCustomReminder(input: {

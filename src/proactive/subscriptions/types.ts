@@ -87,6 +87,9 @@ export function rowToSubscription(row: ProactiveSubscriptionRow): ProactiveSubsc
 
 export const CATALOG_KINDS = [
   "evening_journal",
+  "week_planning",
+  "weekly_wrap",
+  "monthly_goal_review",
   "drift_guard",
   "midday_encouragement",
   "stale_list_nudge",
@@ -98,6 +101,14 @@ export const CATALOG_KINDS = [
   "weekly_nutrition_review",
 ] as const;
 
+/** Rhythm kinds enabled by default when provisioning the owner user. */
+export const RHYTHM_DEFAULT_ENABLED_KINDS: CatalogProactiveKind[] = [
+  "evening_journal",
+  "week_planning",
+  "weekly_wrap",
+  "monthly_goal_review",
+];
+
 export type CatalogProactiveKind = (typeof CATALOG_KINDS)[number];
 
 export function isCatalogKind(kind: string): kind is CatalogProactiveKind {
@@ -105,7 +116,10 @@ export function isCatalogKind(kind: string): kind is CatalogProactiveKind {
 }
 
 export const CATALOG_KIND_LABELS: Record<CatalogProactiveKind, string> = {
-  evening_journal: "Evening journal nudge",
+  evening_journal: "Evening review / journal",
+  week_planning: "Monday week planning",
+  weekly_wrap: "Friday weekly wrap-up",
+  monthly_goal_review: "Monthly goal review",
   drift_guard: "Drift / weak-moment guard",
   midday_encouragement: "Midday encouragement",
   stale_list_nudge: "Stale list nudge",
@@ -119,6 +133,9 @@ export const CATALOG_KIND_LABELS: Record<CatalogProactiveKind, string> = {
 
 export const DEFAULT_CATALOG_SCHEDULE: Record<CatalogProactiveKind, ProactiveSchedule> = {
   evening_journal: { type: "recurring_local", localHour: 21, windowMinutes: 14 },
+  week_planning: { type: "recurring_local", localHour: 8, windowMinutes: 20 },
+  weekly_wrap: { type: "recurring_local", localHour: 18, windowMinutes: 20 },
+  monthly_goal_review: { type: "recurring_local", localHour: 10, windowMinutes: 30 },
   drift_guard: { type: "conditional" },
   midday_encouragement: { type: "recurring_local", localHour: 12, windowMinutes: 14 },
   stale_list_nudge: { type: "conditional" },
@@ -132,6 +149,9 @@ export const DEFAULT_CATALOG_SCHEDULE: Record<CatalogProactiveKind, ProactiveSch
 
 export const DEFAULT_CATALOG_CAP: Record<CatalogProactiveKind, ProactiveCapBucket> = {
   evening_journal: "scheduled",
+  week_planning: "scheduled",
+  weekly_wrap: "scheduled",
+  monthly_goal_review: "scheduled",
   drift_guard: "adaptive",
   midday_encouragement: "adaptive",
   stale_list_nudge: "adaptive",
@@ -145,6 +165,9 @@ export const DEFAULT_CATALOG_CAP: Record<CatalogProactiveKind, ProactiveCapBucke
 
 export const DEFAULT_CATALOG_TRIGGER: Record<CatalogProactiveKind, ProactiveTriggerType> = {
   evening_journal: "recurring",
+  week_planning: "recurring",
+  weekly_wrap: "recurring",
+  monthly_goal_review: "recurring",
   drift_guard: "conditional",
   midday_encouragement: "recurring",
   stale_list_nudge: "conditional",

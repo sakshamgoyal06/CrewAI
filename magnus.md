@@ -131,10 +131,11 @@ shell or `.env`.
 | `src/nutrition/` | Local-date helpers, rollups/plan stores, **planning journey** (`meal_plan_sessions`), anomaly detection, weekly review, journal context |
 | `src/pillars/health/workouts/` | Hevy client, fitness agent, Hevy write agent |
 | `src/pillars/health/references/` | Reads committed program memory + Telegram journals |
-| `src/jobs/` | Morning Brief: prompt, context (reconciles recent journals before missed sweep), cron (legacy re-export), timezone window. Optional. |
+| `src/jobs/` | Morning Brief: compact focus/plan/meals prompt, journal reconcile before missed sweep, cron, timezone window. Optional. |
 | `src/events/gymHevyMatch.ts` | Match planned gym events to Hevy workouts (session label, local date) |
 | `src/events/gymHevyReconcile.ts` | After grace window: sync event log from Hevy or nudge user |
 | `src/proactive/` | Magnus-initiated Telegram: outbound HTML, dedupe, kind registry, dispatcher, subscriptions |
+| `src/proactive/rhythm/` | Day/week/month rhythm summaries for proactive check-ins |
 | `src/proactive/jobs/gymHevyReconcileJob.ts` | Cron: gym ↔ Hevy reconciliation for connected users |
 | `src/proactive/jobs/nutritionNightlyJob.ts` | Cron: EOD rollup recompute, anomaly flags, program-memory sync |
 | `src/tools/telegram.ts` | Telegraf bot, `/start` and `/help`, rate limit, update dedupe, webhook mount |
@@ -181,7 +182,7 @@ shell or `.env`.
    postpone), **nutrition nightly** (~23:00 local: recompute rollups, anomaly flags, sync persistent
    lapse patterns to `program_learnings`; `MAGNUS_NUTRITION_NIGHTLY_ENABLED`), **subscription dispatcher** (`evening_journal`, `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
    `chat_inactivity`, `custom_reminder`, `meal_log_reminder`, `meal_adherence_nudge`, `meal_eod_reconciliation`, `meal_gap_nudge`, `weekly_nutrition_review` via `magnus_proactive_subscriptions` — modular kind registry in
-   `src/proactive/kinds/`). User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
+   `src/proactive/kinds/`). **Rhythm cadence** (catalog kinds): **Morning Brief** (~7:00 local, scheduled job — short focus/plan/meals read + optional intention question; replaces separate morning orientation), `evening_journal` (~21:00, day summary + EOD review), `week_planning` (Monday ~8:00), `weekly_wrap` (Friday ~18:00, includes nutrition week slice), `monthly_goal_review` (1st of month ~10:00). Owner provision seeds evening/weekly/monthly rhythm via `seedDefaultRhythmSubscriptions`. User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
    catalog kinds, create one-shot or daily custom reminders (`create_reminder` /
    `create_recurring_reminder`). Relative time parsing for one-shots (`tomorrow 8pm`, `in 30 minutes`).
    LLM gate+compose (Haiku) for evening journal, drift guard, midday encouragement, stale list nudges,
@@ -339,4 +340,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-13 (Projects migration; event completion reconcile from journal)
+**Last updated:** 2026-08-13 (Projects migration; event completion reconcile; rhythm cadence + short Morning Brief)

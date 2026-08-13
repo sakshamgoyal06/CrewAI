@@ -114,7 +114,7 @@ describe("runMorningBrief", () => {
     expect(result.text).toContain("Morning read");
     expect(invokeClaude).toHaveBeenCalledTimes(1);
     const [system, user] = invokeClaude.mock.calls[0] ?? [];
-    expect(system).toContain("READ");
-    expect(user).toContain("2026-04-12T08:00:00.000Z");
+    expect(system).toContain("45 seconds");
+    expect(user).toContain("todayCommitments");
   });
 });

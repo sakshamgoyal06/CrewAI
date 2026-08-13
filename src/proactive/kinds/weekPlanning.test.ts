@@ -1,36 +1,39 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../rhythm/daySummary.js", () => ({
-  buildDayRhythmSummary: vi.fn(async () => ({
-    dateKey: "2026-08-06",
-    done: 1,
-    missed: 0,
-    open: 0,
-    moved: 0,
-    text: "Day summary stub",
+vi.mock("../rhythm/weekSummary.js", () => ({
+  buildWeekRhythmSummary: vi.fn(async () => ({
+    fromDate: "2026-07-28",
+    toDate: "2026-08-03",
+    checkinCount: 4,
+    joyTrend: "steady",
+    activityStatsText: "gym: 4 done",
+    nutritionText: null,
+    northStar: "Build",
+    weeklyGoalsText: "- Goal A",
+    text: "Week summary stub",
   })),
 }));
 
 import { emptyMealProactiveSnapshot } from "../../nutrition/mealProactiveSignals.js";
-import { eveningJournalHandler } from "./eveningJournal.js";
+import { weekPlanningHandler } from "./weekPlanning.js";
 import type { ProactiveKindContext } from "./types.js";
 
 function ctx(overrides: Partial<ProactiveKindContext> = {}): ProactiveKindContext {
   return {
-    now: new Date("2026-08-06T15:30:00.000Z"),
+    now: new Date("2026-08-03T08:05:00.000Z"),
     userProfileId: "u1",
     telegramChatId: "123",
     timezone: "UTC",
     subscription: {
       id: "s1",
       userProfileId: "u1",
-      kind: "evening_journal",
+      kind: "week_planning",
       enabled: true,
       triggerType: "recurring",
-      schedule: { type: "recurring_local", localHour: 21, windowMinutes: 14 },
+      schedule: { type: "recurring_local", localHour: 8, windowMinutes: 20 },
       config: {},
       userInstruction: null,
-      source: "user_chat",
+      source: "system_default",
       capBucket: "scheduled",
       cooldownHours: null,
       lastSentAt: null,
@@ -39,11 +42,11 @@ function ctx(overrides: Partial<ProactiveKindContext> = {}): ProactiveKindContex
       updatedAt: "",
     },
     signals: {
-      now: new Date("2026-08-06T15:30:00.000Z"),
+      now: new Date("2026-08-03T08:05:00.000Z"),
       timezone: "UTC",
-      local: { hour: 21, minute: 5, dateKey: "2026-08-06" },
+      local: { hour: 8, minute: 5, dateKey: "2026-08-03" },
       hasCheckinToday: false,
-      hevyConnected: true,
+      hevyConnected: false,
       gymPlannedToday: false,
       workoutLoggedToday: false,
       recentUserChatSnippet: "",
@@ -56,31 +59,24 @@ function ctx(overrides: Partial<ProactiveKindContext> = {}): ProactiveKindContex
   };
 }
 
-describe("eveningJournalHandler", () => {
-  it("evaluates true inside local hour window", async () => {
-    const result = await eveningJournalHandler.evaluate(ctx());
+describe("weekPlanningHandler", () => {
+  it("evaluates true on Monday in window", async () => {
+    const result = await weekPlanningHandler.evaluate(ctx());
     expect(result.candidate).toBe(true);
   });
 
-  it("evaluates false outside window", async () => {
-    const result = await eveningJournalHandler.evaluate(
+  it("evaluates false on Tuesday", async () => {
+    const result = await weekPlanningHandler.evaluate(
       ctx({
+        now: new Date("2026-08-04T08:05:00.000Z"),
         signals: {
           ...ctx().signals,
-          local: { hour: 10, minute: 0, dateKey: "2026-08-06" },
+          now: new Date("2026-08-04T08:05:00.000Z"),
+          local: { hour: 8, minute: 5, dateKey: "2026-08-04" },
         },
       }),
     );
     expect(result.candidate).toBe(false);
-  });
-
-  it("skips llm gate when check-in exists", async () => {
-    const gate = await eveningJournalHandler.llmGate(
-      ctx({
-        signals: { ...ctx().signals, hasCheckinToday: true },
-      }),
-      { candidate: true },
-    );
-    expect(gate.send).toBe(false);
+    expect(result.reason).toBe("not_monday");
   });
 });

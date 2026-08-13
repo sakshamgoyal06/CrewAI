@@ -5,9 +5,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { reconcileFromRecentJournalLogs } from "../events/eventCompletionReconcile.js";
-import { loadMealProactiveSnapshot } from "../nutrition/mealProactiveSignals.js";
-import { startOfLocalDay } from "../events/eventTime.js";
+import { hasMorningOrientationToday } from "../proactive/rhythm/checkinRhythm.js";
+import { localWeekdayIndex } from "../proactive/rhythm/localWeekday.js";
+import { fetchCheckinItem, fetchListBySlug } from "../lists/listStore.js";
 import { lifeosContextEnabled } from "../config/lifeosContext.js";
+import { startOfLocalDay } from "../events/eventTime.js";
+import { loadMealProactiveSnapshot } from "../nutrition/mealProactiveSignals.js";
+import { offsetDateKey } from "../nutrition/parseMealPlanJson.js";
+import { buildCompactMorningBriefPayload } from "./morningBriefCompact.js";
+import { getLocalTimeParts } from "./morningBriefTime.js";
 import { logger } from "../logger.js";
 
 export type MorningBriefContextBundle = {
@@ -49,6 +55,10 @@ export type MorningBriefContextBundle = {
     dailyPlans: boolean;
     magnusInsights: boolean;
   };
+  /** Monday week priorities from check-in, when set this week. */
+  weekPriorities?: string | null;
+  /** True when today's check-in already has morning intention or energy. */
+  hasMorningIntentionToday?: boolean;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST row shape varies
@@ -339,6 +349,16 @@ export async function fetchMorningBriefContext(
     magnusInsights: magnusInsights.length > 0,
   };
 
+  const localParts = getLocalTimeParts(now, timeZone);
+  const dayIndex = localWeekdayIndex(now, timeZone);
+  const daysFromMonday = dayIndex === 0 ? 6 : dayIndex - 1;
+  const mondayKey = offsetDateKey(localParts.dateKey, -daysFromMonday);
+
+  const [hasMorningIntentionToday, weekPriorities] = await Promise.all([
+    hasMorningOrientationToday(userProfileId, localParts.dateKey),
+    fetchWeekPrioritiesFromCheckin(userProfileId, mondayKey),
+  ]);
+
   return {
     nowIso: now.toISOString(),
     timeZone,
@@ -356,6 +376,8 @@ export async function fetchMorningBriefContext(
     nutritionBrief,
     patternRows,
     dataAvailability,
+    weekPriorities,
+    hasMorningIntentionToday,
   };
 }
 
@@ -397,28 +419,26 @@ export function filterEmergingPlusPatterns(rows: unknown[]): unknown[] {
 }
 
 export function buildMorningBriefUserMessage(bundle: MorningBriefContextBundle): string {
-  const payload = {
-    now: bundle.nowIso,
-    timeZone: bundle.timeZone,
-    northStarGoal: bundle.northStarGoal ?? null,
-    dataAvailability: bundle.dataAvailability,
-    briefingRules: {
-      omitEmptyLifeOSSections:
-        "When dataAvailability is false for a domain, omit that section entirely — do not say 'unknown' or 'no data'.",
-      commitments:
-        "Use commitmentsYesterdayAndToday and activityAdherence when present; these are wired.",
-    },
-    activeGoals: bundle.goals,
-    pillarStatus: bundle.pillarStatus,
-    happinessReserve: bundle.happinessReserve,
-    recentKpiReadings7d: bundle.kpiReadings,
-    recentInsights: bundle.magnusInsights,
-    recentDailyPlans: bundle.dailyPlans,
-    recentMagnusDailyLogs: bundle.magnusDailyLogs,
-    commitmentsYesterdayAndToday: bundle.events,
-    activityAdherence: bundle.eventActivityStats,
-    nutritionBrief: bundle.nutritionBrief,
-    patternsEmergingPlus: bundle.patternRows,
-  };
-  return `Context JSON (stored facts only; respect dataAvailability):\n${JSON.stringify(payload, null, 2)}`;
+  const payload = buildCompactMorningBriefPayload(bundle);
+  return `Morning brief context (stored facts only — omit empty sections):\n${JSON.stringify(payload, null, 2)}`;
+}
+
+async function fetchWeekPrioritiesFromCheckin(
+  userProfileId: string,
+  mondayDateKey: string,
+): Promise<string | null> {
+  const list = await fetchListBySlug(userProfileId, "checkins");
+  if (!list.ok || !list.data) {
+    return null;
+  }
+  const item = await fetchCheckinItem(userProfileId, list.data.id, mondayDateKey);
+  if (!item.ok || !item.data) {
+    return null;
+  }
+  const raw = item.data.extra?.["Week Priorities"];
+  if (raw == null) {
+    return null;
+  }
+  const text = String(raw).trim();
+  return text || null;
 }

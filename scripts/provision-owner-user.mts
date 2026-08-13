@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 
 import { supabase } from "../src/tools/clients.js";
 import { upsertUserIntegrations } from "../src/users/userIntegrations.js";
+import { seedDefaultRhythmSubscriptions } from "../src/proactive/subscriptions/store.js";
 import {
   PROGRAM_MEMORY_SECTIONS,
   upsertUserProgramMemory,
@@ -155,6 +156,9 @@ if (!integrations.ok) {
   console.error("Failed to seed integrations:", integrations.error);
   process.exit(1);
 }
+
+await seedDefaultRhythmSubscriptions(profileId);
+console.log("Seeded default rhythm proactive subscriptions (morning, evening, weekly, monthly).");
 
 console.log("\nDone. Fresh owner user ready:");
 console.log(`  user_profile.id: ${profileId}`);

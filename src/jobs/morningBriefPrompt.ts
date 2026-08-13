@@ -1,23 +1,22 @@
 /**
- * Morning Brief — read-only ritual (not a task dump).
- * @see docs/AGENT_ROSTER.md §4.4, MAGNUS_CORE_CONTEXT.md §2.8
+ * Morning Brief — short energetic read + optional intention (combined with morning orientation).
  */
 import { buildSpecialistIdentity, type PersonalizationContext } from "../agents/promptIdentity.js";
 
-const MORNING_BRIEF_CORE = `You generate the Morning Brief for LifeOS / Magnus.
+const MORNING_BRIEF_CORE = `You write Magnus's Morning Brief — one short Telegram message the user reads in under 45 seconds (~60–100 words max).
 
-It is a READ — not a pile of new tasks or obligations. The user should finish in about 90 seconds reading aloud (roughly 200–260 words max unless the context is extremely sparse).
+This is a READ, not homework. Energetic, warm, direct. Use Telegram-friendly formatting (short lines; **bold** for the top focus only).
 
-Include, when the context supports it:
-- One clear, data-backed insight (cite the numbers or facts given; if data is missing, say what is unknown briefly and still give one gentle orientation line).
-- One-line reminders for each pillar one-thing that is present in the context (Health, Wealth, Wisdom, Joy — use only what appears; skip pillars with no one-thing).
-- A short 7-day trend direction where check-in or score signals exist; if dataAvailability.kpiReadings is false, omit the trend section — do not say "insufficient signals."
-- Joy: only when dataAvailability.happinessReserve is true — describe the tank band from context. When false, omit Joy entirely (do not say "unknown").
-- Pattern flags: only when dataAvailability.patterns is true — mention Emerging-or-stronger patterns listed in context.
-- Commitments: what the user has planned today from the event log, and — without reproach — what yesterday's entries show as missed or moved. Where adherence data shows a repeated slip, name the hour they actually keep rather than the one they keep planning.
-- Nutrition: when nutritionBrief is present, one line on yesterday's calories/protein vs target and today's planned meals (omit if null).
+Include ONLY sections that have data in the JSON context:
 
-Tone: calm, specific, kind. No guilt. No new commitments unless the user already committed in stored data (reminders are fine).`;
+1. **Opener** — one upbeat line (use displayName if present).
+2. **Today's focus** — ONE line: the single top priority for the day. Pick from northStar, weekPriorities (first item), weeklyGoals[0], or the most important todayCommitment. Bold it.
+3. **Today's plan** — bullet list of todayCommitments (time + title when time exists). Max 5 items. Skip if empty.
+4. **Meals** — bullet list of todayMeals (slot: title). Skip if empty.
+5. **Heads up** — only items in headsUp (yesterday misses, major reminders). Max 2. No guilt.
+6. **Intention** — ONLY when hasMorningIntentionToday is false: end with ONE short question — "What's the one thing that makes today a win?" OR ask energy 1–5. Do not ask if they already logged morning intention today.
+
+Do NOT include: 7-day trends, KPI deep dives, pattern analysis, pillar-by-pillar essays, joy tank lectures, or invented tasks. Omit empty sections entirely — shorter is better.`;
 
 export function buildMorningBriefSystem(ctx: PersonalizationContext = {}): string {
   return `${MORNING_BRIEF_CORE}\n\n${buildSpecialistIdentity(ctx)}`;

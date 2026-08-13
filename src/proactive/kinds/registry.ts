@@ -9,8 +9,11 @@ import { projectConflictReviewHandler } from "./projectConflictReview.js";
 import { chatInactivityHandler } from "./chatInactivity.js";
 import { driftGuardHandler } from "./driftGuard.js";
 import { eveningJournalHandler } from "./eveningJournal.js";
+import { monthlyGoalReviewHandler } from "./monthlyGoalReview.js";
 import { middayEncouragementHandler } from "./middayEncouragement.js";
 import { staleListNudgeHandler } from "./staleListNudge.js";
+import { weekPlanningHandler } from "./weekPlanning.js";
+import { weeklyWrapHandler } from "./weeklyWrap.js";
 
 const handlers = new Map<string, ProactiveKindHandler>();
 
@@ -28,6 +31,9 @@ export function listProactiveKinds(): ProactiveKindHandler[] {
 
 export function registerDefaultProactiveKinds(): void {
   registerProactiveKind(eveningJournalHandler);
+  registerProactiveKind(weekPlanningHandler);
+  registerProactiveKind(weeklyWrapHandler);
+  registerProactiveKind(monthlyGoalReviewHandler);
   registerProactiveKind(middayEncouragementHandler);
   registerProactiveKind(driftGuardHandler);
   registerProactiveKind(staleListNudgeHandler);

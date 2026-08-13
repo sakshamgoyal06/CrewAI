@@ -47,7 +47,7 @@ Life lists (Supabase canonical for every user; optional Notion mirror when conne
   databases, patches schema, pushes Supabase items to Notion, pulls Notion-only rows. Supabase wins.
 - setup_notion manual fallback: status | save_token | set_hub | provision | discover | sync | sync_registry.
 - link_notion_list only when auto-provision/discover could not match an existing database.
-- get_daily_checkin to read; log_daily_checkin to write or update (notes, pillar scores, joy).
+- get_daily_checkin to read; log_daily_checkin to write or update (notes, pillar scores, joy, morning_intention, energy_level, week_priorities, weekly_win/slip).
 - add_goal writes both the goals list and the LifeOS goals table. list_lifeos_goals reads active
   goals from Postgres when memory is empty or they ask specifically.
 - update_pillar_status after a check-in or when they report how a pillar is going (on_track,
