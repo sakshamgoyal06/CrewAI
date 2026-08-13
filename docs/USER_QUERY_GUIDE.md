@@ -1,8 +1,8 @@
 # What users can ask Magnus
 
 **Purpose:** Map natural-language asks to the ideal routing path and expected output.  
-**Tests:** `src/capabilities/userQueryRouting.test.ts` (157 queries, 1200+ structural checks) · `src/capabilities/catalogIntegrity.test.ts`  
-**Last updated:** 2026-08-09
+**Tests:** `src/capabilities/userQueryRouting.test.ts` (157 queries, 1200+ structural checks) · `src/capabilities/chatMessageTestSuite.test.ts` (**1000** NL messages) · `src/capabilities/catalogIntegrity.test.ts`  
+**Last updated:** 2026-08-13
 
 Magnus answers in **one voice**. The user never picks a pillar or specialist. Below: what to say, where it routes, and what you should get back.
 

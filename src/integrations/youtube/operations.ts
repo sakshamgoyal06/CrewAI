@@ -372,6 +372,61 @@ export async function addToPlaylist(input: {
   };
 }
 
+export type PlaylistBatchAddResult =
+  | { ok: true; added: YoutubePlaylistItemBrief[] }
+  | {
+      ok: false;
+      error: string;
+      failedVideoId: string;
+      rolledBackCount: number;
+    };
+
+/** Add multiple videos atomically — rolls back prior inserts if any step fails. */
+export async function addVideosToPlaylistBatch(input: {
+  playlistId: string;
+  videoIds: string[];
+  userProfileId?: string;
+}): Promise<PlaylistBatchAddResult> {
+  const ids = [...new Set(input.videoIds.map((id) => id.trim()).filter(Boolean))];
+  if (ids.length === 0) {
+    return { ok: false, error: "No video ids to add.", failedVideoId: "", rolledBackCount: 0 };
+  }
+
+  const added: YoutubePlaylistItemBrief[] = [];
+  try {
+    for (const videoId of ids) {
+      const item = await addToPlaylist({
+        playlistId: input.playlistId,
+        videoId,
+        userProfileId: input.userProfileId,
+      });
+      added.push(item);
+    }
+    return { ok: true, added };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    const failedVideoId = ids[added.length] ?? ids[0] ?? "";
+    let rolledBackCount = 0;
+    for (const item of [...added].reverse()) {
+      try {
+        await removeFromPlaylist({
+          playlistItemId: item.playlistItemId,
+          userProfileId: input.userProfileId,
+        });
+        rolledBackCount += 1;
+      } catch {
+        // Best-effort rollback — report partial state in error.
+      }
+    }
+    return {
+      ok: false,
+      error: message,
+      failedVideoId,
+      rolledBackCount,
+    };
+  }
+}
+
 export async function removeFromPlaylist(input: {
   playlistItemId: string;
   userProfileId?: string;

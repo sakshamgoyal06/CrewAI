@@ -95,9 +95,6 @@ function parseMealIntakeJson(o: unknown): MealIntakeParseResult | null {
     if (mealText.length < 2) {
       return null;
     }
-    if (!isComponentList(meal)) {
-      return null;
-    }
 
     const slotRaw = typeof meal.meal_slot === "string" ? meal.meal_slot.trim() : "unspecified";
     const mealSlot = VALID_SLOTS.has(slotRaw as MealSlot) ? (slotRaw as MealSlot) : "unspecified";
@@ -110,6 +107,10 @@ function parseMealIntakeJson(o: unknown): MealIntakeParseResult | null {
         : mealSlot === "snack"
           ? "snack"
           : "meal";
+
+    if (!isComponentList(meal)) {
+      return null;
+    }
 
     meals.push({
       mealSlot,

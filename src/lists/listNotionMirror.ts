@@ -286,6 +286,9 @@ export function formatItemLine(item: ListItemRow): string {
   if (item.status) {
     bits.push(`[${item.status}]`);
   }
+  if (item.created_at) {
+    bits.push(`added:${item.created_at.slice(0, 10)}`);
+  }
   bits.push(`id:${item.id}`);
   return bits.join(" ");
 }

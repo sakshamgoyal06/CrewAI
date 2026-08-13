@@ -96,7 +96,10 @@ shell or `.env`.
 | `src/magnus.ts` | Turn handler: allowlist gate, chat persistence, typing indicator, orchestrator call. Starts the Morning Brief cron. |
 | `src/agents/magnusOrchestrator.ts` | Classify → memory → parse/execute/compose per pillar; GENERAL uses parser plan (incl. day_overview, pillar_consultation); `finalizeMagnusVoice` at exit |
 | `src/agents/orchestratorIntent.ts` | Five-way classifier with structural **routing hints** (`intentRoutingHints.ts`); hard overrides: explicit meal log or meal-log read → HEALTH |
-| `src/agents/routing/intentRoutingHints.ts` | Structural signals for top-level intent classifier (YouTube, Magnus tools, portfolio/Hevy reads) |
+| `src/agents/routing/intentRoutingHints.ts` | Structural signals for top-level intent classifier (YouTube, Magnus tools, portfolio/Hevy reads, holistic day, saved-media pick, compound asks) |
+| `src/agents/routing/conversationSignals.ts` | Cross-cutting conversation signals → routing hints (holistic day, treadmill watch, calendar challenge, compound actions) |
+| `src/agents/routing/reversibleAction.ts` | Redis-backed last reversible write (`meal_undo`) for disambiguation-free undo |
+| `src/agents/routing/handleReversibleAction.ts` | Orchestrator prelude: "Undo this" resolves to last registered write |
 | `src/agents/routing/pillarConsultationSignals.ts` | Pillar read signals for `pillar_consultation` GENERAL step |
 | `src/agents/routing/agentConsultation.ts` | Reconciler for `pillar_consultation` multi-pillar step |
 | `src/projects/` | Projects layer: store, setup FSM, themes, executor, conflict service |
@@ -114,20 +117,20 @@ shell or `.env`.
 | `src/lifeos/` | LifeOS Postgres writers: goals, pillar status, joy tank |
 | `src/agents/tools/magnusActionDetect.ts` | Detect list, LifeOS, Notion, and event-log phrases that need Magnus tools (GENERAL) |
 | `src/agents/routing/actionIntegrity.ts` | Blocks false save/add/log claims unless tools actually succeeded |
-| `src/agents/tools/listTool.ts` | List catalog + `recommend_list_items` filters |
+| `src/agents/tools/listTool.ts` | List catalog + `recommend_list_items` filters + `lookup_list_item` (added-at from `created_at`) |
 | `src/lists/` | List catalog templates, Supabase store, service orchestration, optional Notion mirror |
 | `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event; auto-reconciles open/missed event rows when the note reports completion |
 | `src/lists/listService.ts` | List catalog + `log_daily_checkin` / `get_daily_checkin` writers (checkins list + LifeOS dual-write) |
 | `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
 | `src/events/` | Event log domain: timezone helpers, Supabase store, calendar sync, formatting, **completion reconcile** (`eventCompletionReconcile.ts` — journal text → `missed`/`planned` → `done`) |
-| `src/youtube/` | Bookmarks, cue queue, and Magnus playlist state in Supabase |
+| `src/youtube/` | Bookmarks, cue queue, Magnus playlist state, **`playlistResolve`** (pillar aliases vs YT account title match; `youtubeAccountOnly` when user says YT Music) |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
 | `src/agents/health/healthRouter.ts` | Health composite: meal log/photo deterministic gates → pillar plan parser → capability executors (compose pipeline) |
 | `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
 | `src/agents/memory/` | `loadMemoryContext`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
 | `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
-| `src/meals/` | Meal parsing, estimate chain (web search → USDA → CalorieNinjas → optional LLM), `meal_logs` writes |
+| `src/meals/` | Meal parsing, estimate chain, `meal_logs` writes, **intake collapse** (one occasion → one log), **session similarity dedupe**, **slot correction** |
 | `src/nutrition/` | Local-date helpers, rollups/plan stores, **planning journey** (`meal_plan_sessions`), anomaly detection, weekly review, journal context |
 | `src/pillars/health/workouts/` | Hevy client, fitness agent, Hevy write agent |
 | `src/pillars/health/references/` | Reads committed program memory + Telegram journals |
@@ -229,7 +232,7 @@ shell or `.env`.
     compose like other capabilities. **Photo attachments:** every Telegram photo runs context-aware vision
     (`src/vision/`) using caption + recent turns — infers purpose (meal_log, list_items, receipt, …) and
     routes to the right pillar (not blindly HEALTH). Vision summary is appended to the user message for
-    parsers and agents; meal_log_photo only when purpose is food. **Meal log intake:** natural-language eating messages route through the **Meal Intake Parser** agent (`mealIntakeParserAgent`) on the full message + recent context — it outputs how many meals, slots, and per-item components (no regex splitting). Full-day recount sets `replace_today_log` on the plan, **soft-deletes earlier same-day logs** before saving, and multi-step compose uses **saved step metadata + DB day total** (no LLM-invented meals or arithmetic). **Meal plan vs log:** shared rules in `src/meals/mealPlanVsLog.ts` (`MEAL_PLAN_VS_LOG_RULES`, `MEAL_DATA_ARCHITECTURE`) injected into nutrition, parser, planning, compose, Magnus core, health subclassifier, and journal prompts. `meal_plan_*` = future menu (`meal_plan_entries`, no calorie totals); `meal_log` = eaten food (`meal_logs`, only source of daily kcal). Future-tense menus ("I'll eat", "will be") route to planning, not `meal_log`. Present-tense eating ("I'm having…") and `I ate/had` anywhere in the message are accepted. When meal routing fires but text cannot be normalized, Magnus asks **yes/no** to confirm logging (Redis `meal_log_pending`). Parser scaffolding (`Log breakfast:`, "Log afternoon tea") is rejected. Plan slots mark **logged** only when the saved meal clearly matches the plan title (staple conflicts like rice vs chapati block a false "Plan matched"). `meal_day_breakdown` / meal history use deterministic output (`pillar_compose: false`) from `meal_logs` only. `day_overview` shows logged and planned meals in separate sections. Calorie-total disputes route to `meal_history`, not `meal_log`. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
+    parsers and agents; meal_log_photo only when purpose is food. **Meal log intake:** natural-language eating messages route through the **Meal Intake Parser** agent (`mealIntakeParserAgent`) on the full message + recent context — it outputs how many meals, slots, and per-item components (no regex splitting). Full-day recount sets `replace_today_log` on the plan, **soft-deletes earlier same-day logs** before saving, and multi-step compose uses **saved step metadata + DB day total** (no LLM-invented meals or arithmetic). **Meal plan vs log:** shared rules in `src/meals/mealPlanVsLog.ts` (`MEAL_PLAN_VS_LOG_RULES`, `MEAL_DATA_ARCHITECTURE`) injected into nutrition, parser, planning, compose, Magnus core, health subclassifier, and journal prompts. `meal_plan_*` = future menu (`meal_plan_entries`, no calorie totals); `meal_log` = eaten food (`meal_logs`, only source of daily kcal). Future-tense menus ("I'll eat", "will be") route to planning, not `meal_log`. Present-tense eating ("I'm having…", "I'm eating…") and `I ate/had` anywhere in the message are accepted. **Duplicate guard:** fuzzy session similarity blocks near-identical re-logs in the same slot. **Slot corrections** update `meal_slot` on an existing session. **Undo:** meal logs register a reversible action; "Undo this" soft-deletes without disambiguation. When meal routing fires but text cannot be normalized, Magnus asks **yes/no** to confirm logging (Redis `meal_log_pending`). Parser scaffolding (`Log breakfast:`, "Log afternoon tea") is rejected. Plan slots mark **logged** only when the saved meal clearly matches the plan title (staple conflicts like rice vs chapati block a false "Plan matched"). `meal_day_breakdown` / meal history use deterministic output (`pillar_compose: false`) from `meal_logs` only. `day_overview` shows logged and planned meals in separate sections. Calorie-total disputes route to `meal_history`, not `meal_log`. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
     loads calendar + event log + planned meals. Review-step meal Q&A answers without re-posting the draft.
     Happiness/Wisdom catalogs include multiple capabilities (recommendations, travel, learning plan, etc.).
 
@@ -293,6 +296,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npm run youtube:auth` | One-time YouTube OAuth; prints refresh token to store in `user_integrations` |
 | `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
 | `npx tsx scripts/dev/validate-user-query-catalog.mts` | Validate 157 user-query routing hints against detectors |
+| `npx tsx scripts/dev/generate-chat-message-test-suite.mts` | Build 1000 NL chat message tests from real chats + catalog |
+| `npx tsx scripts/dev/analyze-chat-test-suite.mts` | Structural + production-pair analysis → `docs/review/CHAT_MESSAGE_TEST_SUITE_ANALYSIS.md` |
 | `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
 | `npx tsx scripts/upsert-user-integrations.mts` | Update `user_integrations` for a user without wiping data |
 | `npx tsx scripts/reset-user-notion-lists.mts` | Reset list architecture + re-sync notion_registry for a user |
@@ -340,4 +345,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-13 (Morning brief win-condition confirm loop before logging)
+**Last updated:** 2026-08-13 (production chat issue fixes: meal dedupe/slot correction/undo, routing signals, playlist namespace, list added-at, YT batch add)

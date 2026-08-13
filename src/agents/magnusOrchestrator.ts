@@ -36,6 +36,7 @@ import { buildPhotoContext } from "../vision/buildPhotoContext.js";
 import { isMealPhotoPurpose, resolvePhotoIntent } from "../vision/resolvePhotoIntent.js";
 import { tryResolveActiveProjectSessionTurn } from "../projects/projectSessionPrelude.js";
 import { handleWinConditionPendingTurn } from "../jobs/handleWinConditionPending.js";
+import { handleReversibleActionTurn } from "./routing/handleReversibleAction.js";
 
 export type OrchestratorReply = {
   replyText: string;
@@ -91,6 +92,31 @@ export async function runOrchestratorReply(input: {
       delegatedAgent: "Magnus",
       agentMetadata: {
         ...winConditionTurn.metadata,
+        pillar_compose: false,
+        magnus_voice_finalized: true,
+      },
+    });
+  }
+
+  const reversibleTurn = await handleReversibleActionTurn({
+    userProfileId: input.userProfileId,
+    message: input.userMessage,
+    timezone: input.timezone,
+  });
+  if (reversibleTurn.handled) {
+    const ctx: AgentContext = {
+      userProfileId: input.userProfileId,
+      telegramUserId: input.telegramUserId,
+      timezone: input.timezone,
+      rawMessage: input.userMessage,
+      intent: "GENERAL",
+    };
+    return finalizeOrchestratorReply(ctx, {
+      replyText: reversibleTurn.replyText,
+      intent: "GENERAL",
+      delegatedAgent: "Magnus",
+      agentMetadata: {
+        ...reversibleTurn.metadata,
         pillar_compose: false,
         magnus_voice_finalized: true,
       },

@@ -4,6 +4,8 @@ import { logger } from "../logger.js";
 import { localDateKey } from "../nutrition/localDate.js";
 import { linkPlanEntryOnLog } from "../nutrition/store/mealPlanStore.js";
 import { recomputeDailyRollup } from "../nutrition/store/mealRollupStore.js";
+import { getRecentSessions } from "../nutrition/store/mealHistoryStore.js";
+import { findDuplicateSession } from "./mealSessionSimilarity.js";
 import { supabase } from "../tools/clients.js";
 import { buildMealComponentsFromEstimate, type MealComponentForRow } from "./mealComponents.js";
 import { consolidateMealNutritionEstimate } from "./mealItemConsolidate.js";
@@ -33,6 +35,7 @@ export type RecordMealSessionResult =
         planTitle?: string;
         matched: boolean;
       };
+      duplicateSkipped?: boolean;
     }
   | { ok: false; error: string };
 
@@ -67,11 +70,33 @@ function caloriesForDb(calories: number | null | undefined): number | null {
  * Inserts one `meal_logs` row per component, sharing `meal_session_id` and `logged_at`.
  */
 export async function recordMealSession(input: RecordMealSessionInput): Promise<RecordMealSessionResult> {
-  const mealSessionId = randomUUID();
   const loggedAtInstant = new Date();
-  const loggedAt = loggedAtInstant.toISOString();
   const localDate = localDateKey(loggedAtInstant, input.timezone);
+
+  const recent = await getRecentSessions(input.userProfileId, 8);
+  const duplicate = findDuplicateSession(input.rawText, recent, {
+    sameSlotOnly: true,
+    mealSlot: input.mealSlot,
+  });
+  if (duplicate) {
+    logger.info(
+      { mealSessionId: duplicate.mealSessionId, rawText: input.rawText.slice(0, 80) },
+      "meal_log duplicate skipped",
+    );
+    return {
+      ok: true,
+      mealSessionId: duplicate.mealSessionId,
+      rowIds: [],
+      loggedAt: duplicate.loggedAt,
+      date: duplicate.localDate,
+      components: [],
+      duplicateSkipped: true,
+    };
+  }
+
+  const mealSessionId = randomUUID();
   const legacyDate = legacyUtcDateString(loggedAtInstant);
+  const loggedAt = loggedAtInstant.toISOString();
   const mealSlot = input.mealSlot ?? "unspecified";
   const logKind = input.logKind ?? (mealSlot === "snack" ? "snack" : "meal");
   const estimate = consolidateMealNutritionEstimate(input.estimate);

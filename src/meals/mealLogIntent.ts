@@ -6,9 +6,9 @@ import type { MealSlot } from "./parseMealLogCommand.js";
 const PAST_MEAL_RE =
   /\b(?:(?:i|we)\s+)?(?:ate|eaten|had|just\s+had|finished\s+eating|only\s+had)\b|\b(?:for\s+)?(?:breakfast|lunch|dinner|snack)\b[^.\n]{0,40}\b(?:had|ate)\b/i;
 
-/** Present-tense eating ("I'm having X for breakfast") — log, not plan. */
+/** Present-tense eating ("I'm having/eating X") — log, not plan. */
 const PRESENT_MEAL_RE =
-  /\b(?:i'?m|i am|we'?re|we are)\s+having\b/i;
+  /\b(?:i'?m|i am|we'?re|we are)\s+(?:having|eating)\b/i;
 
 const FUTURE_MEAL_RE =
   /\b(?:will\s+(?:eat|have|be)|'?ll\s+(?:eat|have)|going\s+to\s+(?:eat|have)|plan\s+to\s+eat)\b|\b(?:today|tomorrow)\b[^.\n]{0,60}\b(?:ill|i'll)\s+(?:eat|have)\b/i;
@@ -92,7 +92,7 @@ export function extractPastMealFoodText(message: string): string | null {
     return cleanFoodTail(anywherePast[1]);
   }
 
-  const having = t.match(/\b(?:i'?m|i am|we'?re|we are)\s+having\s+(.+)$/i);
+  const having = t.match(/\b(?:i'?m|i am|we'?re|we are)\s+(?:having|eating)\s+(.+)$/i);
   if (having?.[1]) {
     return cleanFoodTail(having[1]);
   }

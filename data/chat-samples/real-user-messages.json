@@ -1,0 +1,1562 @@
+[
+  {
+    "content": "Connect YouTube",
+    "intent": null,
+    "created_at": "2026-08-02 08:54:05.115271+00"
+  },
+  {
+    "content": "Connect youtube now",
+    "intent": null,
+    "created_at": "2026-08-02 09:09:27.273176+00"
+  },
+  {
+    "content": "Connect YouTube",
+    "intent": null,
+    "created_at": "2026-08-02 09:19:21.823427+00"
+  },
+  {
+    "content": "Connect Google",
+    "intent": null,
+    "created_at": "2026-08-02 09:30:42.193551+00"
+  },
+  {
+    "content": "Test my yt music connection. What can you do for me there?",
+    "intent": null,
+    "created_at": "2026-08-02 09:31:36.710718+00"
+  },
+  {
+    "content": "Search youtube and share learning videos about 2007 recession",
+    "intent": null,
+    "created_at": "2026-08-02 09:34:58.295932+00"
+  },
+  {
+    "content": "Add 2,3, 6 in my watchlist for youtube",
+    "intent": null,
+    "created_at": "2026-08-02 09:35:47.977624+00"
+  },
+  {
+    "content": "Create 2 empty playlists \"Wealth\" and \"wisdom\". Add the above videos in wisdom playlist",
+    "intent": null,
+    "created_at": "2026-08-02 09:39:59.576725+00"
+  },
+  {
+    "content": "Search youtube for the best explainers on credit cycles, leverage, and 2008 crises - add thr\nE tip 5 to my wealth playlist",
+    "intent": null,
+    "created_at": "2026-08-02 10:01:04.109119+00"
+  },
+  {
+    "content": "Yes",
+    "intent": null,
+    "created_at": "2026-08-02 10:02:04.444771+00"
+  },
+  {
+    "content": "Yes add both and remove the 36 second short",
+    "intent": null,
+    "created_at": "2026-08-02 10:02:33.757188+00"
+  },
+  {
+    "content": "Find my high energy workou youtube music playlist, and add 5 pop songs to that that are new and fit for good workout",
+    "intent": null,
+    "created_at": "2026-08-02 10:07:37.342598+00"
+  },
+  {
+    "content": "Based on the mixed sessions for ai, what all is remaining to implement ai bot",
+    "intent": null,
+    "created_at": "2026-08-02 10:40:10.415836+00"
+  },
+  {
+    "content": "No read the agenda of past ai sessions in calendar",
+    "intent": null,
+    "created_at": "2026-08-02 10:40:51.954737+00"
+  },
+  {
+    "content": "Cant you check using calendar connections?",
+    "intent": null,
+    "created_at": "2026-08-02 10:41:38.670743+00"
+  },
+  {
+    "content": "You are not looking at calendar",
+    "intent": null,
+    "created_at": "2026-08-02 10:42:45.079022+00"
+  },
+  {
+    "content": "July 31 has an agent",
+    "intent": null,
+    "created_at": "2026-08-02 10:43:23.274924+00"
+  },
+  {
+    "content": "Check agenda more for these events",
+    "intent": null,
+    "created_at": "2026-08-02 10:48:15.31348+00"
+  },
+  {
+    "content": "Log that all this is done now",
+    "intent": null,
+    "created_at": "2026-08-02 10:48:47.314769+00"
+  },
+  {
+    "content": "Now setup AI sessions for the remaining week on monday, wednesday, and friday 7:15 pm to 8:15 pm.\n\nFor AI next steps are setting up my watchlist, movie list, travel list, poem list, readlist and etc to have repository for recommendations.\n\nThen need to add connections to kite and zerodha for investment purposes. And explore AA connection if possible.\n\nThen refactor entire project once to cleanup any redundancies and set up core vs user structure cleanly. So we dont leave any legacy errors.\n\nThen we will need to understand how logging is working in magnus. Meaning when user says log something or do something how and where does data and changes flow. Then we need to add log reminders on magnus.\n\nThen we need to work on fixing the daily / weekly / monthly rythm and progress checks.\n\nAnd then we will finally do a reintegration of everything to double on the core philosophy of 4 pillars and their goals so every conversation works smoothly, and magnus truly becomes the chief of staff",
+    "intent": null,
+    "created_at": "2026-08-02 10:56:55.752822+00"
+  },
+  {
+    "content": "Create the sessions on next mon wed fri similarly to cover up the remaining roadmap.\n\nPre write agendas on all these events and set notification for 10 minute before with pn",
+    "intent": null,
+    "created_at": "2026-08-02 11:00:04.43811+00"
+  },
+  {
+    "content": "Morning brief",
+    "intent": null,
+    "created_at": "2026-08-02 17:42:13.74618+00"
+  },
+  {
+    "content": "Can you help build my meal plan for the week?",
+    "intent": null,
+    "created_at": "2026-08-02 18:07:49.943622+00"
+  },
+  {
+    "content": "Fat and weight loss",
+    "intent": null,
+    "created_at": "2026-08-02 18:08:30.56049+00"
+  },
+  {
+    "content": "I eat normal indian foods. I want to move to healthy weightloss high protein low calorie diet",
+    "intent": null,
+    "created_at": "2026-08-02 18:08:59.079913+00"
+  },
+  {
+    "content": "Breakfast 10 am, lunch 3 pm, dinner 9 pm",
+    "intent": null,
+    "created_at": "2026-08-02 18:09:15.95368+00"
+  },
+  {
+    "content": "In non veg only boneless chicken. Avoid lauki.",
+    "intent": null,
+    "created_at": "2026-08-02 18:09:39.310572+00"
+  },
+  {
+    "content": "So build my meal plan for the week",
+    "intent": null,
+    "created_at": "2026-08-02 18:09:58.749645+00"
+  },
+  {
+    "content": "A) my birthday is on 8th august, saturday. How did you know my burthday?\nB) what is full build day?\nC) I can eat chicken only in lunch on weekdays.\nD) in evening i want to try healthy indian as well as healthy gourmet options like hommeade burrito bowl etc.",
+    "intent": null,
+    "created_at": "2026-08-02 18:12:39.211344+00"
+  },
+  {
+    "content": "First rebuild the plan and then add snack option. Also give calorie and protein numbers",
+    "intent": null,
+    "created_at": "2026-08-02 18:14:20.291111+00"
+  },
+  {
+    "content": "Give me the remaining message",
+    "intent": null,
+    "created_at": "2026-08-02 18:15:33.884644+00"
+  },
+  {
+    "content": "Whats for gym today?",
+    "intent": null,
+    "created_at": "2026-08-03 02:28:05.453777+00"
+  },
+  {
+    "content": "Find a good YouTube video to watch for 20 mins treadmill",
+    "intent": null,
+    "created_at": "2026-08-03 02:29:14.701465+00"
+  },
+  {
+    "content": "Search for highly rated and viewed videos about distillation of good books",
+    "intent": null,
+    "created_at": "2026-08-03 02:30:28.998834+00"
+  },
+  {
+    "content": "Add psychology of money and good to great both in wisdom playlist",
+    "intent": null,
+    "created_at": "2026-08-03 02:34:17.340597+00"
+  },
+  {
+    "content": "What are the next things I have to build for magnus?",
+    "intent": null,
+    "created_at": "2026-08-03 15:42:56.849644+00"
+  },
+  {
+    "content": "Now in my wisdom playlist, can you add videos that help me learn AI concepts that help me achieve the best version of Magnus.\n\nI dont like videos where there is only speech or lectures. I like infographics and animation. Search accordingly, and the time should be 15-30 mins",
+    "intent": null,
+    "created_at": "2026-08-03 15:44:37.896492+00"
+  },
+  {
+    "content": "Yes, add RAG and vector databaes",
+    "intent": null,
+    "created_at": "2026-08-03 15:46:10.581441+00"
+  },
+  {
+    "content": "Yes, go ahead",
+    "intent": null,
+    "created_at": "2026-08-03 15:47:05.16387+00"
+  },
+  {
+    "content": "Remove any videos that are in hindi.  3blue1brown is in hindi, find something else. First do a web search for the right videos and then find them on YouTube and add. Empty the wisdom playlist and recreate in order of curriculum needs",
+    "intent": null,
+    "created_at": "2026-08-03 15:48:59.12712+00"
+  },
+  {
+    "content": "Remove any videos that are in hindi.  3blue1brown is in hindi, find something else.",
+    "intent": null,
+    "created_at": "2026-08-03 15:50:30.078034+00"
+  },
+  {
+    "content": "Empty the wisdom playlist and recreate in order of curriculum needs",
+    "intent": null,
+    "created_at": "2026-08-03 15:51:38.553882+00"
+  },
+  {
+    "content": "Move wealth and money related videos in wealth playlist.",
+    "intent": null,
+    "created_at": "2026-08-03 15:52:59.400964+00"
+  },
+  {
+    "content": "Check my wisdom, wealth, and magnus playlists in youtube.",
+    "intent": null,
+    "created_at": "2026-08-03 15:54:16.731149+00"
+  },
+  {
+    "content": "Yes",
+    "intent": null,
+    "created_at": "2026-08-03 15:54:59.530377+00"
+  },
+  {
+    "content": "Now remove duplicated video in wisdom and wealth playlists",
+    "intent": null,
+    "created_at": "2026-08-03 15:58:18.77449+00"
+  },
+  {
+    "content": "Check my wisdom playlist, and remove duplicated items",
+    "intent": null,
+    "created_at": "2026-08-03 16:01:53.504014+00"
+  },
+  {
+    "content": "Yes",
+    "intent": null,
+    "created_at": "2026-08-03 16:02:25.191513+00"
+  },
+  {
+    "content": "Yes",
+    "intent": null,
+    "created_at": "2026-08-03 16:03:02.0684+00"
+  },
+  {
+    "content": "Connect zerodha",
+    "intent": null,
+    "created_at": "2026-08-03 17:09:47.052619+00"
+  },
+  {
+    "content": "Connect zerodha",
+    "intent": null,
+    "created_at": "2026-08-03 17:11:37.457726+00"
+  },
+  {
+    "content": "Connect zerodha",
+    "intent": null,
+    "created_at": "2026-08-03 17:12:38.749396+00"
+  },
+  {
+    "content": "Connect zerodha",
+    "intent": null,
+    "created_at": "2026-08-03 17:16:29.145769+00"
+  },
+  {
+    "content": "Can you check my holdings right now?",
+    "intent": null,
+    "created_at": "2026-08-03 17:17:03.888158+00"
+  },
+  {
+    "content": "Can you check when i bought this elss fund and when is the 3 year getting over for your",
+    "intent": null,
+    "created_at": "2026-08-03 17:17:58.080146+00"
+  },
+  {
+    "content": "Connect fi",
+    "intent": null,
+    "created_at": "2026-08-03 17:54:31.884555+00"
+  },
+  {
+    "content": "connect notion",
+    "intent": null,
+    "created_at": "2026-08-03 18:37:28.877084+00"
+  },
+  {
+    "content": "Lets mirror the 10th list too",
+    "intent": null,
+    "created_at": "2026-08-03 18:38:12.476147+00"
+  },
+  {
+    "content": "Connect notion",
+    "intent": null,
+    "created_at": "2026-08-03 18:46:57.114011+00"
+  },
+  {
+    "content": "List catalog q",
+    "intent": null,
+    "created_at": "2026-08-03 18:48:00.101993+00"
+  },
+  {
+    "content": "Yes",
+    "intent": null,
+    "created_at": "2026-08-03 18:48:36.263323+00"
+  },
+  {
+    "content": "Connect notion",
+    "intent": null,
+    "created_at": "2026-08-03 18:56:55.496751+00"
+  },
+  {
+    "content": "Whats on my watchlist?",
+    "intent": null,
+    "created_at": "2026-08-03 18:59:20.462629+00"
+  },
+  {
+    "content": "Sleepless in seattle\nThr kings speech\nAamis\n\nAdd to my watchlist",
+    "intent": null,
+    "created_at": "2026-08-03 19:01:06.177726+00"
+  },
+  {
+    "content": "Whats in my watchlist",
+    "intent": null,
+    "created_at": "2026-08-03 19:01:27.102868+00"
+  },
+  {
+    "content": "Remind me to buy tomatoes this Sunday",
+    "intent": null,
+    "created_at": "2026-08-03 19:01:54.521341+00"
+  },
+  {
+    "content": "Whats on my to-do list",
+    "intent": null,
+    "created_at": "2026-08-03 19:02:20.666414+00"
+  },
+  {
+    "content": "Sunday i need to go shopping.\n\nList - bhindi, kela, amrud, imli, tissue roll, bindi, kangan, swimming goggles",
+    "intent": null,
+    "created_at": "2026-08-03 19:03:30.139154+00"
+  },
+  {
+    "content": "Connect notion",
+    "intent": null,
+    "created_at": "2026-08-03 19:11:43.124825+00"
+  },
+  {
+    "content": "Sync supabase to notion",
+    "intent": null,
+    "created_at": "2026-08-03 19:26:25.023871+00"
+  },
+  {
+    "content": "Whats for today",
+    "intent": null,
+    "created_at": "2026-08-04 00:53:14.117272+00"
+  },
+  {
+    "content": "What should i do today",
+    "intent": null,
+    "created_at": "2026-08-04 00:53:56.051644+00"
+  },
+  {
+    "content": "I finished yesterday ao session. It went great. Added zerodha and notion integrations",
+    "intent": null,
+    "created_at": "2026-08-04 00:54:52.613077+00"
+  },
+  {
+    "content": "What about gym today?",
+    "intent": null,
+    "created_at": "2026-08-04 00:55:08.421952+00"
+  },
+  {
+    "content": "Lets do push A",
+    "intent": null,
+    "created_at": "2026-08-04 00:55:42.254495+00"
+  },
+  {
+    "content": "No let's do the push A sheet today instead of pull A",
+    "intent": null,
+    "created_at": "2026-08-04 00:56:16.845555+00"
+  },
+  {
+    "content": "Your calculation is wrong it was 9 pm to 1am",
+    "intent": null,
+    "created_at": "2026-08-04 03:10:37.212287+00"
+  },
+  {
+    "content": "Yes, 9:45 to 11 gym time.\n\n12 ill reach office, 12-3 first block, 3-5:30 second block with lunch and then leave for swimming. Then return home and 9-10 AI work, focusing on end to end architecture review and cleanup, and diagram",
+    "intent": null,
+    "created_at": "2026-08-04 03:48:43.082171+00"
+  },
+  {
+    "content": "What wisdom video I should watch with treadmill.\n\nI am doing cardio and abs and not push A",
+    "intent": null,
+    "created_at": "2026-08-04 04:18:08.309605+00"
+  },
+  {
+    "content": "No, videos from my wisdom playlist",
+    "intent": null,
+    "created_at": "2026-08-04 04:18:41.886353+00"
+  },
+  {
+    "content": "Awesome, i watched all 3 while on treadmill!",
+    "intent": null,
+    "created_at": "2026-08-04 04:39:40.804481+00"
+  },
+  {
+    "content": "I have logged my hevy workout for today, check it out",
+    "intent": null,
+    "created_at": "2026-08-04 04:51:46.83431+00"
+  },
+  {
+    "content": "I will watch Michael on Friday when celebrating weekend. Load it before only on streamio, get all set and watch",
+    "intent": null,
+    "created_at": "2026-08-04 16:42:59.740832+00"
+  },
+  {
+    "content": "No add it to my watchlist",
+    "intent": null,
+    "created_at": "2026-08-04 16:43:24.446453+00"
+  },
+  {
+    "content": "What was the agenda for tonights ai session",
+    "intent": null,
+    "created_at": "2026-08-04 16:45:42.367711+00"
+  },
+  {
+    "content": "Prepare my tomorrow's calendar.",
+    "intent": null,
+    "created_at": "2026-08-04 17:06:59.33257+00"
+  },
+  {
+    "content": "Add pull A tomorrow, and then add work blocks between 10 to 6\n\nFor ai, kite and zerodha connections are already there. What is the next thing we need to do for magnus",
+    "intent": null,
+    "created_at": "2026-08-04 17:08:27.770514+00"
+  },
+  {
+    "content": "Add building notifications for magnus and inactivity trigger for tomorrow.",
+    "intent": null,
+    "created_at": "2026-08-04 17:10:15.11978+00"
+  },
+  {
+    "content": "Can you also create a new list for me, where i track my ideas and todos for magnus? They will come in handy for my ai learning plan",
+    "intent": null,
+    "created_at": "2026-08-04 17:11:16.982324+00"
+  },
+  {
+    "content": "Great! Now in this also add-\n1) users aim and goal disambiguation. \n2) Long term and short term target setting\n3) basically work on magnus core philosophy being implemented in user experience\n4) refine logging, it should turn into a user map for magnus to mark deviation from goal\n5) add detection of missed commitments or plan and correcting course. Finding hidden behaviour\n6) adding journal notifications and making logging fun and important for the user",
+    "intent": null,
+    "created_at": "2026-08-04 17:15:19.685482+00"
+  },
+  {
+    "content": "Great! Lets also add finally building a thorough onboarding journey for new users",
+    "intent": null,
+    "created_at": "2026-08-04 17:16:12.400795+00"
+  },
+  {
+    "content": "what's on my watchlist",
+    "intent": null,
+    "created_at": "2026-08-04 17:39:54.582943+00"
+  },
+  {
+    "content": "No i did yesterdays session. I did architecture review and cleanup",
+    "intent": null,
+    "created_at": "2026-08-05 02:28:31.319904+00"
+  },
+  {
+    "content": "Its late now. I will get late for office if I leave now. Plus i feel tired, ill skip pull a today",
+    "intent": null,
+    "created_at": "2026-08-05 03:45:32.363032+00"
+  },
+  {
+    "content": "Lets do Pull A tomorrow 9 only, but I need to wake up at 7 at all cost. How do i do that",
+    "intent": null,
+    "created_at": "2026-08-05 03:48:25.977238+00"
+  },
+  {
+    "content": "What else should I do to ensure I don't miss the gym sessions",
+    "intent": null,
+    "created_at": "2026-08-05 05:33:52.084527+00"
+  },
+  {
+    "content": "Log today's miss if. Kt already done. Thanks, this was helpful.",
+    "intent": null,
+    "created_at": "2026-08-05 05:35:25.275456+00"
+  },
+  {
+    "content": "In my AI plan list, also add adding a linkedin connection to boost my job prospect. Magnus should be able to search relevant jobs for me, help me prepare for jobs, update / recommend changes to my linkedin profile and activity, and should help me refine my resume.\n\nIf i go in job hunt mode, the architecture should support me to work consistently and regularly, prepare better and evaluate options better, and land the job.",
+    "intent": null,
+    "created_at": "2026-08-05 05:37:07.118674+00"
+  },
+  {
+    "content": "No. But what are my current goals?",
+    "intent": null,
+    "created_at": "2026-08-05 05:38:13.799523+00"
+  },
+  {
+    "content": "What does your context and architecture says about how should i structure goals, north star, and misogi. What should I have with what timeline? I dont mean the exact goal, but like what kind of short goal or long goal etc",
+    "intent": null,
+    "created_at": "2026-08-05 05:39:25.631275+00"
+  },
+  {
+    "content": "Okay, so my misogi this year, that made this year legendry was getting married. Does that fit the misogi definition?",
+    "intent": null,
+    "created_at": "2026-08-05 05:40:52.85536+00"
+  },
+  {
+    "content": "Help me set my goals.",
+    "intent": null,
+    "created_at": "2026-08-05 05:42:09.978708+00"
+  },
+  {
+    "content": "Health - I want to learn swimming. And I want to lose enough weight so my old shirts fit me again. They used to fit when i was 103 kgs, i am at 115 now.\n\nWisdom - shipping magnus to beta users by november. Get feedback and decide If i keep magnus as my own assistant or roll out as a product\n\nWealth - i am employed right now. I work for slice bank. I am not building any company right now. My wealth goal is to have 12 lakh in liquid savings with me. Currently its at 7 lakh.\n\nHappiness - travel more. I have a thailand honeymoon planned for in september end.",
+    "intent": null,
+    "created_at": "2026-08-05 05:46:11.295566+00"
+  },
+  {
+    "content": "You are right, 83k is too high. Lets save 30k a month personally.",
+    "intent": null,
+    "created_at": "2026-08-05 05:48:14.490162+00"
+  },
+  {
+    "content": "Go with 1.",
+    "intent": null,
+    "created_at": "2026-08-05 05:49:00.161933+00"
+  },
+  {
+    "content": "In my ai planning list, add a priority item as meal planning and logging for health pillar. Its very important.\n\nAnd in my general todo list, add an item to sort out joint savings by next weekend at all cost.\n\nAlso, 8th august is my birthday",
+    "intent": null,
+    "created_at": "2026-08-05 05:50:24.572323+00"
+  },
+  {
+    "content": "I will spend Sunday (day after my birthday), introspecting my life and time spend so far, and reading some book. \n\nSaturday my wife has already planned things for me",
+    "intent": null,
+    "created_at": "2026-08-05 05:51:38.409731+00"
+  },
+  {
+    "content": "Die with zero sounds good, add that to my readlist",
+    "intent": null,
+    "created_at": "2026-08-05 05:52:29.954567+00"
+  },
+  {
+    "content": "Why does my today's calendar have the same events duplicated?",
+    "intent": null,
+    "created_at": "2026-08-05 06:09:27.438713+00"
+  },
+  {
+    "content": "Yes remove the duplicates",
+    "intent": null,
+    "created_at": "2026-08-05 06:10:08.858238+00"
+  },
+  {
+    "content": "In my guitar practice playlist, add the night we met.",
+    "intent": null,
+    "created_at": "2026-08-05 07:25:20.225697+00"
+  },
+  {
+    "content": "No, in my list on notion, is there a music / guitar list?",
+    "intent": null,
+    "created_at": "2026-08-05 07:25:54.167429+00"
+  },
+  {
+    "content": "So lets reframe music list as guitar learning list. In that we will add the songs i want to learn, link to its chords and music sheet, and any youtube video link for learning.\n\nAlso create a new youtube playlist where i will keep the song learning videos.",
+    "intent": null,
+    "created_at": "2026-08-05 07:26:58.451637+00"
+  },
+  {
+    "content": "Thanks!",
+    "intent": null,
+    "created_at": "2026-08-05 07:27:59.910105+00"
+  },
+  {
+    "content": "Add invite to my watchlist",
+    "intent": null,
+    "created_at": "2026-08-05 08:32:43.382372+00"
+  },
+  {
+    "content": "Remind me to call Nishit at 8PM today",
+    "intent": null,
+    "created_at": "2026-08-05 12:30:06.185182+00"
+  },
+  {
+    "content": "I had a great swimming session. Had a good one yesterday too but today was really good. I learned how to kick and go beyond, and i backfloated without breaking for 15 mins.....it was reallly really peaceful and drove dopamine",
+    "intent": null,
+    "created_at": "2026-08-05 13:45:40.982122+00"
+  },
+  {
+    "content": "Add this to the relevant logs",
+    "intent": null,
+    "created_at": "2026-08-05 13:46:37.859061+00"
+  },
+  {
+    "content": "In AI task list, add defining joy tank management",
+    "intent": null,
+    "created_at": "2026-08-05 13:58:16.052806+00"
+  },
+  {
+    "content": "In the notion list there is an ai task plan, search and add thete",
+    "intent": null,
+    "created_at": "2026-08-05 13:59:13.721882+00"
+  },
+  {
+    "content": "What other items are there in magnus ideas and todos",
+    "intent": null,
+    "created_at": "2026-08-05 14:02:58.087337+00"
+  },
+  {
+    "content": "Cool. This is good. What other lists do we have which we are maintaining",
+    "intent": null,
+    "created_at": "2026-08-05 14:03:49.56158+00"
+  },
+  {
+    "content": "Cool. This is good",
+    "intent": null,
+    "created_at": "2026-08-05 14:04:21.48847+00"
+  },
+  {
+    "content": "Now today, we had a 50 minute swimming sesion. In this 10 minutes we did floating, next 25 mins we did kicking and swimming with kicking, and then 15 mins back floating\n\n\nHow much calories did i burn?",
+    "intent": null,
+    "created_at": "2026-08-05 14:05:14.625645+00"
+  },
+  {
+    "content": "I didnt do AI session today because i spent time teaching my wife sql. I had fun.\n\nI have kept my gym clothes up, set alarm for 6 30 and 7 and keeping it on a desk away so i have to get out of bed move out and turn it off. See you tomorrow. Pull A here i come",
+    "intent": null,
+    "created_at": "2026-08-05 18:50:34.899482+00"
+  },
+  {
+    "content": "I gave you the reason why i did not do ai session yesterday. \n\nAlso, gym session i have been logging decently earlier. I'd like to continue morning slot only",
+    "intent": null,
+    "created_at": "2026-08-06 01:33:28.694949+00"
+  },
+  {
+    "content": "I am done with the workout. Read hevy, review, and log",
+    "intent": null,
+    "created_at": "2026-08-06 04:00:12.893541+00"
+  },
+  {
+    "content": "No, log that i did the workout in my daily chrck ins.\n\nAlso we scheduled pull A only today right since we missed it yesterday?",
+    "intent": null,
+    "created_at": "2026-08-06 04:01:24.834486+00"
+  },
+  {
+    "content": "I updated the workout, check again now. Also did you notice treadmill?",
+    "intent": null,
+    "created_at": "2026-08-06 04:02:21.034907+00"
+  },
+  {
+    "content": "So I was able to do treadmill because i was watching LLM video from my wisdom playlist. From youtube, can you check which video i watched tofay?",
+    "intent": null,
+    "created_at": "2026-08-06 04:03:32.48117+00"
+  },
+  {
+    "content": "Add getting yourube watch history in my magnus ideas list",
+    "intent": null,
+    "created_at": "2026-08-06 04:06:18.767866+00"
+  },
+  {
+    "content": "https://youtu.be/NLOBYtfdxuM?si=LC0ErzXtfWLMVILi\n\nI watched this video. This was really good. Can you add the next 5 videos from this channel regarding LLMs in wisdom playlist. I think there will be a sequence of videos in the channel, search that and add in sequence",
+    "intent": null,
+    "created_at": "2026-08-06 04:07:35.886586+00"
+  },
+  {
+    "content": "You picked the wrong channel. Delete the above videos from the playlist. The channel name is under the hood",
+    "intent": null,
+    "created_at": "2026-08-06 04:09:32.552412+00"
+  },
+  {
+    "content": "Yes that's better. Remove other videos too from this playlist. Only keep videos from under the hood",
+    "intent": null,
+    "created_at": "2026-08-06 04:11:42.582133+00"
+  },
+  {
+    "content": "Add a reminder to message bharadwaj to get my brother's surgical stuff on the weekend. Remind me on saturday 12 pm",
+    "intent": null,
+    "created_at": "2026-08-06 06:33:32.163797+00"
+  },
+  {
+    "content": "Remind me on sunday 9:30 AM to drop my bike for servicing",
+    "intent": null,
+    "created_at": "2026-08-06 12:26:53.1367+00"
+  },
+  {
+    "content": "Die with zero just got delivered",
+    "intent": null,
+    "created_at": "2026-08-06 13:51:18.224853+00"
+  },
+  {
+    "content": "What did you mark as in progress?",
+    "intent": null,
+    "created_at": "2026-08-06 13:51:59.410291+00"
+  },
+  {
+    "content": "Whats on the ai practice agenda today",
+    "intent": null,
+    "created_at": "2026-08-06 14:44:44.110356+00"
+  },
+  {
+    "content": "Check today's calendar and magnus ideas and tell me",
+    "intent": null,
+    "created_at": "2026-08-06 14:45:31.171611+00"
+  },
+  {
+    "content": "There were other todos. Check notion list and confirm",
+    "intent": null,
+    "created_at": "2026-08-06 14:58:12.199178+00"
+  },
+  {
+    "content": "Nooo check magnus ideas in notion, there were more items there",
+    "intent": null,
+    "created_at": "2026-08-06 14:58:50.678073+00"
+  },
+  {
+    "content": "What do i need to do tomorrow",
+    "intent": null,
+    "created_at": "2026-08-06 15:40:39.870493+00"
+  },
+  {
+    "content": "Gym is push A\nAI will be 8:30 onwards",
+    "intent": null,
+    "created_at": "2026-08-06 15:41:29.940669+00"
+  },
+  {
+    "content": "I watched the notebook today with my wife. I found it okay, one classic off my watchlist.",
+    "intent": null,
+    "created_at": "2026-08-06 16:35:53.361119+00"
+  },
+  {
+    "content": "Connect zerodha",
+    "intent": null,
+    "created_at": "2026-08-06 18:07:47.632106+00"
+  },
+  {
+    "content": "What are my goals",
+    "intent": null,
+    "created_at": "2026-08-06 18:13:41.435003+00"
+  },
+  {
+    "content": "I completed yesterday's ai session. \nalso i went to gym yesterday and earlier too.",
+    "intent": null,
+    "created_at": "2026-08-07 01:37:52.179083+00"
+  },
+  {
+    "content": "No push a is not done yet. Pull a only was done yesterday",
+    "intent": null,
+    "created_at": "2026-08-07 01:38:56.699129+00"
+  },
+  {
+    "content": "No i did the pull A session on 6th instead of 5th",
+    "intent": null,
+    "created_at": "2026-08-07 02:58:43.896416+00"
+  },
+  {
+    "content": "Add musafir cafe to my watchlist",
+    "intent": null,
+    "created_at": "2026-08-07 05:31:41.523036+00"
+  },
+  {
+    "content": "How was my todays gym session",
+    "intent": null,
+    "created_at": "2026-08-07 06:57:04.13457+00"
+  },
+  {
+    "content": "Pull data from hevy",
+    "intent": null,
+    "created_at": "2026-08-07 06:57:33.910764+00"
+  },
+  {
+    "content": "How was my gym session today",
+    "intent": null,
+    "created_at": "2026-08-07 08:33:11.736477+00"
+  },
+  {
+    "content": "Had a good swimming session",
+    "intent": null,
+    "created_at": "2026-08-07 16:45:41.828015+00"
+  },
+  {
+    "content": "Not doing ai learning. I am going to watch Michael",
+    "intent": null,
+    "created_at": "2026-08-07 16:45:56.025989+00"
+  },
+  {
+    "content": "Technique is getting much better now",
+    "intent": null,
+    "created_at": "2026-08-07 16:46:13.998648+00"
+  },
+  {
+    "content": "I meant swimming technique",
+    "intent": null,
+    "created_at": "2026-08-07 16:46:36.700655+00"
+  },
+  {
+    "content": "Yesterday, 7th was a good day. I did gym, good work, great swim session, relaxed, ate, watched michael - a new movie for me and wife.\n\nAnd my wife celebrated my birthday with a beautiful treasure end. It was beautiful, romantic, and truly surprisign. I love her. I cant believe the love i looked for all my life, has walked into it so easily. I feel like my prayers have been answered",
+    "intent": null,
+    "created_at": "2026-08-07 19:53:34.668714+00"
+  },
+  {
+    "content": "Create this as a journal entry",
+    "intent": null,
+    "created_at": "2026-08-07 19:54:06.400173+00"
+  },
+  {
+    "content": "I did AI practice on 6th too. Is it not logged?",
+    "intent": null,
+    "created_at": "2026-08-08 01:38:41.519167+00"
+  },
+  {
+    "content": "At 9 pm only on 6th i did ai session",
+    "intent": null,
+    "created_at": "2026-08-08 01:45:21.170272+00"
+  },
+  {
+    "content": "Done, messaged bhardwaj",
+    "intent": null,
+    "created_at": "2026-08-08 06:32:59.344457+00"
+  },
+  {
+    "content": "Add wicked game and chhaiya chhaiya (2 different songs) in my guitar learning music list. Find the youtube videos for this to learn on guitar and add on my youtube guitar learning playlist too",
+    "intent": null,
+    "created_at": "2026-08-08 07:47:17.104829+00"
+  },
+  {
+    "content": "Remind me to call bansal tomorrow at 6 PM. Add to calendar",
+    "intent": null,
+    "created_at": "2026-08-08 15:42:07.281937+00"
+  },
+  {
+    "content": "What was my last workout. How was it and what did i do",
+    "intent": null,
+    "created_at": "2026-08-08 15:43:38.604893+00"
+  },
+  {
+    "content": "In catan, what is the order in which the steps should be done. And can dev card be played before turn",
+    "intent": null,
+    "created_at": "2026-08-08 16:16:45.296215+00"
+  },
+  {
+    "content": "Add a reminder 6 months from today on the 1st of that month, that my bike's 4th service is due.",
+    "intent": null,
+    "created_at": "2026-08-09 06:54:42.455977+00"
+  },
+  {
+    "content": "What next items do i have, to build for magnus?",
+    "intent": null,
+    "created_at": "2026-08-09 12:04:30.784034+00"
+  },
+  {
+    "content": "[meal photo]",
+    "intent": null,
+    "created_at": "2026-08-09 15:06:18.301751+00"
+  },
+  {
+    "content": "The second curry is also chana masala. And there is no dip. Only the curry and rice",
+    "intent": null,
+    "created_at": "2026-08-09 15:09:03.894697+00"
+  },
+  {
+    "content": "Tomorrow is Monday. I want to make meal plan for next 2 weeks. Help me make the plan",
+    "intent": null,
+    "created_at": "2026-08-09 15:14:39.121449+00"
+  },
+  {
+    "content": "Tomorrow is Monday. I want to make meal plan for next 2 weeks. Help me make the plan",
+    "intent": null,
+    "created_at": "2026-08-09 15:38:05.86204+00"
+  },
+  {
+    "content": "cancel planning",
+    "intent": null,
+    "created_at": "2026-08-09 15:43:43.237119+00"
+  },
+  {
+    "content": "Tomorrow is Monday. I want to make meal plan for next 2 weeks. Help me make the plan",
+    "intent": null,
+    "created_at": "2026-08-09 15:44:20.766659+00"
+  },
+  {
+    "content": "Cancel planning",
+    "intent": null,
+    "created_at": "2026-08-09 16:16:31.869807+00"
+  },
+  {
+    "content": "Goal is to get used to home diet and a good active routine. Not eat out or snack a lot. Dedicated one meal for eating out, one for ordering, and one for cooking special.\n\nMeals need to be simple, vegetarian, indian regular meals. But it should be protein + carbs + fiber. Eggs, protein whey, and paneer for fiber. Eggs only omelette or sunny side up.\n\nCalories 2400 max. Protein 80 gms is good, but lower is also fine for 2 weeks.\n\nFor breakfast and lunch, my cook cooks. Dinner my wife, or both of us if planning something special. \n\n3 meals. Keep desi vegetables and curries and staple option in \n\nTemplate i want each day plan for week 1 first, and then week 2",
+    "intent": null,
+    "created_at": "2026-08-09 16:21:01.221117+00"
+  },
+  {
+    "content": "Why did you make it lauki free menu",
+    "intent": null,
+    "created_at": "2026-08-09 16:28:33.723282+00"
+  },
+  {
+    "content": "No, lauki was on my avoid list. Remove lauki, keep the original plan",
+    "intent": null,
+    "created_at": "2026-08-09 16:31:08.571697+00"
+  },
+  {
+    "content": "Lock this in",
+    "intent": null,
+    "created_at": "2026-08-09 16:37:34.442064+00"
+  },
+  {
+    "content": "Save plan",
+    "intent": null,
+    "created_at": "2026-08-09 16:39:33.419999+00"
+  },
+  {
+    "content": "Whats my meal plan for tomorrow",
+    "intent": null,
+    "created_at": "2026-08-09 16:39:58.7067+00"
+  },
+  {
+    "content": "Whats my meal plan tomorrow?",
+    "intent": null,
+    "created_at": "2026-08-09 17:03:17.573736+00"
+  },
+  {
+    "content": "Should i swap rajma for chhole?",
+    "intent": null,
+    "created_at": "2026-08-09 17:06:03.726972+00"
+  },
+  {
+    "content": "Whats the plan for tomorrow?",
+    "intent": null,
+    "created_at": "2026-08-09 17:08:22.386802+00"
+  },
+  {
+    "content": "I mean, what does my whole day look like tomorrow",
+    "intent": null,
+    "created_at": "2026-08-09 17:08:51.497574+00"
+  },
+  {
+    "content": "Cancel planning",
+    "intent": null,
+    "created_at": "2026-08-09 17:09:25.72178+00"
+  },
+  {
+    "content": "So what does my tomorrow's day look like",
+    "intent": null,
+    "created_at": "2026-08-09 17:09:58.087249+00"
+  },
+  {
+    "content": "What does my day look like tomorrow",
+    "intent": null,
+    "created_at": "2026-08-09 17:32:27.783948+00"
+  },
+  {
+    "content": "Move AI session from 7:15 to 9 pm tomorrow",
+    "intent": null,
+    "created_at": "2026-08-09 17:33:24.264011+00"
+  },
+  {
+    "content": "Switch lunch and dinner planned meals for tomorrow",
+    "intent": null,
+    "created_at": "2026-08-09 17:34:16.434334+00"
+  },
+  {
+    "content": "Whats my meal plan for tomorrow",
+    "intent": null,
+    "created_at": "2026-08-09 17:34:48.683201+00"
+  },
+  {
+    "content": "What is the amount of poha i have to eat tomorrow",
+    "intent": null,
+    "created_at": "2026-08-09 17:35:06.354124+00"
+  },
+  {
+    "content": "Whats the gym plan tomorrow?",
+    "intent": null,
+    "created_at": "2026-08-09 17:55:42.84124+00"
+  },
+  {
+    "content": "Add this to my calendar. And suggest the youtube video for treadmill",
+    "intent": null,
+    "created_at": "2026-08-09 17:56:28.063376+00"
+  },
+  {
+    "content": "Find a YouTube video animated explaining the book die with zero",
+    "intent": null,
+    "created_at": "2026-08-09 18:01:47.445892+00"
+  },
+  {
+    "content": "https://youtu.be/GbhjusSbXcY?si=5Yq2f20ZKoBbqQ3D\n\nAdd this to my wisdom list",
+    "intent": null,
+    "created_at": "2026-08-09 18:03:24.461563+00"
+  },
+  {
+    "content": "My wisdom youtube list",
+    "intent": null,
+    "created_at": "2026-08-09 18:03:53.402965+00"
+  },
+  {
+    "content": "https://youtube.com/@antidote_thechannel?si=SHl5jIrqL4hxBea1\n\nAdd all videos of this channel in wisdom youtube playlist",
+    "intent": null,
+    "created_at": "2026-08-09 18:07:42.063409+00"
+  },
+  {
+    "content": "Yes, add in magnus ideas.",
+    "intent": null,
+    "created_at": "2026-08-09 18:09:36.685304+00"
+  },
+  {
+    "content": "https://youtu.be/bHpLERAfY-w?si=9QH3zOIkULnYloHh\n\nThis is the die by zero summary I'll read tomorrow. Add to my wisdom youtube playlist",
+    "intent": null,
+    "created_at": "2026-08-09 18:10:33.048644+00"
+  },
+  {
+    "content": "Whats the agenda for AI session tomorrow?",
+    "intent": null,
+    "created_at": "2026-08-09 18:11:14.961395+00"
+  },
+  {
+    "content": "See you tomorrow",
+    "intent": null,
+    "created_at": "2026-08-09 18:16:32.20356+00"
+  },
+  {
+    "content": "I dropped the bike, but haven't picked it up",
+    "intent": null,
+    "created_at": "2026-08-10 03:24:40.009934+00"
+  },
+  {
+    "content": "Ill pick up today, not needed in calendar",
+    "intent": null,
+    "created_at": "2026-08-10 03:25:56.133945+00"
+  },
+  {
+    "content": "What does my day look like today",
+    "intent": null,
+    "created_at": "2026-08-10 03:26:34.61452+00"
+  },
+  {
+    "content": "For today's meal, switch lunch and dinner",
+    "intent": null,
+    "created_at": "2026-08-10 03:39:25.613079+00"
+  },
+  {
+    "content": "Today breakfast ill eat poha and sunny side up egg. Lunch will be moong dal and aloo palak. Dinner will aloo sabji and methi paratha",
+    "intent": null,
+    "created_at": "2026-08-10 03:44:32.351163+00"
+  },
+  {
+    "content": "Lunch will have 2 rotis too",
+    "intent": null,
+    "created_at": "2026-08-10 03:46:11.513249+00"
+  },
+  {
+    "content": "So whats my todays meal plan?",
+    "intent": null,
+    "created_at": "2026-08-10 03:47:23.747191+00"
+  },
+  {
+    "content": "Dinner?",
+    "intent": null,
+    "created_at": "2026-08-10 03:47:53.969976+00"
+  },
+  {
+    "content": "So give me today and tomorrow's complete meal plan.",
+    "intent": null,
+    "created_at": "2026-08-10 03:48:30.42744+00"
+  },
+  {
+    "content": "Share me a shopping list for ingredients, based on this weeks meal plan",
+    "intent": null,
+    "created_at": "2026-08-10 03:50:05.973816+00"
+  },
+  {
+    "content": "I am taking a leave from woek today. Will go for getting bike and gym in afternoon. I will use this time to clean up and organize my personal space today",
+    "intent": null,
+    "created_at": "2026-08-10 04:20:09.318706+00"
+  },
+  {
+    "content": "https://www.instagram.com/reel/Dbx35NWtGEm/?igsh=NWtlcTU5a3M1aWt3\n\nCan you add these books in my readlist",
+    "intent": null,
+    "created_at": "2026-08-10 05:20:00.779346+00"
+  },
+  {
+    "content": "These are the books",
+    "intent": null,
+    "created_at": "2026-08-10 05:20:56.035442+00"
+  },
+  {
+    "content": "Add 3 months from today to put bike for 3rd service",
+    "intent": null,
+    "created_at": "2026-08-10 07:49:33.101327+00"
+  },
+  {
+    "content": "In this event and reminder, add the details to a) 2nd service was missed and done on 3rd and i paid 250 for it. So for 3rd i was asked to come early\nB) leave helmet and key at the center only",
+    "intent": null,
+    "created_at": "2026-08-10 07:52:53.003763+00"
+  },
+  {
+    "content": "The bill for this service will be kept in my bookshelf. Add that in agenda and reminder too",
+    "intent": null,
+    "created_at": "2026-08-10 07:55:36.449714+00"
+  },
+  {
+    "content": "Add musafir cafe to my watchlist",
+    "intent": null,
+    "created_at": "2026-08-10 09:30:24.9003+00"
+  },
+  {
+    "content": "Add musafir cafe to my watchlist",
+    "intent": null,
+    "created_at": "2026-08-10 10:07:58.570118+00"
+  },
+  {
+    "content": "Can you add these books to my readlist",
+    "intent": null,
+    "created_at": "2026-08-10 10:08:46.097377+00"
+  },
+  {
+    "content": "I missed the gym session today. Postponing it made me forget and then by 4 PM i thought that since I have to go to swimming ill be sore",
+    "intent": null,
+    "created_at": "2026-08-10 12:47:35.870031+00"
+  },
+  {
+    "content": "Remind me on friday to get done the following at 12 PM. Pest control, refrigerator service, toilet fix, get ghewar, visit mandir,",
+    "intent": null,
+    "created_at": "2026-08-10 16:12:07.962423+00"
+  },
+  {
+    "content": "Add to calendar also",
+    "intent": null,
+    "created_at": "2026-08-10 16:13:19.766319+00"
+  },
+  {
+    "content": "It's time i switch jobs.",
+    "intent": null,
+    "created_at": "2026-08-10 17:07:18.23853+00"
+  },
+  {
+    "content": "Start a job search project",
+    "intent": null,
+    "created_at": "2026-08-10 17:09:08.075529+00"
+  },
+  {
+    "content": "Lock it in.",
+    "intent": null,
+    "created_at": "2026-08-10 17:10:32.611107+00"
+  },
+  {
+    "content": "Start a job search project",
+    "intent": null,
+    "created_at": "2026-08-10 17:26:31.820807+00"
+  },
+  {
+    "content": "Start a job search project",
+    "intent": null,
+    "created_at": "2026-08-10 17:26:31.87059+00"
+  },
+  {
+    "content": "Lock this in",
+    "intent": null,
+    "created_at": "2026-08-10 17:29:47.023167+00"
+  },
+  {
+    "content": "I don't want to search jobs anymore",
+    "intent": null,
+    "created_at": "2026-08-10 17:30:30.235028+00"
+  },
+  {
+    "content": "I started the search to see what's our there. But decided it's better to stay in my current firm since i have more knowledge and power here and will get a better role here soon",
+    "intent": null,
+    "created_at": "2026-08-10 17:32:27.808146+00"
+  },
+  {
+    "content": "What does my day fir tomorrow look like",
+    "intent": null,
+    "created_at": "2026-08-10 17:38:30.729712+00"
+  },
+  {
+    "content": "Abandon job search. \n\nLets focus on tomorrow's day. Add my gym plan, meal plan, and work slots",
+    "intent": null,
+    "created_at": "2026-08-10 17:39:20.827545+00"
+  },
+  {
+    "content": "You know my routine. Whats the gym plan for tomorrow",
+    "intent": null,
+    "created_at": "2026-08-10 17:39:55.541566+00"
+  },
+  {
+    "content": "10:30 - 1 -> close finance and ir queries and talk to payments team analysts and also post growth focus message. \n\n1-6 -> close your task list in cafeteria",
+    "intent": null,
+    "created_at": "2026-08-10 17:41:15.347966+00"
+  },
+  {
+    "content": "10:30 - 1 -> close finance and ir queries and talk to payments team analysts and also post growth focus message. \n\n1-6 -> close your task list in cafeteria\n\nThese are the two work blocks we need to set on my calendar for tomorrow. Along with the agenda shared",
+    "intent": null,
+    "created_at": "2026-08-10 17:42:09.190905+00"
+  },
+  {
+    "content": "Whats there tomorrow for gym and meals",
+    "intent": null,
+    "created_at": "2026-08-10 17:49:01.981269+00"
+  },
+  {
+    "content": "I did swimming today. An okay session but learnt back floating. Having trouble with landing.\n\n\nAlso for tomorrows calendar, add gym from morning 7:30 AM. What's the plan for gym tomorrow?",
+    "intent": null,
+    "created_at": "2026-08-10 17:51:11.096163+00"
+  },
+  {
+    "content": "Yes lets queue the podcast. Pick something in my wisdom playlist",
+    "intent": null,
+    "created_at": "2026-08-10 17:54:09.472194+00"
+  },
+  {
+    "content": "Lets go with die with zero",
+    "intent": null,
+    "created_at": "2026-08-10 17:54:52.154983+00"
+  },
+  {
+    "content": "I picked up bike yesterday. And i cleaned home partly, my middle cupboard clean up is remaining",
+    "intent": null,
+    "created_at": "2026-08-11 02:32:21.065793+00"
+  },
+  {
+    "content": "Wednesday evening",
+    "intent": null,
+    "created_at": "2026-08-11 02:40:59.624744+00"
+  },
+  {
+    "content": "Ill do masala omellette and 2 bread for breakfast today, in lunch i will have cabbage sabji and curd and parathe 2, and dinner will be khichdi",
+    "intent": null,
+    "created_at": "2026-08-11 02:57:25.616787+00"
+  },
+  {
+    "content": "I did it. Check hevy and log. Review how the workout wrnt",
+    "intent": null,
+    "created_at": "2026-08-11 05:06:09.838908+00"
+  },
+  {
+    "content": "Add how to get to heaven from belfast as a series to watch. Will be starting today onwards",
+    "intent": null,
+    "created_at": "2026-08-11 08:45:47.303035+00"
+  },
+  {
+    "content": "For breakfast today i just had a tea\nFor lunch i had 2 plain parathas, boondi raita, and cabbage sabzi\nThen another tea",
+    "intent": null,
+    "created_at": "2026-08-11 09:48:16.440769+00"
+  },
+  {
+    "content": "It is not 1930 calories.",
+    "intent": null,
+    "created_at": "2026-08-11 09:53:41.07824+00"
+  },
+  {
+    "content": "Add task for cooker fixing and mixer repair for saturday",
+    "intent": null,
+    "created_at": "2026-08-11 14:03:09.400851+00"
+  },
+  {
+    "content": "Remind me too",
+    "intent": null,
+    "created_at": "2026-08-11 14:03:45.801284+00"
+  },
+  {
+    "content": "Whats on my watchlist",
+    "intent": null,
+    "created_at": "2026-08-11 14:14:25.310661+00"
+  },
+  {
+    "content": "Michael i have watched already",
+    "intent": null,
+    "created_at": "2026-08-11 14:15:06.546339+00"
+  },
+  {
+    "content": "I ate a samosa just now, and a tea",
+    "intent": null,
+    "created_at": "2026-08-11 14:20:36.536601+00"
+  },
+  {
+    "content": "Meal breakdown",
+    "intent": null,
+    "created_at": "2026-08-11 14:23:09.983123+00"
+  },
+  {
+    "content": "Meal breakdown for entire day",
+    "intent": null,
+    "created_at": "2026-08-11 14:23:34.614928+00"
+  },
+  {
+    "content": "Whats all on my readlist",
+    "intent": null,
+    "created_at": "2026-08-11 14:25:39.733084+00"
+  },
+  {
+    "content": "Die with zero - i am no longer reading it. In todays treadmill session i watched the video summary for the book, which was enough. Ill move to the next book. \n\nCan you give me genre and short description of each book, and ratings",
+    "intent": null,
+    "created_at": "2026-08-11 14:27:14.275644+00"
+  },
+  {
+    "content": "Mark die with zero as done. \nAdd catch 22 in readlist, ill begin with that",
+    "intent": null,
+    "created_at": "2026-08-11 14:29:17.408618+00"
+  },
+  {
+    "content": "Now what's in my readlist",
+    "intent": null,
+    "created_at": "2026-08-11 14:30:02.541314+00"
+  },
+  {
+    "content": "Mark die with zero as done. Add a comment that i watched the video and hence skipping it.",
+    "intent": null,
+    "created_at": "2026-08-11 14:30:35.649152+00"
+  },
+  {
+    "content": "For dinner i just ate rice and daal",
+    "intent": null,
+    "created_at": "2026-08-11 15:05:13.218552+00"
+  },
+  {
+    "content": "Meal breakdown",
+    "intent": null,
+    "created_at": "2026-08-11 15:05:56.17891+00"
+  },
+  {
+    "content": "Meal breakdown for entire day",
+    "intent": null,
+    "created_at": "2026-08-11 15:06:23.470668+00"
+  },
+  {
+    "content": "Samosa and tea was in evening and not mid morning. And lunch had a tea too",
+    "intent": null,
+    "created_at": "2026-08-11 15:07:17.33974+00"
+  },
+  {
+    "content": "Meal breakdown for entire day",
+    "intent": null,
+    "created_at": "2026-08-11 15:09:52.304662+00"
+  },
+  {
+    "content": "Why did you change breakfast and dinner?",
+    "intent": null,
+    "created_at": "2026-08-11 15:10:34.592194+00"
+  },
+  {
+    "content": "I ate a cornettos icecream cone today after dinner",
+    "intent": null,
+    "created_at": "2026-08-11 16:12:44.099341+00"
+  },
+  {
+    "content": "Meal breakdown for entire day",
+    "intent": null,
+    "created_at": "2026-08-11 16:13:57.568301+00"
+  },
+  {
+    "content": "That's right, thanks!",
+    "intent": null,
+    "created_at": "2026-08-11 16:29:00.332398+00"
+  },
+  {
+    "content": "Whats my meal plan for tomorrow",
+    "intent": null,
+    "created_at": "2026-08-11 16:29:16.846758+00"
+  },
+  {
+    "content": "All set",
+    "intent": null,
+    "created_at": "2026-08-11 16:32:48.414719+00"
+  },
+  {
+    "content": "I did the ai session today too. Fixing meal items. \n\nAnd I'll read catch 22 before sleep. Good night",
+    "intent": null,
+    "created_at": "2026-08-11 16:34:11.646145+00"
+  },
+  {
+    "content": "Add while my guitar gently weeps in guitar learning playlist. And find a learning video and add to my youtube playlist for guitar learning",
+    "intent": null,
+    "created_at": "2026-08-11 17:25:22.370993+00"
+  },
+  {
+    "content": "I dont think thr youtube video was sabed",
+    "intent": null,
+    "created_at": "2026-08-11 17:27:10.115015+00"
+  },
+  {
+    "content": "What should i watch for treadmill tomorrow",
+    "intent": null,
+    "created_at": "2026-08-11 17:39:39.734491+00"
+  },
+  {
+    "content": "No something from my wisdom youtube playlist",
+    "intent": null,
+    "created_at": "2026-08-11 17:40:17.555052+00"
+  },
+  {
+    "content": "Whats the gym plan for today. And meal plan for today",
+    "intent": null,
+    "created_at": "2026-08-12 01:43:54.742243+00"
+  },
+  {
+    "content": "Add 5 famous rock songs from the 70s in my hugh energy workout playlist in youtube music",
+    "intent": null,
+    "created_at": "2026-08-12 03:32:01.415557+00"
+  },
+  {
+    "content": "There is a high energy workout mix playlist in youtube music. Check",
+    "intent": null,
+    "created_at": "2026-08-12 03:34:06.315521+00"
+  },
+  {
+    "content": "Yes add them in this playlist",
+    "intent": null,
+    "created_at": "2026-08-12 03:35:33.074725+00"
+  },
+  {
+    "content": "Add Rocky movie series to my watchlist. Research what all are there in the series and add all of them",
+    "intent": null,
+    "created_at": "2026-08-12 04:01:01.500889+00"
+  },
+  {
+    "content": "What all is in my watchlist now",
+    "intent": null,
+    "created_at": "2026-08-12 04:02:14.345946+00"
+  },
+  {
+    "content": "Yes clean up Michael and keep only one entry",
+    "intent": null,
+    "created_at": "2026-08-12 04:02:59.690909+00"
+  },
+  {
+    "content": "I did today's workout. Check hevy and review and log",
+    "intent": null,
+    "created_at": "2026-08-12 04:46:01.311811+00"
+  },
+  {
+    "content": "For breakfast today, I am having 2 besan cheelas, ketchup, and a tea",
+    "intent": null,
+    "created_at": "2026-08-12 04:47:53.050104+00"
+  },
+  {
+    "content": "For breakfast today, I ate 2 besan cheelas, ketchup, and a tea",
+    "intent": null,
+    "created_at": "2026-08-12 04:48:25.52969+00"
+  },
+  {
+    "content": "I ate 2 besan cheelas, ketchup, and a tea in breakfast",
+    "intent": null,
+    "created_at": "2026-08-12 04:48:56.549143+00"
+  },
+  {
+    "content": "Meal breakdown",
+    "intent": null,
+    "created_at": "2026-08-12 04:49:44.591068+00"
+  },
+  {
+    "content": "Remind me to buy ghewar on Friday morning",
+    "intent": null,
+    "created_at": "2026-08-12 05:25:03.640873+00"
+  },
+  {
+    "content": "I had this for lunch",
+    "intent": null,
+    "created_at": "2026-08-12 06:03:04.263011+00"
+  },
+  {
+    "content": "Meal breakdown",
+    "intent": null,
+    "created_at": "2026-08-12 06:04:00.416009+00"
+  },
+  {
+    "content": "I had a crispy chicken California burrito bowl for lunch and a diet coke",
+    "intent": null,
+    "created_at": "2026-08-12 08:54:47.090335+00"
+  },
+  {
+    "content": "meal breakdown",
+    "intent": null,
+    "created_at": "2026-08-12 08:56:05.045413+00"
+  },
+  {
+    "content": "Meal breakdown for entire day",
+    "intent": null,
+    "created_at": "2026-08-12 08:56:30.683071+00"
+  },
+  {
+    "content": "You logged burrito bowl twice, i only ate one",
+    "intent": null,
+    "created_at": "2026-08-12 08:56:55.491932+00"
+  },
+  {
+    "content": "Did i log my breakfast today?",
+    "intent": null,
+    "created_at": "2026-08-12 08:57:24.445537+00"
+  },
+  {
+    "content": "I am eating a dahi aloo tikki from bistro and a cold coffee shake",
+    "intent": null,
+    "created_at": "2026-08-12 13:14:09.84334+00"
+  },
+  {
+    "content": "Yes",
+    "intent": null,
+    "created_at": "2026-08-12 13:14:34.169151+00"
+  },
+  {
+    "content": "Meal breakdown for thr day",
+    "intent": null,
+    "created_at": "2026-08-12 13:15:18.735184+00"
+  },
+  {
+    "content": "Whats the meal plan for tomorrow",
+    "intent": null,
+    "created_at": "2026-08-12 16:35:22.820672+00"
+  },
+  {
+    "content": "Add dil chahta h to my watchlist",
+    "intent": null,
+    "created_at": "2026-08-13 01:41:28.468286+00"
+  },
+  {
+    "content": "Morning brief",
+    "intent": "morning_brief_request",
+    "created_at": "2026-08-13 01:48:22.390244+00"
+  },
+  {
+    "content": "Ensuring good gym and not missing skipping, while staying happy at end of day",
+    "intent": null,
+    "created_at": "2026-08-13 01:49:33.895013+00"
+  },
+  {
+    "content": "Undo this.",
+    "intent": null,
+    "created_at": "2026-08-13 01:50:32.418332+00"
+  },
+  {
+    "content": "Add ship of theseus in my watch list",
+    "intent": null,
+    "created_at": "2026-08-13 02:42:03.363786+00"
+  },
+  {
+    "content": "What all is in my watchlist",
+    "intent": null,
+    "created_at": "2026-08-13 02:42:31.244002+00"
+  },
+  {
+    "content": "When did i add ship of theseus to watchlist",
+    "intent": null,
+    "created_at": "2026-08-13 02:43:12.903374+00"
+  },
+  {
+    "content": "I didn't go to gym today. I missed it because i feel tired. Today was supposed to be cardio and abs",
+    "intent": null,
+    "created_at": "2026-08-13 05:03:51.066593+00"
+  },
+  {
+    "content": "Still there a bit tired. But will not leave for work. I have swimming in evening for light workout",
+    "intent": null,
+    "created_at": "2026-08-13 05:06:38.240926+00"
+  },
+  {
+    "content": "For breakfast i had fried idli and tea tofay",
+    "intent": null,
+    "created_at": "2026-08-13 05:30:08.417872+00"
+  },
+  {
+    "content": "I had 2 paratha, bhindi sabji, and boondi raita for lunch",
+    "intent": null,
+    "created_at": "2026-08-13 08:41:39.841487+00"
+  }
+]

@@ -51,6 +51,7 @@ import {
   magnusLinkNotionList,
   magnusListCatalog,
   magnusListItems,
+  magnusLookupListItem,
   magnusRecommendListItems,
   magnusUpdateListItem,
   notionAddItem,
@@ -413,7 +414,7 @@ const TOOLS: Tool[] = [
       properties: {
         action: {
           type: "string",
-          enum: ["list", "load", "create", "add", "remove", "clear", "dedupe", "ensure_magnus"],
+          enum: ["list", "load", "create", "add", "add_batch", "remove", "clear", "dedupe", "ensure_magnus"],
         },
         playlist_id: {
           type: "string",
@@ -428,6 +429,11 @@ const TOOLS: Tool[] = [
           description: "For create. Defaults to private.",
         },
         video_id: { type: "string", description: "For add." },
+        video_ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "For add_batch — multiple video ids; rolls back on partial failure.",
+        },
         url: { type: "string", description: "For add — YouTube URL instead of video_id." },
         query: { type: "string", description: "For add — search and take the top hit." },
         playlist_item_id: {
@@ -503,6 +509,19 @@ const TOOLS: Tool[] = [
         limit: { type: "number", description: "Max rows, default 15." },
       },
       required: ["list"],
+    },
+  },
+  {
+    name: "lookup_list_item",
+    description:
+      "When the user asks when they added something to a list (watchlist, readlist, etc.). Returns the added date from list item metadata.",
+    input_schema: {
+      type: "object",
+      properties: {
+        list: { type: "string", description: "List slug or alias." },
+        title_query: { type: "string", description: "Substring of the item title." },
+      },
+      required: ["list", "title_query"],
     },
   },
   {
@@ -1054,11 +1073,15 @@ async function runTool(
           title: str(input.title),
           description: str(input.description),
           videoId: str(input.video_id),
+          videoIds: Array.isArray(input.video_ids)
+            ? input.video_ids.filter((id): id is string => typeof id === "string")
+            : undefined,
           url: str(input.url),
           query: str(input.query),
           playlistItemId: str(input.playlist_item_id),
           privacyStatus: str(input.privacy_status),
           maxResults: num(input.max_results),
+          userMessage: ctx.rawMessage,
         });
       case "youtube_bookmark":
         return await youtubeBookmarkTool({
@@ -1094,6 +1117,12 @@ async function runTool(
           status: str(input.status),
           openOnly: input.open_only === true,
           limit: num(input.limit),
+        });
+      case "lookup_list_item":
+        return await magnusLookupListItem({
+          userProfileId: ctx.userProfileId,
+          list: String(input.list ?? ""),
+          titleQuery: String(input.title_query ?? ""),
         });
       case "recommend_list_items":
         return await magnusRecommendListItems({

@@ -178,6 +178,45 @@ export async function listItems(input: {
   return `${list.slug} (${items.data.length}):\n${lines.join("\n")}`;
 }
 
+/** Find when a list item was added — used for "when did I add X to watchlist" asks. */
+export async function lookupListItemAddedAt(input: {
+  userProfileId: string;
+  list: string;
+  titleQuery: string;
+}): Promise<string> {
+  const list = await resolveList(input.userProfileId, input.list);
+  if (!list) {
+    return describeUnknownList(input.list);
+  }
+
+  const q = input.titleQuery.trim().toLowerCase();
+  if (!q) {
+    return "Need a title to look up when an item was added.";
+  }
+
+  const items = await queryListItems({
+    userProfileId: input.userProfileId,
+    listId: list.id,
+    limit: 50,
+  });
+  if (!items.ok) {
+    return `Could not read ${list.slug}: ${items.error}`;
+  }
+
+  const matches = items.data.filter((item) => item.title.toLowerCase().includes(q));
+  if (matches.length === 0) {
+    return `No item matching "${input.titleQuery.trim()}" in ${list.slug}.`;
+  }
+  if (matches.length > 1) {
+    const lines = matches.slice(0, 5).map((item) => formatItemLine(item));
+    return `Multiple matches in ${list.slug} — be more specific:\n${lines.join("\n")}`;
+  }
+
+  const item = matches[0]!;
+  const added = item.created_at.slice(0, 10);
+  return `"${item.title}" was added to ${list.slug} on ${added} (id:${item.id}).`;
+}
+
 function extraNumber(extra: Record<string, unknown>, key: string): number | undefined {
   const v = extra[key];
   if (typeof v === "number" && Number.isFinite(v)) {
