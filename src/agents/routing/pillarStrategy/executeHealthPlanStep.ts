@@ -18,6 +18,7 @@ import {
 } from "../../health/nutritionOrchestrated.js";
 import { runNutritionCapability } from "../../health/nutritionAgent.js";
 import { tryHevyWriteAgent } from "../../../pillars/health/workouts/agents/hevyWriteAgent.js";
+import type { MealParserComponent } from "../../health/mealParserAgent.js";
 import { parseMealLogCommand, type MealLogKind, type MealSlot } from "../../../meals/parseMealLogCommand.js";
 import { sanitizeMealLogRawText } from "../../../meals/sanitizeMealLogRawText.js";
 import { isMealPlanningIntent, isMealSlotCorrectionMessage, extractPastMealFoodText, extractMealSlotFromMessage, inferMealLogCandidate, normalizeMealLogText } from "../../../meals/mealLogIntent.js";
@@ -153,6 +154,24 @@ export async function executeHealthPlanStep(
           : mealParsed.kind === "meal"
             ? mealParsed.logKind
             : undefined;
+
+      const rawIntakeComponents = step.args.intake_components;
+      const preParsedComponents = Array.isArray(rawIntakeComponents)
+        ? rawIntakeComponents
+            .filter(
+              (row): row is MealParserComponent =>
+                typeof row === "object" &&
+                row !== null &&
+                typeof (row as MealParserComponent).user_label === "string" &&
+                typeof (row as MealParserComponent).api_query === "string",
+            )
+            .map((row) => ({
+              user_label: row.user_label.trim(),
+              api_query: row.api_query.trim(),
+            }))
+            .filter((row) => row.user_label.length > 0 && row.api_query.length > 0)
+        : undefined;
+
       return runOrchestratedMealLogTurn(
         stepCtx,
         sanitizeMealLogRawText(rawText),
@@ -160,6 +179,10 @@ export async function executeHealthPlanStep(
         {
           mealSlot,
           logKind,
+          preParsedComponents:
+            preParsedComponents && preParsedComponents.length > 0
+              ? preParsedComponents
+              : undefined,
         },
       );
     }

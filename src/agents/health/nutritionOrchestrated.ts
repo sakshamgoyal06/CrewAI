@@ -14,6 +14,7 @@ import {
   extractMealComponentsFromMessage,
   reconcileParserWithApiResults,
   summarizeEstimateForReconcile,
+  type MealParserComponent,
 } from "./mealParserAgent.js";
 import { describeMealFromPhoto } from "../../meals/mealPhotoEstimate.js";
 import { downloadTelegramPhoto } from "../../meals/telegramPhotoDownload.js";
@@ -70,15 +71,24 @@ export async function runOrchestratedMealLogTurn(
   ctx: AgentContext,
   rawMealText: string,
   fullUserMessage: string,
-  options?: { mealSlot?: MealSlot; logKind?: MealLogKind },
+  options?: {
+    mealSlot?: MealSlot;
+    logKind?: MealLogKind;
+    preParsedComponents?: MealParserComponent[];
+  },
 ): Promise<AgentResult> {
   try {
-    const parsed = await extractMealComponentsFromMessage({
-      fullUserMessage,
-      rawMealText,
-      memoryBlock: ctx.memoryBlock,
-    });
-    let components = parsed.components;
+    let components: MealParserComponent[];
+    if (options?.preParsedComponents?.length) {
+      components = options.preParsedComponents;
+    } else {
+      const parsed = await extractMealComponentsFromMessage({
+        fullUserMessage,
+        rawMealText,
+        memoryBlock: ctx.memoryBlock,
+      });
+      components = parsed.components;
+    }
 
     let estimates = await estimateMealComponentsInParallel(components);
     let perSummaries = components.map((c, i) => summarizeEstimateForReconcile(c, estimates[i]!));
@@ -133,6 +143,7 @@ export async function runOrchestratedMealLogTurn(
         meal_log: true,
         meal_parser_pipeline: true,
         orchestrated_meal_log: true,
+        meal_intake_parser: Boolean(options?.preParsedComponents?.length),
         meal_session_id: done.mealSessionId,
         meal_log_compose: done.compose,
         pillar_compose: false,

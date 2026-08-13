@@ -126,7 +126,7 @@ export function splitFullDayMealRecountSegments(message: string): FullDayMealSeg
   return segments.length >= 2 ? segments : [];
 }
 
-/** Deterministic multi-step plan for a full-day eating recount (replaces stacked logs). */
+/** @deprecated Use meal intake parser (`mealIntakeParserAgent`) — regex splitting is retired. */
 export function buildFullDayMealRecountPlan(message: string): PillarExecutionPlan | null {
   const segments = splitFullDayMealRecountSegments(message);
   if (segments.length < 2) {
