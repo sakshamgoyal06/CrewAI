@@ -3,7 +3,6 @@
  */
 import { localDateKey } from "../../../nutrition/localDate.js";
 import { softDeleteSessionsForLocalDate } from "../../../nutrition/store/mealHistoryStore.js";
-import { isFullDayMealRecount } from "../../../meals/mealDayRecount.js";
 import type { AgentContext, AgentResult } from "../../types.js";
 import {
   composePillarPlanReply,
@@ -20,13 +19,12 @@ export async function executePillarPlan(
   plan: PillarExecutionPlan,
   extraMeta?: Record<string, unknown>,
 ): Promise<AgentResult> {
-  const originalMessage = ctx.originalUserMessage?.trim() || ctx.rawMessage.trim();
   const isMultiMealLog =
     pillar === "HEALTH" &&
     plan.steps.length > 1 &&
     plan.steps.every((s) => s.capability === "meal_log" || s.capability === "meal_log_correct");
 
-  if (isMultiMealLog && isFullDayMealRecount(originalMessage)) {
+  if (isMultiMealLog && plan.replace_today_log === true) {
     const localDate = localDateKey(new Date(), ctx.timezone);
     await softDeleteSessionsForLocalDate(ctx.userProfileId, localDate, ctx.timezone);
   }
@@ -49,8 +47,12 @@ export async function executePillarPlan(
   const skipCompose =
     stepResults.some((s) => s.metadata?.pillar_compose === false) &&
     stepResults.every((s) => s.metadata?.pillar_compose === false);
+  // Multi-meal logs already format per-step replies; still merge via deterministic compose
+  // (saved metadata + DB day total) instead of stacking duplicate "Meal logged" blocks.
+  const shouldCompose =
+    pillarPlanComposeEnabled() && (!skipCompose || isMultiMealLog);
 
-  if (!pillarPlanComposeEnabled() || skipCompose) {
+  if (!shouldCompose) {
     finalText =
       stepResults.length === 1
         ? (stepResults[0]?.text ?? "…")
@@ -60,7 +62,7 @@ export async function executePillarPlan(
   }
 
   const mergedMetadata: Record<string, unknown> = {
-    magnus_voice_finalized: pillarPlanComposeEnabled() && !skipCompose,
+    magnus_voice_finalized: shouldCompose,
   };
   const mealSessionIds: string[] = [];
   for (const s of stepResults) {

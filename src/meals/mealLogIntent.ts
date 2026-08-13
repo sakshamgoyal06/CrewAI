@@ -1,5 +1,6 @@
 import { isMealCalorieDisputeMessage } from "./mealCalorieDispute.js";
 import { sanitizeMealLogRawText } from "./sanitizeMealLogRawText.js";
+import { parseMealLogCommand } from "./parseMealLogCommand.js";
 import type { MealSlot } from "./parseMealLogCommand.js";
 
 const PAST_MEAL_RE =
@@ -40,6 +41,18 @@ export function isMealPlanningIntent(message: string): boolean {
     return false;
   }
   return FUTURE_MEAL_RE.test(t);
+}
+
+/** User is logging food they ate (not reading history or planning future meals). */
+export function isMealLogWriteIntent(message: string): boolean {
+  const t = message.trim();
+  if (!t || isMealPlanningIntent(t)) {
+    return false;
+  }
+  if (parseMealLogCommand(t).kind === "meal") {
+    return true;
+  }
+  return PAST_MEAL_RE.test(t) || PRESENT_MEAL_RE.test(t);
 }
 
 /** Parser/step scaffolding — not food the user ate. */

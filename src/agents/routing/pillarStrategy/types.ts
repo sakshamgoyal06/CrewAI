@@ -13,6 +13,8 @@ export type PillarExecutionPlan = {
   steps: PillarPlanStep[];
   confidence: number;
   parser: "llm" | "deterministic";
+  /** Meal intake: soft-delete today's logs before saving (full-day recount). */
+  replace_today_log?: boolean;
 };
 
 /** @deprecated Alias — strategy is now a multi-step plan. */
