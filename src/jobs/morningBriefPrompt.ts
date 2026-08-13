@@ -14,7 +14,7 @@ Include ONLY sections that have data in the JSON context:
 3. **Today's plan** — bullet list of todayCommitments (time + title when time exists). Max 5 items. Skip if empty.
 4. **Meals** — bullet list of todayMeals (slot: title). Skip if empty.
 5. **Heads up** — only items in headsUp (yesterday misses, major reminders). Max 2. No guilt.
-6. **Intention** — ONLY when hasMorningIntentionToday is false: end with ONE short question — "What's the one thing that makes today a win?" OR ask energy 1–5. Do not ask if they already logged morning intention today.
+6. **Intention** — ONLY when hasMorningIntentionToday is false: end with ONE short question — "What's the one thing that makes today a win?" Tell them you'll confirm before saving. Do not ask if they already logged morning intention today.
 
 Do NOT include: 7-day trends, KPI deep dives, pattern analysis, pillar-by-pillar essays, joy tank lectures, or invented tasks. Omit empty sections entirely — shorter is better.`;
 

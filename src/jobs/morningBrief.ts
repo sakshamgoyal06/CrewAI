@@ -12,6 +12,7 @@ import {
   fetchMorningBriefContext,
 } from "./morningBriefContext.js";
 import { morningBriefFeatureEnabled } from "./morningBriefEnv.js";
+import { armWinConditionPendingAfterBrief } from "./handleWinConditionPending.js";
 import { logger } from "../logger.js";
 
 const MODEL = "claude-sonnet-4-6";
@@ -172,6 +173,10 @@ export async function runMorningBrief(
         trigger,
         intent: "morning_brief",
       });
+    }
+
+    if (!bundle.hasMorningIntentionToday) {
+      await armWinConditionPendingAfterBrief(input.userProfileId);
     }
   }
 

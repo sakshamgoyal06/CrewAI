@@ -77,6 +77,11 @@ vi.mock("../projects/projectSessionPrelude.js", () => ({
   tryResolveActiveProjectSessionTurn: vi.fn().mockResolvedValue({ handled: false }),
 }));
 
+vi.mock("../jobs/handleWinConditionPending.js", () => ({
+  handleWinConditionPendingTurn: vi.fn().mockResolvedValue({ handled: false }),
+  armWinConditionPendingAfterBrief: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("./routing/pillarStrategy/buildRoutingHints.js", () => ({
   buildRoutingHints: vi.fn().mockResolvedValue({
     has_meal_photo: false,
