@@ -8,6 +8,10 @@
 import { logger } from "../../logger.js";
 import { loggableError } from "../../util/loggableError.js";
 import { recordMagnusDailyLog } from "../../tools/dailyLog.js";
+import {
+  formatReconcileSummary,
+  reconcileEventCompletionsFromText,
+} from "../../events/eventCompletionReconcile.js";
 import { updateEvent } from "../../events/eventStore.js";
 import {
   appendParagraphBlocks,
@@ -111,7 +115,16 @@ export async function logNote(input: {
     });
   }
 
+  const reconcile = await reconcileEventCompletionsFromText({
+    userProfileId: input.userProfileId,
+    text,
+    timeZone: input.timeZone,
+    completedAt: explicitDate ? when : undefined,
+  });
+  const reconcileSummary = formatReconcileSummary(reconcile);
+
   const where = notionPageId ? " (saved and mirrored to Notion)" : "";
   const attached = linkedTitle ? ` Attached to "${linkedTitle}".` : "";
-  return `Logged for ${dateKey}${where}.${attached}`;
+  const reconciled = reconcileSummary ? ` ${reconcileSummary}` : "";
+  return `Logged for ${dateKey}${where}.${attached}${reconciled}`;
 }

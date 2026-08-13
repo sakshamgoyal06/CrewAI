@@ -4,6 +4,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { reconcileFromRecentJournalLogs } from "../events/eventCompletionReconcile.js";
 import { loadMealProactiveSnapshot } from "../nutrition/mealProactiveSignals.js";
 import { startOfLocalDay } from "../events/eventTime.js";
 import { lifeosContextEnabled } from "../config/lifeosContext.js";
@@ -230,6 +231,21 @@ export async function fetchMorningBriefContext(
         .order("created_at", { ascending: false })
         .limit(12),
     )) ?? [];
+
+  // Close commitments the user already reported in recent journals before the missed sweep runs.
+  const journalBodies = magnusDailyLogs
+    .map((row) => (row && typeof row === "object" ? (row as { body?: string }).body : null))
+    .filter((body): body is string => typeof body === "string" && body.trim().length > 0);
+  if (journalBodies.length > 0) {
+    try {
+      await reconcileFromRecentJournalLogs({
+        userProfileId,
+        bodies: journalBodies,
+      });
+    } catch (err) {
+      logger.debug({ err: String(err) }, "journal event reconcile skipped");
+    }
+  }
 
   // Write off yesterday's untouched commitments before reading, so the brief talks about a log
   // that matches reality rather than one full of stale "planned" rows.
