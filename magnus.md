@@ -187,8 +187,8 @@ shell or `.env`.
    `create_recurring_reminder`). Relative time parsing for one-shots (`tomorrow 8pm`, `in 30 minutes`).
    LLM gate+compose (Haiku) for evening journal, drift guard, midday encouragement, stale list nudges,
    and chat inactivity; quiet hours 23:00–06:00 local; adaptive cap 3/day (scheduled + user-asked
-   reminders exempt). Manual brief: say `morning brief` or
-   `/morningbrief`. Outbound uses HTML formatting and is logged to `magnus_chat_messages` with
+   reminders exempt).    Manual brief: say `morning brief` or
+   `/morningbrief`. After the brief, the next reply to the win question goes through a confirm loop (yes → log `morning_intention` on check-in; no → try again; explicit skip ends the loop). Outbound uses HTML formatting and is logged to `magnus_chat_messages` with
    `metadata.proactive`.
 10. **Event log** — Magnus tools `log_event`, `update_event`, `reschedule_event`, `list_events` write
    to `magnus_events`. Moving a commitment closes the old row and opens a linked replacement (never
@@ -340,4 +340,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-13 (Projects migration; event completion reconcile; rhythm cadence + short Morning Brief)
+**Last updated:** 2026-08-13 (Morning brief win-condition confirm loop before logging)
