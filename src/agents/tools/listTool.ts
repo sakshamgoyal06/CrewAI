@@ -9,6 +9,7 @@ import {
   linkNotionList,
   listCatalog,
   listItems,
+  lookupListItemAddedAt,
   logDailyCheckin,
   recommendListItems,
   updateListItemCompat,
@@ -62,6 +63,14 @@ export async function magnusUpdateListItem(input: {
     notes: input.notes,
     title: input.title,
   });
+}
+
+export async function magnusLookupListItem(input: {
+  userProfileId: string;
+  list: string;
+  titleQuery: string;
+}): Promise<string> {
+  return lookupListItemAddedAt(input);
 }
 
 export async function magnusListCatalog(input: { userProfileId: string }): Promise<string> {

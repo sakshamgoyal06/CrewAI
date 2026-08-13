@@ -40,6 +40,10 @@ the answer.
 Use routing_hints when present:
 - explicit_meal_log or looks_like_meal_log_read → HEALTH (logging food eaten, or reading **logged** meal history/macros — never the meal **plan** menu)
 - looks_like_youtube_action or looks_like_magnus_tool_action or looks_like_magnus_tool_continuation → GENERAL (Magnus has tools)
+- holistic_day_ask → GENERAL (whole-day schedule: calendar + commitments + meals — use day_overview, not meal plan alone)
+- saved_media_pick → GENERAL (pick from saved playlist/watchlist for treadmill/gym — not taste coaching in HAPPINESS)
+- schedule_accuracy_challenge → GENERAL (user disputes schedule — read calendar, do not guess)
+- compound_action → GENERAL (multiple distinct asks in one message — multi-step plan: calendar + youtube, gym + meal plan, etc.)
 - looks_like_wealth_portfolio_read → WEALTH when asking to read/show portfolio (not a Magnus list action)
 - looks_like_health_fitness_read → HEALTH when asking to read/review workouts or Hevy (not a Magnus tool action)
 

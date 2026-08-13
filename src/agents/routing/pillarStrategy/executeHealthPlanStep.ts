@@ -2,7 +2,7 @@
  * Execute one HEALTH plan step — loads user context and runs the matching pipeline.
  */
 import type { AgentContext, AgentResult } from "../../types.js";
-import { softDeleteMostRecentSession } from "../../../nutrition/store/mealHistoryStore.js";
+import { softDeleteMostRecentSession, getSessionsForLocalDate, updateMealSessionSlot } from "../../../nutrition/store/mealHistoryStore.js";
 import { runAlternatesRecommenderAgent } from "../../health/alternatesRecommenderAgent.js";
 import { runEnergyAgent } from "../../health/energyAgent.js";
 import { HEALTH_GENERIC_ACK } from "../../health/healthConstants.js";
@@ -22,6 +22,7 @@ import type { MealParserComponent } from "../../health/mealParserAgent.js";
 import { parseMealLogCommand, type MealLogKind, type MealSlot } from "../../../meals/parseMealLogCommand.js";
 import { sanitizeMealLogRawText } from "../../../meals/sanitizeMealLogRawText.js";
 import { isMealPlanningIntent, isMealSlotCorrectionMessage, extractPastMealFoodText, extractMealSlotFromMessage, inferMealLogCandidate, normalizeMealLogText } from "../../../meals/mealLogIntent.js";
+import { resolveMealSlotCorrection } from "../../../meals/mealSlotCorrection.js";
 import {
   clearMealLogPending,
   formatMealLogConfirmationPrompt,
@@ -194,9 +195,34 @@ export async function executeHealthPlanStep(
       const original = ctx.originalUserMessage?.trim() || ctx.rawMessage.trim();
       if (isMealSlotCorrectionMessage(original)) {
         const today = localDateKey(new Date(), stepCtx.timezone);
+        const sessions = await getSessionsForLocalDate(stepCtx.userProfileId, today);
+        const correction = resolveMealSlotCorrection(original, sessions);
+        if (correction.ok) {
+          const updated = await updateMealSessionSlot(
+            stepCtx.userProfileId,
+            correction.mealSessionId,
+            correction.toSlot,
+            stepCtx.timezone,
+          );
+          if (updated.ok) {
+            const dayView = await executeMealHistoryCapability(stepCtx, "meal_day_breakdown");
+            return {
+              text: `${dayView.text}\n\nUpdated **${correction.label}** from ${correction.fromSlot} → **${correction.toSlot}**.`,
+              metadata: {
+                specialist: "MealHistory",
+                meal_log: false,
+                meal_slot_updated: true,
+                meal_session_id: correction.mealSessionId,
+                pillar_compose: false,
+                magnus_voice_finalized: true,
+                local_date: today,
+              },
+            };
+          }
+        }
         const dayView = await executeMealHistoryCapability(stepCtx, "meal_day_breakdown");
         return {
-          text: `${dayView.text}\n\nI can't auto-fix meal **timing** from that message — it would corrupt your log. Send a **full-day recount** to replace today's entries, e.g.:\n\n"For breakfast I had tea. For lunch parathas, raita, sabzi and tea. Evening samosa and tea. Dinner rice and daal."`,
+          text: `${dayView.text}\n\nI couldn't match that timing correction to a logged meal. Name the food or send a **full-day recount** to replace today's entries.`,
           metadata: {
             specialist: "MealHistory",
             meal_log: false,

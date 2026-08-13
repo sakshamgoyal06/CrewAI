@@ -1,5 +1,6 @@
 import { anthropic } from "../../../tools/clients.js";
 import { logger } from "../../../logger.js";
+import { MEAL_DATA_ARCHITECTURE, MEAL_PLAN_VS_LOG_RULES } from "../../../meals/mealPlanVsLog.js";
 import { loggableError } from "../../../util/loggableError.js";
 import {
   formatCatalogForPrompt,
@@ -8,7 +9,6 @@ import {
 } from "./catalogs/index.js";
 import type { PillarExecutionPlan, PillarId, PillarPlanStep, RoutingHints } from "./types.js";
 import { planFromSingleCapability } from "./types.js";
-import { MEAL_DATA_ARCHITECTURE, MEAL_PLAN_VS_LOG_RULES } from "../../../meals/mealPlanVsLog.js";
 
 const PARSER_MODEL = process.env.MAGNUS_PILLAR_STRATEGY_MODEL?.trim() || "claude-haiku-4-5";
 
@@ -120,6 +120,7 @@ GENERAL-specific:
 - **pillar_consultation** when the turn needs Magnus tools AND pillar specialist depth in one reply. Set args.pillars to subset of ["HEALTH","WEALTH","HAPPINESS","WISDOM"]. Examples: log check-in + review workout, calendar edit + nutrition advice, list update + portfolio context.
 - **calendar** only when they want Google Calendar / schedule **without** also wanting meals and commitments woven in.
 - Holistic day asks are NEVER satisfied by conversation alone — use day_overview.
+- When routing_hints.compound_action=true, emit **multiple steps** in logical order (e.g. calendar then youtube, gym plan then meal plan) — do not stop after the first sub-request.
 - Use routing_hints integration flags (google_calendar_connected, etc.) — if calendar not connected, day_overview still runs but calendar section may be empty.
 - **project_setup** when starting or **clearly continuing** a bounded initiative draft (lock, revise checklist, confirm scope). Also when user starts job search / trip / transformation / skill sprint / event planning. NOT for daily gym, meals, calendar, or day_overview — **active_project_session=true does NOT hijack operations**. If the user asks about tomorrow's schedule, gym, or meals while a draft exists, use day_overview / calendar / HEALTH — abandon is handled separately before this parser runs.
 - **project_status** when user asks progress on an active project ("how's job search", "what's left on Bali").
@@ -163,6 +164,52 @@ function fallbackPlan(pillar: PillarId): PillarExecutionPlan {
   return planFromSingleCapability(defaults[pillar], {}, 0, "deterministic");
 }
 
+function dateHintFromMessage(message: string): string {
+  const t = message.toLowerCase();
+  if (/\btomorrow\b/.test(t)) {
+    return "tomorrow";
+  }
+  if (/\byesterday\b/.test(t)) {
+    return "yesterday";
+  }
+  return "today";
+}
+
+function deterministicPlanFromHints(
+  pillar: PillarId,
+  userMessage: string,
+  hints: RoutingHints,
+): PillarExecutionPlan | null {
+  if (pillar !== "GENERAL") {
+    return null;
+  }
+  if (hints.holistic_day_ask || hints.schedule_accuracy_challenge) {
+    return planFromSingleCapability(
+      "day_overview",
+      { date_hint: dateHintFromMessage(userMessage), force_calendar_refresh: true },
+      0.95,
+      "deterministic",
+    );
+  }
+  if (hints.saved_media_pick) {
+    if (/\bwatchlist\b/i.test(userMessage)) {
+      return planFromSingleCapability(
+        "lists",
+        { action: "recommend", source: "watchlist" },
+        0.9,
+        "deterministic",
+      );
+    }
+    return planFromSingleCapability(
+      "youtube",
+      { action: "recommend_from_saved", context: "activity" },
+      0.9,
+      "deterministic",
+    );
+  }
+  return null;
+}
+
 /**
  * LLM parser: message + hints only — no user data. Returns an ordered execution plan.
  */
@@ -171,6 +218,11 @@ export async function parsePillarExecutionPlan(
   userMessage: string,
   hints: RoutingHints,
 ): Promise<PillarExecutionPlan> {
+  const fromHints = deterministicPlanFromHints(pillar, userMessage, hints);
+  if (fromHints) {
+    return fromHints;
+  }
+
   const userPayload = JSON.stringify(
     {
       message: userMessage.trim(),

@@ -4,6 +4,7 @@
 import type { AgentContext } from "../types.js";
 import { enforceActionIntegrity, type ToolOutcome } from "./actionIntegrity.js";
 import { finalizeMagnusVoice } from "./finalizeMagnusVoice.js";
+import { registerReversibleAction } from "./reversibleAction.js";
 
 export type ActionLedgerEntry = {
   agent: string;
@@ -72,6 +73,27 @@ function resolveAgentLabel(meta: Record<string, unknown>, intent?: string): stri
   return "GENERAL";
 }
 
+async function persistReversibleAction(
+  userProfileId: string,
+  meta: Record<string, unknown>,
+): Promise<void> {
+  const mealSessionId = meta.meal_session_id;
+  if (meta.meal_log === true && typeof mealSessionId === "string" && mealSessionId.trim()) {
+    const raw =
+      typeof meta.meal_log_raw === "string"
+        ? meta.meal_log_raw
+        : typeof meta.meal_description === "string"
+          ? meta.meal_description
+          : "last meal";
+    await registerReversibleAction(userProfileId, {
+      kind: "meal_undo",
+      summary: raw.slice(0, 80),
+      payload: { meal_session_id: mealSessionId },
+      createdAt: new Date().toISOString(),
+    });
+  }
+}
+
 export async function vetAndCompose(input: {
   ctx: AgentContext;
   text: string;
@@ -96,6 +118,8 @@ export async function vetAndCompose(input: {
     claims_verified: failedTools.length === 0 || !integrity.corrected,
     failed_tools: failedTools,
   };
+
+  await persistReversibleAction(input.ctx.userProfileId, integrity.metadata);
 
   return {
     text: integrity.text,

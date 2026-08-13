@@ -40,6 +40,10 @@ const EMPTY_HINTS = {
   hevy_connected: false,
   zerodha_connected: false,
   recent_turns: [],
+  holistic_day_ask: false,
+  saved_media_pick: false,
+  schedule_accuracy_challenge: false,
+  compound_action: false,
 };
 
 describe("parsePillarExecutionPlan", () => {

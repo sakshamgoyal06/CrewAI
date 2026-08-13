@@ -82,6 +82,10 @@ vi.mock("../jobs/handleWinConditionPending.js", () => ({
   armWinConditionPendingAfterBrief: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("./routing/handleReversibleAction.js", () => ({
+  handleReversibleActionTurn: vi.fn().mockResolvedValue({ handled: false }),
+}));
+
 vi.mock("./routing/pillarStrategy/buildRoutingHints.js", () => ({
   buildRoutingHints: vi.fn().mockResolvedValue({
     has_meal_photo: false,
@@ -104,6 +108,10 @@ vi.mock("./routing/pillarStrategy/buildRoutingHints.js", () => ({
     hevy_connected: false,
     zerodha_connected: false,
     recent_turns: [],
+    holistic_day_ask: false,
+    saved_media_pick: false,
+    schedule_accuracy_challenge: false,
+    compound_action: false,
   }),
 }));
 

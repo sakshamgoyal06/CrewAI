@@ -11,6 +11,7 @@ import {
 } from "../../integrations/youtube/auth.js";
 import {
   addToPlaylist,
+  addVideosToPlaylistBatch,
   createPlaylist,
   getPlaylist,
   getVideo,
@@ -33,7 +34,7 @@ import {
   removeCueItem,
   upsertBookmark,
 } from "../../youtube/youtubeStore.js";
-import { resolvePlaylistRef, formatPlaylistDisambiguation } from "../../youtube/playlistResolve.js";
+import { resolvePlaylistRef, formatPlaylistDisambiguation, prefersYoutubeAccountPlaylist } from "../../youtube/playlistResolve.js";
 
 const NOT_CONFIGURED =
   "YouTube is not connected for this user. Ask me to connect Google (one link covers Calendar and YouTube), or set YOUTUBE_API_KEY on the host for search-only. See docs/YOUTUBE.md.";
@@ -118,10 +119,11 @@ async function resolveVideo(input: {
 async function resolvePlaylistForTool(
   userProfileId: string,
   playlistId: string | undefined,
-  options?: { requireExplicit?: boolean; actionHint?: string },
+  options?: { requireExplicit?: boolean; actionHint?: string; userMessage?: string },
 ): Promise<{ playlistId: string; title: string } | { error: string }> {
   const resolved = await resolvePlaylistRef(userProfileId, playlistId, {
     requireExplicit: options?.requireExplicit,
+    youtubeAccountOnly: prefersYoutubeAccountPlaylist(playlistId, options?.userMessage),
   });
   if (!resolved.ok) {
     if (resolved.suggestions?.length || resolved.listAll) {
@@ -253,11 +255,13 @@ export async function youtubePlaylistTool(input: {
   title?: string;
   description?: string;
   videoId?: string;
+  videoIds?: string[];
   url?: string;
   query?: string;
   playlistItemId?: string;
   privacyStatus?: string;
   maxResults?: number;
+  userMessage?: string;
 }): Promise<string> {
   if (!youtubeConfigured()) {
     return NOT_CONFIGURED;
@@ -337,6 +341,7 @@ export async function youtubePlaylistTool(input: {
       const resolved = await resolvePlaylistForTool(uid, input.playlistId, {
         requireExplicit: !input.playlistId?.trim(),
         actionHint: "add to",
+        userMessage: input.userMessage,
       });
       if ("error" in resolved) {
         return `Could not resolve playlist: ${resolved.error}`;
@@ -357,6 +362,47 @@ export async function youtubePlaylistTool(input: {
         userProfileId: uid,
       });
       return `Added "${added.title}" to playlist "${resolved.title}" [playlist_id: ${playlistId}] [video_id: ${added.videoId}].`;
+    }
+    case "add_batch":
+    case "add_many": {
+      const resolved = await resolvePlaylistForTool(uid, input.playlistId, {
+        requireExplicit: !input.playlistId?.trim(),
+        actionHint: "add to",
+        userMessage: input.userMessage,
+      });
+      if ("error" in resolved) {
+        return `Could not resolve playlist: ${resolved.error}`;
+      }
+      const playlistId = resolved.playlistId;
+      const videoIds = [...(input.videoIds ?? [])];
+      if (input.videoId?.trim()) {
+        videoIds.push(input.videoId.trim());
+      }
+      if (videoIds.length === 0 && input.query?.trim()) {
+        const hits = await searchVideos({
+          query: input.query.trim(),
+          maxResults: input.maxResults ?? 5,
+          userProfileId: uid,
+        });
+        videoIds.push(...hits.map((h) => h.videoId));
+      }
+      if (videoIds.length === 0) {
+        return "Batch add needs video_ids or a search query.";
+      }
+      const batch = await addVideosToPlaylistBatch({
+        playlistId,
+        videoIds,
+        userProfileId: uid,
+      });
+      if (!batch.ok) {
+        const rolled =
+          batch.rolledBackCount > 0
+            ? ` Rolled back ${batch.rolledBackCount} prior add(s).`
+            : "";
+        return `Could not add all videos to "${resolved.title}" — failed on ${batch.failedVideoId}: ${batch.error}.${rolled}`;
+      }
+      const titles = batch.added.map((a) => a.title).join(", ");
+      return `Added ${batch.added.length} video(s) to "${resolved.title}": ${titles} [playlist_id: ${playlistId}].`;
     }
     case "clear":
     case "empty": {
@@ -399,7 +445,7 @@ export async function youtubePlaylistTool(input: {
       return "Removed that item from the playlist.";
     }
     default:
-      return `Unknown playlist action "${input.action}". Use list, load, create, add, remove, clear, dedupe, or ensure_magnus.`;
+      return `Unknown playlist action "${input.action}". Use list, load, create, add, add_batch, remove, clear, dedupe, or ensure_magnus.`;
   }
 }
 
