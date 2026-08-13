@@ -49,8 +49,12 @@ export async function executePillarPlan(
   const skipCompose =
     stepResults.some((s) => s.metadata?.pillar_compose === false) &&
     stepResults.every((s) => s.metadata?.pillar_compose === false);
+  // Multi-meal logs already format per-step replies; still merge via deterministic compose
+  // (saved metadata + DB day total) instead of stacking duplicate "Meal logged" blocks.
+  const shouldCompose =
+    pillarPlanComposeEnabled() && (!skipCompose || isMultiMealLog);
 
-  if (!pillarPlanComposeEnabled() || skipCompose) {
+  if (!shouldCompose) {
     finalText =
       stepResults.length === 1
         ? (stepResults[0]?.text ?? "…")
@@ -60,7 +64,7 @@ export async function executePillarPlan(
   }
 
   const mergedMetadata: Record<string, unknown> = {
-    magnus_voice_finalized: pillarPlanComposeEnabled() && !skipCompose,
+    magnus_voice_finalized: shouldCompose,
   };
   const mealSessionIds: string[] = [];
   for (const s of stepResults) {
