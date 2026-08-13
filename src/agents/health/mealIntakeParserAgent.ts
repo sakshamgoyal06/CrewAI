@@ -95,7 +95,8 @@ function parseMealIntakeJson(o: unknown): MealIntakeParseResult | null {
     if (mealText.length < 2) {
       return null;
     }
-    if (!isComponentList(meal)) {
+    const componentsRaw = meal.components;
+    if (!isComponentList({ components: componentsRaw })) {
       return null;
     }
 
@@ -115,7 +116,7 @@ function parseMealIntakeJson(o: unknown): MealIntakeParseResult | null {
       mealSlot,
       logKind,
       mealText,
-      components: normalizeParserComponents(meal.components),
+      components: normalizeParserComponents(componentsRaw as MealParserComponent[]),
     });
   }
 
