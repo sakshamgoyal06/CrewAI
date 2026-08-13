@@ -5,9 +5,9 @@ vi.mock("./mealPlanningAgent.js", () => ({
 }));
 
 import { tryMealPlanningAgent } from "./mealPlanningAgent.js";
-import { matchesMealPlannerMessage, tryMealPlannerAgent } from "./mealPlannerAgent.js";
+import { matchesMealPlannerMessage } from "./mealPlannerPatterns.js";
 
-describe("mealPlannerAgent", () => {
+describe("meal planning triggers", () => {
   beforeEach(() => {
     vi.mocked(tryMealPlanningAgent).mockReset();
   });
@@ -16,7 +16,7 @@ describe("mealPlannerAgent", () => {
     expect(matchesMealPlannerMessage("Can you give me a meal plan for the week?")).toBe(true);
   });
 
-  it("tryMealPlannerAgent delegates to meal planning journey", async () => {
+  it("tryMealPlanningAgent runs the multi-turn planning journey", async () => {
     vi.mocked(tryMealPlanningAgent).mockResolvedValue({
       text: "draft",
       metadata: { specialist: "MealPlanner", meal_plan_drafted: true },
@@ -28,7 +28,7 @@ describe("mealPlannerAgent", () => {
       rawMessage: "weekly menu",
       intent: "HEALTH" as const,
     };
-    const out = await tryMealPlannerAgent(ctx);
+    const out = await tryMealPlanningAgent(ctx);
     expect(tryMealPlanningAgent).toHaveBeenCalledWith(ctx);
     expect(out?.metadata?.meal_plan_drafted).toBe(true);
   });

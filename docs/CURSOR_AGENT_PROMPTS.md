@@ -229,7 +229,7 @@ Magnus — `src/agents/wisdom/buildShipAgent.ts` + tests + barrel.
 
 **### Prompt**
 
-Magnus — `src/agents/health/mealPlannerAgent.ts` + tests.
+Magnus — `src/agents/health/mealPlanningAgent.ts` + `mealPlannerPatterns.ts` + tests.
 
 **Critical:** This is **not** the meal **logger** (`mealLogPipeline` / commands). It suggests **meal ideas** for a day or week given constraints in the user message; may reference existing env keys in comments only (CalorieNinjas etc.) but must not duplicate logging pipeline.
 
