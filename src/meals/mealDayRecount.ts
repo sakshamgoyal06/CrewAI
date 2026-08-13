@@ -17,6 +17,13 @@ const SNACK_LEAD_RE =
   /^(?:then|also|and\s+then|later)\s+(?:i\s+)?(?:had|ate|just\s+had)?\s*(?:a\s+|an\s+)?/i;
 const ANOTHER_TEA_RE = /^(?:then|also|and\s+then)\s+(?:another|a)\s+tea\b/i;
 
+/**
+ * Boundary between eating occasions on one line — "For lunch I had…", not trailing "…for lunch".
+ * Must stay aligned with BREAKFAST_/LUNCH_/DINNER_LEAD_RE (had/ate/was after the slot).
+ */
+const MEAL_OCCASION_SPLIT_RE =
+  /(?=\bfor\s+(?:breakfast|lunch|dinner)\b(?:\s+today|\s+this\s+morning|tonight)?\s*(?:i\s+)?(?:just\s+)?(?:had|ate|only\s+had|was)\b)/i;
+
 /** User recounts what they ate across multiple meals in one message (replace today's log, don't stack). */
 export function isFullDayMealRecount(message: string): boolean {
   return splitFullDayMealRecountSegments(message).length >= 2;
@@ -82,7 +89,7 @@ export function splitFullDayMealRecountSegments(message: string): FullDayMealSeg
     .split(/\n+/)
     .flatMap((line) =>
       line
-        .split(/(?=\bfor\s+(?:breakfast|lunch|dinner)\b)/i)
+        .split(MEAL_OCCASION_SPLIT_RE)
         .map((s) => s.trim())
         .filter((s) => s.length > 0),
     )
