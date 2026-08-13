@@ -51,6 +51,27 @@ export type PlaylistResolveResult =
       requestedName?: string;
     };
 
+export type PlaylistResolveOptions = {
+  requireExplicit?: boolean;
+  /** Skip Magnus pillar aliases; match only the user's YouTube account playlists by title. */
+  youtubeAccountOnly?: boolean;
+};
+
+/** User asked for a YouTube / YT Music account playlist — not a Magnus pillar alias. */
+export function prefersYoutubeAccountPlaylist(
+  playlistRef: string | undefined,
+  userMessage?: string,
+): boolean {
+  if (userMessage && /\b(?:youtube\s*music|yt\s*music|ytmusic)\b/i.test(userMessage)) {
+    return true;
+  }
+  const raw = playlistRef?.trim();
+  if (!raw || PLAYLIST_ID_RE.test(raw)) {
+    return false;
+  }
+  return !normalizeAlias(raw);
+}
+
 function normalizeAlias(raw: string): string | null {
   const t = raw.trim().toLowerCase();
   if (!t) {
@@ -301,9 +322,36 @@ async function resolveFreeTextTitle(
 export async function resolvePlaylistRef(
   userProfileId: string,
   ref: string | undefined,
-  options?: { requireExplicit?: boolean },
+  options?: PlaylistResolveOptions,
 ): Promise<PlaylistResolveResult> {
   const raw = ref?.trim();
+
+  if (options?.youtubeAccountOnly) {
+    if (!raw) {
+      if (options.requireExplicit) {
+        const suggestions = await listAllPlaylistCandidates(userProfileId, 8);
+        return {
+          ok: false,
+          error: "No playlist specified.",
+          suggestions,
+          listAll: true,
+        };
+      }
+      return ensureMagnusPlaylistRef(userProfileId);
+    }
+    if (PLAYLIST_ID_RE.test(raw)) {
+      const meta = await getPlaylist(raw, userProfileId);
+      return {
+        ok: true,
+        playlist: {
+          playlistId: raw,
+          title: meta?.title ?? raw,
+          fromCache: false,
+        },
+      };
+    }
+    return resolveFreeTextTitle(userProfileId, raw);
+  }
 
   if (!raw) {
     if (options?.requireExplicit) {

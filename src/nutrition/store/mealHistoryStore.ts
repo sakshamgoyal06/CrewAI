@@ -411,3 +411,46 @@ export async function getMealSessionComponents(
 
   return { session, components };
 }
+
+/** Update meal_slot for all rows in a session (timing correction without re-logging). */
+export async function updateMealSessionSlot(
+  userProfileId: string,
+  mealSessionId: string,
+  newSlot: MealSlot,
+  timezone?: string | null,
+): Promise<{ ok: true; localDate: string } | { ok: false; error: string }> {
+  const { data: existing, error: fetchError } = await supabase
+    .from("meal_logs")
+    .select("local_date, date")
+    .eq("user_profile_id", userProfileId)
+    .eq("meal_session_id", mealSessionId)
+    .is("deleted_at", null)
+    .limit(1);
+
+  if (fetchError) {
+    return { ok: false, error: fetchError.message };
+  }
+  if (!existing?.length) {
+    return { ok: false, error: "meal session not found" };
+  }
+
+  const localDate =
+    (existing[0]!.local_date as string | null) ??
+    (existing[0]!.date as string | null) ??
+    localDateKey(new Date(), timezone);
+
+  const mealTime = newSlot === "unspecified" ? "unspecified" : newSlot;
+  const { error: updateError } = await supabase
+    .from("meal_logs")
+    .update({ meal_slot: newSlot, meal_time: mealTime })
+    .eq("user_profile_id", userProfileId)
+    .eq("meal_session_id", mealSessionId)
+    .is("deleted_at", null);
+
+  if (updateError) {
+    return { ok: false, error: updateError.message };
+  }
+
+  await recomputeDailyRollup(userProfileId, localDate);
+  return { ok: true, localDate };
+}

@@ -67,6 +67,21 @@ export async function completeMealLogWithEstimate(input: {
       return { ok: false, reply: formatMealLogSaveFailure(saved.error) };
     }
 
+    if (saved.duplicateSkipped) {
+      return {
+        ok: true,
+        reply:
+          `You already logged **${sanitizeMealLogRawText(input.rawMealText).slice(0, 80)}** — kept your existing entry.\n\n` +
+          `_Say **meal breakdown** for per-item detail._`,
+        mealSessionId: saved.mealSessionId,
+        compose: {
+          mealSlot: input.mealSlot ?? "unspecified",
+          headline: mealLogComposeHeadline(input.mealSlot ?? "unspecified", input.rawMealText),
+          totals: { calories: estimate.calories ?? 0, protein_g: estimate.protein_g ?? 0, carbs_g: estimate.carbs_g ?? 0, fat_g: estimate.fat_g ?? 0 },
+        },
+      };
+    }
+
     const mealTotals = sumMealTotals(saved.components);
     const [day, daySessionCount] = await Promise.all([
       sumMealLogsForDay(input.userProfileId, saved.date),

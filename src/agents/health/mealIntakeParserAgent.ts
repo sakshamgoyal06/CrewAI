@@ -95,6 +95,7 @@ function parseMealIntakeJson(o: unknown): MealIntakeParseResult | null {
     if (mealText.length < 2) {
       return null;
     }
+
     const componentsRaw = meal.components;
     if (!isComponentList({ components: componentsRaw })) {
       return null;

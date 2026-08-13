@@ -1,15 +1,17 @@
 import type { AgentContext } from "../agents/types.js";
 import { parseMealIntakeFromMessage } from "../agents/health/mealIntakeParserAgent.js";
 import type { PillarExecutionPlan } from "../agents/routing/pillarStrategy/types.js";
+import { collapseMealIntakeForSingleOccasion } from "./mealIntakeCollapse.js";
 
 /** Build a multi-step meal_log plan from the intake parser agent (no regex splitting). */
 export async function buildMealLogPlanFromIntakeParser(
   ctx: AgentContext,
 ): Promise<PillarExecutionPlan | null> {
-  const intake = await parseMealIntakeFromMessage(ctx);
-  if (!intake || intake.meals.length === 0) {
+  const intakeRaw = await parseMealIntakeFromMessage(ctx);
+  if (!intakeRaw || intakeRaw.meals.length === 0) {
     return null;
   }
+  const intake = collapseMealIntakeForSingleOccasion(intakeRaw, ctx.rawMessage);
 
   return {
     confidence: intake.parser === "llm" ? 0.95 : 0.7,

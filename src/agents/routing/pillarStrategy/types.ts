@@ -60,6 +60,10 @@ export type RoutingHints = {
   zerodha_connected: boolean;
   /** Last few chat turns (truncated) so the parser can disambiguate read vs create. */
   recent_turns: Array<{ role: "user" | "assistant"; preview: string }>;
+  holistic_day_ask: boolean;
+  saved_media_pick: boolean;
+  schedule_accuracy_challenge: boolean;
+  compound_action: boolean;
 };
 
 export type PillarId = Intent;

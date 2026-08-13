@@ -1,7 +1,7 @@
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
 import { buildMealLogPlanFromIntakeParser } from "../../meals/mealIntakePlan.js";
 import { isMealCalorieDisputeMessage } from "../../meals/mealCalorieDispute.js";
-import { isMealLogWriteIntent, isMealPlanningIntent } from "../../meals/mealLogIntent.js";
+import { isMealLogWriteIntent, isMealPlanningIntent, isMealSlotCorrectionMessage } from "../../meals/mealLogIntent.js";
 import {
   getMealLogPending,
   isMealLogConfirmationNo,
@@ -57,6 +57,10 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
   }
   if (isMealDayBreakdownRequest(ctx.rawMessage)) {
     return executeMealHistoryCapability(ctxWithPrefs, "meal_day_breakdown");
+  }
+  if (isMealSlotCorrectionMessage(ctx.rawMessage)) {
+    const plan = deterministicHealthPlan("meal_log_correct");
+    return executeHealthStrategy({ ...ctxWithPrefs, pillarStrategy: plan }, plan);
   }
   if (deterministic === "meal_log_photo") {
     const plan = deterministicHealthPlan("meal_log_photo");

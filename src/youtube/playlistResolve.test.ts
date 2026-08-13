@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { scorePlaylistTitle, formatPlaylistDisambiguation } from "./playlistResolve.js";
+import { scorePlaylistTitle, formatPlaylistDisambiguation, prefersYoutubeAccountPlaylist } from "./playlistResolve.js";
 
 describe("scorePlaylistTitle", () => {
   it("scores exact and partial title matches", () => {
@@ -23,5 +23,18 @@ describe("formatPlaylistDisambiguation", () => {
     expect(text).toContain('couldn\'t find an exact playlist');
     expect(text).toContain("1. High Energy Workout Mix");
     expect(text).toContain("PLabc");
+  });
+});
+
+describe("prefersYoutubeAccountPlaylist", () => {
+  it("prefers YT account playlists when user mentions youtube music", () => {
+    expect(
+      prefersYoutubeAccountPlaylist(
+        "High Energy Workout Mix",
+        "Add songs to my high energy workout playlist in youtube music",
+      ),
+    ).toBe(true);
+    expect(prefersYoutubeAccountPlaylist("wisdom", "add to wisdom playlist")).toBe(false);
+    expect(prefersYoutubeAccountPlaylist("High Energy Workout", undefined)).toBe(true);
   });
 });
