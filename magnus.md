@@ -34,12 +34,13 @@ ship anything that changes behaviour, dependencies, environment, or the database
 
 ## What Magnus is
 
-A single-user Telegram bot that supports **multiple users** when provisioned per `user_profile`. The user writes plain language; Magnus answers in one voice. Each turn
+A **multi-user** Telegram bot (one deployment, many provisioned `user_profile` rows). The user writes plain language; Magnus answers in one voice. Each turn
 is silently classified to one of five intents — four pillars plus Magnus's own work — and a
 specialist may write the answer, but the user is never told and cannot address one directly.
 
-**There are exactly two commands: `/start` and `/help`.** Both are answered locally with no model
-call. No menu, no lane picker, no per-department commands.
+**There are exactly two registered commands: `/start` and `/help`.** Both are answered locally with no model
+call. No menu, no lane picker, no per-department commands. Rituals such as the morning brief use
+plain language (`morning brief`, legacy `/morningbrief`) — not registered slash commands.
 
 | Owner | Scope |
 |---|---|
@@ -241,10 +242,8 @@ shell or `.env`.
 ## Database
 
 **Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`, `meal_plan_sessions`, `meal_plan_templates`,
-`user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries`, `projects`, `features`, `project_sessions`,
-`user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries` (Phases 2–3:
-rolling summary + semantic facts), `magnus_youtube_bookmarks`, `magnus_youtube_cues`,
-`magnus_youtube_state` (includes `playlist_aliases` JSONB for pillar playlist ids).
+`user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries` (rolling summary + semantic facts), `projects`, `features`, `project_sessions`,
+`magnus_youtube_bookmarks`, `magnus_youtube_cues`, `magnus_youtube_state` (includes `playlist_aliases` JSONB for pillar playlist ids).
 
 **Read only:** `workouts`, `goals`, `daily_scores`, `happiness_reserve`,
 `patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans`,
@@ -294,8 +293,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npm run db:apply -- supabase/migrations/<file>.sql` | Apply a migration via direct Postgres (`SUPABASE_DB_PASSWORD`) |
 | `npm run google-calendar:auth` | One-time OAuth; prints the refresh token for the host |
 | `npm run youtube:auth` | One-time YouTube OAuth; prints refresh token to store in `user_integrations` |
-| `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero orphans |
-| `npx tsx scripts/dev/validate-user-query-catalog.mts` | Validate 157 user-query routing hints against detectors |
+| `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero production orphans (test-only helpers excluded) |
+| `npx tsx scripts/dev/validate-user-query-catalog.mts` | Validate 158 user-query routing hints against detectors |
 | `npx tsx scripts/dev/generate-chat-message-test-suite.mts` | Build 1000 NL chat message tests from real chats + catalog |
 | `npx tsx scripts/dev/analyze-chat-test-suite.mts` | Structural + production-pair analysis → `docs/review/CHAT_MESSAGE_TEST_SUITE_ANALYSIS.md` |
 | `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
@@ -341,8 +340,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
   `chat_inactivity` (no Telegram messages for 3+ days) are opt-in catalog kinds with LLM gate+compose.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube (turn-handler smoke in `src/magnus.smoke.test.ts` only).
 - **Notion list mirror** — Supabase canonical; OAuth reconnect now wipes legacy LifeOS hub/registry and provisions a fresh **Magnus** page (no discover fallback to old DBs). Say connect Notion again after deploy if relink stuck on old LifeOS.
-**Hevy in Telegram:** Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries. **Session volume** (working-set tonnage) is computed deterministically from Hevy set data (`workoutVolume.ts`); agents must not guess volume. **Pillar consultation** (`pillar_consultation`): Magnus tools + pillar specialists run in parallel; `consultationOutcome.ts` builds a structured fulfillment summary, strips stale capability denials (e.g. Magnus saying it cannot pull Hevy when Health loaded it), and `composePillarPlanReply` composes one voice from user intent + delegation map.
+- **Hevy in Telegram** — Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries. **Session volume** (working-set tonnage) is computed deterministically from Hevy set data (`workoutVolume.ts`); agents must not guess volume. **Pillar consultation** (`pillar_consultation`): Magnus tools + pillar specialists run in parallel; `consultationOutcome.ts` builds a structured fulfillment summary, strips stale capability denials (e.g. Magnus saying it cannot pull Hevy when Health loaded it), and `composePillarPlanReply` composes one voice from user intent + delegation map.
 
 ---
 
-**Last updated:** 2026-08-13 (production chat issue fixes: meal dedupe/slot correction/undo, routing signals, playlist namespace, list added-at, YT batch add)
+**Last updated:** 2026-08-13 (architecture audit cleanup + production chat fixes merged)

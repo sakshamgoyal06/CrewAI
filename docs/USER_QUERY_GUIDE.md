@@ -1,7 +1,7 @@
 # What users can ask Magnus
 
 **Purpose:** Map natural-language asks to the ideal routing path and expected output.  
-**Tests:** `src/capabilities/userQueryRouting.test.ts` (157 queries, 1200+ structural checks) · `src/capabilities/chatMessageTestSuite.test.ts` (**1000** NL messages) · `src/capabilities/catalogIntegrity.test.ts`  
+**Tests:** `src/capabilities/userQueryRouting.test.ts` (158 queries, 1200+ structural checks) · `src/capabilities/chatMessageTestSuite.test.ts` (**1000** NL messages) · `src/capabilities/catalogIntegrity.test.ts`  
 **Last updated:** 2026-08-13
 
 Magnus answers in **one voice**. The user never picks a pillar or specialist. Below: what to say, where it routes, and what you should get back.
@@ -154,7 +154,7 @@ Manual brief: `morning brief` or legacy `/morningbrief`.
 | Suite | What it verifies |
 |-------|------------------|
 | `magnusGoldenPath.test.ts` | **100** user asks through full orchestrator — intent, capability, tools, one voice |
-| `userQueryRouting.test.ts` | 157 queries × structural validators (hints, detectors) |
+| `userQueryRouting.test.ts` | 158 queries × structural validators (hints, detectors) |
 | `catalogIntegrity.test.ts` | Catalog ids, tool map ↔ `magnusAgent` |
 | `orchestratorIntent.test.ts` | Classifier payload + meal hard override |
 | `magnusActionDetect.test.ts` | List/LifeOS/Notion/event/proactive phrases |

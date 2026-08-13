@@ -469,3 +469,11 @@ export async function listLikedVideos(input?: {
     kind: i.kind,
   }));
 }
+
+/** Back-compat OAuth aliases — unified Google flow (Calendar + YouTube). */
+export {
+  beginYoutubeOauth,
+  completeYoutubeOauth,
+  youtubeOauthLinkAvailable,
+  youtubeOauthRedirectConfigured,
+} from "./oauthFlow.js";

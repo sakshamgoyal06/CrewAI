@@ -96,6 +96,11 @@ function parseMealIntakeJson(o: unknown): MealIntakeParseResult | null {
       return null;
     }
 
+    const componentsRaw = meal.components;
+    if (!isComponentList({ components: componentsRaw })) {
+      return null;
+    }
+
     const slotRaw = typeof meal.meal_slot === "string" ? meal.meal_slot.trim() : "unspecified";
     const mealSlot = VALID_SLOTS.has(slotRaw as MealSlot) ? (slotRaw as MealSlot) : "unspecified";
 
@@ -108,15 +113,11 @@ function parseMealIntakeJson(o: unknown): MealIntakeParseResult | null {
           ? "snack"
           : "meal";
 
-    if (!isComponentList(meal)) {
-      return null;
-    }
-
     meals.push({
       mealSlot,
       logKind,
       mealText,
-      components: normalizeParserComponents(meal.components),
+      components: normalizeParserComponents(componentsRaw as MealParserComponent[]),
     });
   }
 

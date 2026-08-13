@@ -52,9 +52,6 @@ function resolveSpecifier(fromFile: string, spec: string): string | null {
 
 const importedBy = new Map<string, string[]>();
 for (const file of files) {
-  if (!countTests && isTest(file)) {
-    continue;
-  }
   const src = readFileSync(file, "utf8");
   for (const m of src.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)) {
     const target = resolveSpecifier(file, m[1]);
@@ -69,21 +66,8 @@ const entrypoints = new Set(
   ["src/index.ts", "mcp/google-calendar/server.mts"].map((p) => join(ROOT, p)),
 );
 
-const orphans = files
-  .filter((f) => !isTest(f))
-  .filter((f) => !entrypoints.has(f))
-  .filter((f) => !f.includes("/scripts/"))
-  .filter((f) => (importedBy.get(f)?.length ?? 0) === 0);
-
-console.log(
-  `Scanned ${files.length} files (${countTests ? "including" : "excluding"} test importers).\n`,
-);
-console.log(`Files nothing imports (${orphans.length}):`);
-for (const f of orphans.sort()) {
-  console.log(`  ${rel(f)}`);
-}
-
-const testOnly = files
+/** Files imported only by `*.test.ts` — helpers, not dead production code. */
+const testOnlyImported = files
   .filter((f) => !isTest(f))
   .filter((f) => !entrypoints.has(f))
   .filter((f) => !f.includes("/scripts/"))
@@ -92,11 +76,33 @@ const testOnly = files
     return importers.length > 0 && importers.every(isTest);
   });
 
-if (!countTests) {
-  console.log("\n(Re-run with --include-tests to see which orphans are test-only.)");
-} else {
-  console.log(`\nImported only by tests (${testOnly.length}):`);
-  for (const f of testOnly.sort()) {
+const orphans = files
+  .filter((f) => !isTest(f))
+  .filter((f) => !entrypoints.has(f))
+  .filter((f) => !f.includes("/scripts/"))
+  .filter((f) => (importedBy.get(f)?.length ?? 0) === 0);
+
+console.log(
+  `Scanned ${files.length} files (test imports counted for reachability).\n`,
+);
+console.log(`Production orphans (${orphans.length}):`);
+for (const f of orphans.sort()) {
+  console.log(`  ${rel(f)}`);
+}
+
+if (testOnlyImported.length > 0) {
+  console.log(`\nImported only by tests (${testOnlyImported.length}):`);
+  for (const f of testOnlyImported.sort()) {
     console.log(`  ${rel(f)}`);
   }
+}
+
+const testOnly = testOnlyImported;
+
+if (!countTests) {
+  console.log(
+    "\n(Re-run with --include-tests to build the import graph using test files as importers too.)",
+  );
+} else if (testOnly.length === 0) {
+  console.log("\nNo test-only imports beyond the lists above.");
 }

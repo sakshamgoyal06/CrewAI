@@ -72,12 +72,12 @@ when a pillar earns it.
 
 ## 4. Health internals
 
-Sequential first-accept — the first sub-specialist that claims the message answers it:
-
-```
-meal log ("log lunch: …")  →  journal (end-of-day phrasing)  →  Hevy write ("hevy routine: …")
-  →  fitness (training, Hevy reads)  →  nutrition (advice)  →  generic acknowledgement
-```
+**Deterministic gates → Haiku plan parser → step executors** (`healthRouter.ts` →
+`executeHealthStrategy`). Pre-parser gates handle unambiguous cases (meal-log confirmation,
+calorie disputes, meal-day breakdown, food photos, explicit meal-log write intent, meal-slot
+follow-ups). Everything else runs through `parsePillarExecutionPlan` with routing hints, then
+capability executors (meal planning journey, fitness/Hevy, nutrition advice, journal, …) with
+terminal compose.
 
 Onboarding gates the pillar: until `user_health_profile.onboarding_completed_at` is set, every
 health turn continues the four-question flow, so advice starts from real constraints. Meal logging
@@ -96,13 +96,14 @@ Program memory comes from `user_program_memory` in Supabase (seeded via
 | Presentation | `magnus/telegramIntro.ts`, `telegramFormat.ts`, `telegramChunk.ts` |
 | Routing | `intent.ts`, `agents/orchestratorIntent.ts`, `agents/magnusOrchestrator.ts`, `agents/registry.ts`, `routing/intentToPillarRoute.ts` |
 | Magnus's tools | `agents/tools/calendarTool.ts`, `agents/tools/logNoteTool.ts`, `agents/tools/eventLogTool.ts`, `agents/tools/youtubeTool.ts`, `agents/tools/youtubeConnectTool.ts` |
-| YouTube | `integrations/youtube/` (incl. `oauthFlow.ts`), `youtube/youtubeStore.ts`, `config/publicBaseUrl.ts` |
+| YouTube | `integrations/youtube/` (operations + legacy OAuth aliases), `youtube/youtubeStore.ts`, `config/publicBaseUrl.ts` |
 | Memory | `agents/memory/{memoryAgent,format,types}.ts` |
 | Persistence | `tools/chatLog.ts`, `tools/dailyLog.ts` |
 | Morning Brief | `jobs/*.ts` — Magnus's optional proactive daily push (`MAGNUS_MORNING_BRIEF_CRON_ENABLED`) |
 | Capability report | `config/magnusCapabilities.ts` |
 
-`npx tsx scripts/dev/import-graph.mts` reports zero unreachable files; keep it that way.
+`npx tsx scripts/dev/import-graph.mts` reports zero unreachable **production** files (test-only
+helpers are listed separately); keep it that way.
 
 ## 6. Database
 
@@ -120,7 +121,7 @@ and `docs/review/IMPARTIAL_REVIEW_2026-08-04.md` for the full picture and cleanu
 
 ## 7. Deliberate omissions
 
-- **No user-facing commands beyond `/start` and `/help`.** Everything else is plain language.
+- **No user-facing commands beyond `/start` and `/help`.** Everything else is plain language (including `morning brief` and legacy `/morningbrief` text triggers).
 - **No specialist announcements.** The user hears one voice.
 - **No calendar change without a read first.** Edits and deletes work from an event id returned by
   a read, so Magnus cannot act on a guess, and it asks when several events match.
