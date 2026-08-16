@@ -10,7 +10,7 @@
 | Date | PR | Agent / human | Segments | Gates A–D | Summary |
 |------|-----|---------------|----------|-----------|---------|
 | 2026-08-16 | docs | — | Plan created | — | Initial review artifact suite pushed to `main` |
-| 2026-08-16 | #91 | cloud agent | 0.1 (CI), 0.2 (CI), 1.1 (partial) | A pass (2247 tests) | Baseline snapshots; owner live checks pending |
+| 2026-08-16 | #91 / GitHub #92 | cloud agent | 0.1 (CI), 0.2 (CI), 1.1 (partial) | A pass (2247 tests) | Baseline snapshots; owner live checks pending — [PR #92](https://github.com/sakshamgoyal06/CrewAI/pull/92) |
 
 ---
 
@@ -18,7 +18,7 @@
 
 | PR | Title | Status | Merged date | Branch |
 |----|-------|--------|-------------|--------|
-| #91 | Foundation & Pillar Canon | `in_progress` | — | `cursor/v1-pr91-foundation-9f4f` |
+| #91 | Foundation & Pillar Canon | `in_progress` | — | `cursor/v1-pr91-foundation-9f4f` → GitHub [#92](https://github.com/sakshamgoyal06/CrewAI/pull/92) |
 | #92 | Memory & Pillar Context Spine | `pending` | — | |
 | #93 | Routing Spine & Voice Coherence | `pending` | — | |
 | #94 | Calendar, Events, Chief-of-Staff Day | `pending` | — | |
