@@ -21,6 +21,13 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/review/REGRADE_2026-08-04.md`** | Post-security cleanup re-grade (B+ 84/100) |
 | **`docs/review/GOLDEN_PATH_TEST_RESULTS.md`** | 100 golden-path integration tests — routing, tools, one voice |
 | **`docs/review/AUDIT_2026-08-09.md`** | Full-repo audit: security, coherence, test results |
+| **`docs/review/V1_HARDENING_PLAN.md`** | **v1 close-out master plan** — PR #91–#100, milestones, agent instructions |
+| **`docs/review/V1_HARDENING_LOG.md`** | Per-PR hardening progress log (update every PR) |
+| **`docs/review/PILLAR_TOOL_AUDIT.md`** | Every tool/capability → pillar + activity layer audit |
+| **`docs/review/PILLAR_CONTEXT_MAP.md`** | Required memory context per intent |
+| **`docs/review/CONNECTION_SMOKE_MATRIX.md`** | Integration smoke tests — PR #100 gate |
+| **`docs/review/ARCHITECTURE_COHERENCE.md`** | Frozen architecture target + streamlining rules |
+| **`docs/review/MAGNUS_V1_OPPORTUNITIES.md`** | Post-v1 opportunities and what Magnus can do next |
 | **`docs/ARCHITECTURE.md`** | What the system is: Magnus, four pillars, connections, ownership |
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
 | **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
@@ -344,4 +351,10 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-13 (architecture audit cleanup + production chat fixes merged)
+## v1 close-out (PR #91–#100)
+
+**Status:** In progress (PR #90 merged). Execute [`docs/review/V1_HARDENING_PLAN.md`](docs/review/V1_HARDENING_PLAN.md) — technical hardening + four-pillar reintegration. Track in [`docs/review/V1_HARDENING_LOG.md`](docs/review/V1_HARDENING_LOG.md). Agents: read the master plan before any v1 hardening PR.
+
+---
+
+**Last updated:** 2026-08-16 (v1 hardening plan + review artifact suite)

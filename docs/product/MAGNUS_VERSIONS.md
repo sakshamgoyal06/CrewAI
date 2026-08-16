@@ -30,6 +30,8 @@ v1.0 shipped the activity taxonomy, Accountability Agent, shared ops tools, and 
 
 **v1 north star:** One user (you) can run real projects end-to-end in Telegram with confidence Magnus knows goals, plans with you, executes writes, and nudges without noise.
 
+**Execution plan (PR #91–#100):** [`docs/review/V1_HARDENING_PLAN.md`](../review/V1_HARDENING_PLAN.md) — milestones, pillar audit, connection smoke matrix, agent instructions.
+
 ---
 
 ## Magnus v1.0 — Chief of staff with activity taxonomy
