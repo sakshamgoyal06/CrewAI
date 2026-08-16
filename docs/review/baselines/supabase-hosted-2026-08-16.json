@@ -1,0 +1,18 @@
+{
+  "capturedAt": "2026-08-16",
+  "environment": "hosted Supabase project xdrpjfdhduskhzryevze (verified via Supabase MCP)",
+  "note": "npm run test:supabase requires owner .env with SUPABASE_SERVICE_ROLE_KEY — not run in cloud agent.",
+  "publicTableCount": 59,
+  "migrationFiles": 27,
+  "keyRowCounts": {
+    "magnus_chat_messages": 761,
+    "memory_summaries": 672,
+    "meal_logs": 53,
+    "magnus_events": 49,
+    "magnus_list_items": 62,
+    "meal_plan_entries": 42,
+    "user_integrations": 1,
+    "user_health_profile": 1
+  },
+  "schemaDoc": "docs/DATABASE_SCHEMA.md migration index section 9"
+}

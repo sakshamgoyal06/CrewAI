@@ -9,8 +9,8 @@
 
 | Date | PR | Agent / human | Segments | Gates A–D | Summary |
 |------|-----|---------------|----------|-----------|---------|
-| 2026-08-16 | docs | — | Plan created | — | Initial review artifact suite on branch `cursor/v1-hardening-plan-docs-9f4f` |
-| | | | | | |
+| 2026-08-16 | docs | — | Plan created | — | Initial review artifact suite pushed to `main` |
+| 2026-08-16 | #91 | cloud agent | 0.1 (CI), 0.2 (CI), 1.1 (partial) | A pass (2247 tests) | Baseline snapshots; owner live checks pending |
 
 ---
 
@@ -18,7 +18,7 @@
 
 | PR | Title | Status | Merged date | Branch |
 |----|-------|--------|-------------|--------|
-| #91 | Foundation & Pillar Canon | `pending` | — | |
+| #91 | Foundation & Pillar Canon | `in_progress` | — | `cursor/v1-pr91-foundation-9f4f` |
 | #92 | Memory & Pillar Context Spine | `pending` | — | |
 | #93 | Routing Spine & Voice Coherence | `pending` | — | |
 | #94 | Calendar, Events, Chief-of-Staff Day | `pending` | — | |
@@ -39,11 +39,11 @@ Mark `pass` / `fail` / `skip` as each PR closes segments.
 
 | ID | Segment | PR | Status | Notes |
 |----|---------|-----|--------|-------|
-| 0.1 | Boot & capabilities | #91 | | |
-| 0.2 | Health HTTP / OAuth | #91 | | |
-| 1.1 | Database & migrations | #91 | | |
-| 1.2 | Identity & access | #91 | | |
-| 2.1 | Telegram delivery | #91 | | |
+| 0.1 | Boot & capabilities | #91 | pass (CI) | `telegram:check` JSON saved; live `getMe` pending owner env |
+| 0.2 | Health HTTP / OAuth | #91 | pass (CI) | 22 unit tests green (`healthServer.*`, `magnusCapabilities`) |
+| 1.1 | Database & migrations | #91 | partial | Hosted schema verified (59 tables, 27 migrations); `test:supabase` pending owner creds |
+| 1.2 | Identity & access | #91 | pending | Owner provision + integrations row — manual verify |
+| 2.1 | Telegram delivery | #91 | pending | Dedupe/rate-limit/`/start` — manual chat script on owner deploy |
 | 3.1 | Memory subsystem | #92 | | |
 | 4.1 | Orchestrator prelude | #92 | | |
 | 4.2 | Intent + routing hints | #92 | | |
@@ -85,11 +85,29 @@ Mark `pass` / `fail` / `skip` as each PR closes segments.
 
 ### `telegram:check` (paste JSON or summary)
 
+**CI dummy env** (cloud agent, 2026-08-16): [`baselines/telegram-check-ci-dummy-2026-08-16.json`](./baselines/telegram-check-ci-dummy-2026-08-16.json)
+
 ```
-Date: 2026-08-16
-Branch: cursor/v1-hardening-plan-docs-9f4f
-(pending first real run on owner env)
+coreOk: true
+ready: chat, journal, morning_brief, proactive
+partial: workouts, meals, notion, access, delivery
+off: zerodha, calendar, youtube
+getMe: Unauthorized (dummy TELEGRAM_BOT_TOKEN — expected)
 ```
+
+**Owner action required:** run on Railway/local with real `.env`:
+
+```bash
+npm run telegram:check -- --json > docs/review/baselines/telegram-check-owner-$(date +%F).json
+```
+
+Compare capability statuses to live integrations (Google, Hevy, Notion, Kite).
+
+### Supabase hosted baseline
+
+[`baselines/supabase-hosted-2026-08-16.json`](./baselines/supabase-hosted-2026-08-16.json) — 59 public tables, 761 chat rows, 27 migration files.
+
+**Owner action:** `npm run test:supabase` with service role key.
 
 ### Test counts at v1 start
 
@@ -99,6 +117,11 @@ PR #90 baseline:
 - userQueryCatalog: 158 queries
 - golden paths: 100 scenarios
 - See docs/review/AUDIT_2026-08-09.md
+
+PR #91 segment 0.1 CI (2026-08-16):
+- npm test: 2247 passed, 1 skipped (158 files)
+- npm run build: pass
+- PR #91 scoped tests: 22 passed (magnusCapabilities + healthServer)
 ```
 
 ---
