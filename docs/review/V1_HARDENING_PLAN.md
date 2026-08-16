@@ -14,7 +14,7 @@
 | **[PILLAR_CONTEXT_MAP.md](./PILLAR_CONTEXT_MAP.md)** | Required memory context per intent |
 | **[CONNECTION_SMOKE_MATRIX.md](./CONNECTION_SMOKE_MATRIX.md)** | Integration smoke tests for PR #100 |
 | **[ARCHITECTURE_COHERENCE.md](./ARCHITECTURE_COHERENCE.md)** | Frozen architecture target + streamlining rules |
-| **[MAGNUS_V1_OPPORTUNITIES.md](./MAGNUS_V1_OPPORTUNITIES.md)** | Post-v1 and in-scope opportunities from product review |
+| **[MAGNUS_IDEAS.md](../product/MAGNUS_IDEAS.md)** | Product ideas backlog (post–v1 only — not hardening) |
 
 **Operational tracker:** [`magnus.md`](../../magnus.md) · **Version canon:** [`docs/product/MAGNUS_VERSIONS.md`](../product/MAGNUS_VERSIONS.md)
 

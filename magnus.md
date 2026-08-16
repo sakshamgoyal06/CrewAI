@@ -13,6 +13,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/product/TRD.md`** | Technical requirements — stack, interfaces, security, deploy |
 | **`docs/product/ACTIVITY_TAXONOMY.md`** | Operations · Goals · Projects activity layer |
 | **`docs/product/PROJECT_DEFINITION.md`** | Project anatomy, lifecycle, UX |
+| **`docs/product/MAGNUS_IDEAS.md`** | Product ideas backlog (post–v1 hardening) — not bug fixes |
 | **`docs/diagrams/ARCHITECTURE_DIAGRAMS.md`** | Mermaid diagrams: context, sequence, routing, deployment |
 | **`docs/TOOLS_AND_AGENTS.md`** | Repo diagram: agents, tools, proactive jobs, integrations |
 | **`docs/USER_QUERY_GUIDE.md`** | What users can ask → routing path and expected output |
@@ -27,7 +28,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/review/PILLAR_CONTEXT_MAP.md`** | Required memory context per intent |
 | **`docs/review/CONNECTION_SMOKE_MATRIX.md`** | Integration smoke tests — PR #100 gate |
 | **`docs/review/ARCHITECTURE_COHERENCE.md`** | Frozen architecture target + streamlining rules |
-| **`docs/review/MAGNUS_V1_OPPORTUNITIES.md`** | Post-v1 opportunities and what Magnus can do next |
+| **`docs/review/MAGNUS_V1_OPPORTUNITIES.md`** | Redirect → `docs/product/MAGNUS_IDEAS.md` |
 | **`docs/ARCHITECTURE.md`** | What the system is: Magnus, four pillars, connections, ownership |
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
 | **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
