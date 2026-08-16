@@ -2,9 +2,18 @@
 
 **Status:** Active execution plan  
 **Created:** 2026-08-16  
-**Current PR:** #90 merged · **10 PRs remaining** to v1 complete  
-**Audience:** Owner, Cloud Agents, Cursor subagents, future contributors  
-**Companion docs:** This file is the **master plan**. Use the linked artifacts for day-to-day tracking.
+**Current PR:** #90 merged · **10 hardening PRs remaining** (#91–#100 on GitHub)  
+**Planning docs:** On `main` directly (not a milestone PR — does not consume a hardening slot)  
+## Planning docs vs hardening PRs
+
+| Type | Where | Counts toward #91–#100? |
+|------|--------|-------------------------|
+| Planning & ideas docs | `main` (direct commit) + `.cursor/rules/v1-hardening.mdc` | **No** |
+| Hardening execution | GitHub PRs **#91–#100** | **Yes** (one per milestone in this plan) |
+
+Agents: rules inject `v1-hardening.mdc` at session start; read `V1_HARDENING_PLAN.md` before hardening work.
+
+---
 
 | Artifact | Purpose |
 |----------|---------|

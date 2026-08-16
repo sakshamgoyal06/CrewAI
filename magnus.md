@@ -358,4 +358,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-16 (v1 hardening plan + review artifact suite)
+**Last updated:** 2026-08-16 (v1 hardening plan + MAGNUS_IDEAS backlog)

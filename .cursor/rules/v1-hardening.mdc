@@ -1,0 +1,33 @@
+---
+description: v1 close-out plan and ideas backlog — read before hardening or feature work
+alwaysApply: true
+---
+
+# Magnus v1 hardening & ideas (agent reference)
+
+## Before v1 hardening work (PR milestones on GitHub)
+
+1. **Master plan:** `docs/review/V1_HARDENING_PLAN.md` — PR scope, gates, agent instructions.
+2. **Progress log:** `docs/review/V1_HARDENING_LOG.md` — update every hardening PR.
+3. **Pillar audit:** `docs/review/PILLAR_TOOL_AUDIT.md` — Gate B (tools → pillar).
+4. **Context map:** `docs/review/PILLAR_CONTEXT_MAP.md` — Gate C (memory per intent).
+5. **Smoke matrix:** `docs/review/CONNECTION_SMOKE_MATRIX.md` — PR #100 gate only.
+6. **Architecture:** `docs/review/ARCHITECTURE_COHERENCE.md` — frozen spine target.
+
+Planning docs live on **`main`** and do **not** count toward the 10 hardening PR milestones (#91–#100).
+
+## Product ideas (post–v1 only)
+
+- **Ideas backlog:** `docs/product/MAGNUS_IDEAS.md` — `IDEA-###` ids; not in scope during hardening unless owner assigns.
+- **Do not** implement ideas from that doc during v1 hardening unless explicitly assigned.
+
+## Operational tracker
+
+- `magnus.md` at repo root — behaviour, env, database; update when shipping behaviour changes.
+
+## Hardening vs ideas
+
+| Hardening (fix gaps) | Ideas (new capability) |
+|----------------------|-------------------------|
+| `V1_HARDENING_PLAN.md` | `MAGNUS_IDEAS.md` |
+| Gates A–D every PR | After PR #100 |
