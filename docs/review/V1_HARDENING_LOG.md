@@ -10,7 +10,7 @@
 | Date | PR | Agent / human | Segments | Gates A–D | Summary |
 |------|-----|---------------|----------|-----------|---------|
 | 2026-08-16 | docs | — | Plan created | — | Initial review artifact suite pushed to `main` |
-| 2026-08-16 | #91 / GitHub #92 | cloud agent | 0.1 (CI), 0.2 (CI), 1.1 (partial) | A pass (2247 tests) | Baseline snapshots; owner live checks pending — [PR #92](https://github.com/sakshamgoyal06/CrewAI/pull/92) |
+| 2026-08-17 | #91 / GitHub #92 | owner | 0.1–2.1 | A pass | Owner verified telegram:check, test:supabase, identity, Telegram scripts; merged |
 
 ---
 
@@ -18,7 +18,7 @@
 
 | PR | Title | Status | Merged date | Branch |
 |----|-------|--------|-------------|--------|
-| #91 | Foundation & Pillar Canon | `in_progress` | — | `cursor/v1-pr91-foundation-9f4f` → GitHub [#92](https://github.com/sakshamgoyal06/CrewAI/pull/92) |
+| #91 | Foundation & Pillar Canon | `merged` | 2026-08-17 | `cursor/v1-pr91-foundation-9f4f` → GitHub [#92](https://github.com/sakshamgoyal06/CrewAI/pull/92) |
 | #92 | Memory & Pillar Context Spine | `pending` | — | |
 | #93 | Routing Spine & Voice Coherence | `pending` | — | |
 | #94 | Calendar, Events, Chief-of-Staff Day | `pending` | — | |
@@ -39,11 +39,11 @@ Mark `pass` / `fail` / `skip` as each PR closes segments.
 
 | ID | Segment | PR | Status | Notes |
 |----|---------|-----|--------|-------|
-| 0.1 | Boot & capabilities | #91 | pass (CI) | `telegram:check` JSON saved; live `getMe` pending owner env |
-| 0.2 | Health HTTP / OAuth | #91 | pass (CI) | 22 unit tests green (`healthServer.*`, `magnusCapabilities`) |
-| 1.1 | Database & migrations | #91 | partial | Hosted schema verified (59 tables, 27 migrations); `test:supabase` pending owner creds |
-| 1.2 | Identity & access | #91 | pending | Owner provision + integrations row — manual verify |
-| 2.1 | Telegram delivery | #91 | pending | Dedupe/rate-limit/`/start` — manual chat script on owner deploy |
+| 0.1 | Boot & capabilities | #91 | pass | Owner `telegram:check` — @MagnusLifeOsBot, coreOk=true |
+| 0.2 | Health HTTP / OAuth | #91 | pass | Unit tests green |
+| 1.1 | Database & migrations | #91 | pass | `test:supabase` green; north_star_goal insert fix |
+| 1.2 | Identity & access | #91 | pass | Owner profile + integrations verified |
+| 2.1 | Telegram delivery | #91 | pass | `/start`, `/help`, delivery manual scripts |
 | 3.1 | Memory subsystem | #92 | | |
 | 4.1 | Orchestrator prelude | #92 | | |
 | 4.2 | Intent + routing hints | #92 | | |
@@ -95,19 +95,17 @@ off: zerodha, calendar, youtube
 getMe: Unauthorized (dummy TELEGRAM_BOT_TOKEN — expected)
 ```
 
-**Owner action required:** run on Railway/local with real `.env`:
+**Owner verified** (2026-08-17): `coreOk=true`, bot @MagnusLifeOsBot, ready: chat, journal, morning_brief, calendar, proactive.
 
 ```bash
-npm run telegram:check -- --json > docs/review/baselines/telegram-check-owner-$(date +%F).json
+npm run telegram:check -- --json > docs/review/baselines/telegram-check-owner-2026-08-17.json
 ```
-
-Compare capability statuses to live integrations (Google, Hevy, Notion, Kite).
 
 ### Supabase hosted baseline
 
-[`baselines/supabase-hosted-2026-08-16.json`](./baselines/supabase-hosted-2026-08-16.json) — 59 public tables, 761 chat rows, 27 migration files.
+[`baselines/supabase-hosted-2026-08-16.json`](./baselines/supabase-hosted-2026-08-16.json) — 59 public tables, 27 migration files.
 
-**Owner action:** `npm run test:supabase` with service role key.
+**Owner verified:** `npm run test:supabase` green (2026-08-17); fix `north_star_goal` on profile insert in PR #92.
 
 ### Test counts at v1 start
 
@@ -138,4 +136,4 @@ PR #91 segment 0.1 CI (2026-08-16):
 
 ---
 
-**Last updated:** 2026-08-16
+**Last updated:** 2026-08-17
