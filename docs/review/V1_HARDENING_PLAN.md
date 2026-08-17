@@ -367,7 +367,16 @@ npm test -- src/agents/routing/pillarStrategy/
 
 ### PR #99 — Proactive Chief of Staff & Rhythm
 
-**Theme:** Magnus initiates — pillar-aware, goal-aligned.
+**Theme:** Magnus initiates — pillar-aware, goal-aligned. **Expand reminders architecture** so user-asked schedules match what Magnus says in chat.
+
+#### Evidence (owner chat, Aug 2026)
+
+| Date | User ask | Magnus said | What broke |
+|------|----------|-------------|------------|
+| 15 Aug | “Remind me **every 2 days** till 31 Aug to change coriander plant water” | Every 2 days at 9 AM until 31 Aug | Stored as **daily** `recurring_local` @ 9:00 — first fire next morning (~1 day, not 2) |
+| 17 Aug | Correct cadence: next Tue, then Thu, then every 2 days | Locked Tue 18 + Thu 20 one-shots | **Did not disable** original daily sub; **added a second** daily sub → duplicate fire 10 min apart |
+
+Photo mis-route (coriander seedling → meal log) is **PR #95** (`7.6 Vision`). Reminder cadence + subscription hygiene is **this PR**.
 
 #### Technical scope
 
@@ -375,13 +384,60 @@ npm test -- src/agents/routing/pillarStrategy/
 |---------|-----------|----------------|
 | 10.1 Cron | `proactive/cron.ts`, job runners | All jobs registered |
 | 10.2 Kinds | `proactive/kinds/*`, `manageProactiveTool.ts` | Every kind triggered or staging-tested |
+| **10.3 Reminder frequencies** | `subscriptions/types.ts`, `subscriptions/store.ts`, `manageProactiveTool.ts`, `kinds/customReminder.ts`, `dispatcher.ts`, `parseReminderTime.ts` | Interval + until-date; replace-on-correct; no duplicate active subs for same intent |
 | Rhythm | `proactive/rhythm/*`, `seedDefaultRhythmSubscriptions` | Owner seeds on provision |
+
+#### 10.3 — Reminder frequencies architecture (required)
+
+**Problem today:** `create_recurring_reminder` only supports **daily** `recurring_local` (fixed hour). There is no `intervalDays`, `weekdays`, or `until` on custom reminders. Corrections **insert** new rows without disabling prior matches → duplicate fires (dedupe key is per `subscription.id`, so two dailies both pass on the same day).
+
+**Target schedule types** (extend `ProactiveSchedule` in `subscriptions/types.ts`):
+
+| Type | User phrases | Fields | Fire rule |
+|------|--------------|--------|-----------|
+| `one_shot` | “in 30 minutes”, “tomorrow 8pm” | `at` | Existing — keep |
+| `recurring_local` | “every day at 9am” | `localHour`, `windowMinutes?` | Existing — `intervalDays` defaults to **1** |
+| `recurring_interval` | “every 2 days at 9am”, “every 3 days” | `localHour`, `intervalDays`, `windowMinutes?`, `until?` | Fire when `(daysSinceAnchor % intervalDays === 0)` in local date; respect `until` (disable after) |
+| `recurring_weekly` *(stretch)* | “every Monday at 9am” | `localHour`, `weekdays: number[]` | Fire on matching weekday in window |
+
+**Store / tool changes:**
+
+1. **`create_recurring_reminder`** — accept `interval_days` (default 1), optional `until` (ISO date or parsed NL end date). Persist correct schedule type; tool response must **not** say “daily” when `interval_days > 1`.
+2. **`replace_reminder` semantics** — before creating or correcting a user-asked reminder, disable (or delete) existing `custom_reminder` rows that match the same **intent fingerprint** (same normalized message body, or explicit `replaces_subscription_id` from the agent). Never stack duplicate actives for the same user instruction.
+3. **`customReminderHandler.evaluate`** — interval logic: use `lastSentAt` + `intervalDays` to skip off-cadence days; recurring dailies unchanged.
+4. **`markSubscriptionSent`** — for `recurring_interval` with `until` passed, set `enabled=false`.
+5. **Migration** — no new table; `schedule` JSONB on `magnus_proactive_subscriptions` already flexible. Add validation in store layer.
+
+**Tests (required):**
+
+```bash
+npm test -- src/proactive/kinds/customReminder.test.ts   # new
+npm test -- src/proactive/manageProactiveTool.test.ts
+npm test -- src/proactive/parseReminderTime.test.ts
+```
+
+- Every-2-days from anchor → fires day 0, 2, 4… not 1, 3
+- `until` date → no fire after; sub disabled
+- Correction flow → prior daily disabled; only one fire per window
+- Dedupe: two subs same message same day → at most one send (after replace semantics)
 
 #### Pillar / agenda scope
 
 - Tag every proactive kind with primary pillar(s) in `PILLAR_TOOL_AUDIT.md`
+- Update `custom_reminder` row: `gap` → `audited` when 10.3 ships
 - Quiet hours 23:00–06:00; cap ~3/day (scheduled + user reminders exempt)
 - Proactive compose includes pillar_status + active projects where relevant
+
+#### Manual chat scripts (10.3)
+
+- `Remind me every 2 days at 9am until Aug 31 to water my coriander plant` → confirm interval + until; first fire ≥2 days after setup (or explicit anchor)
+- Wait/simulate second fire → only on cadence (not next calendar day)
+- Correct cadence in chat → old subscription disabled; no duplicate message in same window
+- `Remind me every day at 9am to X` → unchanged daily behavior
+
+#### Smoke matrix (PR #100)
+
+Add **R7** and **R8** in `CONNECTION_SMOKE_MATRIX.md` (see that doc).
 
 ---
 
@@ -439,7 +495,7 @@ When assigned a PR from this plan:
 | Thu | Health | Meal plan lock; shopping list; adherence nudge |
 | Fri | Cross | Weekly wrap; project status; pillar_status check |
 | Sat | Wisdom + Wealth | Learning plan; Kite portfolio (if connected); project checkpoint |
-| Sun | Cross | Evening journal; proactive enable/disable; compound consultation ask |
+| Sun | Cross | Evening journal; proactive enable/disable; **every-2-days custom reminder**; compound consultation ask |
 
 **Pass:** No routing surprises in `magnus_chat_messages.metadata`; no false saves; context felt natural.
 
@@ -489,7 +545,7 @@ Do **not** block v1 on these; do **not** implement in PRs #91–#100:
 | #96 Health training | `pending` | — | — | |
 | #97 Lists + LifeOS | `pending` | — | — | |
 | #98 4-pillar integration | `pending` | — | — | |
-| #99 Proactive | `pending` | — | — | |
+| #99 Proactive | `pending` | — | — | +10.3 reminder frequencies |
 | #100 v1 declare | `pending` | — | — | |
 
 ---
@@ -507,4 +563,4 @@ Do **not** block v1 on these; do **not** implement in PRs #91–#100:
 
 ---
 
-**Last updated:** 2026-08-16
+**Last updated:** 2026-08-17

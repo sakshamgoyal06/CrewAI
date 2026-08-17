@@ -170,7 +170,7 @@
 | `meal_eod_reconciliation` | Health | Operations | pending | | |
 | `meal_gap_nudge` | Health | Operations | pending | | |
 | `weekly_nutrition_review` | Health | Operations | pending | | |
-| `custom_reminder` | Cross | Operations | pending | | |
+| `custom_reminder` | Cross | Operations | **gap** | #99 | Daily only today; needs interval + until + replace-on-correct (coriander Aug 2026) |
 | `project_conflict_review` | Cross | Projects | pending | | |
 
 ---

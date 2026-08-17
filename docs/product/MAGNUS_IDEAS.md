@@ -95,7 +95,7 @@ From **364 user messages** (Aug 2–16 2026). These motivated the ideas above; f
 | Hevy + review + log in one ask | — | `pillar_consultation` (#93, #96) |
 | Watchlist + "recommend from list" | IDEA-003 | List recommend filters (#97) |
 | Poetry / stories / wife / mic | IDEA-010, IDEA-011 | — (new workflow) |
-| Coriander photo project | IDEA-009 | Photo ≠ meal routing (#95) |
+| Coriander photo project | IDEA-009 | Photo ≠ meal routing (#95); every-N-days reminders (#99) |
 | Skip gym when tired | IDEA-023 | — (MVD mode) |
 | Home vendors + room reorganise | IDEA-012, IDEA-033 | Event log mark-done (#94) |
 | Morning brief + win intention | — | Brief accuracy + calendar (#94) |
@@ -118,6 +118,7 @@ After PR #100 smoke test passes:
 
 | Date | Change |
 |------|--------|
+| 2026-08-17 | Coriander incident → reminder interval hardening scoped to PR #99 segment 10.3 |
 | 2026-08-16 | Initial backlog from product review + real Telegram chat analysis. Non-hardening items only. |
 
 ---
