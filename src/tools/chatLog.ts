@@ -12,6 +12,7 @@ import type { ChatDeliveryTrigger, ChatMessageType } from "./chatMessageTypes.js
 
 const DEFAULT_PROFILE = {
   timezone: "UTC",
+  north_star_goal: "",
 };
 
 /** Placeholder tiers — tighten rules in code as the product grows. */

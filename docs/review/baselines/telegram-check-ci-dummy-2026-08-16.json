@@ -1,0 +1,18 @@
+{
+  "capturedAt": "2026-08-16",
+  "environment": "cloud-agent CI dummy env (not owner Railway)",
+  "note": "TELEGRAM_BOT_TOKEN was placeholder — getMe returns Unauthorized. Re-run on owner deploy with real .env.",
+  "production": false,
+  "coreOk": true,
+  "ready": ["chat", "journal", "morning_brief", "proactive"],
+  "partial": ["workouts", "meals", "notion", "access", "delivery"],
+  "off": ["zerodha", "calendar", "youtube"],
+  "telegramGetMe": "Unauthorized (dummy token)",
+  "bootSmoke": "coreOk=true; startup failed on Telegram 404 (expected with dummy token)",
+  "hostedSupabase": "761 magnus_chat_messages rows (verified via Supabase MCP 2026-08-16)",
+  "unitTests": {
+    "magnusCapabilities.test.ts": "16 passed",
+    "healthServer.internal.test.ts": "3 passed",
+    "healthServer.webhook.test.ts": "3 passed"
+  }
+}
