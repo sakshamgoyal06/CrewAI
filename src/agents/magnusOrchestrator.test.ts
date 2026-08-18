@@ -93,6 +93,23 @@ vi.mock("./context/assembleRoutingContext.js", () => ({
     pending: {},
     activeWork: { activeProjects: [], gymEventToday: false, openCommitmentCount: 0 },
     standing: { programNotes: [], routingFacts: [] },
+    growth: {
+      localTime: { dateKey: "2026-08-18", hour: 12, minute: 0, isLateEvening: false },
+      lists: [],
+      listHighlights: [],
+      goals: [],
+      todayWin: {},
+      behavior: {
+        recentIssues: [],
+        recentWins: [],
+        dailyLogSnippets: [],
+        narrativeBullets: [],
+      },
+      kpis: {
+        pillarStatus: [],
+        activityStats: [],
+      },
+    },
     routingHints: {
       explicit_meal_log: false,
       looks_like_meal_log_read: false,

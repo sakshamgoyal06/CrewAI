@@ -31,6 +31,33 @@ export function formatRoutingContextForClassifier(ctx: RoutingContext): Record<s
       program_notes: ctx.standing.programNotes,
       routing_facts: ctx.standing.routingFacts,
     },
+    growth: {
+      local_time: {
+        date_key: ctx.growth.localTime.dateKey,
+        hour: ctx.growth.localTime.hour,
+        is_late_evening: ctx.growth.localTime.isLateEvening,
+      },
+      lists: ctx.growth.lists,
+      list_highlights: ctx.growth.listHighlights,
+      goals: ctx.growth.goals,
+      today_win: {
+        morning_intention: ctx.growth.todayWin.morningIntention ?? null,
+        energy_level: ctx.growth.todayWin.energyLevel ?? null,
+        win_condition_pending: ctx.growth.todayWin.winConditionPending ?? null,
+      },
+      behavior: {
+        narrative_bullets: ctx.growth.behavior.narrativeBullets,
+        recent_issues: ctx.growth.behavior.recentIssues,
+        recent_wins: ctx.growth.behavior.recentWins,
+      },
+      kpis: {
+        joy_tank: ctx.growth.kpis.joyTank ?? null,
+        pillar_status: ctx.growth.kpis.pillarStatus,
+        activity_stats: ctx.growth.kpis.activityStats,
+        gym_miss_streak_days: ctx.growth.kpis.gymMissStreakDays ?? null,
+        routine_consistency_hint: ctx.growth.kpis.routineConsistencyHint ?? null,
+      },
+    },
     routing_hints: ctx.routingHints,
     gaps: ctx.gaps,
   };

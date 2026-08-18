@@ -41,6 +41,43 @@ function sampleContext(overrides: Partial<RoutingContext> = {}): RoutingContext 
       programNotes: ["Avoid lauki"],
       routingFacts: ["User prefers Friday burger exception"],
     },
+    growth: {
+      localTime: {
+        dateKey: "2026-08-18",
+        hour: 22,
+        minute: 15,
+        isLateEvening: true,
+      },
+      lists: [
+        { slug: "watchlist", displayName: "Watchlist", openCount: 4 },
+        { slug: "tasks", displayName: "Tasks", openCount: 2 },
+      ],
+      listHighlights: [{ slug: "watchlist", title: "Dune Part Two" }],
+      goals: [{ title: "Ship portfolio site", pillar: "build", status: "active" }],
+      todayWin: {
+        morningIntention: "Gym before work",
+        energyLevel: 4,
+      },
+      behavior: {
+        recentIssues: ["Missing gym 3 days"],
+        recentWins: ["Loved new movie"],
+        dailyLogSnippets: [{ date: "2026-08-17", snippet: "Feeling tired" }],
+        narrativeBullets: [
+          "Watch: Missing gym 3 days",
+          "2026-08-17: Feeling tired",
+        ],
+      },
+      kpis: {
+        joyTank: { level: 42, date: "2026-08-18" },
+        pillarStatus: [{ pillar: "health", status: "at_risk" }],
+        activityStats: [
+          { activity: "gym", pillar: "health", done: 2, missed: 3, total: 5, showUpRate: 40 },
+        ],
+        gymMissStreakDays: 3,
+        routineConsistencyHint:
+          "Gym missed or skipped 3 times recently — protect recovery and show-up tomorrow.",
+      },
+    },
     routingHints: {
       explicit_meal_log: false,
       looks_like_meal_log_read: false,
@@ -70,5 +107,13 @@ describe("formatRoutingContextForClassifier", () => {
     expect(formatted.standing).toMatchObject({
       program_notes: ["Avoid lauki"],
     });
+    expect(formatted.growth).toMatchObject({
+      local_time: { is_late_evening: true, hour: 22 },
+      today_win: { morning_intention: "Gym before work" },
+      kpis: { gym_miss_streak_days: 3, joy_tank: { level: 42 } },
+    });
+    expect((formatted.growth as { behavior: { narrative_bullets: string[] } }).behavior.narrative_bullets).toContain(
+      "Watch: Missing gym 3 days",
+    );
   });
 });

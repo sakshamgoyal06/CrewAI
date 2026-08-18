@@ -65,6 +65,14 @@ routing_context (when present) — use with the message:
 - active_work.active_projects → status questions may be GENERAL project_status
 - standing.routing_facts / program_notes → honor avoid lists and meal rules when classifying food messages → HEALTH
 
+growth (when present) — align routing with the user's growth, not just keywords:
+- growth.local_time.is_late_evening → leisure/rest asks after 21:00 may still route correctly but execution should favor sleep/recovery when growth.kpis.gym_miss_streak_days is high
+- growth.today_win.morning_intention → user's stated win for today; cross-pillar asks should respect it
+- growth.behavior.narrative_bullets / recent_issues → tired, gym trouble, low energy — HEALTH or supportive GENERAL, not ignoring context
+- growth.kpis.joy_tank (low) + HAPPINESS leisure ask → valid joy refill; still note growth.kpis.routine_consistency_hint when gym is slipping
+- growth.lists / list_highlights → saved watchlist/readlist/tasks; movie or book asks may be GENERAL list actions or HAPPINESS taste — use whether they want to log, add to list, or get a recommendation
+- growth.goals + active_work.active_projects → WISDOM for career/build goals; tie project status to GENERAL
+
 When a message could fit two categories, choose the one the user is asking you to act on.
 Reply with only the category name.`;
 

@@ -10,7 +10,7 @@
 | Date | PR | Agent / human | Segments | Gates A–D | Summary |
 |------|-----|---------------|----------|-----------|---------|
 | 2026-08-16 | docs | — | Plan created | — | Initial review artifact suite pushed to `main` |
-| 2026-08-18 | #92 | agent | 3.1 (partial) | A pass (scoped) | Frontload routing context module + classifier integration |
+| 2026-08-18 | #92 | agent | 3.1 (partial) | A pass (scoped) | Frontload routing context + growth snapshot (lists, goals, behavior, KPIs) |
 | 2026-08-17 | #91 / GitHub #92 | owner | 0.1–2.1 | A pass | Merged foundation PR |
 
 ---

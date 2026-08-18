@@ -17,6 +17,7 @@ import { supabase } from "../../tools/clients.js";
 import { logger } from "../../logger.js";
 import { loggableError } from "../../util/loggableError.js";
 import { buildIntegrationRegistry } from "./integrationRegistry.js";
+import { loadGrowthSnapshot } from "./loadGrowthSnapshot.js";
 import { normalizeRoutingRecentTurns } from "./normalizeRecentTurns.js";
 import type { RoutingContext, RoutingStandingContext } from "./types.js";
 
@@ -135,6 +136,7 @@ export async function assembleRoutingContext(
     activeProjects,
     standing,
     openToday,
+    growth,
   ] = await Promise.all([
     fetchRecentRoutingTurns(input.userProfileId, input.telegramUserId, 8),
     loadUserIntegrations(input.userProfileId),
@@ -146,6 +148,7 @@ export async function assembleRoutingContext(
     listActiveProjects(input.userProfileId).catch(() => []),
     loadStandingContext(input.userProfileId),
     countOpenCommitmentsToday(input.userProfileId, timezone),
+    loadGrowthSnapshot({ userProfileId: input.userProfileId, timezone }),
   ]);
 
   const recentTurns = normalizeRoutingRecentTurns(recentRaw);
@@ -212,6 +215,7 @@ export async function assembleRoutingContext(
       openCommitmentCount: openToday.count,
     },
     standing,
+    growth,
     routingHints,
     gaps,
   };

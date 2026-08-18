@@ -24,6 +24,7 @@ Full execution memory still loads **after** intent (`memoryAgent` + `userKnowled
 | **Pending state** | Redis + session tables | meal confirm, undo, project FSM, meal-plan FSM |
 | **Active work** | `projects`, `magnus_events` | project status questions; gym today |
 | **Standing context** | `user_program_memory`, semantic facts | avoid lists, meal rules (lauki, Friday burger) |
+| **Growth snapshot** | lists, goals, checkins, daily logs, LifeOS KPIs | behavior narrative, today's win, joy tank, show-up rate, late-evening coaching |
 | **Routing hints** | `intentRoutingHints.ts` | structural signals (holistic day, compound, meal log) |
 
 ---
@@ -35,7 +36,8 @@ Three layers agents use — routing only needs layer 1:
 ```
 ┌─ Layer 1: ROUTING (frontload) ─────────────────────────────┐
 │  identity · integrations · pending · recent+metadata        │
-│  active work snapshot · standing rules · routing_hints      │
+│  active work snapshot · standing rules · growth snapshot    │
+│  routing_hints                                              │
 └────────────────────────────────────────────────────────────┘
 ┌─ Layer 2: EXECUTION (after intent) ────────────────────────┐
 │  verbatim chat · rolling summary · semantic facts           │
@@ -70,8 +72,31 @@ Vectors/RAG (v2): fuzzy recall over old journals — not used for routing yet.
 | Meal plan thread | `change dinner on the plan` | `pending.meal_plan_session` |
 | Project setup | `lock it in` during project FSM | `pending.project_session` |
 | Avoid foods | lauki in plan despite rule | `standing.program_notes` + `routing_facts` |
+| Growth-aligned leisure | "watch a movie" at 21:00 after 3 gym misses | `growth.kpis.gym_miss_streak_days` + `growth.local_time.is_late_evening` + `growth.behavior` |
+| Today's win | cross-pillar ask vs morning intention | `growth.today_win.morning_intention` |
+| List-backed media | "add to watchlist" / recommend from saved | `growth.lists` + `growth.list_highlights` |
 
 See `src/capabilities/chatMessageTestAnalysis.ts` (`PRODUCTION_ISSUE_FINDINGS`) and `docs/product/MAGNUS_IDEAS.md`.
+
+---
+
+## Growth snapshot (`growth`)
+
+Loaded in parallel with other routing blocks via `loadGrowthSnapshot()`:
+
+| Field | Source | Example use |
+|-------|--------|-------------|
+| `local_time` | user timezone | `is_late_evening` after 21:00 — favor sleep/recovery when gym is slipping |
+| `lists` / `list_highlights` | `magnus_user_lists` + open items | watchlist/readlist/tasks catalog for media and task routing |
+| `goals` | `goals` table (when LifeOS enabled) | active north-star / weekly goals |
+| `today_win` | checkins + Redis win FSM | morning intention, energy, pending win confirmation |
+| `behavior.narrative_bullets` | program learnings, `magnus_daily_logs`, semantic facts | "tired 3 days", "loved movie yesterday", gym trouble |
+| `kpis.joy_tank` | `happiness_reserve` or checkin Joy Score | low joy → HAPPINESS refill is valid |
+| `kpis.activity_stats` | `magnus_event_activity_stats` view | show-up rate per activity (gym, etc.) |
+| `kpis.gym_miss_streak_days` | recent `magnus_events` misses | "missing gym 3 days" coaching signal |
+| `kpis.routine_consistency_hint` | derived from stats + misses | one-line consistency nudge for classifier/execution |
+
+**Example:** User sends "I want to watch a movie today" at 22:00. Classifier may still route HAPPINESS or GENERAL (watchlist), but `growth` tells execution: gym missed 3 days, today's win was "gym before work", late evening → suggest relaxing and sleeping so they can show up tomorrow (not guilt — Joy is a tank to protect).
 
 ---
 

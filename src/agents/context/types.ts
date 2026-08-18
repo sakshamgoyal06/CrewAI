@@ -54,6 +54,45 @@ export type RoutingStandingContext = {
   routingFacts: string[];
 };
 
+/** Growth-aligned snapshot — lists, goals, behavior, today's win, KPIs. */
+export type RoutingGrowthContext = {
+  localTime: {
+    dateKey: string;
+    hour: number;
+    minute: number;
+    isLateEvening: boolean;
+  };
+  lists: Array<{ slug: string; displayName: string; openCount: number }>;
+  listHighlights: Array<{ slug: string; title: string; status?: string }>;
+  goals: Array<{ title: string; pillar: string; status: string }>;
+  todayWin: {
+    morningIntention?: string;
+    energyLevel?: number;
+    winConditionPending?: { phase: string; candidateText?: string };
+  };
+  behavior: {
+    recentIssues: string[];
+    recentWins: string[];
+    dailyLogSnippets: Array<{ date: string; snippet: string }>;
+    /** Compact bullets for classifier and growth-aligned routing. */
+    narrativeBullets: string[];
+  };
+  kpis: {
+    joyTank?: { level: number; date: string };
+    pillarStatus: Array<{ pillar: string; status: string; summary?: string }>;
+    activityStats: Array<{
+      activity: string;
+      pillar: string;
+      done: number;
+      missed: number;
+      total: number;
+      showUpRate?: number;
+    }>;
+    gymMissStreakDays?: number;
+    routineConsistencyHint?: string;
+  };
+};
+
 export type RoutingContext = {
   userProfileId: string;
   assembledAt: string;
@@ -74,6 +113,9 @@ export type RoutingContext = {
   activeWork: RoutingActiveWork;
 
   standing: RoutingStandingContext;
+
+  /** Lists, goals, logged behavior, today's win, joy/consistency KPIs. */
+  growth: RoutingGrowthContext;
 
   routingHints: IntentRoutingHints;
 
