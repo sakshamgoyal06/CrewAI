@@ -25,7 +25,6 @@ import { isMealDayBreakdownRequest } from "./health/mealHistoryAgent.js";
 import { dispatchToAgent } from "./registry.js";
 import { intentToPillarRoute } from "./routing/intentToPillarRoute.js";
 import type { AgentContext } from "./types.js";
-import { fetchRecentRoutingTurns } from "../tools/routingContext.js";
 import { vetAndCompose } from "./routing/accountabilityAgent.js";
 import {
   looksLikeMealSlotFollowUp,
@@ -34,6 +33,7 @@ import {
 import { augmentMessageWithPhotoContext } from "../vision/augmentMessageWithPhoto.js";
 import { buildPhotoContext } from "../vision/buildPhotoContext.js";
 import { isMealPhotoPurpose, resolvePhotoIntent } from "../vision/resolvePhotoIntent.js";
+import { assembleRoutingContext } from "./context/assembleRoutingContext.js";
 import { tryResolveActiveProjectSessionTurn } from "../projects/projectSessionPrelude.js";
 import { handleWinConditionPendingTurn } from "../jobs/handleWinConditionPending.js";
 import { handleReversibleActionTurn } from "./routing/handleReversibleAction.js";
@@ -161,10 +161,24 @@ export async function runOrchestratorReply(input: {
     });
   }
 
-  const recentTurns = await fetchRecentRoutingTurns(
-    input.userProfileId,
-    input.telegramUserId,
-  );
+  const routingContext = await assembleRoutingContext({
+    userProfileId: input.userProfileId,
+    telegramUserId: input.telegramUserId,
+    userMessage: input.userMessage,
+    displayName: input.displayName,
+    timezone: input.timezone,
+    northStarGoal: input.northStarGoal,
+  });
+
+  const recentTurns = routingContext.recentTurns.map((t) => ({
+    role: t.role,
+    content: t.content,
+    metadata: {
+      ...(t.intent ? { intent: t.intent } : {}),
+      ...(t.delegatedAgent ? { delegated_agent: t.delegatedAgent } : {}),
+      ...(t.toolsUsed?.length ? { tools_used: t.toolsUsed } : {}),
+    },
+  }));
 
   const photoTurnPreviews = recentTurns.slice(-6).map((t) => ({
     role: t.role === "assistant" ? ("assistant" as const) : ("user" as const),
@@ -189,7 +203,9 @@ export async function runOrchestratorReply(input: {
       : looksLikeMealSlotFollowUp(input.userMessage) &&
         recentTurnWasMealContext(recentTurns)
       ? ("HEALTH" as Intent)
-      : await resolveIntentNaturalLanguage(effectiveUserMessage, { recentTurns });
+      : await resolveIntentNaturalLanguage(effectiveUserMessage, {
+          routingContext,
+        });
 
   if (
     intent === "HEALTH" &&
@@ -262,6 +278,8 @@ export async function runOrchestratorReply(input: {
       photoPurpose: photoContext?.analysis.purpose ?? null,
       memoryGapCount: memory.gaps.length,
       memoryRecentTurns: memory.recentSignals.recentChatTurns.length,
+      routingPending: Object.keys(routingContext.pending),
+      routingGapCount: routingContext.gaps.length,
     },
     "turn routed",
   );

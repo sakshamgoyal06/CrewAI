@@ -10,7 +10,8 @@
 | Date | PR | Agent / human | Segments | Gates A–D | Summary |
 |------|-----|---------------|----------|-----------|---------|
 | 2026-08-16 | docs | — | Plan created | — | Initial review artifact suite pushed to `main` |
-| 2026-08-17 | #91 / GitHub #92 | owner | 0.1–2.1 | A pass | Owner verified telegram:check, test:supabase, identity, Telegram scripts; merged |
+| 2026-08-18 | #92 | agent | 3.1 (partial) | A pass (scoped) | Frontload routing context module + classifier integration |
+| 2026-08-17 | #91 / GitHub #92 | owner | 0.1–2.1 | A pass | Merged foundation PR |
 
 ---
 
@@ -19,7 +20,7 @@
 | PR | Title | Status | Merged date | Branch |
 |----|-------|--------|-------------|--------|
 | #91 | Foundation & Pillar Canon | `merged` | 2026-08-17 | `cursor/v1-pr91-foundation-9f4f` → GitHub [#92](https://github.com/sakshamgoyal06/CrewAI/pull/92) |
-| #92 | Memory & Pillar Context Spine | `pending` | — | |
+| #92 | Memory & Pillar Context Spine | `in_progress` | — | `cursor/v1-pr92-memory-context-9f4f` |
 | #93 | Routing Spine & Voice Coherence | `pending` | — | |
 | #94 | Calendar, Events, Chief-of-Staff Day | `pending` | — | |
 | #95 | Health: Meals & Planning | `pending` | — | |
@@ -44,7 +45,7 @@ Mark `pass` / `fail` / `skip` as each PR closes segments.
 | 1.1 | Database & migrations | #91 | pass | `test:supabase` green; north_star_goal insert fix |
 | 1.2 | Identity & access | #91 | pass | Owner profile + integrations verified |
 | 2.1 | Telegram delivery | #91 | pass | `/start`, `/help`, delivery manual scripts |
-| 3.1 | Memory subsystem | #92 | | |
+| 3.1 | Memory subsystem | #92 | in_progress | `assembleRoutingContext` frontload before classify; execution bundle next |
 | 4.1 | Orchestrator prelude | #92 | | |
 | 4.2 | Intent + routing hints | #92 | | |
 | 4.3 | Pillar strategy | #93 | | |
@@ -136,4 +137,4 @@ PR #91 segment 0.1 CI (2026-08-16):
 
 ---
 
-**Last updated:** 2026-08-17
+**Last updated:** 2026-08-18

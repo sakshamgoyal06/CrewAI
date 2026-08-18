@@ -73,6 +73,43 @@ vi.mock("../tools/routingContext.js", () => ({
   fetchRecentRoutingTurns: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock("./context/assembleRoutingContext.js", () => ({
+  assembleRoutingContext: vi.fn().mockResolvedValue({
+    userProfileId: "00000000-0000-0000-0000-000000000001",
+    assembledAt: new Date().toISOString(),
+    identity: {
+      timezone: "UTC",
+      northStarGoal: "",
+      healthOnboardingComplete: true,
+    },
+    integrations: {
+      notion: "not_connected",
+      googleCalendar: "not_connected",
+      youtube: "not_connected",
+      hevy: "not_connected",
+      zerodha: "not_connected",
+    },
+    recentTurns: [],
+    pending: {},
+    activeWork: { activeProjects: [], gymEventToday: false, openCommitmentCount: 0 },
+    standing: { programNotes: [], routingFacts: [] },
+    routingHints: {
+      explicit_meal_log: false,
+      looks_like_meal_log_read: false,
+      looks_like_youtube_action: false,
+      looks_like_magnus_tool_action: false,
+      looks_like_magnus_tool_continuation: false,
+      looks_like_health_fitness_read: false,
+      looks_like_wealth_portfolio_read: false,
+      holistic_day_ask: false,
+      saved_media_pick: false,
+      schedule_accuracy_challenge: false,
+      compound_action: false,
+    },
+    gaps: [],
+  }),
+}));
+
 vi.mock("../projects/projectSessionPrelude.js", () => ({
   tryResolveActiveProjectSessionTurn: vi.fn().mockResolvedValue({ handled: false }),
 }));
