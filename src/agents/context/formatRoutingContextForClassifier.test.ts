@@ -34,8 +34,8 @@ function sampleContext(overrides: Partial<RoutingContext> = {}): RoutingContext 
     },
     activeWork: {
       activeProjects: [{ title: "Job search", pillar: "wisdom", status: "active" }],
-      gymEventToday: true,
       openCommitmentCount: 3,
+      overdueCommitmentCount: 1,
     },
     standing: {
       programNotes: ["Avoid lauki"],
@@ -48,34 +48,54 @@ function sampleContext(overrides: Partial<RoutingContext> = {}): RoutingContext 
         minute: 15,
         isLateEvening: true,
       },
-      lists: [
-        { slug: "watchlist", displayName: "Watchlist", openCount: 4 },
-        { slug: "tasks", displayName: "Tasks", openCount: 2 },
-      ],
-      listHighlights: [{ slug: "watchlist", title: "Dune Part Two" }],
-      goals: [{ title: "Ship portfolio site", pillar: "build", status: "active" }],
-      todayWin: {
-        morningIntention: "Gym before work",
+      dayFrame: {
+        tone: "working",
+        toneReason: "multiple commitments planned today",
+        morningIntention: "Ship portfolio draft",
         energyLevel: 4,
+        morningNotes: ["Slept late — starting slow"],
       },
-      behavior: {
-        recentIssues: ["Missing gym 3 days"],
-        recentWins: ["Loved new movie"],
-        dailyLogSnippets: [{ date: "2026-08-17", snippet: "Feeling tired" }],
-        narrativeBullets: [
-          "Watch: Missing gym 3 days",
-          "2026-08-17: Feeling tired",
+      northStar: {
+        statement: "Build intentionally",
+        goals: [{ title: "Ship portfolio site", pillar: "build", timeframe: "quarterly", status: "active" }],
+      },
+      operations: {
+        todayCommitments: [
+          { title: "Gym", status: "planned", pillar: "health", activityKey: "gym" },
         ],
+        overdueCount: 1,
+        errands: [{ source: "task", slug: "tasks", title: "Renew insurance" }],
+        slippingRoutines: [
+          { activityKey: "gym", activity: "gym", pillar: "health", recentMisses: 3, showUpRate: 40, total: 5 },
+        ],
+      },
+      projects: {
+        active: [
+          {
+            title: "Job search",
+            pillar: "wisdom",
+            status: "active",
+            openChecklistCount: 2,
+            nextChecklistItem: "Update resume",
+          },
+        ],
+        consistencyHint: "1 active project(s) have open next steps (Job search).",
+      },
+      lists: [{ slug: "watchlist", displayName: "Watchlist", openCount: 4 }],
+      listHighlights: [{ slug: "watchlist", title: "Dune Part Two" }],
+      behavior: {
+        issues: ["Routine slipping on gym"],
+        wins: ["Loved new movie"],
+        dailyLogSnippets: [{ date: "2026-08-17", snippet: "Feeling tired" }],
+        narrativeBullets: ["Issue: Routine slipping on gym", "Morning: Slept late — starting slow"],
       },
       kpis: {
         joyTank: { level: 42, date: "2026-08-18" },
         pillarStatus: [{ pillar: "health", status: "at_risk" }],
-        activityStats: [
+        topRoutines: [
           { activity: "gym", pillar: "health", done: 2, missed: 3, total: 5, showUpRate: 40 },
         ],
-        gymMissStreakDays: 3,
-        routineConsistencyHint:
-          "Gym missed or skipped 3 times recently — protect recovery and show-up tomorrow.",
+        consistencyHint: "gym show-up ~40% (3 recent miss(es)) — consistency is the lever.",
       },
     },
     routingHints: {
@@ -97,23 +117,19 @@ function sampleContext(overrides: Partial<RoutingContext> = {}): RoutingContext 
 }
 
 describe("formatRoutingContextForClassifier", () => {
-  it("includes pending state and integrations for classifier", () => {
+  it("includes growth blocks for classifier", () => {
     const formatted = formatRoutingContextForClassifier(sampleContext());
     expect(formatted.pending).toEqual({
       mealLogConfirm: { preview: "burrito bowl", mealSlot: "lunch" },
     });
-    expect(formatted.integrations).toMatchObject({ googleCalendar: "connected" });
-    expect(formatted.recent_turns).toHaveLength(2);
-    expect(formatted.standing).toMatchObject({
-      program_notes: ["Avoid lauki"],
-    });
     expect(formatted.growth).toMatchObject({
-      local_time: { is_late_evening: true, hour: 22 },
-      today_win: { morning_intention: "Gym before work" },
-      kpis: { gym_miss_streak_days: 3, joy_tank: { level: 42 } },
+      day_frame: { tone: "working", morning_intention: "Ship portfolio draft" },
+      operations: { slipping_routines: expect.any(Array), errands: expect.any(Array) },
+      north_star: { statement: "Build intentionally" },
+      projects: { consistency_hint: expect.stringContaining("Job search") },
     });
-    expect((formatted.growth as { behavior: { narrative_bullets: string[] } }).behavior.narrative_bullets).toContain(
-      "Watch: Missing gym 3 days",
-    );
+    expect(
+      (formatted.growth as { behavior: { issues: string[] } }).behavior.issues,
+    ).toContain("Routine slipping on gym");
   });
 });

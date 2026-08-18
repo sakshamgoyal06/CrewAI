@@ -4,6 +4,7 @@
  */
 import type { IntentRoutingHints } from "../routing/intentRoutingHints.js";
 import type { UserKnowledgeIntegrations } from "../memory/userKnowledge.js";
+import type { DayTone } from "./growthHelpers.js";
 
 /** Compact turn for routing — includes metadata for continuations (Yes, undo, playlists). */
 export type RoutingRecentTurn = {
@@ -42,8 +43,8 @@ export type RoutingActiveWork = {
     projectType?: string;
     status: string;
   }>;
-  gymEventToday: boolean;
   openCommitmentCount: number;
+  overdueCommitmentCount: number;
 };
 
 /** Standing rules and preferences surfaced for routing (meal rules, avoid lists). */
@@ -54,7 +55,7 @@ export type RoutingStandingContext = {
   routingFacts: string[];
 };
 
-/** Growth-aligned snapshot — lists, goals, behavior, today's win, KPIs. */
+/** Growth-aligned snapshot — commitments, projects, north star, day frame, KPIs. */
 export type RoutingGrowthContext = {
   localTime: {
     dateKey: string;
@@ -62,25 +63,84 @@ export type RoutingGrowthContext = {
     minute: number;
     isLateEvening: boolean;
   };
-  lists: Array<{ slug: string; displayName: string; openCount: number }>;
-  listHighlights: Array<{ slug: string; title: string; status?: string }>;
-  goals: Array<{ title: string; pillar: string; status: string }>;
-  todayWin: {
+
+  /** Rest vs working day, morning state, today's win. */
+  dayFrame: {
+    tone: DayTone;
+    toneReason?: string;
     morningIntention?: string;
     energyLevel?: number;
+    feeling?: string;
+    dayRating?: string;
+    weekPriorities?: string;
+    dailyPlanIntention?: string;
+    morningNotes: string[];
     winConditionPending?: { phase: string; candidateText?: string };
   };
+
+  northStar: {
+    statement?: string;
+    goals: Array<{
+      title: string;
+      pillar: string;
+      timeframe: string;
+      status: string;
+    }>;
+  };
+
+  operations: {
+    todayCommitments: Array<{
+      title: string;
+      status: string;
+      pillar: string;
+      activityKey?: string | null;
+      plannedStartAt?: string | null;
+      overdue?: boolean;
+    }>;
+    overdueCount: number;
+    errands: Array<{
+      source: "task" | "list" | "event";
+      slug?: string;
+      title: string;
+      status?: string;
+    }>;
+    slippingRoutines: Array<{
+      activityKey: string;
+      activity: string;
+      pillar?: string;
+      recentMisses: number;
+      showUpRate?: number;
+      total?: number;
+    }>;
+  };
+
+  projects: {
+    active: Array<{
+      title: string;
+      pillar: string;
+      status: string;
+      projectType?: string;
+      targetDate?: string | null;
+      openChecklistCount?: number;
+      nextChecklistItem?: string;
+    }>;
+    consistencyHint?: string;
+  };
+
+  lists: Array<{ slug: string; displayName: string; openCount: number }>;
+  listHighlights: Array<{ slug: string; title: string; status?: string }>;
+
   behavior: {
-    recentIssues: string[];
-    recentWins: string[];
+    issues: string[];
+    wins: string[];
     dailyLogSnippets: Array<{ date: string; snippet: string }>;
-    /** Compact bullets for classifier and growth-aligned routing. */
     narrativeBullets: string[];
   };
+
   kpis: {
     joyTank?: { level: number; date: string };
     pillarStatus: Array<{ pillar: string; status: string; summary?: string }>;
-    activityStats: Array<{
+    topRoutines: Array<{
       activity: string;
       pillar: string;
       done: number;
@@ -88,8 +148,7 @@ export type RoutingGrowthContext = {
       total: number;
       showUpRate?: number;
     }>;
-    gymMissStreakDays?: number;
-    routineConsistencyHint?: string;
+    consistencyHint?: string;
   };
 };
 
@@ -114,7 +173,6 @@ export type RoutingContext = {
 
   standing: RoutingStandingContext;
 
-  /** Lists, goals, logged behavior, today's win, joy/consistency KPIs. */
   growth: RoutingGrowthContext;
 
   routingHints: IntentRoutingHints;

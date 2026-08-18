@@ -66,12 +66,17 @@ routing_context (when present) — use with the message:
 - standing.routing_facts / program_notes → honor avoid lists and meal rules when classifying food messages → HEALTH
 
 growth (when present) — align routing with the user's growth, not just keywords:
-- growth.local_time.is_late_evening → leisure/rest asks after 21:00 may still route correctly but execution should favor sleep/recovery when growth.kpis.gym_miss_streak_days is high
-- growth.today_win.morning_intention → user's stated win for today; cross-pillar asks should respect it
-- growth.behavior.narrative_bullets / recent_issues → tired, gym trouble, low energy — HEALTH or supportive GENERAL, not ignoring context
-- growth.kpis.joy_tank (low) + HAPPINESS leisure ask → valid joy refill; still note growth.kpis.routine_consistency_hint when gym is slipping
-- growth.lists / list_highlights → saved watchlist/readlist/tasks; movie or book asks may be GENERAL list actions or HAPPINESS taste — use whether they want to log, add to list, or get a recommendation
-- growth.goals + active_work.active_projects → WISDOM for career/build goals; tie project status to GENERAL
+- growth.day_frame.tone (working | rest | relaxed | mixed) — respect light days; don't push grind on rest/relaxed
+- growth.day_frame.morning_intention / morning_notes — today's win and morning changes; cross-pillar asks should respect them
+- growth.north_star.statement / goals — north star and active goals; career/build → WISDOM, money → WEALTH
+- growth.operations.today_commitments / overdue_count — schedule and commitment load; holistic day → GENERAL
+- growth.operations.errands — open tasks/admin items; list or event actions → GENERAL
+- growth.operations.slipping_routines — any activity_key with recent misses (not gym-specific); note when leisure competes with recovery
+- growth.projects.active / consistency_hint — project status and open next steps → GENERAL or WISDOM
+- growth.behavior.issues / narrative_bullets — issues faced (tired, friction, blockers)
+- growth.kpis.joy_tank (low) + HAPPINESS leisure → valid joy refill; still note slipping_routines and day_frame.tone
+- growth.local_time.is_late_evening — late leisure/rest may be appropriate when routines are slipping
+- growth.lists / list_highlights — saved watchlist/readlist/tasks for media and errand routing
 
 When a message could fit two categories, choose the one the user is asking you to act on.
 Reply with only the category name.`;

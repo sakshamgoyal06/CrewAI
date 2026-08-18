@@ -11,11 +11,7 @@ import { getMealLogPending } from "../../meals/mealLogPending.js";
 import { getReversibleAction } from "../routing/reversibleAction.js";
 import { getActiveMealPlanSession } from "../../nutrition/planning/mealPlanningSessionStore.js";
 import { getActiveProjectSession } from "../../projects/projectSessionStore.js";
-import { listActiveProjects } from "../../projects/projectStore.js";
 import { fetchRecentRoutingTurns } from "../../tools/routingContext.js";
-import { supabase } from "../../tools/clients.js";
-import { logger } from "../../logger.js";
-import { loggableError } from "../../util/loggableError.js";
 import { buildIntegrationRegistry } from "./integrationRegistry.js";
 import { loadGrowthSnapshot } from "./loadGrowthSnapshot.js";
 import { normalizeRoutingRecentTurns } from "./normalizeRecentTurns.js";
@@ -70,45 +66,6 @@ async function loadStandingContext(userProfileId: string): Promise<RoutingStandi
   };
 }
 
-async function countOpenCommitmentsToday(
-  userProfileId: string,
-  timezone: string,
-): Promise<{ count: number; gymToday: boolean }> {
-  try {
-    const now = new Date();
-    const localDate = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone || "UTC",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(now);
-
-    const { data, error } = await supabase
-      .from("magnus_events")
-      .select("id, title, pillar, status, planned_start_at")
-      .eq("user_profile_id", userProfileId)
-      .in("status", ["planned", "in_progress"])
-      .gte("planned_start_at", `${localDate}T00:00:00`)
-      .lte("planned_start_at", `${localDate}T23:59:59`)
-      .limit(12);
-
-    if (error || !data?.length) {
-      return { count: 0, gymToday: false };
-    }
-
-    const gymToday = data.some((row) => {
-      const title = String(row.title ?? "").toLowerCase();
-      const pillar = String(row.pillar ?? "").toLowerCase();
-      return pillar === "health" && /\b(gym|workout|train|hevy|legs|push|pull)\b/.test(title);
-    });
-
-    return { count: data.length, gymToday };
-  } catch (err) {
-    logger.warn({ err: loggableError(err), userProfileId }, "routing: open commitments load failed");
-    return { count: 0, gymToday: false };
-  }
-}
-
 export type AssembleRoutingContextInput = {
   userProfileId: string;
   telegramUserId: string;
@@ -133,9 +90,7 @@ export async function assembleRoutingContext(
     reversible,
     projectSession,
     mealPlanSession,
-    activeProjects,
     standing,
-    openToday,
     growth,
   ] = await Promise.all([
     fetchRecentRoutingTurns(input.userProfileId, input.telegramUserId, 8),
@@ -145,10 +100,12 @@ export async function assembleRoutingContext(
     getReversibleAction(input.userProfileId),
     getActiveProjectSession(input.userProfileId),
     getActiveMealPlanSession(input.userProfileId),
-    listActiveProjects(input.userProfileId).catch(() => []),
     loadStandingContext(input.userProfileId),
-    countOpenCommitmentsToday(input.userProfileId, timezone),
-    loadGrowthSnapshot({ userProfileId: input.userProfileId, timezone }),
+    loadGrowthSnapshot({
+      userProfileId: input.userProfileId,
+      timezone,
+      northStarGoal,
+    }),
   ]);
 
   const recentTurns = normalizeRoutingRecentTurns(recentRaw);
@@ -205,14 +162,14 @@ export async function assembleRoutingContext(
     recentTurns,
     pending,
     activeWork: {
-      activeProjects: activeProjects.slice(0, 3).map((p) => ({
+      activeProjects: growth.projects.active.slice(0, 3).map((p) => ({
         title: p.title,
-        pillar: p.primary_pillar,
-        projectType: p.project_type,
+        pillar: p.pillar,
+        projectType: p.projectType,
         status: p.status,
       })),
-      gymEventToday: openToday.gymToday,
-      openCommitmentCount: openToday.count,
+      openCommitmentCount: growth.operations.todayCommitments.length,
+      overdueCommitmentCount: growth.operations.overdueCount,
     },
     standing,
     growth,

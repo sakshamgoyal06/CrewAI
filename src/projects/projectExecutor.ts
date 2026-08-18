@@ -59,6 +59,7 @@ export async function buildActiveProjectSummaries(
       target_date: p.target_date,
       status: p.status,
       project_type: p.project_type,
+      primary_pillar: p.primary_pillar,
       priority_rank: p.priority_rank,
       energy_budget: p.energy_budget,
       open_checklist_count: open,

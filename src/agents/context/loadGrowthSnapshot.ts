@@ -1,87 +1,73 @@
 /**
- * Growth-oriented snapshot for routing — lists, goals, behavior narrative, today's win, KPIs.
- * Keeps routing aligned with the user's actual growth (not just intent disambiguation).
+ * Growth-oriented snapshot for routing — commitments, projects, north star, day frame, KPIs.
+ * Reads only from per-user stores; nothing gym- or activity-specific hardcoded.
  */
 import { lifeosContextEnabled } from "../../config/lifeosContext.js";
 import { getLocalTimeParts } from "../../jobs/morningBriefTime.js";
 import { getWinConditionPending } from "../../jobs/winConditionPending.js";
 import { loadListMemoryContext } from "../../lists/listMemory.js";
-import { fetchCheckinItem, fetchListBySlug } from "../../lists/listStore.js";
-import { listActiveLifeosGoals } from "../../lifeos/lifeosStore.js";
+import { ensureUserLists } from "../../lists/listService.js";
+import { fetchCheckinItem, fetchListBySlug, queryListItems } from "../../lists/listStore.js";
 import { offsetDateKey } from "../../nutrition/parseMealPlanJson.js";
+import { buildActiveProjectSummaries } from "../../projects/projectExecutor.js";
 import { supabase } from "../../tools/clients.js";
 import { logger } from "../../logger.js";
 import { loggableError } from "../../util/loggableError.js";
 import { loadUserProgramMemory } from "../../users/userProgramMemory.js";
 import { loadSemanticFacts } from "../memory/semanticMemory.js";
 import { parseMarkdownSectionBullets } from "../memory/userKnowledge.js";
+import {
+  buildBehaviorNarrative,
+  buildSlippingRoutines,
+  inferDayFrameTone,
+  isEventOverdue,
+  isLateEveningHour,
+  localWeekdayIndex,
+  projectConsistencyHint,
+  routineConsistencyHint,
+} from "./growthHelpers.js";
 import type { RoutingGrowthContext } from "./types.js";
 
-const GYM_ACTIVITY_RE = /\b(gym|workout|train|hevy|push|pull|legs|cardio)\b/i;
 const LATE_EVENING_HOUR = 21;
-const MAX_NARRATIVE_BULLETS = 8;
-const MAX_LOG_SNIPPETS = 6;
-
-function truncate(text: string, max: number): string {
-  const t = text.replace(/\s+/g, " ").trim();
-  if (t.length <= max) {
-    return t;
-  }
-  return `${t.slice(0, max)}…`;
-}
+const MAX_LOG_SNIPPETS = 8;
+const ERRAND_LIST_SLUG_RE = /(?:task|errand|shopping|todo|chore|admin)/i;
 
 function firstLine(body: string): string {
   return body.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
 }
 
-function programLearningsBody(
+function programSectionBody(
   rows: Array<{ section: string; body: string }>,
+  section: string,
 ): string {
-  return rows.find((r) => r.section === "program_learnings")?.body ?? "";
+  return rows.find((r) => r.section === section)?.body ?? "";
 }
 
-/** Compact bullets for classifier — issues, wins, recent logs, semantic facts. */
-export function buildBehaviorNarrative(input: {
-  recentIssues: string[];
-  recentWins: string[];
-  dailyLogSnippets: Array<{ date: string; snippet: string }>;
-  semanticFacts: string[];
-}): string[] {
-  const bullets: string[] = [];
-
-  for (const issue of input.recentIssues.slice(0, 3)) {
-    bullets.push(`Watch: ${truncate(issue, 120)}`);
-  }
-  for (const win of input.recentWins.slice(0, 2)) {
-    bullets.push(`Win: ${truncate(win, 120)}`);
-  }
-  for (const log of input.dailyLogSnippets.slice(0, 4)) {
-    bullets.push(`${log.date}: ${truncate(log.snippet, 140)}`);
-  }
-  for (const fact of input.semanticFacts.slice(0, 3)) {
-    if (!bullets.some((b) => b.includes(fact.slice(0, 40)))) {
-      bullets.push(`Fact: ${truncate(fact, 120)}`);
-    }
-  }
-
-  return bullets.slice(0, MAX_NARRATIVE_BULLETS);
-}
-
-export function computeShowUpRate(done: number, total: number): number | undefined {
-  if (total <= 0) {
+function strExtra(extra: Record<string, unknown> | undefined, key: string): string | undefined {
+  const v = extra?.[key];
+  if (v == null) {
     return undefined;
   }
-  return Math.round((done / total) * 100);
+  const s = String(v).trim();
+  return s || undefined;
 }
 
-export function isLateEveningHour(hour: number): boolean {
-  return hour >= LATE_EVENING_HOUR;
+function numExtra(extra: Record<string, unknown> | undefined, key: string): number | undefined {
+  const v = extra?.[key];
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : undefined;
 }
 
-async function loadTodayCheckinWin(
+async function loadTodayCheckin(
   userProfileId: string,
   dateKey: string,
-): Promise<{ morningIntention?: string; energyLevel?: number }> {
+): Promise<{
+  morningIntention?: string;
+  energyLevel?: number;
+  feeling?: string;
+  dayRating?: string;
+  weekPriorities?: string;
+}> {
   const list = await fetchListBySlug(userProfileId, "checkins");
   if (!list.ok || !list.data) {
     return {};
@@ -91,24 +77,55 @@ async function loadTodayCheckinWin(
     return {};
   }
   const extra = item.data.extra;
-  const morningIntention = extra["Morning Intention"];
-  const energyLevel = extra["Energy Level"];
   return {
-    morningIntention:
-      morningIntention != null && String(morningIntention).trim()
-        ? String(morningIntention).trim()
-        : undefined,
-    energyLevel:
-      energyLevel != null && Number.isFinite(Number(energyLevel))
-        ? Number(energyLevel)
-        : undefined,
+    morningIntention: strExtra(extra, "Morning Intention"),
+    energyLevel: numExtra(extra, "Energy Level"),
+    feeling: strExtra(extra, "How Are You Feeling"),
+    dayRating: strExtra(extra, "Day Rating"),
+    weekPriorities: strExtra(extra, "Week Priorities"),
   };
+}
+
+async function loadDailyPlanIntention(
+  userProfileId: string,
+  dateKey: string,
+): Promise<string | undefined> {
+  if (!lifeosContextEnabled()) {
+    return undefined;
+  }
+  try {
+    const { data } = await supabase
+      .from("daily_plans")
+      .select("morning_intention, top_3_priorities")
+      .eq("user_profile_id", userProfileId)
+      .eq("date", dateKey)
+      .order("generated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const intention =
+      typeof data?.morning_intention === "string" ? data.morning_intention.trim() : "";
+    if (intention) {
+      return intention;
+    }
+    const priorities = data?.top_3_priorities;
+    if (Array.isArray(priorities) && priorities.length > 0) {
+      return priorities
+        .slice(0, 3)
+        .map((p) => String(p).trim())
+        .filter(Boolean)
+        .join("; ");
+    }
+  } catch {
+    /* table optional */
+  }
+  return undefined;
 }
 
 async function loadRecentDailyLogs(
   userProfileId: string,
   limit: number,
-): Promise<Array<{ date: string; snippet: string }>> {
+): Promise<Array<{ date: string; snippet: string; isToday: boolean }>> {
   try {
     const { data, error } = await supabase
       .from("magnus_daily_logs")
@@ -132,11 +149,38 @@ async function loadRecentDailyLogs(
           typeof row.log_date === "string" && row.log_date
             ? row.log_date
             : String(row.created_at ?? "").slice(0, 10);
-        return { date, snippet };
+        return { date, snippet, isToday: false };
       })
-      .filter((r): r is { date: string; snippet: string } => r != null);
+      .filter((r): r is { date: string; snippet: string; isToday: boolean } => r != null);
   } catch (err) {
     logger.debug({ err: loggableError(err) }, "growth: daily logs load failed");
+    return [];
+  }
+}
+
+async function loadNorthStarGoals(
+  userProfileId: string,
+): Promise<RoutingGrowthContext["northStar"]["goals"]> {
+  if (!lifeosContextEnabled()) {
+    return [];
+  }
+  try {
+    const { data } = await supabase
+      .from("goals")
+      .select("title, pillar, timeframe, status")
+      .eq("user_profile_id", userProfileId)
+      .eq("status", "active")
+      .eq("is_deleted", false)
+      .order("updated_at", { ascending: false })
+      .limit(12);
+
+    return (data ?? []).map((row) => ({
+      title: String(row.title ?? ""),
+      pillar: String(row.pillar ?? "life"),
+      timeframe: String(row.timeframe ?? "weekly"),
+      status: String(row.status ?? "active"),
+    }));
+  } catch {
     return [];
   }
 }
@@ -145,33 +189,24 @@ async function loadJoyTank(
   userProfileId: string,
   dateKey: string,
 ): Promise<{ level: number; date: string } | undefined> {
-  if (!lifeosContextEnabled()) {
-    return loadJoyFromCheckin(userProfileId, dateKey);
-  }
+  if (lifeosContextEnabled()) {
+    try {
+      const { data } = await supabase
+        .from("happiness_reserve")
+        .select("level, date")
+        .eq("user_profile_id", userProfileId)
+        .order("date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-  try {
-    const { data } = await supabase
-      .from("happiness_reserve")
-      .select("level, date")
-      .eq("user_profile_id", userProfileId)
-      .order("date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (data?.level != null && Number.isFinite(Number(data.level))) {
-      return { level: Number(data.level), date: String(data.date ?? dateKey) };
+      if (data?.level != null && Number.isFinite(Number(data.level))) {
+        return { level: Number(data.level), date: String(data.date ?? dateKey) };
+      }
+    } catch {
+      /* optional table */
     }
-  } catch {
-    /* table may be missing */
   }
 
-  return loadJoyFromCheckin(userProfileId, dateKey);
-}
-
-async function loadJoyFromCheckin(
-  userProfileId: string,
-  dateKey: string,
-): Promise<{ level: number; date: string } | undefined> {
   const list = await fetchListBySlug(userProfileId, "checkins");
   if (!list.ok || !list.data) {
     return undefined;
@@ -180,9 +215,8 @@ async function loadJoyFromCheckin(
   if (!item.ok || !item.data?.extra) {
     return undefined;
   }
-  const joy = item.data.extra["Joy Score"];
-  const n = typeof joy === "number" ? joy : Number(joy);
-  if (!Number.isFinite(n) || n <= 0) {
+  const n = numExtra(item.data.extra, "Joy Score");
+  if (n == null || n <= 0) {
     return undefined;
   }
   return { level: n, date: dateKey };
@@ -190,7 +224,7 @@ async function loadJoyFromCheckin(
 
 async function loadPillarStatus(
   userProfileId: string,
-): Promise<Array<{ pillar: string; status: string; summary?: string }>> {
+): Promise<RoutingGrowthContext["kpis"]["pillarStatus"]> {
   if (!lifeosContextEnabled()) {
     return [];
   }
@@ -205,12 +239,8 @@ async function loadPillarStatus(
       .order("date", { ascending: false })
       .limit(12);
 
-    if (!data?.length) {
-      return [];
-    }
-
     const byPillar = new Map<string, { pillar: string; status: string; summary?: string }>();
-    for (const row of data) {
+    for (const row of data ?? []) {
       const pillar = String(row.pillar ?? "");
       if (!pillar || byPillar.has(pillar)) {
         continue;
@@ -227,9 +257,9 @@ async function loadPillarStatus(
   }
 }
 
-async function loadActivityStats(
+async function loadTopRoutines(
   userProfileId: string,
-): Promise<RoutingGrowthContext["kpis"]["activityStats"]> {
+): Promise<RoutingGrowthContext["kpis"]["topRoutines"]> {
   try {
     const { data } = await supabase
       .from("magnus_event_activity_stats")
@@ -238,11 +268,7 @@ async function loadActivityStats(
       .order("total", { ascending: false })
       .limit(12);
 
-    if (!data?.length) {
-      return [];
-    }
-
-    return data
+    return (data ?? [])
       .map((row) => {
         const done = Number(row.done_count ?? 0);
         const missed = Number(row.missed_count ?? 0);
@@ -253,7 +279,7 @@ async function loadActivityStats(
           done,
           missed,
           total,
-          showUpRate: computeShowUpRate(done, total),
+          showUpRate: total > 0 ? Math.round((done / total) * 100) : undefined,
         };
       })
       .filter((r) => r.activity && r.total > 0)
@@ -263,76 +289,158 @@ async function loadActivityStats(
   }
 }
 
-async function countRecentGymMisses(
-  userProfileId: string,
-  timezone: string,
-  lookbackDays: number,
-): Promise<number> {
-  try {
-    const now = new Date();
-    const local = getLocalTimeParts(now, timezone);
-    const fromKey = offsetDateKey(local.dateKey, -lookbackDays);
+type EventRow = {
+  title: string;
+  status: string;
+  pillar: string;
+  activity_key: string | null;
+  planned_start_at: string | null;
+  planned_end_at: string | null;
+};
 
+async function loadCommitments(
+  userProfileId: string,
+  dateKey: string,
+  timezone: string,
+  now: Date,
+): Promise<{
+  today: RoutingGrowthContext["operations"]["todayCommitments"];
+  overdueCount: number;
+  recentMissesByKey: Map<string, { activity: string; pillar?: string; misses: number }>;
+}> {
+  const fromKey = offsetDateKey(dateKey, -7);
+  const todayStart = `${dateKey}T00:00:00`;
+  const todayEnd = `${dateKey}T23:59:59`;
+
+  try {
     const { data } = await supabase
       .from("magnus_events")
-      .select("status, title, activity_key, planned_start_at")
+      .select("title, status, pillar, activity_key, planned_start_at, planned_end_at")
       .eq("user_profile_id", userProfileId)
       .gte("planned_start_at", `${fromKey}T00:00:00`)
-      .lte("planned_start_at", `${local.dateKey}T23:59:59`)
-      .in("status", ["missed", "skipped", "planned"])
-      .limit(40);
+      .lte("planned_start_at", todayEnd)
+      .limit(60);
 
     if (!data?.length) {
-      return 0;
+      return { today: [], overdueCount: 0, recentMissesByKey: new Map() };
     }
 
-    let misses = 0;
-    for (const row of data) {
-      const title = String(row.title ?? "");
-      const activityKey = String(row.activity_key ?? "");
-      const blob = `${title} ${activityKey}`.toLowerCase();
-      if (!GYM_ACTIVITY_RE.test(blob)) {
-        continue;
-      }
-      const status = String(row.status ?? "");
-      if (status === "missed" || status === "skipped") {
-        misses += 1;
-      } else if (status === "planned") {
-        const planned = row.planned_start_at ? new Date(String(row.planned_start_at)) : null;
-        if (planned && planned.getTime() < now.getTime()) {
-          misses += 1;
+    const today: RoutingGrowthContext["operations"]["todayCommitments"] = [];
+    let overdueCount = 0;
+    const recentMissesByKey = new Map<
+      string,
+      { activity: string; pillar?: string; misses: number }
+    >();
+
+    for (const raw of data as EventRow[]) {
+      const status = String(raw.status ?? "");
+      const plannedStart = raw.planned_start_at;
+      const isToday =
+        plannedStart != null &&
+        plannedStart >= todayStart &&
+        plannedStart <= todayEnd;
+
+      if (isToday && (status === "planned" || status === "in_progress")) {
+        const overdue = isEventOverdue({
+          status,
+          plannedStartAt: plannedStart,
+          plannedEndAt: raw.planned_end_at,
+          now,
+        });
+        today.push({
+          title: String(raw.title ?? ""),
+          status,
+          pillar: String(raw.pillar ?? ""),
+          activityKey: raw.activity_key,
+          plannedStartAt: plannedStart,
+          overdue,
+        });
+        if (overdue) {
+          overdueCount += 1;
         }
+      } else if (
+        !isToday &&
+        plannedStart != null &&
+        plannedStart < todayStart &&
+        (status === "planned" || status === "in_progress")
+      ) {
+        overdueCount += 1;
+      }
+
+      if (status === "missed" || status === "skipped") {
+        const key = raw.activity_key?.trim() || String(raw.title ?? "").toLowerCase().slice(0, 40);
+        if (!key) {
+          continue;
+        }
+        const existing = recentMissesByKey.get(key);
+        recentMissesByKey.set(key, {
+          activity: raw.activity_key ?? String(raw.title ?? key),
+          pillar: String(raw.pillar ?? ""),
+          misses: (existing?.misses ?? 0) + 1,
+        });
       }
     }
-    return misses;
-  } catch {
-    return 0;
+
+    today.sort((a, b) => {
+      const ta = a.plannedStartAt ? new Date(a.plannedStartAt).getTime() : 0;
+      const tb = b.plannedStartAt ? new Date(b.plannedStartAt).getTime() : 0;
+      return ta - tb;
+    });
+
+    return { today: today.slice(0, 10), overdueCount, recentMissesByKey };
+  } catch (err) {
+    logger.debug({ err: loggableError(err), timezone }, "growth: commitments load failed");
+    return { today: [], overdueCount: 0, recentMissesByKey: new Map() };
   }
 }
 
-function routineConsistencyHint(
-  activityStats: RoutingGrowthContext["kpis"]["activityStats"],
-  gymMisses: number,
-): string | undefined {
-  const gymStat = activityStats.find((s) => GYM_ACTIVITY_RE.test(s.activity));
-  if (gymMisses >= 2) {
-    return `Gym missed or skipped ${gymMisses} times recently — protect recovery and show-up tomorrow.`;
+async function loadErrands(
+  userProfileId: string,
+  todayCommitments: RoutingGrowthContext["operations"]["todayCommitments"],
+): Promise<RoutingGrowthContext["operations"]["errands"]> {
+  const errands: RoutingGrowthContext["operations"]["errands"] = [];
+
+  for (const c of todayCommitments) {
+    if (c.pillar === "magnus" || /\b(?:errand|admin|chore|pickup|drop|bill|renew)\b/i.test(c.title)) {
+      errands.push({ source: "event", title: c.title, status: c.status });
+    }
   }
-  if (gymStat?.showUpRate != null && gymStat.showUpRate < 60 && gymStat.total >= 3) {
-    return `Gym show-up rate ~${gymStat.showUpRate}% (${gymStat.done}/${gymStat.total}) — consistency is the lever.`;
+
+  try {
+    const lists = await ensureUserLists(userProfileId);
+    for (const list of lists) {
+      if (!ERRAND_LIST_SLUG_RE.test(list.slug)) {
+        continue;
+      }
+      const items = await queryListItems({
+        userProfileId,
+        listId: list.id,
+        openStatuses: list.open_statuses.length > 0 ? list.open_statuses : undefined,
+        limit: 6,
+      });
+      if (!items.ok) {
+        continue;
+      }
+      for (const item of items.data.slice(0, 4)) {
+        errands.push({
+          source: list.slug === "tasks" ? "task" : "list",
+          slug: list.slug,
+          title: item.title,
+          status: item.status ?? undefined,
+        });
+      }
+    }
+  } catch {
+    /* lists optional */
   }
-  const weakest = [...activityStats]
-    .filter((s) => s.total >= 3 && s.showUpRate != null && s.showUpRate < 70)
-    .sort((a, b) => (a.showUpRate ?? 100) - (b.showUpRate ?? 100))[0];
-  if (weakest) {
-    return `${weakest.activity} show-up ~${weakest.showUpRate}% — routine slipping.`;
-  }
-  return undefined;
+
+  return errands.slice(0, 10);
 }
 
 export type LoadGrowthSnapshotInput = {
   userProfileId: string;
   timezone: string;
+  northStarGoal?: string;
   now?: Date;
 };
 
@@ -342,54 +450,83 @@ export async function loadGrowthSnapshot(
   const now = input.now ?? new Date();
   const timezone = input.timezone.trim() || "UTC";
   const local = getLocalTimeParts(now, timezone);
+  const dayIndex = localWeekdayIndex(now, timezone);
 
   const [
     listMemory,
     programRows,
     winPending,
     checkinToday,
-    dailyLogs,
+    dailyPlanIntention,
+    dailyLogsRaw,
     semanticFacts,
-    goalsResult,
+    northStarGoals,
     joyTank,
     pillarStatus,
-    activityStats,
-    gymMisses,
+    topRoutines,
+    commitments,
+    projectSummaries,
   ] = await Promise.all([
     loadListMemoryContext(input.userProfileId),
     loadUserProgramMemory(input.userProfileId),
     getWinConditionPending(input.userProfileId),
-    loadTodayCheckinWin(input.userProfileId, local.dateKey),
+    loadTodayCheckin(input.userProfileId, local.dateKey),
+    loadDailyPlanIntention(input.userProfileId, local.dateKey),
     loadRecentDailyLogs(input.userProfileId, MAX_LOG_SNIPPETS),
     loadSemanticFacts(input.userProfileId, 8),
-    lifeosContextEnabled()
-      ? listActiveLifeosGoals(input.userProfileId, 8)
-      : Promise.resolve({ ok: true as const, data: [] }),
+    loadNorthStarGoals(input.userProfileId),
     loadJoyTank(input.userProfileId, local.dateKey),
     loadPillarStatus(input.userProfileId),
-    loadActivityStats(input.userProfileId),
-    countRecentGymMisses(input.userProfileId, timezone, 5),
+    loadTopRoutines(input.userProfileId),
+    loadCommitments(input.userProfileId, local.dateKey, timezone, now),
+    buildActiveProjectSummaries(input.userProfileId).catch(() => []),
   ]);
 
-  const learnings = programLearningsBody(programRows);
-  const recentIssues = parseMarkdownSectionBullets(learnings, "Not working / watch").slice(0, 4);
-  const recentWins = parseMarkdownSectionBullets(learnings, "Working").slice(0, 3);
+  const dailyLogs = dailyLogsRaw.map((log) => ({
+    ...log,
+    isToday: log.date === local.dateKey,
+  }));
+  const morningNotes = dailyLogs.filter((l) => l.isToday).map((l) => l.snippet);
 
-  const behaviorNarrative = buildBehaviorNarrative({
-    recentIssues,
-    recentWins,
-    dailyLogSnippets: dailyLogs,
-    semanticFacts,
+  const learnings = programSectionBody(programRows, "program_learnings");
+  const issues = parseMarkdownSectionBullets(learnings, "Not working / watch").slice(0, 5);
+  const wins = parseMarkdownSectionBullets(learnings, "Working").slice(0, 3);
+
+  const scheduleBody = programSectionBody(programRows, "weekly_schedule");
+  const dayTone = inferDayFrameTone({
+    scheduleBody,
+    dayIndex,
+    morningIntention: checkinToday.morningIntention,
+    energyLevel: checkinToday.energyLevel,
+    openCommitmentCount: commitments.today.length,
+    overdueCount: commitments.overdueCount,
+    dailyPlanIntention,
   });
 
-  const goals =
-    goalsResult.ok && goalsResult.data.length > 0
-      ? goalsResult.data.map((g) => ({
-          title: g.title,
-          pillar: g.pillar,
-          status: g.status,
-        }))
-      : [];
+  const slippingRoutines = buildSlippingRoutines({
+    recentMissesByKey: commitments.recentMissesByKey,
+    activityStats: topRoutines,
+  });
+
+  const errands = await loadErrands(input.userProfileId, commitments.today);
+
+  const activeProjects = projectSummaries.slice(0, 4).map((p) => ({
+    title: p.title,
+    pillar: p.primary_pillar,
+    status: p.status,
+    projectType: p.project_type,
+    targetDate: p.target_date,
+    openChecklistCount: p.open_checklist_count,
+    nextChecklistItem: p.next_checklist_item,
+  }));
+
+  const narrativeBullets = buildBehaviorNarrative({
+    issues,
+    wins,
+    dailyLogSnippets: dailyLogs.map(({ date, snippet }) => ({ date, snippet })),
+    semanticFacts,
+    morningNotes,
+  });
 
   const lists = listMemory.catalog.map((c) => ({
     slug: c.slug,
@@ -397,14 +534,40 @@ export async function loadGrowthSnapshot(
     openCount: c.openCount,
   }));
 
-  const consistencyHint = routineConsistencyHint(activityStats, gymMisses);
-
   return {
     localTime: {
       dateKey: local.dateKey,
       hour: local.hour,
       minute: local.minute,
-      isLateEvening: isLateEveningHour(local.hour),
+      isLateEvening: isLateEveningHour(local.hour, LATE_EVENING_HOUR),
+    },
+    dayFrame: {
+      tone: dayTone.tone,
+      toneReason: dayTone.reason,
+      morningIntention: checkinToday.morningIntention,
+      energyLevel: checkinToday.energyLevel,
+      feeling: checkinToday.feeling,
+      dayRating: checkinToday.dayRating,
+      weekPriorities: checkinToday.weekPriorities,
+      dailyPlanIntention,
+      morningNotes,
+      winConditionPending: winPending
+        ? { phase: winPending.phase, candidateText: winPending.candidateText }
+        : undefined,
+    },
+    northStar: {
+      statement: input.northStarGoal?.trim() || undefined,
+      goals: northStarGoals,
+    },
+    operations: {
+      todayCommitments: commitments.today,
+      overdueCount: commitments.overdueCount,
+      errands,
+      slippingRoutines,
+    },
+    projects: {
+      active: activeProjects,
+      consistencyHint: projectConsistencyHint(activeProjects),
     },
     lists,
     listHighlights: listMemory.openHighlights.slice(0, 8).map((h) => ({
@@ -412,26 +575,24 @@ export async function loadGrowthSnapshot(
       title: h.title,
       status: h.status,
     })),
-    goals,
-    todayWin: {
-      morningIntention: checkinToday.morningIntention,
-      energyLevel: checkinToday.energyLevel,
-      winConditionPending: winPending
-        ? { phase: winPending.phase, candidateText: winPending.candidateText }
-        : undefined,
-    },
     behavior: {
-      recentIssues,
-      recentWins,
-      dailyLogSnippets: dailyLogs,
-      narrativeBullets: behaviorNarrative,
+      issues,
+      wins,
+      dailyLogSnippets: dailyLogs.map(({ date, snippet }) => ({ date, snippet })),
+      narrativeBullets,
     },
     kpis: {
       joyTank,
       pillarStatus,
-      activityStats,
-      gymMissStreakDays: gymMisses > 0 ? gymMisses : undefined,
-      routineConsistencyHint: consistencyHint,
+      topRoutines,
+      consistencyHint: routineConsistencyHint(slippingRoutines),
     },
   };
 }
+
+// Re-export helpers used in tests
+export {
+  buildBehaviorNarrative,
+  computeShowUpRate,
+  isLateEveningHour,
+} from "./growthHelpers.js";

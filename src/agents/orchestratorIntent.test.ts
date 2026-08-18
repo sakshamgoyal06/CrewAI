@@ -2,6 +2,31 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createMock = vi.hoisted(() => vi.fn());
 
+const minimalGrowth = vi.hoisted(() => ({
+  localTime: { dateKey: "2026-08-18", hour: 12, minute: 0, isLateEvening: false },
+  dayFrame: { tone: "unknown" as const, morningNotes: [] as string[] },
+  northStar: { goals: [] as Array<{ title: string; pillar: string; timeframe: string; status: string }> },
+  operations: {
+    todayCommitments: [] as Array<{ title: string; status: string; pillar: string }>,
+    overdueCount: 0,
+    errands: [] as Array<{ source: "task"; title: string }>,
+    slippingRoutines: [] as Array<{ activityKey: string; activity: string; recentMisses: number }>,
+  },
+  projects: { active: [] as Array<{ title: string; pillar: string; status: string }> },
+  lists: [] as Array<{ slug: string; displayName: string; openCount: number }>,
+  listHighlights: [] as Array<{ slug: string; title: string }>,
+  behavior: {
+    issues: [] as string[],
+    wins: [] as string[],
+    dailyLogSnippets: [] as Array<{ date: string; snippet: string }>,
+    narrativeBullets: [] as string[],
+  },
+  kpis: {
+    pillarStatus: [] as Array<{ pillar: string; status: string }>,
+    topRoutines: [] as Array<{ activity: string; pillar: string; done: number; missed: number; total: number }>,
+  },
+}));
+
 vi.mock("../tools/clients.js", () => ({
   anthropic: { messages: { create: createMock } },
   supabase: {},
@@ -92,8 +117,9 @@ describe("resolveIntentNaturalLanguage", () => {
           },
           recentTurns: [],
           pending: { mealLogConfirm: { preview: "burrito bowl" } },
-          activeWork: { activeProjects: [], gymEventToday: false, openCommitmentCount: 0 },
+          activeWork: { activeProjects: [], openCommitmentCount: 0, overdueCommitmentCount: 0 },
           standing: { programNotes: [], routingFacts: [] },
+          growth: minimalGrowth,
           routingHints: {
             explicit_meal_log: false,
             looks_like_meal_log_read: false,
@@ -134,8 +160,9 @@ describe("resolveIntentNaturalLanguage", () => {
         },
         recentTurns: [],
         pending: {},
-        activeWork: { activeProjects: [], gymEventToday: false, openCommitmentCount: 2 },
+        activeWork: { activeProjects: [], openCommitmentCount: 2, overdueCommitmentCount: 0 },
         standing: { programNotes: [], routingFacts: [] },
+        growth: minimalGrowth,
         routingHints: {
           explicit_meal_log: false,
           looks_like_meal_log_read: false,

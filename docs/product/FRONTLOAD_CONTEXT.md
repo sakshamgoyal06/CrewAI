@@ -22,7 +22,7 @@ Full execution memory still loads **after** intent (`memoryAgent` + `userKnowled
 | **Integrations registry** | `user_integrations` (flags only) | calendar/kite/youtube off → don't mis-route portfolio/schedule |
 | **Recent turns (8)** | `magnus_chat_messages` + metadata | `Yes` after playlist ops; tool continuation |
 | **Pending state** | Redis + session tables | meal confirm, undo, project FSM, meal-plan FSM |
-| **Active work** | `projects`, `magnus_events` | project status questions; gym today |
+| **Active work** | derived from `growth` | project titles + commitment counts (no activity-specific flags) |
 | **Standing context** | `user_program_memory`, semantic facts | avoid lists, meal rules (lauki, Friday burger) |
 | **Growth snapshot** | lists, goals, checkins, daily logs, LifeOS KPIs | behavior narrative, today's win, joy tank, show-up rate, late-evening coaching |
 | **Routing hints** | `intentRoutingHints.ts` | structural signals (holistic day, compound, meal log) |
@@ -72,8 +72,11 @@ Vectors/RAG (v2): fuzzy recall over old journals — not used for routing yet.
 | Meal plan thread | `change dinner on the plan` | `pending.meal_plan_session` |
 | Project setup | `lock it in` during project FSM | `pending.project_session` |
 | Avoid foods | lauki in plan despite rule | `standing.program_notes` + `routing_facts` |
-| Growth-aligned leisure | "watch a movie" at 21:00 after 3 gym misses | `growth.kpis.gym_miss_streak_days` + `growth.local_time.is_late_evening` + `growth.behavior` |
-| Today's win | cross-pillar ask vs morning intention | `growth.today_win.morning_intention` |
+| Growth-aligned leisure | movie at 21:00 after routine slips | `growth.operations.slipping_routines` + `growth.day_frame.tone` |
+| Today's win | cross-pillar ask vs morning intention | `growth.day_frame.morning_intention` |
+| Rest vs grind | "I want to take it easy" on a working day | `growth.day_frame.tone` (working / rest / relaxed) |
+| Errands | "what's on my task list" | `growth.operations.errands` |
+| Project momentum | "how's the job search going" | `growth.projects` |
 | List-backed media | "add to watchlist" / recommend from saved | `growth.lists` + `growth.list_highlights` |
 
 See `src/capabilities/chatMessageTestAnalysis.ts` (`PRODUCTION_ISSUE_FINDINGS`) and `docs/product/MAGNUS_IDEAS.md`.
@@ -82,21 +85,40 @@ See `src/capabilities/chatMessageTestAnalysis.ts` (`PRODUCTION_ISSUE_FINDINGS`) 
 
 ## Growth snapshot (`growth`)
 
-Loaded in parallel with other routing blocks via `loadGrowthSnapshot()`:
+Loaded via `loadGrowthSnapshot()` — **read-only assembly** from per-user stores. Nothing is gym- or activity-specific; routines group by `activity_key` on `magnus_events`.
 
-| Field | Source | Example use |
-|-------|--------|-------------|
-| `local_time` | user timezone | `is_late_evening` after 21:00 — favor sleep/recovery when gym is slipping |
-| `lists` / `list_highlights` | `magnus_user_lists` + open items | watchlist/readlist/tasks catalog for media and task routing |
-| `goals` | `goals` table (when LifeOS enabled) | active north-star / weekly goals |
-| `today_win` | checkins + Redis win FSM | morning intention, energy, pending win confirmation |
-| `behavior.narrative_bullets` | program learnings, `magnus_daily_logs`, semantic facts | "tired 3 days", "loved movie yesterday", gym trouble |
-| `kpis.joy_tank` | `happiness_reserve` or checkin Joy Score | low joy → HAPPINESS refill is valid |
-| `kpis.activity_stats` | `magnus_event_activity_stats` view | show-up rate per activity (gym, etc.) |
-| `kpis.gym_miss_streak_days` | recent `magnus_events` misses | "missing gym 3 days" coaching signal |
-| `kpis.routine_consistency_hint` | derived from stats + misses | one-line consistency nudge for classifier/execution |
+### How data gets written (any user)
 
-**Example:** User sends "I want to watch a movie today" at 22:00. Classifier may still route HAPPINESS or GENERAL (watchlist), but `growth` tells execution: gym missed 3 days, today's win was "gym before work", late evening → suggest relaxing and sleeping so they can show up tomorrow (not guilt — Joy is a tank to protect).
+| User action | Tool / job | Store |
+|-------------|------------|-------|
+| "Gym tomorrow 7am" / "pay bills Friday" | `log_event` | `magnus_events` → `activity_key` slug |
+| "Missed it" / "done" | `update_event` | event `status` |
+| Stale planned events | `magnus_sweep_missed_events` (morning brief) | `status = missed` |
+| Journal / note | `log_note` / journal tools | `magnus_daily_logs` |
+| Morning intention / energy | morning brief → `log_daily_checkin` | `checkins` list (`extra` JSON) |
+| North star goals | `create_goal` / LifeOS | `goals` (`timeframe`: north_star → weekly) |
+| Open errands | `list_items` add on `tasks` / custom lists | `magnus_list_items` |
+| Issues / wins (long-term) | health coaching, nutrition nightly | `user_program_memory.program_learnings` |
+| Joy / pillar health | `log_joy_tank`, `update_pillar_status` | `happiness_reserve`, `pillar_status` |
+| Show-up KPIs | automatic | view `magnus_event_activity_stats` |
+
+### Growth blocks in routing JSON
+
+| Block | Source | Use |
+|-------|--------|-----|
+| `day_frame` | checkins, `daily_plans`, `weekly_schedule`, commitments | **working / rest / relaxed** tone; morning intention, feeling, morning notes |
+| `north_star` | profile + `goals` | statement + active goals by timeframe |
+| `operations.today_commitments` | `magnus_events` today | what's planned; overdue flag per row |
+| `operations.overdue_count` | `magnus_events` | carry-over load |
+| `operations.errands` | open `tasks` / errand lists + admin events | errands and open loops |
+| `operations.slipping_routines` | missed events + `activity_stats` by `activity_key` | **any** routine slipping (not gym-only) |
+| `projects` | `buildActiveProjectSummaries` | active projects, open checklist, consistency hint |
+| `behavior.issues` / `narrative_bullets` | program learnings, logs, semantic facts | issues faced, recent context |
+| `kpis.top_routines` | `magnus_event_activity_stats` | show-up % per activity |
+| `kpis.joy_tank` / `pillar_status` | LifeOS or checkins | quantified wellbeing |
+| `lists` / `list_highlights` | list catalog | watchlist, readlist, tasks |
+
+**Example:** User at 22:00 asks to watch a movie. `slipping_routines` might show `{ activityKey: "gym", recentMisses: 3 }` or `{ activityKey: "deep_work", ... }` depending on their log — same code path. `day_frame.tone: "working"` + low energy → execution favors rest without guilt.
 
 ---
 
