@@ -104,12 +104,12 @@ shell or `.env`.
 | `src/index.ts` | Boot: clients → capability log → Telegram runtime → health server → watchdog → graceful shutdown |
 | `src/magnus.ts` | Turn handler: allowlist gate, chat persistence, typing indicator, orchestrator call. Starts the Morning Brief cron. |
 | `src/agents/magnusOrchestrator.ts` | Classify → memory → parse/execute/compose per pillar; GENERAL uses parser plan (incl. day_overview, pillar_consultation); `finalizeMagnusVoice` at exit |
-| `src/agents/orchestratorIntent.ts` | Five-way classifier with structural **routing hints** (`intentRoutingHints.ts`); hard overrides: explicit meal log or meal-log read → HEALTH |
-| `src/agents/routing/intentRoutingHints.ts` | Structural signals for top-level intent classifier (YouTube, Magnus tools, portfolio/Hevy reads, holistic day, saved-media pick, compound asks) |
-| `src/agents/routing/conversationSignals.ts` | Cross-cutting conversation signals → routing hints (holistic day, treadmill watch, calendar challenge, compound actions) |
+| `src/agents/orchestratorIntent.ts` | Five-way classifier with LLM **routing context** hints; no regex routing |
+| `src/agents/routing/routingContextParser.ts` | Haiku sub-agent: structural signals + Magnus capability list for intent classifier and pillar parsers |
+| `src/agents/routing/intentRoutingHints.ts` | Async facade over `routingContextParser` for intent classifier |
 | `src/agents/routing/reversibleAction.ts` | Redis-backed last reversible write (`meal_undo`) for disambiguation-free undo |
 | `src/agents/routing/handleReversibleAction.ts` | Orchestrator prelude: "Undo this" resolves to last registered write |
-| `src/agents/routing/pillarConsultationSignals.ts` | Pillar read signals for `pillar_consultation` GENERAL step |
+| `src/agents/routing/pillarConsultationSignals.ts` | Pillar consultation list from routing context parser (LLM) |
 | `src/agents/routing/agentConsultation.ts` | Reconciler for `pillar_consultation` multi-pillar step |
 | `src/projects/` | Projects layer: store, setup FSM, themes, executor, conflict service |
 | `src/agents/tools/runAgentWithTools.ts` | Pillar agents with shared operations tools |
@@ -124,7 +124,6 @@ shell or `.env`.
 | `src/integrations/notion/notionProvision.ts` | Post-OAuth: create Magnus hub, Journal, standard list databases in Notion |
 | `src/agents/tools/notionConnectTool.ts` | `connect_notion`, `setup_notion` Magnus tools |
 | `src/lifeos/` | LifeOS Postgres writers: goals, pillar status, joy tank |
-| `src/agents/tools/magnusActionDetect.ts` | Detect list, LifeOS, Notion, and event-log phrases that need Magnus tools (GENERAL) |
 | `src/agents/routing/actionIntegrity.ts` | Blocks false save/add/log claims unless tools actually succeeded |
 | `src/agents/tools/listTool.ts` | List catalog + `recommend_list_items` filters + `lookup_list_item` (added-at from `created_at`) |
 | `src/lists/` | List catalog templates, Supabase store, service orchestration, optional Notion mirror |
@@ -135,7 +134,7 @@ shell or `.env`.
 | `src/youtube/` | Bookmarks, cue queue, Magnus playlist state, **`playlistResolve`** (pillar aliases vs YT account title match; `youtubeAccountOnly` when user says YT Music) |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
-| `src/agents/health/healthRouter.ts` | Health composite: meal log/photo deterministic gates → pillar plan parser → capability executors (compose pipeline) |
+| `src/agents/health/healthRouter.ts` | Health composite: pillar plan parser (LLM) → capability executors (compose pipeline) |
 | `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
 | `src/agents/memory/` | `loadMemoryContext`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
 | `src/agents/context/` | `assembleRoutingContext`, `loadGrowthSnapshot`, `growthHelpers` — frontload before classify (PR #92) |
@@ -173,15 +172,16 @@ shell or `.env`.
 3. **Rate limit** — Redis fixed 60s window per user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, 0 disables).
 4. **Dedupe** — `update_id` claimed in Redis for 24h, so webhook retries never double-reply.
 5. **Classification** — Five intents. `GENERAL` is Magnus's own work, not a fallback bucket.
-   Before classify, **`assembleRoutingContext`** loads identity, integrations, pending FSM state,
-   recent turns,    active work, standing rules, and a **growth snapshot** (day frame, north star goals,
+   Each turn: **`assembleRoutingContext`** loads identity, integrations, pending FSM state,
+   recent turns, active work, standing rules, and a **growth snapshot** (day frame, north star goals,
    commitments/errands, project consistency, slipping routines by `activity_key`, issues,
-   joy/pillar KPIs). See `docs/product/FRONTLOAD_CONTEXT.md`.
-   The classifier receives **routing hints** (explicit meal log, YouTube/Magnus-tool signals,
-   portfolio/Hevy read signals) with the message; explicit meal-log command or **logged-meal read**
-   (breakdown, history, macros — not the meal plan menu) hard-overrides to `HEALTH`. On `GENERAL`, the pillar plan parser may choose `pillar_consultation` (Magnus tools +
-   pillar depth in one reply) or `day_overview` (calendar + commitments + meals). Pillar specialists
-   are prompt-only except Health (capability executors) and Wealth (Kite read in executor).
+   joy/pillar KPIs). **`routingContextParser`** (Haiku) then produces structural hints and Magnus
+   capability lists from the message + recent turns. Five-way intent classifier (Sonnet) receives
+   hints + assembled context; per-pillar **plan parser** (Haiku) runs step executors. No regex routing
+   bypasses. Calendar management (read/delete/create) routes through the **`calendar`** capability and
+   Magnus tool loop, not `day_overview`. On `GENERAL`, the plan parser may choose `pillar_consultation`,
+   `day_overview`, `calendar`, etc. Pillar specialists are prompt-only except Health (capability
+   executors) and Wealth (Kite read in executor).
 6. **Memory** — Loaded once per turn: recent chat, rolling summary, semantic facts, structured profile/goals/logs, **active projects block** in user knowledge. **Accountability Agent** at orchestrator exit: `action_ledger` + `accountability` metadata on tool turns. Tunable via `MAGNUS_MEMORY_*`.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
    routing in `metadata` (`delegated_agent`, `agent_metadata`). Columns `message_type`
@@ -367,4 +367,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-09-05 (reminders management + lifecycle; routing growth snapshot PR #92; Supabase security hardening)
+**Last updated:** 2026-09-05 (LLM routing parser; reminders management; growth snapshot PR #92; Supabase security)

@@ -29,13 +29,17 @@ process.env.ANTHROPIC_API_KEY ??= "dummy";
 process.env.TELEGRAM_BOT_TOKEN ??= "dummy";
 
 const { USER_QUERY_CATALOG } = await import("../../src/capabilities/userQueryCatalog.ts");
-const { looksLikeMagnusToolAction } = await import(
-  "../../src/agents/tools/magnusActionDetect.ts"
-);
-const { looksLikeYoutubeAction } = await import(
-  "../../src/agents/tools/youtubeActionDetect.ts"
-);
 const { parseMealLogCommand } = await import("../../src/meals/parseMealLogCommand.ts");
+
+function looksLikeYoutubeForSuite(msg: string): boolean {
+  return /\b(?:youtube|yt\s*music|youtu\.be|youtube\.com)\b/i.test(msg);
+}
+
+function looksLikeMagnusToolsForSuite(msg: string): boolean {
+  return /\b(?:watchlist|readlist|connect notion|log_event|remind me|joy tank|list_catalog)\b/i.test(
+    msg,
+  );
+}
 
 type RealMsg = { content: string; intent: string | null; created_at: string };
 
@@ -52,8 +56,8 @@ function inferCategory(msg: string): string {
   if (/\b(zerodha|kite|holdings|portfolio|savings)\b/.test(q)) return "wealth";
   if (/\b(watchlist|readlist|recommend a film|treadmill.*watch)\b/.test(q)) return "happiness_media";
   if (/\b(learning plan|ship|career|ai session|magnus ideas)\b/.test(q)) return "wisdom";
-  if (looksLikeYoutubeAction(msg)) return "general_youtube";
-  if (looksLikeMagnusToolAction(msg)) return "general_tools";
+  if (looksLikeYoutubeForSuite(msg)) return "general_youtube";
+  if (looksLikeMagnusToolsForSuite(msg)) return "general_tools";
   if (/\b(yes|no|undo|that's right|all set|thanks)\b/i.test(msg) && msg.length < 40)
     return "follow_up";
   if (/\b(whole day|day look|morning brief|calendar)\b/.test(q)) return "general_day";
@@ -113,8 +117,8 @@ function fromRealChats(msgs: RealMsg[]): ChatMessageTestCase[] {
       issueTags: tags.length ? tags : undefined,
       structural: {
         explicitMealLog: parseMealLogCommand(m.content).kind === "meal",
-        magnusTools: looksLikeMagnusToolAction(m.content),
-        youtubeAction: looksLikeYoutubeAction(m.content),
+        magnusTools: looksLikeMagnusToolsForSuite(m.content),
+        youtubeAction: looksLikeYoutubeForSuite(m.content),
       },
     };
   });
@@ -367,8 +371,8 @@ function buildSyntheticAndVariations(needed: number): ChatMessageTestCase[] {
         category: block.category,
         structural: {
           explicitMealLog: parseMealLogCommand(msg).kind === "meal",
-          magnusTools: looksLikeMagnusToolAction(msg),
-          youtubeAction: looksLikeYoutubeAction(msg),
+          magnusTools: looksLikeMagnusToolsForSuite(msg),
+          youtubeAction: looksLikeYoutubeForSuite(msg),
         },
       });
     }
@@ -395,8 +399,8 @@ function buildSyntheticAndVariations(needed: number): ChatMessageTestCase[] {
       category: a.category,
       issueTags: a.tags,
       structural: {
-        magnusTools: looksLikeMagnusToolAction(a.msg),
-        youtubeAction: looksLikeYoutubeAction(a.msg),
+        magnusTools: looksLikeMagnusToolsForSuite(a.msg),
+        youtubeAction: looksLikeYoutubeForSuite(a.msg),
       },
     });
   }
@@ -444,8 +448,8 @@ function enrichStructural(tc: ChatMessageTestCase): ChatMessageTestCase {
       ...tc.structural,
       explicitMealLog:
         tc.structural?.explicitMealLog ?? parseMealLogCommand(tc.message).kind === "meal",
-      magnusTools: tc.structural?.magnusTools ?? looksLikeMagnusToolAction(tc.message),
-      youtubeAction: tc.structural?.youtubeAction ?? looksLikeYoutubeAction(tc.message),
+      magnusTools: tc.structural?.magnusTools ?? looksLikeMagnusToolsForSuite(tc.message),
+      youtubeAction: tc.structural?.youtubeAction ?? looksLikeYoutubeForSuite(tc.message),
     },
     issueTags: tc.issueTags ?? inferIssueTags(tc.message, tc.observedIntent),
   };

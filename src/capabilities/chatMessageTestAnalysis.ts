@@ -27,43 +27,16 @@ const FOLLOW_UP_RE = /^(yes|no|undo|that's right|all set|go with \d|lock it in)\
 export function analyzeStructuralCase(
   tc: ChatMessageTestCase,
   deps: {
-    buildHints: (msg: string) => Record<string, boolean>;
-    magnusDetect: (msg: string) => boolean;
-    youtubeDetect: (msg: string) => boolean;
     mealParse: (msg: string) => { kind: string };
-    pillarConsult: (msg: string) => string[];
   },
 ): StructuralCheckResult {
   const failures: string[] = [];
   const warnings: string[] = [];
 
-  const magnus = deps.magnusDetect(tc.message);
-  const youtube = deps.youtubeDetect(tc.message);
-  if (magnus && youtube) {
-    failures.push("collision: both magnus and youtube detectors true");
-  }
-
   if (tc.structural?.explicitMealLog !== undefined) {
     const actual = deps.mealParse(tc.message).kind === "meal";
     if (tc.structural.explicitMealLog !== actual) {
       failures.push(`explicitMealLog: expected ${tc.structural.explicitMealLog}, got ${actual}`);
-    }
-  }
-
-  if (tc.structural?.magnusTools !== undefined && tc.structural.magnusTools !== magnus) {
-    failures.push(`magnusTools: expected ${tc.structural.magnusTools}, got ${magnus}`);
-  }
-
-  if (tc.structural?.youtubeAction !== undefined && tc.structural.youtubeAction !== youtube) {
-    failures.push(`youtubeAction: expected ${tc.structural.youtubeAction}, got ${youtube}`);
-  }
-
-  if (tc.structural?.consultPillars?.length) {
-    const resolved = deps.pillarConsult(tc.message);
-    for (const p of tc.structural.consultPillars) {
-      if (!resolved.includes(p)) {
-        failures.push(`consultPillars: missing ${p} in [${resolved.join(", ")}]`);
-      }
     }
   }
 

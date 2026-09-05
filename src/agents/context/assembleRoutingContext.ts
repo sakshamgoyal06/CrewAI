@@ -2,7 +2,10 @@
  * Assemble routing context before intent classification.
  * Loads only what disambiguates intent — full memory loads after classify.
  */
-import { buildIntentRoutingHints } from "../routing/intentRoutingHints.js";
+import {
+  parseRoutingContext,
+  routingContextToIntentHints,
+} from "../routing/routingContextParser.js";
 import { fetchUserHealthProfile } from "../health/healthOnboarding.js";
 import { loadSemanticFacts } from "../memory/semanticMemory.js";
 import { loadUserProgramMemory } from "../../users/userProgramMemory.js";
@@ -109,7 +112,11 @@ export async function assembleRoutingContext(
   ]);
 
   const recentTurns = normalizeRoutingRecentTurns(recentRaw);
-  const routingHints = buildIntentRoutingHints(input.userMessage, recentRaw);
+  const parserSignals = await parseRoutingContext({
+    userMessage: input.userMessage,
+    recentTurns: recentRaw,
+  });
+  const routingHints = routingContextToIntentHints(parserSignals);
 
   const integrations = buildIntegrationRegistry(integrationsRow);
 
@@ -174,6 +181,7 @@ export async function assembleRoutingContext(
     standing,
     growth,
     routingHints,
+    parserSignals,
     gaps,
   };
 }

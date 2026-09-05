@@ -69,6 +69,27 @@ vi.mock("./memory/memoryAgent.js", () => ({
   intentToMemoryPurpose: () => "chat" as const,
 }));
 
+vi.mock("./routing/routingContextParser.js", () => ({
+  parseRoutingContext: vi.fn().mockResolvedValue({
+    explicit_meal_log: false,
+    looks_like_meal_log_read: false,
+    looks_like_youtube_action: false,
+    looks_like_magnus_tool_action: false,
+    looks_like_magnus_tool_continuation: false,
+    looks_like_health_fitness_read: false,
+    looks_like_wealth_portfolio_read: false,
+    holistic_day_ask: false,
+    saved_media_pick: false,
+    schedule_accuracy_challenge: false,
+    compound_action: false,
+    prefer_intent_health: false,
+    consult_pillars: [],
+    magnus_capabilities: [],
+  }),
+  NEUTRAL_ROUTING_CONTEXT: {},
+  routingContextToIntentHints: vi.fn().mockReturnValue({}),
+}));
+
 vi.mock("../tools/routingContext.js", () => ({
   fetchRecentRoutingTurns: vi.fn().mockResolvedValue([]),
 }));
@@ -116,6 +137,22 @@ vi.mock("./context/assembleRoutingContext.js", () => ({
       saved_media_pick: false,
       schedule_accuracy_challenge: false,
       compound_action: false,
+    },
+    parserSignals: {
+      explicit_meal_log: false,
+      looks_like_meal_log_read: false,
+      looks_like_youtube_action: false,
+      looks_like_magnus_tool_action: false,
+      looks_like_magnus_tool_continuation: false,
+      looks_like_health_fitness_read: false,
+      looks_like_wealth_portfolio_read: false,
+      holistic_day_ask: false,
+      saved_media_pick: false,
+      schedule_accuracy_challenge: false,
+      compound_action: false,
+      prefer_intent_health: false,
+      consult_pillars: [],
+      magnus_capabilities: [],
     },
     gaps: [],
   }),

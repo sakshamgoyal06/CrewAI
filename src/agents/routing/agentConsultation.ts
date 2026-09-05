@@ -124,7 +124,7 @@ function scorePillarCandidate(
   let score = 5;
   let reason = "pillar_substantive";
 
-  if (messageHasPillarSignal(candidate.intent, input.userMessage)) {
+  if (messageHasPillarSignal(input.userMessage, candidate.intent, input.routingContext)) {
     score += 10;
     reason = "message_pillar_signal";
   }

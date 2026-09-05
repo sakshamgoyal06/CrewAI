@@ -118,7 +118,7 @@ async function classifyIntent(
 }
 
 /**
- * Classify with structural hints. Hard overrides: explicit meal-log command or meal-log read → HEALTH.
+ * Classify with structural hints from the routing context parser (LLM).
  */
 export async function resolveIntentNaturalLanguage(
   userMessage: string,
@@ -126,7 +126,7 @@ export async function resolveIntentNaturalLanguage(
 ): Promise<Intent> {
   const hints =
     options?.routingContext?.routingHints ??
-    buildIntentRoutingHints(userMessage, options?.recentTurns ?? []);
+    await buildIntentRoutingHints(userMessage, options?.recentTurns ?? []);
 
   const pending = options?.routingContext?.pending;
 
