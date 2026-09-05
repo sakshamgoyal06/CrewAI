@@ -199,9 +199,13 @@ shell or `.env`.
    postpone), **nutrition nightly** (~23:00 local: recompute rollups, anomaly flags, sync persistent
    lapse patterns to `program_learnings`; `MAGNUS_NUTRITION_NIGHTLY_ENABLED`), **subscription dispatcher** (`evening_journal`, `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
    `chat_inactivity`, `custom_reminder`, `meal_log_reminder`, `meal_adherence_nudge`, `meal_eod_reconciliation`, `meal_gap_nudge`, `weekly_nutrition_review` via `magnus_proactive_subscriptions` — modular kind registry in
-   `src/proactive/kinds/`). **Rhythm cadence** (catalog kinds): **Morning Brief** (~7:00 local, scheduled job — short focus/plan/meals read + optional intention question; replaces separate morning orientation), `evening_journal` (~21:00, day summary + EOD review), `week_planning` (Monday ~8:00), `weekly_wrap` (Friday ~18:00, includes nutrition week slice), `monthly_goal_review` (1st of month ~10:00). Owner provision seeds evening/weekly/monthly rhythm via `seedDefaultRhythmSubscriptions`. User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
+   `src/proactive/kinds/`). **Rhythm cadence** (catalog kinds): **Morning Brief** (~7:00 local, scheduled job — short focus/plan/meals read + optional intention question; replaces separate morning orientation), `evening_journal` (~21:00, day summary + EOD review), `week_planning` (Monday ~8:00), `weekly_wrap` (Friday ~18:00, includes nutrition week slice), `monthly_goal_review` (1st of month ~10:00). Owner provision seeds evening/weekly/monthly rhythm via `seedDefaultRhythmSubscriptions`.    User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
    catalog kinds, create one-shot or daily custom reminders (`create_reminder` /
-   `create_recurring_reminder`). Relative time parsing for one-shots (`tomorrow 8pm`, `in 30 minutes`).
+   `create_recurring_reminder`). **Task reminders** use `manage_reminders`: list, create,
+   create_recurring (daily or weekly), update, snooze, cancel — standalone (`custom_reminder`) or
+   commitment-linked (`magnus_events.remind_at`). Relative time parsing for one-shots (`tomorrow 8pm`,
+   `Sunday 9:30am`, `in 30 minutes`, `6 months from today on the 1st`). Reschedule carries
+   `remind_at` by the same delta as `planned_start_at`. `day_overview` includes reminders for the day.
    LLM gate+compose (Haiku) for evening journal, drift guard, midday encouragement, stale list nudges,
    and chat inactivity; quiet hours 23:00–06:00 local; adaptive cap 3/day (scheduled + user-asked
    reminders exempt).    Manual brief: say `morning brief` or
@@ -363,4 +367,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-09-05 (LLM routing context parser + growth snapshot frontload + Supabase security)
+**Last updated:** 2026-09-05 (LLM routing parser; reminders management; growth snapshot PR #92; Supabase security)

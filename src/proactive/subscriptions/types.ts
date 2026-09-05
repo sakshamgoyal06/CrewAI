@@ -11,6 +11,16 @@ export type ProactiveSubscriptionSource = "system_default" | "user_chat";
 export type RecurringLocalSchedule = {
   type: "recurring_local";
   localHour: number;
+  localMinute?: number;
+  windowMinutes?: number;
+};
+
+/** Fire on specific weekdays at a local hour (0=Sun … 6=Sat). */
+export type WeeklyLocalSchedule = {
+  type: "weekly_local";
+  daysOfWeek: number[];
+  localHour: number;
+  localMinute?: number;
   windowMinutes?: number;
 };
 
@@ -25,6 +35,7 @@ export type ConditionalSchedule = {
 
 export type ProactiveSchedule =
   | RecurringLocalSchedule
+  | WeeklyLocalSchedule
   | OneShotSchedule
   | ConditionalSchedule
   | Record<string, unknown>;

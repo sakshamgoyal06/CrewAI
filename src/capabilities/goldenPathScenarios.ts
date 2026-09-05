@@ -61,6 +61,8 @@ export function primaryToolForGeneralCapability(
       if (/sync/i.test(q)) return "sync_notion";
       if (/setup/i.test(q)) return "setup_notion";
       return "connect_notion";
+    case "reminders":
+      return "manage_reminders";
     case "proactive":
       return "manage_proactive_messages";
     case "journal_note":
