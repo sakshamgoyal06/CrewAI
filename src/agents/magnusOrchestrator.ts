@@ -21,15 +21,10 @@ import {
   startHealthOnboarding,
 } from "./health/healthOnboarding.js";
 import { isMealCommand } from "../meals/parseMealLogCommand.js";
-import { isMealDayBreakdownRequest } from "./health/mealHistoryAgent.js";
 import { dispatchToAgent } from "./registry.js";
 import { intentToPillarRoute } from "./routing/intentToPillarRoute.js";
 import type { AgentContext } from "./types.js";
 import { vetAndCompose } from "./routing/accountabilityAgent.js";
-import {
-  looksLikeMealSlotFollowUp,
-  recentTurnWasMealContext,
-} from "./routing/mealPlanFollowUp.js";
 import { augmentMessageWithPhotoContext } from "../vision/augmentMessageWithPhoto.js";
 import { buildPhotoContext } from "../vision/buildPhotoContext.js";
 import { isMealPhotoPurpose, resolvePhotoIntent } from "../vision/resolvePhotoIntent.js";
@@ -161,7 +156,7 @@ export async function runOrchestratorReply(input: {
     });
   }
 
-  const routingContext = await assembleRoutingContext({
+  const assembled = await assembleRoutingContext({
     userProfileId: input.userProfileId,
     telegramUserId: input.telegramUserId,
     userMessage: input.userMessage,
@@ -170,7 +165,7 @@ export async function runOrchestratorReply(input: {
     northStarGoal: input.northStarGoal,
   });
 
-  const recentTurns = routingContext.recentTurns.map((t) => ({
+  const recentTurns = assembled.recentTurns.map((t) => ({
     role: t.role,
     content: t.content,
     metadata: {
@@ -198,13 +193,10 @@ export async function runOrchestratorReply(input: {
 
   const intent = photoContext
     ? resolvePhotoIntent(photoContext)
-    : isMealDayBreakdownRequest(effectiveUserMessage)
-      ? ("HEALTH" as Intent)
-      : looksLikeMealSlotFollowUp(input.userMessage) &&
-        recentTurnWasMealContext(recentTurns)
+    : assembled.parserSignals.prefer_intent_health
       ? ("HEALTH" as Intent)
       : await resolveIntentNaturalLanguage(effectiveUserMessage, {
-          routingContext,
+          routingContext: assembled,
         });
 
   if (
@@ -266,6 +258,7 @@ export async function runOrchestratorReply(input: {
     intent,
     memoryBlock,
     memoryPackage,
+    routingContext: assembled.parserSignals,
     pillar: pillarRoute.pillar,
     department: pillarRoute.department,
   };
@@ -278,8 +271,8 @@ export async function runOrchestratorReply(input: {
       photoPurpose: photoContext?.analysis.purpose ?? null,
       memoryGapCount: memory.gaps.length,
       memoryRecentTurns: memory.recentSignals.recentChatTurns.length,
-      routingPending: Object.keys(routingContext.pending),
-      routingGapCount: routingContext.gaps.length,
+      routingPending: Object.keys(assembled.pending),
+      routingGapCount: assembled.gaps.length,
     },
     "turn routed",
   );

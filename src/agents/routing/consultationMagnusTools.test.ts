@@ -3,24 +3,24 @@ import { describe, expect, it } from "vitest";
 import { magnusAllowedToolsForConsultation } from "./consultationMagnusTools.js";
 
 describe("magnusAllowedToolsForConsultation", () => {
-  it("returns no tools for gym + meal plan only", () => {
-    expect(
-      magnusAllowedToolsForConsultation(
-        "Whats the gym plan for today. And meal plan for today",
-      ),
-    ).toEqual([]);
+  it("returns no tools when parser lists no capabilities", () => {
+    expect(magnusAllowedToolsForConsultation([])).toEqual([]);
   });
 
-  it("includes youtube tools when playlist action is requested", () => {
-    const tools = magnusAllowedToolsForConsultation(
-      "Add 5 rock songs to my high energy workout playlist",
-    );
+  it("includes youtube tools when parser lists youtube capability", () => {
+    const tools = magnusAllowedToolsForConsultation(["youtube"]);
     expect(tools).toContain("youtube_playlist");
     expect(tools).toContain("youtube_search");
   });
 
-  it("includes list tools for watchlist actions", () => {
-    const tools = magnusAllowedToolsForConsultation("Add Rocky to my watchlist");
+  it("includes list tools when parser lists lists capability", () => {
+    const tools = magnusAllowedToolsForConsultation(["lists"]);
     expect(tools).toContain("add_list_item");
+  });
+
+  it("includes calendar tools when parser lists calendar capability", () => {
+    const tools = magnusAllowedToolsForConsultation(["calendar"]);
+    expect(tools).toContain("read_calendar");
+    expect(tools).toContain("delete_calendar_event");
   });
 });

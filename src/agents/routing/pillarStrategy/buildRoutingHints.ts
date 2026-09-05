@@ -4,8 +4,8 @@ import { getActiveProjectSession } from "../../../projects/projectSessionStore.j
 import { listActiveProjects } from "../../../projects/projectStore.js";
 import { fetchRecentRoutingTurns } from "../../../tools/routingContext.js";
 import { loadUserIntegrations } from "../../../users/userIntegrations.js";
-import { buildConversationSignals } from "../conversationSignals.js";
 import type { AgentContext } from "../../types.js";
+import { NEUTRAL_ROUTING_CONTEXT } from "../routingContextParser.js";
 import type { RoutingHints } from "./types.js";
 
 function capabilityFromMetadata(meta: Record<string, unknown> | null | undefined): string | null {
@@ -52,7 +52,7 @@ export async function buildRoutingHints(ctx: AgentContext): Promise<RoutingHints
   const integrations = await loadUserIntegrations(ctx.userProfileId);
 
   const photoAnalysis = ctx.photoContext?.analysis;
-  const conversation = buildConversationSignals(ctx.rawMessage, recent);
+  const routing = ctx.routingContext ?? NEUTRAL_ROUTING_CONTEXT;
 
   return {
     has_meal_photo: Boolean(ctx.mealPhoto?.fileId),
@@ -93,9 +93,9 @@ export async function buildRoutingHints(ctx: AgentContext): Promise<RoutingHints
       role: t.role === "assistant" ? ("assistant" as const) : ("user" as const),
       preview: t.content.slice(0, 280),
     })),
-    holistic_day_ask: conversation.holistic_day_ask,
-    saved_media_pick: conversation.saved_media_pick,
-    schedule_accuracy_challenge: conversation.schedule_accuracy_challenge,
-    compound_action: conversation.compound_action,
+    holistic_day_ask: routing.holistic_day_ask,
+    saved_media_pick: routing.saved_media_pick,
+    schedule_accuracy_challenge: routing.schedule_accuracy_challenge,
+    compound_action: routing.compound_action,
   };
 }

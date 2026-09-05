@@ -3,6 +3,7 @@
  * Scoped strictly by user_profile_id (multi-tenant safe).
  */
 import type { IntentRoutingHints } from "../routing/intentRoutingHints.js";
+import type { RoutingContextSignals } from "../routing/routingContextParser.js";
 import type { UserKnowledgeIntegrations } from "../memory/userKnowledge.js";
 import type { DayTone } from "./growthHelpers.js";
 
@@ -176,6 +177,9 @@ export type RoutingContext = {
   growth: RoutingGrowthContext;
 
   routingHints: IntentRoutingHints;
+
+  /** Full LLM routing parser output for capability filter and intent coercion. */
+  parserSignals: RoutingContextSignals;
 
   gaps: string[];
 };
