@@ -111,11 +111,20 @@ describe("resolveIntentNaturalLanguage", () => {
   });
 
   it("uses routing context parser before the classifier", async () => {
-    mockRoutingSignals({ explicit_meal_log: true });
-    classifiedAs("HEALTH");
-    await expect(resolveIntentNaturalLanguage("meal: two eggs and toast")).resolves.toBe("HEALTH");
+    mockRoutingSignals({ looks_like_youtube_action: true });
+    classifiedAs("GENERAL");
+    await expect(resolveIntentNaturalLanguage("search YouTube for lo-fi study beats")).resolves.toBe(
+      "GENERAL",
+    );
     expect(parseRoutingContextMock).toHaveBeenCalled();
     expect(createMock).toHaveBeenCalled();
+  });
+
+  it("short-circuits to HEALTH for explicit meal log without calling classifier", async () => {
+    mockRoutingSignals({ explicit_meal_log: true });
+    await expect(resolveIntentNaturalLanguage("meal: two eggs and toast")).resolves.toBe("HEALTH");
+    expect(parseRoutingContextMock).toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
   });
 
   it("includes routing context hints in the classifier payload", async () => {
