@@ -412,6 +412,70 @@ vi.mock("../pillars/wealth/zerodha/index.js", () => ({
   formatKitePortfolioForPrompt: vi.fn().mockReturnValue(""),
 }));
 
+vi.mock("../agents/context/assembleRoutingContext.js", () => ({
+  assembleRoutingContext: vi.fn().mockResolvedValue({
+    userProfileId: "00000000-0000-0000-0000-000000000099",
+    assembledAt: new Date().toISOString(),
+    identity: {
+      timezone: "Asia/Kolkata",
+      northStarGoal: "",
+      healthOnboardingComplete: true,
+    },
+    integrations: {
+      googleCalendar: "connected",
+      youtube: "connected",
+      notion: "not_connected",
+      hevy: "not_connected",
+      zerodha: "not_connected",
+    },
+    recentTurns: [],
+    pending: {},
+    activeWork: { activeProjects: [], openCommitmentCount: 0, overdueCommitmentCount: 0 },
+    standing: { programNotes: [], routingFacts: [] },
+    growth: {
+      localTime: { dateKey: "2026-09-05", hour: 12, minute: 0, isLateEvening: false },
+      dayFrame: { tone: "neutral", morningNotes: [] },
+      northStar: { goals: [] },
+      operations: { todayCommitments: [], overdueCount: 0, errands: [], slippingRoutines: [] },
+      projects: { active: [] },
+      lists: [],
+      listHighlights: [],
+      behavior: { issues: [], wins: [], dailyLogSnippets: [], narrativeBullets: [] },
+      kpis: { pillarStatus: [], topRoutines: [] },
+    },
+    routingHints: {
+      explicit_meal_log: false,
+      looks_like_meal_log_read: false,
+      looks_like_youtube_action: false,
+      looks_like_magnus_tool_action: false,
+      looks_like_magnus_tool_continuation: false,
+      looks_like_health_fitness_read: false,
+      looks_like_wealth_portfolio_read: false,
+      holistic_day_ask: false,
+      saved_media_pick: false,
+      schedule_accuracy_challenge: false,
+      compound_action: false,
+    },
+    parserSignals: {
+      explicit_meal_log: false,
+      looks_like_meal_log_read: false,
+      looks_like_youtube_action: false,
+      looks_like_magnus_tool_action: false,
+      looks_like_magnus_tool_continuation: false,
+      looks_like_health_fitness_read: false,
+      looks_like_wealth_portfolio_read: false,
+      holistic_day_ask: false,
+      saved_media_pick: false,
+      schedule_accuracy_challenge: false,
+      compound_action: false,
+      prefer_intent_health: false,
+      consult_pillars: [],
+      magnus_capabilities: [],
+    },
+    gaps: [],
+  }),
+}));
+
 vi.mock("../agents/routing/pillarStrategy/executePillarConsultation.js", () => ({
   executePillarConsultationStep: vi.fn().mockResolvedValue({
     text: "Consultation composed.",

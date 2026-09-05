@@ -7,10 +7,18 @@ import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 import { parseIntent, type Intent } from "../intent.js";
 import { anthropic } from "../tools/clients.js";
 import {
+  isMealLogConfirmationNo,
+  isMealLogConfirmationYes,
+} from "../meals/mealLogPending.js";
+import {
   buildIntentRoutingHints,
   type IntentRoutingHints,
 } from "./routing/intentRoutingHints.js";
 import type { RoutingChatTurn } from "./routing/magnusToolContinuation.js";
+import {
+  formatRoutingContextForClassifier,
+  type RoutingContext,
+} from "./context/index.js";
 
 const MODEL = "claude-sonnet-4-6";
 
@@ -47,6 +55,29 @@ Use routing_hints when present:
 - looks_like_wealth_portfolio_read → WEALTH when asking to read/show portfolio (not a Magnus list action)
 - looks_like_health_fitness_read → HEALTH when asking to read/review workouts or Hevy (not a Magnus tool action)
 
+routing_context (when present) — use with the message:
+- pending.meal_log_confirm → short "yes"/"no" is meal logging, not new topic → HEALTH on yes
+- pending.reversible_undo → "undo"/"yes" refers to last write → GENERAL (Magnus tools)
+- pending.project_session → planning language or lock-in → GENERAL
+- pending.meal_plan_session → meal plan edits → HEALTH
+- recent_turns[].tools_used / delegated_agent → continuations ("yes", "add both") → GENERAL if prior turn used Magnus tools
+- integrations → if calendar not connected and user challenges schedule, GENERAL connect path not HEALTH
+- active_work.active_projects → status questions may be GENERAL project_status
+- standing.routing_facts / program_notes → honor avoid lists and meal rules when classifying food messages → HEALTH
+
+growth (when present) — align routing with the user's growth, not just keywords:
+- growth.day_frame.tone (working | rest | relaxed | mixed) — respect light days; don't push grind on rest/relaxed
+- growth.day_frame.morning_intention / morning_notes — today's win and morning changes; cross-pillar asks should respect them
+- growth.north_star.statement / goals — north star and active goals; career/build → WISDOM, money → WEALTH
+- growth.operations.today_commitments / overdue_count — schedule and commitment load; holistic day → GENERAL
+- growth.operations.errands — open tasks/admin items; list or event actions → GENERAL
+- growth.operations.slipping_routines — any activity_key with recent misses (not gym-specific); note when leisure competes with recovery
+- growth.projects.active / consistency_hint — project status and open next steps → GENERAL or WISDOM
+- growth.behavior.issues / narrative_bullets — issues faced (tired, friction, blockers)
+- growth.kpis.joy_tank (low) + HAPPINESS leisure → valid joy refill; still note slipping_routines and day_frame.tone
+- growth.local_time.is_late_evening — late leisure/rest may be appropriate when routines are slipping
+- growth.lists / list_highlights — saved watchlist/readlist/tasks for media and errand routing
+
 When a message could fit two categories, choose the one the user is asking you to act on.
 Reply with only the category name.`;
 
@@ -62,7 +93,16 @@ function textFromMessage(msg: Message): string {
 async function classifyIntent(
   userMessage: string,
   hints: IntentRoutingHints,
+  routingContext?: RoutingContext,
 ): Promise<Intent> {
+  const payload: Record<string, unknown> = {
+    message: userMessage.trim(),
+    routing_hints: hints,
+  };
+  if (routingContext) {
+    payload.routing_context = formatRoutingContextForClassifier(routingContext);
+  }
+
   const msg = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 16,
@@ -70,7 +110,7 @@ async function classifyIntent(
     messages: [
       {
         role: "user",
-        content: JSON.stringify({ message: userMessage.trim(), routing_hints: hints }, null, 2),
+        content: JSON.stringify(payload, null, 2),
       },
     ],
   });
@@ -82,16 +122,33 @@ async function classifyIntent(
  */
 export async function resolveIntentNaturalLanguage(
   userMessage: string,
-  options?: {
-    recentTurns?: RoutingChatTurn[];
-    routingContext?: import("./routing/routingContextParser.js").RoutingContextSignals;
-  },
+  options?: { recentTurns?: RoutingChatTurn[]; routingContext?: RoutingContext },
 ): Promise<Intent> {
-  const hints = await buildIntentRoutingHints(
-    userMessage,
-    options?.recentTurns ?? [],
-    options?.routingContext,
-  );
+  const hints =
+    options?.routingContext?.routingHints ??
+    await buildIntentRoutingHints(userMessage, options?.recentTurns ?? []);
 
-  return classifyIntent(userMessage, hints);
+  const pending = options?.routingContext?.pending;
+
+  if (pending?.mealLogConfirm) {
+    if (isMealLogConfirmationYes(userMessage)) {
+      return "HEALTH";
+    }
+    if (isMealLogConfirmationNo(userMessage)) {
+      return "GENERAL";
+    }
+  }
+
+  if (hints.explicit_meal_log || hints.looks_like_meal_log_read) {
+    return "HEALTH";
+  }
+
+  if (
+    pending?.mealPlanSession &&
+    /\b(meal\s+plan|breakfast|lunch|dinner|snack|swap|change|lock|plan)\b/i.test(userMessage)
+  ) {
+    return "HEALTH";
+  }
+
+  return classifyIntent(userMessage, hints, options?.routingContext);
 }

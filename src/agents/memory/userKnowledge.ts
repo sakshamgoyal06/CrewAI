@@ -17,6 +17,7 @@ import { getYoutubeState } from "../../youtube/youtubeStore.js";
 import { PILLAR_PLAYLIST_ALIASES } from "../../youtube/playlistResolve.js";
 import { loadSemanticFacts } from "./semanticMemory.js";
 import type { MemoryContext } from "./types.js";
+import { buildIntegrationRegistry } from "../context/integrationRegistry.js";
 
 const MAX_BLOCK_CHARS = 4_200;
 const MAX_GRAPH_ITEMS = 8;
@@ -324,18 +325,7 @@ async function loadListKnowledge(
 function loadIntegrationKnowledge(
   integrations: Awaited<ReturnType<typeof loadUserIntegrations>>,
 ): UserKnowledgeIntegrations {
-  return {
-    notion: integrations.notionToken ? "connected" : "not_connected",
-    googleCalendar: integrations.googleCalendarRefreshToken ? "connected" : "not_connected",
-    youtube: integrations.googleYoutubeRefreshToken ? "connected" : "not_connected",
-    hevy: integrations.hevyApiKey ? "connected" : "not_connected",
-    zerodha:
-      integrations.kiteAccessToken && integrations.kiteApiKey
-        ? "token_set"
-        : integrations.kiteApiKey
-          ? "connected"
-          : "not_connected",
-  };
+  return buildIntegrationRegistry(integrations);
 }
 
 async function loadPlaylistAliasKnowledge(

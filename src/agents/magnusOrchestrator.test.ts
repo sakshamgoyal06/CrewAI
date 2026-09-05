@@ -94,6 +94,70 @@ vi.mock("../tools/routingContext.js", () => ({
   fetchRecentRoutingTurns: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock("./context/assembleRoutingContext.js", () => ({
+  assembleRoutingContext: vi.fn().mockResolvedValue({
+    userProfileId: "00000000-0000-0000-0000-000000000001",
+    assembledAt: new Date().toISOString(),
+    identity: {
+      timezone: "UTC",
+      northStarGoal: "",
+      healthOnboardingComplete: true,
+    },
+    integrations: {
+      notion: "not_connected",
+      googleCalendar: "not_connected",
+      youtube: "not_connected",
+      hevy: "not_connected",
+      zerodha: "not_connected",
+    },
+    recentTurns: [],
+    pending: {},
+    activeWork: { activeProjects: [], openCommitmentCount: 0, overdueCommitmentCount: 0 },
+    standing: { programNotes: [], routingFacts: [] },
+    growth: {
+      localTime: { dateKey: "2026-08-18", hour: 12, minute: 0, isLateEvening: false },
+      dayFrame: { tone: "unknown", morningNotes: [] },
+      northStar: { goals: [] },
+      operations: { todayCommitments: [], overdueCount: 0, errands: [], slippingRoutines: [] },
+      projects: { active: [] },
+      lists: [],
+      listHighlights: [],
+      behavior: { issues: [], wins: [], dailyLogSnippets: [], narrativeBullets: [] },
+      kpis: { pillarStatus: [], topRoutines: [] },
+    },
+    routingHints: {
+      explicit_meal_log: false,
+      looks_like_meal_log_read: false,
+      looks_like_youtube_action: false,
+      looks_like_magnus_tool_action: false,
+      looks_like_magnus_tool_continuation: false,
+      looks_like_health_fitness_read: false,
+      looks_like_wealth_portfolio_read: false,
+      holistic_day_ask: false,
+      saved_media_pick: false,
+      schedule_accuracy_challenge: false,
+      compound_action: false,
+    },
+    parserSignals: {
+      explicit_meal_log: false,
+      looks_like_meal_log_read: false,
+      looks_like_youtube_action: false,
+      looks_like_magnus_tool_action: false,
+      looks_like_magnus_tool_continuation: false,
+      looks_like_health_fitness_read: false,
+      looks_like_wealth_portfolio_read: false,
+      holistic_day_ask: false,
+      saved_media_pick: false,
+      schedule_accuracy_challenge: false,
+      compound_action: false,
+      prefer_intent_health: false,
+      consult_pillars: [],
+      magnus_capabilities: [],
+    },
+    gaps: [],
+  }),
+}));
+
 vi.mock("../projects/projectSessionPrelude.js", () => ({
   tryResolveActiveProjectSessionTurn: vi.fn().mockResolvedValue({ handled: false }),
 }));

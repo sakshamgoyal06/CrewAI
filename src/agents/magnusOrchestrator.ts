@@ -24,12 +24,11 @@ import { isMealCommand } from "../meals/parseMealLogCommand.js";
 import { dispatchToAgent } from "./registry.js";
 import { intentToPillarRoute } from "./routing/intentToPillarRoute.js";
 import type { AgentContext } from "./types.js";
-import { fetchRecentRoutingTurns } from "../tools/routingContext.js";
-import { parseRoutingContext } from "./routing/routingContextParser.js";
 import { vetAndCompose } from "./routing/accountabilityAgent.js";
 import { augmentMessageWithPhotoContext } from "../vision/augmentMessageWithPhoto.js";
 import { buildPhotoContext } from "../vision/buildPhotoContext.js";
 import { isMealPhotoPurpose, resolvePhotoIntent } from "../vision/resolvePhotoIntent.js";
+import { assembleRoutingContext } from "./context/assembleRoutingContext.js";
 import { tryResolveActiveProjectSessionTurn } from "../projects/projectSessionPrelude.js";
 import { handleWinConditionPendingTurn } from "../jobs/handleWinConditionPending.js";
 import { handleReversibleActionTurn } from "./routing/handleReversibleAction.js";
@@ -157,10 +156,24 @@ export async function runOrchestratorReply(input: {
     });
   }
 
-  const recentTurns = await fetchRecentRoutingTurns(
-    input.userProfileId,
-    input.telegramUserId,
-  );
+  const assembled = await assembleRoutingContext({
+    userProfileId: input.userProfileId,
+    telegramUserId: input.telegramUserId,
+    userMessage: input.userMessage,
+    displayName: input.displayName,
+    timezone: input.timezone,
+    northStarGoal: input.northStarGoal,
+  });
+
+  const recentTurns = assembled.recentTurns.map((t) => ({
+    role: t.role,
+    content: t.content,
+    metadata: {
+      ...(t.intent ? { intent: t.intent } : {}),
+      ...(t.delegatedAgent ? { delegated_agent: t.delegatedAgent } : {}),
+      ...(t.toolsUsed?.length ? { tools_used: t.toolsUsed } : {}),
+    },
+  }));
 
   const photoTurnPreviews = recentTurns.slice(-6).map((t) => ({
     role: t.role === "assistant" ? ("assistant" as const) : ("user" as const),
@@ -178,18 +191,12 @@ export async function runOrchestratorReply(input: {
     ? augmentMessageWithPhotoContext(input.userMessage, photoContext)
     : input.userMessage;
 
-  const routingContext = await parseRoutingContext({
-    userMessage: effectiveUserMessage,
-    recentTurns,
-  });
-
   const intent = photoContext
     ? resolvePhotoIntent(photoContext)
-    : routingContext.prefer_intent_health
+    : assembled.parserSignals.prefer_intent_health
       ? ("HEALTH" as Intent)
       : await resolveIntentNaturalLanguage(effectiveUserMessage, {
-          recentTurns,
-          routingContext,
+          routingContext: assembled,
         });
 
   if (
@@ -251,7 +258,7 @@ export async function runOrchestratorReply(input: {
     intent,
     memoryBlock,
     memoryPackage,
-    routingContext,
+    routingContext: assembled.parserSignals,
     pillar: pillarRoute.pillar,
     department: pillarRoute.department,
   };
@@ -264,6 +271,8 @@ export async function runOrchestratorReply(input: {
       photoPurpose: photoContext?.analysis.purpose ?? null,
       memoryGapCount: memory.gaps.length,
       memoryRecentTurns: memory.recentSignals.recentChatTurns.length,
+      routingPending: Object.keys(assembled.pending),
+      routingGapCount: assembled.gaps.length,
     },
     "turn routed",
   );
