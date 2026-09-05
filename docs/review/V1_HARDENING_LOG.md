@@ -10,7 +10,7 @@
 | Date | PR | Agent / human | Segments | Gates A–D | Summary |
 |------|-----|---------------|----------|-----------|---------|
 | 2026-08-16 | docs | — | Plan created | — | Initial review artifact suite pushed to `main` |
-| 2026-08-17 | #91 / GitHub #92 | owner | 0.1–2.1 | A pass | Owner verified telegram:check, test:supabase, identity, Telegram scripts; merged |
+| 2026-09-05 | — | agent | routing spine | — | LLM `routingContextParser` replaces regex routing (conversationSignals, magnusActionDetect, deterministic plan bypasses) |
 
 ---
 

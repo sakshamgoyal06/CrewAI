@@ -48,6 +48,8 @@ export type AgentContext = {
   photoContext?: import("../vision/types.js").PhotoContext;
   /** Parsed execution plan from request parser — executor runs steps sequentially. */
   pillarStrategy?: import("./routing/pillarStrategy/types.js").PillarExecutionPlan;
+  /** LLM routing context parser output for this turn (intent hints + Magnus capability filter). */
+  routingContext?: import("./routing/routingContextParser.js").RoutingContextSignals;
 };
 
 export type AgentResult = {

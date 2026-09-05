@@ -16,19 +16,7 @@ process.env.TELEGRAM_BOT_TOKEN ??= "dummy";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "../..");
 
-const { buildIntentRoutingHints } = await import(
-  "../../src/agents/routing/intentRoutingHints.ts"
-);
-const { looksLikeMagnusToolAction } = await import(
-  "../../src/agents/tools/magnusActionDetect.ts"
-);
-const { looksLikeYoutubeAction } = await import(
-  "../../src/agents/tools/youtubeActionDetect.ts"
-);
 const { parseMealLogCommand } = await import("../../src/meals/parseMealLogCommand.ts");
-const { resolvePillarsToConsultOnGeneral } = await import(
-  "../../src/agents/routing/pillarConsultationSignals.ts"
-);
 const { CHAT_MESSAGE_TEST_SUITE, CHAT_MESSAGE_TEST_SUITE_META } = await import(
   "../../src/capabilities/chatMessageTestSuite.generated.ts"
 );
@@ -39,12 +27,7 @@ const {
 } = await import("../../src/capabilities/chatMessageTestAnalysis.ts");
 
 const deps = {
-  buildHints: (msg: string) => buildIntentRoutingHints(msg) as Record<string, boolean>,
-  magnusDetect: looksLikeMagnusToolAction,
-  youtubeDetect: looksLikeYoutubeAction,
   mealParse: parseMealLogCommand,
-  pillarConsult: (msg: string) =>
-    resolvePillarsToConsultOnGeneral({ userMessage: msg, recentTurns: [] }),
 };
 
 type Pair = { user_msg: string; assistant_msg: string; intent: string | null; created_at: string };

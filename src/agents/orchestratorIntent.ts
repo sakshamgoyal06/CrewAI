@@ -78,17 +78,20 @@ async function classifyIntent(
 }
 
 /**
- * Classify with structural hints. Hard overrides: explicit meal-log command or meal-log read → HEALTH.
+ * Classify with structural hints from the routing context parser (LLM).
  */
 export async function resolveIntentNaturalLanguage(
   userMessage: string,
-  options?: { recentTurns?: RoutingChatTurn[] },
+  options?: {
+    recentTurns?: RoutingChatTurn[];
+    routingContext?: import("./routing/routingContextParser.js").RoutingContextSignals;
+  },
 ): Promise<Intent> {
-  const hints = buildIntentRoutingHints(userMessage, options?.recentTurns ?? []);
-
-  if (hints.explicit_meal_log || hints.looks_like_meal_log_read) {
-    return "HEALTH";
-  }
+  const hints = await buildIntentRoutingHints(
+    userMessage,
+    options?.recentTurns ?? [],
+    options?.routingContext,
+  );
 
   return classifyIntent(userMessage, hints);
 }

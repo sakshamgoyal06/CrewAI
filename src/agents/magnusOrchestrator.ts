@@ -21,16 +21,12 @@ import {
   startHealthOnboarding,
 } from "./health/healthOnboarding.js";
 import { isMealCommand } from "../meals/parseMealLogCommand.js";
-import { isMealDayBreakdownRequest } from "./health/mealHistoryAgent.js";
 import { dispatchToAgent } from "./registry.js";
 import { intentToPillarRoute } from "./routing/intentToPillarRoute.js";
 import type { AgentContext } from "./types.js";
 import { fetchRecentRoutingTurns } from "../tools/routingContext.js";
+import { parseRoutingContext } from "./routing/routingContextParser.js";
 import { vetAndCompose } from "./routing/accountabilityAgent.js";
-import {
-  looksLikeMealSlotFollowUp,
-  recentTurnWasMealContext,
-} from "./routing/mealPlanFollowUp.js";
 import { augmentMessageWithPhotoContext } from "../vision/augmentMessageWithPhoto.js";
 import { buildPhotoContext } from "../vision/buildPhotoContext.js";
 import { isMealPhotoPurpose, resolvePhotoIntent } from "../vision/resolvePhotoIntent.js";
@@ -182,14 +178,19 @@ export async function runOrchestratorReply(input: {
     ? augmentMessageWithPhotoContext(input.userMessage, photoContext)
     : input.userMessage;
 
+  const routingContext = await parseRoutingContext({
+    userMessage: effectiveUserMessage,
+    recentTurns,
+  });
+
   const intent = photoContext
     ? resolvePhotoIntent(photoContext)
-    : isMealDayBreakdownRequest(effectiveUserMessage)
+    : routingContext.prefer_intent_health
       ? ("HEALTH" as Intent)
-      : looksLikeMealSlotFollowUp(input.userMessage) &&
-        recentTurnWasMealContext(recentTurns)
-      ? ("HEALTH" as Intent)
-      : await resolveIntentNaturalLanguage(effectiveUserMessage, { recentTurns });
+      : await resolveIntentNaturalLanguage(effectiveUserMessage, {
+          recentTurns,
+          routingContext,
+        });
 
   if (
     intent === "HEALTH" &&
@@ -250,6 +251,7 @@ export async function runOrchestratorReply(input: {
     intent,
     memoryBlock,
     memoryPackage,
+    routingContext,
     pillar: pillarRoute.pillar,
     department: pillarRoute.department,
   };

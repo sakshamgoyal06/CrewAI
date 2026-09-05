@@ -44,7 +44,9 @@ export async function executePillarConsultationStep(
     runMagnusAgent(stepCtx, {
       originalUserMessage: ctx.rawMessage,
       consultationDelegation,
-      allowedToolNames: magnusAllowedToolsForConsultation(ctx.rawMessage),
+      allowedToolNames: magnusAllowedToolsForConsultation(
+        ctx.routingContext?.magnus_capabilities ?? [],
+      ),
     }),
     ...pillars.map(async (pillarIntent) => {
       const route = intentToPillarRoute(pillarIntent);
@@ -71,6 +73,7 @@ export async function executePillarConsultationStep(
     userMessage: ctx.rawMessage,
     magnus,
     pillars: pillarDispatches.filter((p): p is NonNullable<typeof p> => p !== null),
+    routingContext: ctx.routingContext,
   });
 
   return {

@@ -105,7 +105,8 @@ Rules:
 - "confidence" is 0.0–1.0 for the whole plan.
 - Single clear intent → one step. Multiple distinct actions ("and also", "then", comma-separated tool asks) → multiple steps in logical order.
 - READ before WRITE when order matters (e.g. show plan, then shopping list).
-- Use the **entire user message** plus **recent_turns** and **routing_hints** together — interpret meaning; do not keyword-match in code.
+- Use the **entire user message** plus **recent_turns** and **routing_hints** together — interpret meaning from context.
+- **schedule_accuracy_challenge** means the user disputes schedule accuracy — read calendar via day_overview or calendar. Calendar **management** (delete, clean up, extend recurring events) → **calendar** capability with read then write/delete tools.
 - Do NOT duplicate the same capability unless the user explicitly asked twice.
 
 Shape:
@@ -164,52 +165,6 @@ function fallbackPlan(pillar: PillarId): PillarExecutionPlan {
   return planFromSingleCapability(defaults[pillar], {}, 0, "deterministic");
 }
 
-function dateHintFromMessage(message: string): string {
-  const t = message.toLowerCase();
-  if (/\btomorrow\b/.test(t)) {
-    return "tomorrow";
-  }
-  if (/\byesterday\b/.test(t)) {
-    return "yesterday";
-  }
-  return "today";
-}
-
-function deterministicPlanFromHints(
-  pillar: PillarId,
-  userMessage: string,
-  hints: RoutingHints,
-): PillarExecutionPlan | null {
-  if (pillar !== "GENERAL") {
-    return null;
-  }
-  if (hints.holistic_day_ask || hints.schedule_accuracy_challenge) {
-    return planFromSingleCapability(
-      "day_overview",
-      { date_hint: dateHintFromMessage(userMessage), force_calendar_refresh: true },
-      0.95,
-      "deterministic",
-    );
-  }
-  if (hints.saved_media_pick) {
-    if (/\bwatchlist\b/i.test(userMessage)) {
-      return planFromSingleCapability(
-        "lists",
-        { action: "recommend", source: "watchlist" },
-        0.9,
-        "deterministic",
-      );
-    }
-    return planFromSingleCapability(
-      "youtube",
-      { action: "recommend_from_saved", context: "activity" },
-      0.9,
-      "deterministic",
-    );
-  }
-  return null;
-}
-
 /**
  * LLM parser: message + hints only — no user data. Returns an ordered execution plan.
  */
@@ -218,11 +173,6 @@ export async function parsePillarExecutionPlan(
   userMessage: string,
   hints: RoutingHints,
 ): Promise<PillarExecutionPlan> {
-  const fromHints = deterministicPlanFromHints(pillar, userMessage, hints);
-  if (fromHints) {
-    return fromHints;
-  }
-
   const userPayload = JSON.stringify(
     {
       message: userMessage.trim(),

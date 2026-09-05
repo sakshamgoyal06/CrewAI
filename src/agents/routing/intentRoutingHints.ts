@@ -1,17 +1,12 @@
 /**
- * Structural intent hints for the top-level classifier — signals only, not routing decisions.
- * Replaces post-classifier regex coercions; the classifier reads these hints with the message.
+ * Intent routing hints — produced by the routing context parser (LLM), not regex.
  */
-import { isMealDayBreakdownRequest, matchesMealHistoryMessage } from "../health/mealHistoryAgent.js";
-import { parseMealLogCommand } from "../../meals/parseMealLogCommand.js";
-import { looksLikeMagnusToolContinuation, type RoutingChatTurn } from "./magnusToolContinuation.js";
+import type { RoutingChatTurn } from "./magnusToolContinuation.js";
 import {
-  looksLikeHealthFitnessIntent,
-  looksLikeWealthPortfolioIntent,
-} from "./pillarConsultationSignals.js";
-import { looksLikeMagnusToolAction } from "../tools/magnusActionDetect.js";
-import { looksLikeYoutubeAction } from "../tools/youtubeActionDetect.js";
-import { buildConversationSignals } from "./conversationSignals.js";
+  parseRoutingContext,
+  routingContextToIntentHints,
+  type RoutingContextSignals,
+} from "./routingContextParser.js";
 
 export type IntentRoutingHints = {
   explicit_meal_log: boolean;
@@ -27,24 +22,11 @@ export type IntentRoutingHints = {
   compound_action: boolean;
 };
 
-export function buildIntentRoutingHints(
+export async function buildIntentRoutingHints(
   userMessage: string,
   recentTurns: RoutingChatTurn[] = [],
-): IntentRoutingHints {
-  const conversation = buildConversationSignals(userMessage, recentTurns);
-  return {
-    explicit_meal_log: parseMealLogCommand(userMessage).kind === "meal",
-    looks_like_meal_log_read:
-      isMealDayBreakdownRequest(userMessage) ||
-      (matchesMealHistoryMessage(userMessage) && !/\bmeal\s+plan\b/i.test(userMessage)),
-    looks_like_youtube_action: looksLikeYoutubeAction(userMessage),
-    looks_like_magnus_tool_action: looksLikeMagnusToolAction(userMessage),
-    looks_like_magnus_tool_continuation: looksLikeMagnusToolContinuation(userMessage, recentTurns),
-    looks_like_health_fitness_read: looksLikeHealthFitnessIntent(userMessage),
-    looks_like_wealth_portfolio_read: looksLikeWealthPortfolioIntent(userMessage),
-    holistic_day_ask: conversation.holistic_day_ask,
-    saved_media_pick: conversation.saved_media_pick,
-    schedule_accuracy_challenge: conversation.schedule_accuracy_challenge,
-    compound_action: conversation.compound_action,
-  };
+  preParsed?: RoutingContextSignals,
+): Promise<IntentRoutingHints> {
+  const signals = preParsed ?? (await parseRoutingContext({ userMessage, recentTurns }));
+  return routingContextToIntentHints(signals);
 }

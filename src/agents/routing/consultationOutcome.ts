@@ -5,6 +5,7 @@
 import type { ToolOutcome } from "./actionIntegrity.js";
 import { hasSuccessfulWriteTool } from "./actionIntegrity.js";
 import type { ConsultablePillarIntent } from "./pillarConsultationSignals.js";
+import type { RoutingContextSignals } from "./routingContextParser.js";
 import type { AgentResult } from "../types.js";
 
 export type PillarConsultationCandidate = {
@@ -17,6 +18,7 @@ export type ConsultationReconcileInput = {
   userMessage: string;
   magnus: AgentResult;
   pillars: PillarConsultationCandidate[];
+  routingContext?: RoutingContextSignals;
 };
 
 export type ConsultationMagnusAction = {

@@ -1,5 +1,7 @@
 /**
- * 1000 natural-language chat message tests — structural routing + catalog alignment.
+ * 1000 natural-language chat message tests — catalog alignment + explicit meal protocol.
+ *
+ * Routing signals are LLM-parsed (routingContextParser); this suite no longer uses regex detectors.
  *
  * Suite: src/capabilities/chatMessageTestSuite.generated.ts
  * Regenerate: npx tsx scripts/dev/generate-chat-message-test-suite.mts
@@ -7,10 +9,6 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { buildIntentRoutingHints } from "../agents/routing/intentRoutingHints.js";
-import { resolvePillarsToConsultOnGeneral } from "../agents/routing/pillarConsultationSignals.js";
-import { looksLikeMagnusToolAction } from "../agents/tools/magnusActionDetect.js";
-import { looksLikeYoutubeAction } from "../agents/tools/youtubeActionDetect.js";
 import { parseMealLogCommand } from "../meals/parseMealLogCommand.js";
 import {
   analyzeStructuralCase,
@@ -23,12 +21,7 @@ import {
 } from "./chatMessageTestSuite.generated.js";
 
 const deps = {
-  buildHints: (msg: string) => buildIntentRoutingHints(msg) as Record<string, boolean>,
-  magnusDetect: looksLikeMagnusToolAction,
-  youtubeDetect: looksLikeYoutubeAction,
   mealParse: parseMealLogCommand,
-  pillarConsult: (msg: string) =>
-    resolvePillarsToConsultOnGeneral({ userMessage: msg, recentTurns: [] }),
 };
 
 describe("chat message test suite (1000 NL messages)", () => {
@@ -77,8 +70,15 @@ describe("chat message test suite (1000 NL messages)", () => {
         );
         const tagMatch = finding.id === "PI-005" && tc.issueTags?.includes("playlist_name_confusion");
         const titleWord = finding.title.split(" ")[0]?.toLowerCase();
-        const tagFromTitle = tc.issueTags?.some((t) => finding.title.toLowerCase().includes(t.replace(/_/g, " ")));
-        return msgMatch || tagMatch || tagFromTitle || (titleWord && tc.message.toLowerCase().includes(titleWord));
+        const tagFromTitle = tc.issueTags?.some((t) =>
+          finding.title.toLowerCase().includes(t.replace(/_/g, " ")),
+        );
+        return (
+          msgMatch ||
+          tagMatch ||
+          tagFromTitle ||
+          (titleWord && tc.message.toLowerCase().includes(titleWord))
+        );
       });
       expect(covered, `no test coverage for ${finding.id}`).toBe(true);
     }
@@ -101,25 +101,17 @@ describe("chat message test suite (1000 NL messages)", () => {
   });
 
   describe("suite-wide structural summary", () => {
-    it("passes bulk structural checks with low collision rate", () => {
+    it("passes bulk structural checks", () => {
       const results = CHAT_MESSAGE_TEST_SUITE.map((tc) => analyzeStructuralCase(tc, deps));
       const summary = summarizeSuiteAnalysis(CHAT_MESSAGE_TEST_SUITE, results);
       expect(summary.total).toBe(1000);
-      expect(summary.detectorCollisions).toBeLessThan(5);
-      expect(summary.structuralFail).toBeLessThan(20);
+      expect(summary.structuralFail).toBe(0);
     });
   });
 
-  describe("cross-detector invariants (all 1000)", () => {
-    it("no message triggers both youtube and magnus detectors", () => {
-      const collisions = CHAT_MESSAGE_TEST_SUITE.filter(
-        (tc) => looksLikeYoutubeAction(tc.message) && looksLikeMagnusToolAction(tc.message),
-      );
-      expect(collisions.map((c) => c.message)).toEqual([]);
-    });
-
-    it("explicit meal: prefix always parses as meal", () => {
-      const meals = CHAT_MESSAGE_TEST_SUITE.filter((tc) => /^meal:/i.test(tc.message.trim()));
+  describe("explicit meal protocol", () => {
+    it("meal: prefix always parses as meal", () => {
+      const meals = CHAT_MESSAGE_TEST_SUITE.filter((tc) => tc.message.trim().toLowerCase().startsWith("meal:"));
       for (const tc of meals) {
         expect(parseMealLogCommand(tc.message).kind).toBe("meal");
       }
