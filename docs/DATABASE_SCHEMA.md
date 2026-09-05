@@ -328,6 +328,7 @@ Not Postgres, but part of durable/fast state:
 | `20260809190000_meal_plan_templates.sql` | meal plan templates |
 | `20260810160000_projects_and_sessions.sql` | projects + project_sessions |
 | `20260905170000_supabase_security_hardening.sql` | LifeOS views `security_invoker`; chat purge RPC locked to `service_role` |
+| `20260905173000_revoke_graphql_api_roles.sql` | Revoke `anon`/`authenticated` grants on all `public` tables (GraphQL lockdown) |
 
 ---
 
