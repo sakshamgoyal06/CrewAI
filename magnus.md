@@ -13,7 +13,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/product/TRD.md`** | Technical requirements — stack, interfaces, security, deploy |
 | **`docs/product/ACTIVITY_TAXONOMY.md`** | Operations · Goals · Projects activity layer |
 | **`docs/product/PROJECT_DEFINITION.md`** | Project anatomy, lifecycle, UX |
-| **`docs/product/MAGNUS_IDEAS.md`** | Product ideas backlog (post–v1 hardening) — not bug fixes |
+| **`docs/product/FRONTLOAD_CONTEXT.md`** | Routing context frontload — per-turn assembly before classify (PR #92) |
 | **`docs/diagrams/ARCHITECTURE_DIAGRAMS.md`** | Mermaid diagrams: context, sequence, routing, deployment |
 | **`docs/TOOLS_AND_AGENTS.md`** | Repo diagram: agents, tools, proactive jobs, integrations |
 | **`docs/USER_QUERY_GUIDE.md`** | What users can ask → routing path and expected output |
@@ -138,6 +138,7 @@ shell or `.env`.
 | `src/agents/health/healthRouter.ts` | Health composite: meal log/photo deterministic gates → pillar plan parser → capability executors (compose pipeline) |
 | `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
 | `src/agents/memory/` | `loadMemoryContext`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
+| `src/agents/context/` | `assembleRoutingContext`, `loadGrowthSnapshot`, `growthHelpers` — frontload before classify (PR #92) |
 | `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
 | `src/meals/` | Meal parsing, estimate chain, `meal_logs` writes, **intake collapse** (one occasion → one log), **session similarity dedupe**, **slot correction** |
 | `src/nutrition/` | Local-date helpers, rollups/plan stores, **planning journey** (`meal_plan_sessions`), anomaly detection, weekly review, journal context |
@@ -172,6 +173,10 @@ shell or `.env`.
 3. **Rate limit** — Redis fixed 60s window per user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, 0 disables).
 4. **Dedupe** — `update_id` claimed in Redis for 24h, so webhook retries never double-reply.
 5. **Classification** — Five intents. `GENERAL` is Magnus's own work, not a fallback bucket.
+   Before classify, **`assembleRoutingContext`** loads identity, integrations, pending FSM state,
+   recent turns,    active work, standing rules, and a **growth snapshot** (day frame, north star goals,
+   commitments/errands, project consistency, slipping routines by `activity_key`, issues,
+   joy/pillar KPIs). See `docs/product/FRONTLOAD_CONTEXT.md`.
    The classifier receives **routing hints** (explicit meal log, YouTube/Magnus-tool signals,
    portfolio/Hevy read signals) with the message; explicit meal-log command or **logged-meal read**
    (breakdown, history, macros — not the meal plan menu) hard-overrides to `HEALTH`. On `GENERAL`, the pillar plan parser may choose `pillar_consultation` (Magnus tools +
@@ -358,4 +363,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
+<<<<<<< HEAD
+**Last updated:** 2026-08-18 (routing growth snapshot in frontload context, PR #92)
+=======
 **Last updated:** 2026-09-05 (Supabase security hardening + GraphQL API lockdown)
+>>>>>>> origin/main
