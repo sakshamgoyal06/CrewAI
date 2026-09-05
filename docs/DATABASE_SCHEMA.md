@@ -320,6 +320,14 @@ Not Postgres, but part of durable/fast state:
 | `20260803160000_magnus_youtube_playlist_aliases.sql` | playlist_aliases |
 | `20260803180000_user_integrations_notion_registry.sql` | notion_registry JSONB |
 | `20260803190000_magnus_user_lists.sql` | lists + items |
+| `20260804120000_baseline_lifeos_core.sql` | LifeOS core tables |
+| `20260806160000_magnus_proactive_subscriptions.sql` | proactive subscriptions |
+| `20260809140000_nutrition_local_date_rollups.sql` | nutrition rollups |
+| `20260809160000_meal_plan_entries.sql` | meal plan entries |
+| `20260809180000_meal_plan_sessions.sql` | meal plan sessions |
+| `20260809190000_meal_plan_templates.sql` | meal plan templates |
+| `20260810160000_projects_and_sessions.sql` | projects + project_sessions |
+| `20260905170000_supabase_security_hardening.sql` | LifeOS views `security_invoker`; chat purge RPC locked to `service_role` |
 
 ---
 
