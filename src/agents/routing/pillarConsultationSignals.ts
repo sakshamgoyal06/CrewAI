@@ -26,7 +26,7 @@ export function shouldConsultHealthOnGeneral(input: {
 
 /** Used by agentConsultation outcome scoring — routing context supplies pillar signals. */
 export function messageHasPillarSignal(
-  message: string,
+  _message: string,
   pillar: ConsultablePillarIntent,
   routingContext?: RoutingContextSignals,
 ): boolean {

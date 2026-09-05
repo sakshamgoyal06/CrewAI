@@ -131,7 +131,6 @@ function parseConsultPillars(raw: unknown): ConsultablePillarIntent[] {
   if (!Array.isArray(raw)) {
     return [];
   }
-  const allowed = new Set<ConsultablePillarIntent>(["HEALTH", "WEALTH", "HAPPINESS", "WISDOM"]);
   const out: ConsultablePillarIntent[] = [];
   for (const item of raw) {
     const id = typeof item === "string" ? item.trim().toUpperCase() : "";
