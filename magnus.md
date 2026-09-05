@@ -363,8 +363,12 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ## v1 close-out (PR #91–#100)
 
-**Status:** In progress (PR #90 merged). Execute [`docs/review/V1_HARDENING_PLAN.md`](docs/review/V1_HARDENING_PLAN.md) — technical hardening + four-pillar reintegration. Track in [`docs/review/V1_HARDENING_LOG.md`](docs/review/V1_HARDENING_LOG.md). Agents: read the master plan before any v1 hardening PR.
+**Status:** In progress (PR #90 merged). Execute [`docs/review/V1_HARDENING_PLAN.md`](docs/review/V1_HARDENING_PLAN.md) — technical hardening + four-pillar reintegration. Track in [`docs/review/V1_HARDENING_LOG.md`](docs/review/V1_HARDENING_LOG.md). Agents: read the master plan before any v1 hardening PR. **PR #99** includes reminder frequency expansion (every-N-days, until-date, replace-on-correct) — see segment 10.3 and bug B-001 in the hardening log.
 
 ---
 
+<<<<<<< HEAD
+**Last updated:** 2026-09-05 (PR #99 reminder frequencies scoped; reminders management; routing growth snapshot PR #92; Supabase security)
+=======
 **Last updated:** 2026-09-05 (LLM routing parser; reminders management; growth snapshot PR #92; Supabase security)
+>>>>>>> origin/main

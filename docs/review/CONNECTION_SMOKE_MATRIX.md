@@ -95,6 +95,8 @@
 | R4 | custom_reminder | `remind me in 30 minutes to X` | Fires at parsed time | ☐ | |
 | R5 | week_planning | Monday ~8:00 local | Subscription send | ☐ | |
 | R6 | weekly_wrap | Friday ~18:00 local | Includes nutrition slice | ☐ | |
+| R7 | custom_reminder interval | `remind me every 2 days at 9am until Aug 31 to X` | Fires on cadence (not daily); stops after until | ☐ | #99 |
+| R8 | custom_reminder replace | Correct an existing reminder cadence in chat | Prior sub disabled; no duplicate fire same window | ☐ | #99 |
 
 ---
 

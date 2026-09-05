@@ -10,7 +10,11 @@
 | Date | PR | Agent / human | Segments | Gates A–D | Summary |
 |------|-----|---------------|----------|-----------|---------|
 | 2026-08-16 | docs | — | Plan created | — | Initial review artifact suite pushed to `main` |
+<<<<<<< HEAD
+| 2026-08-17 | docs | — | PR #99 scope | — | Added segment **10.3 Reminder frequencies** (coriander incident); interval/until/replace-on-correct |
+=======
 | 2026-09-05 | — | agent | routing spine | — | LLM `routingContextParser` replaces regex routing (conversationSignals, magnusActionDetect, deterministic plan bypasses) |
+>>>>>>> origin/main
 | 2026-08-18 | #92 | agent | 3.1 (partial) | A pass (scoped) | Generic growth snapshot: day frame, commitments, errands, projects, slipping routines by activity_key |
 | 2026-08-17 | #91 / GitHub #92 | owner | 0.1–2.1 | A pass | Merged foundation PR |
 
@@ -70,6 +74,7 @@ Mark `pass` / `fail` / `skip` as each PR closes segments.
 | 8.1–8.3 | Shallow pillars grounded | #98 | | |
 | 10.1 | Proactive cron | #99 | | |
 | 10.2 | Proactive kinds | #99 | | |
+| 10.3 | Reminder frequencies | #99 | | Interval days, until-date, replace-on-correct (coriander) |
 | 11.1 | CI + test gate | #100 | | |
 | 11.2 | Seven-day owner sim | #100 | | |
 
@@ -79,7 +84,8 @@ Mark `pass` / `fail` / `skip` as each PR closes segments.
 
 | ID | PR | Severity | Description | Fix | Verified |
 |----|-----|----------|-------------|-----|----------|
-| | | | | | |
+| B-001 | #99 | high | “Every 2 days” coriander water reminder stored as daily `recurring_local`; correction stacked duplicate dailies → double fire same morning | Segment 10.3: `recurring_interval`, `until`, replace-on-correct | |
+| B-002 | #95 | medium | Coriander plant photo mis-routed to meal log (~11 kcal) | Segment 7.6: photo purpose ≠ meal when not food | |
 
 ---
 
@@ -138,4 +144,4 @@ PR #91 segment 0.1 CI (2026-08-16):
 
 ---
 
-**Last updated:** 2026-08-18
+**Last updated:** 2026-09-05

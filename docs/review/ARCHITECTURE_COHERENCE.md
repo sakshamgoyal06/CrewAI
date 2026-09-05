@@ -142,6 +142,8 @@ cron (every N min)
 
 **Registry:** `proactive/kinds/registry.ts` — single registration point.
 
+**Custom reminder schedules (PR #99, segment 10.3):** `magnus_proactive_subscriptions.schedule` JSONB supports `one_shot`, daily `recurring_local`, and (after hardening) `recurring_interval` (`intervalDays`, optional `until`) plus replace-on-correct so corrections do not stack duplicate actives. See `V1_HARDENING_PLAN.md` § PR #99.
+
 ---
 
 ## 7. Test architecture (Frozen at v1)
