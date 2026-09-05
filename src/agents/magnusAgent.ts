@@ -68,6 +68,7 @@ import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
 import { classifyToolResult, type ToolOutcome } from "./routing/actionIntegrity.js";
 import { manageProactiveMessages } from "../proactive/manageProactiveTool.js";
+import { manageReminders } from "../proactive/manageRemindersTool.js";
 
 const MODEL = "claude-sonnet-4-6";
 // Calendar + event log + YouTube bulk ops in one turn needs headroom (env override).
@@ -243,6 +244,10 @@ const TOOLS: Tool[] = [
         actual_start: { type: "string", description: "When it really started, local time." },
         actual_end: { type: "string", description: "When it really finished, local time." },
         details: { type: "string", description: "Corrected or fuller description." },
+        remind_at: {
+          type: "string",
+          description: "When to nudge, local time. Set to cancel a pending reminder.",
+        },
       },
       required: ["event_id"],
     },
@@ -364,6 +369,61 @@ const TOOLS: Tool[] = [
         catalog_only: {
           type: "boolean",
           description: "For disable_all: only disable catalog kinds (evening_journal, drift_guard, midday_encouragement).",
+        },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "manage_reminders",
+    description:
+      "Task reminders Magnus sends on Telegram: list, create one-shot, create daily/weekly recurring, update, snooze, cancel. For commitment-linked reminders use log_event with remind_at. For evening journal / rhythm nudges use manage_proactive_messages instead.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["list", "create", "create_recurring", "update", "snooze", "cancel"],
+        },
+        message: {
+          type: "string",
+          description: "Reminder body (create, create_recurring).",
+        },
+        at: {
+          type: "string",
+          description:
+            "When to fire (create) or snooze target: tomorrow 8pm, Sunday 9:30am, in 30 minutes, 2026-08-07 20:00.",
+        },
+        local_hour: {
+          type: "number",
+          description: "Local hour 0-23 for create_recurring (e.g. 9 for 9am).",
+        },
+        local_minute: {
+          type: "number",
+          description: "Local minute 0-59 for create_recurring (optional).",
+        },
+        days_of_week: {
+          type: "string",
+          description:
+            "For weekly recurrence: comma-separated weekdays (mon,wed,fri) or numbers 0=Sun … 6=Sat.",
+        },
+        query: {
+          type: "string",
+          description: "Match reminder by title text (list, cancel, snooze, update).",
+        },
+        reminder_id: {
+          type: "string",
+          description: "From list output (first 8 chars of id) when query is ambiguous.",
+        },
+        reminder_kind: {
+          type: "string",
+          enum: ["standalone", "event", "reminder", "commitment"],
+          description: "Narrow list/cancel/snooze to standalone or event-linked reminders.",
+        },
+        new_message: { type: "string", description: "Updated body (update)." },
+        new_at: {
+          type: "string",
+          description: "New fire time (update, snooze).",
         },
       },
       required: ["action"],
@@ -1010,6 +1070,7 @@ async function runTool(
           actualStart: str(input.actual_start),
           actualEnd: str(input.actual_end),
           details: str(input.details),
+          remindAt: str(input.remind_at),
         });
       case "reschedule_event":
         return await rescheduleEventTool({
@@ -1049,6 +1110,22 @@ async function runTool(
           user_instruction: str(input.user_instruction),
           subscription_id: str(input.subscription_id),
           catalog_only: input.catalog_only === true,
+        });
+      case "manage_reminders":
+        return await manageReminders({
+          userProfileId: ctx.userProfileId,
+          timezone: timeZone,
+          action: String(input.action ?? ""),
+          message: str(input.message),
+          at: str(input.at),
+          local_hour: num(input.local_hour),
+          local_minute: num(input.local_minute),
+          days_of_week: str(input.days_of_week),
+          query: str(input.query),
+          reminder_id: str(input.reminder_id),
+          reminder_kind: str(input.reminder_kind),
+          new_message: str(input.new_message),
+          new_at: str(input.new_at),
         });
       case "youtube_search":
         return await youtubeSearchTool({

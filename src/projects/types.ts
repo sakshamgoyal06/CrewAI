@@ -61,6 +61,7 @@ export type ActiveProjectSummary = {
   target_date: string | null;
   status: ProjectStatus;
   project_type: string;
+  primary_pillar: string;
   priority_rank: number;
   energy_budget: ProjectEnergyBudget;
   open_checklist_count?: number;

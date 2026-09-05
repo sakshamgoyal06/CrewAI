@@ -13,7 +13,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/product/TRD.md`** | Technical requirements — stack, interfaces, security, deploy |
 | **`docs/product/ACTIVITY_TAXONOMY.md`** | Operations · Goals · Projects activity layer |
 | **`docs/product/PROJECT_DEFINITION.md`** | Project anatomy, lifecycle, UX |
-| **`docs/product/MAGNUS_IDEAS.md`** | Product ideas backlog (post–v1 hardening) — not bug fixes |
+| **`docs/product/FRONTLOAD_CONTEXT.md`** | Routing context frontload — per-turn assembly before classify (PR #92) |
 | **`docs/diagrams/ARCHITECTURE_DIAGRAMS.md`** | Mermaid diagrams: context, sequence, routing, deployment |
 | **`docs/TOOLS_AND_AGENTS.md`** | Repo diagram: agents, tools, proactive jobs, integrations |
 | **`docs/USER_QUERY_GUIDE.md`** | What users can ask → routing path and expected output |
@@ -138,6 +138,7 @@ shell or `.env`.
 | `src/agents/health/healthRouter.ts` | Health composite: meal log/photo deterministic gates → pillar plan parser → capability executors (compose pipeline) |
 | `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
 | `src/agents/memory/` | `loadMemoryContext`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
+| `src/agents/context/` | `assembleRoutingContext`, `loadGrowthSnapshot`, `growthHelpers` — frontload before classify (PR #92) |
 | `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
 | `src/meals/` | Meal parsing, estimate chain, `meal_logs` writes, **intake collapse** (one occasion → one log), **session similarity dedupe**, **slot correction** |
 | `src/nutrition/` | Local-date helpers, rollups/plan stores, **planning journey** (`meal_plan_sessions`), anomaly detection, weekly review, journal context |
@@ -172,6 +173,10 @@ shell or `.env`.
 3. **Rate limit** — Redis fixed 60s window per user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, 0 disables).
 4. **Dedupe** — `update_id` claimed in Redis for 24h, so webhook retries never double-reply.
 5. **Classification** — Five intents. `GENERAL` is Magnus's own work, not a fallback bucket.
+   Before classify, **`assembleRoutingContext`** loads identity, integrations, pending FSM state,
+   recent turns,    active work, standing rules, and a **growth snapshot** (day frame, north star goals,
+   commitments/errands, project consistency, slipping routines by `activity_key`, issues,
+   joy/pillar KPIs). See `docs/product/FRONTLOAD_CONTEXT.md`.
    The classifier receives **routing hints** (explicit meal log, YouTube/Magnus-tool signals,
    portfolio/Hevy read signals) with the message; explicit meal-log command or **logged-meal read**
    (breakdown, history, macros — not the meal plan menu) hard-overrides to `HEALTH`. On `GENERAL`, the pillar plan parser may choose `pillar_consultation` (Magnus tools +
@@ -194,9 +199,13 @@ shell or `.env`.
    postpone), **nutrition nightly** (~23:00 local: recompute rollups, anomaly flags, sync persistent
    lapse patterns to `program_learnings`; `MAGNUS_NUTRITION_NIGHTLY_ENABLED`), **subscription dispatcher** (`evening_journal`, `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
    `chat_inactivity`, `custom_reminder`, `meal_log_reminder`, `meal_adherence_nudge`, `meal_eod_reconciliation`, `meal_gap_nudge`, `weekly_nutrition_review` via `magnus_proactive_subscriptions` — modular kind registry in
-   `src/proactive/kinds/`). **Rhythm cadence** (catalog kinds): **Morning Brief** (~7:00 local, scheduled job — short focus/plan/meals read + optional intention question; replaces separate morning orientation), `evening_journal` (~21:00, day summary + EOD review), `week_planning` (Monday ~8:00), `weekly_wrap` (Friday ~18:00, includes nutrition week slice), `monthly_goal_review` (1st of month ~10:00). Owner provision seeds evening/weekly/monthly rhythm via `seedDefaultRhythmSubscriptions`. User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
+   `src/proactive/kinds/`). **Rhythm cadence** (catalog kinds): **Morning Brief** (~7:00 local, scheduled job — short focus/plan/meals read + optional intention question; replaces separate morning orientation), `evening_journal` (~21:00, day summary + EOD review), `week_planning` (Monday ~8:00), `weekly_wrap` (Friday ~18:00, includes nutrition week slice), `monthly_goal_review` (1st of month ~10:00). Owner provision seeds evening/weekly/monthly rhythm via `seedDefaultRhythmSubscriptions`.    User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
    catalog kinds, create one-shot or daily custom reminders (`create_reminder` /
-   `create_recurring_reminder`). Relative time parsing for one-shots (`tomorrow 8pm`, `in 30 minutes`).
+   `create_recurring_reminder`). **Task reminders** use `manage_reminders`: list, create,
+   create_recurring (daily or weekly), update, snooze, cancel — standalone (`custom_reminder`) or
+   commitment-linked (`magnus_events.remind_at`). Relative time parsing for one-shots (`tomorrow 8pm`,
+   `Sunday 9:30am`, `in 30 minutes`, `6 months from today on the 1st`). Reschedule carries
+   `remind_at` by the same delta as `planned_start_at`. `day_overview` includes reminders for the day.
    LLM gate+compose (Haiku) for evening journal, drift guard, midday encouragement, stale list nudges,
    and chat inactivity; quiet hours 23:00–06:00 local; adaptive cap 3/day (scheduled + user-asked
    reminders exempt).    Manual brief: say `morning brief` or
@@ -262,7 +271,7 @@ Supabase `sb_secret_…` key format works as service role.
 
 `supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`, `meal_plan_sessions`,
 `projects`, `features`, `project_sessions`, `magnus_events`, `magnus_proactive_subscriptions`, `memory_summaries`, `magnus_youtube_*` (incl. `playlist_aliases`), and `magnus_chat_messages` type columns;
-older schema was applied directly to the project before those migrations existed. **`20260810160000_projects_and_sessions.sql`** applied to hosted Supabase 2026-08-10 — upgrades legacy `projects`/`features` columns and adds `project_sessions`.
+older schema was applied directly to the project before those migrations existed. **`20260810160000_projects_and_sessions.sql`** applied to hosted Supabase 2026-08-10 — upgrades legacy `projects`/`features` columns and adds `project_sessions`. **`20260905170000_supabase_security_hardening.sql`** (hosted 2026-09-05) — LifeOS views use `security_invoker`; `purge_expired_magnus_chat_messages()` is `service_role` only. **`20260905173000_revoke_graphql_api_roles.sql`** — revokes all `anon`/`authenticated` grants on `public` (Magnus uses `service_role` only).
 
 ---
 
@@ -358,4 +367,4 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-**Last updated:** 2026-08-17 (PR #99 reminder frequencies scoped)
+**Last updated:** 2026-09-05 (PR #99 reminder frequencies scoped; reminders management; routing growth snapshot PR #92; Supabase security)

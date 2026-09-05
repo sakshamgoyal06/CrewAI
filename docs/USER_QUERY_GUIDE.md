@@ -117,7 +117,9 @@ Everything else is plain language.
 | `connect notion` | `notion` | `connect_notion` | OAuth link |
 | `log gym 6am tomorrow` | `event_log` | `log_event` | Commitment in event log |
 | `reschedule gym to Friday` | `event_log` | `reschedule_event` | Chained replacement row |
-| `remind me tomorrow 8pm` | `proactive` | `manage_proactive_messages` | Custom reminder created |
+| `remind me tomorrow 8pm` | `reminders` | `manage_reminders` | Custom reminder created |
+| `what reminders do I have?` | `reminders` | `manage_reminders` | Upcoming list |
+| `snooze the bike reminder` | `reminders` | `manage_reminders` | Snoozed |
 | `connect google` | `calendar` / `youtube` | `connect_google` | Unified OAuth link |
 | `quick note: …` | `journal_note` | `log_note` | Note in daily log (+ Notion if linked) |
 | `review my hevy workout and log this in my daily checkins` | `pillar_consultation` | Magnus tools + HEALTH step | Single composed reply |
@@ -130,7 +132,8 @@ Everything else is plain language.
 Users can also **configure** proactive messages:
 
 - `enable evening journal` · `disable drift guard` · `list proactive messages`
-- `remind me in 30 minutes to …` · `every day at 9am remind me to …`
+- `remind me in 30 minutes to …` · `every day at 9am remind me to …` · `every Monday at 7pm …`
+- `what reminders do I have?` · `snooze …` · `cancel the … reminder`
 
 Magnus may also send without a user turn: morning brief, event reminders, gym↔Hevy reconcile, nutrition nightly, subscription kinds (see `docs/TOOLS_AND_AGENTS.md` §7).
 

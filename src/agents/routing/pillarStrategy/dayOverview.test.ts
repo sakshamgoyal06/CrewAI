@@ -31,6 +31,13 @@ vi.mock("../../../meals/mealDaySummary.js", () => ({
   sumMealLogsForDay: (...args: unknown[]) => sumMealLogsMock(...args),
 }));
 
+const listRemindersMock = vi.fn();
+
+vi.mock("../../../proactive/reminderStore.js", () => ({
+  listUpcomingReminders: (...args: unknown[]) => listRemindersMock(...args),
+  formatReminderList: () => "No reminders set for this day.",
+}));
+
 import { executeDayOverviewCapability } from "./dayOverview.js";
 
 function ctx(raw: string) {
@@ -50,6 +57,8 @@ describe("executeDayOverviewCapability", () => {
     getPlanEntriesMock.mockReset();
     getSessionsMock.mockReset();
     sumMealLogsMock.mockReset();
+    listRemindersMock.mockReset();
+    listRemindersMock.mockResolvedValue([]);
     readCalendarMock.mockResolvedValue("- 09:00 Standup\n- 13:00 Lunch with Alex");
     listEventsMock.mockResolvedValue("- Gym (planned)");
     getPlanEntriesMock.mockResolvedValue([
