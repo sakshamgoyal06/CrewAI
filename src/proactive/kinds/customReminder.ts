@@ -1,6 +1,6 @@
 import { isInLocalHourWindow } from "../scheduleWindow.js";
 import type { ProactiveEvaluateResult, ProactiveKindHandler } from "./types.js";
-import type { OneShotSchedule, RecurringLocalSchedule, WeeklyLocalSchedule } from "../subscriptions/types.js";
+import type { OneShotSchedule, WeeklyLocalSchedule } from "../subscriptions/types.js";
 import { recurringLocalSchedule } from "./recurringLocal.js";
 
 function localDayOfWeek(now: Date, timezone: string): number {

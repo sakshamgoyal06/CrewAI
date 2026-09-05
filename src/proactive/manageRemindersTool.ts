@@ -181,21 +181,23 @@ export async function manageReminders(input: {
       if (input.new_message?.trim()) {
         return "Commitment reminder text comes from the event title — use update_event to change details.";
       }
-      if (patch.remindAt === undefined) {
+      if (patch.remindAt == null) {
         return "new_at is required to reschedule a commitment reminder.";
       }
+      const remindAt = patch.remindAt;
       const res = await updateEvent({
         userProfileId: input.userProfileId,
         eventId: target.id,
-        remindAt: patch.remindAt,
+        remindAt,
       });
       if (!res.ok) {
         return `Could not update reminder: ${res.error}`;
       }
-      return `Commitment reminder moved to ${patch.remindAt.toISOString()}.`;
+      return `Commitment reminder moved to ${remindAt.toISOString()}.`;
     }
 
-    const at = input.new_at?.trim() ? parseAt(input.new_at, input.timezone) : undefined;
+    const parsedAt = input.new_at?.trim() ? parseAt(input.new_at, input.timezone) : undefined;
+    const at = parsedAt ?? undefined;
     if (at && at.getTime() <= now.getTime()) {
       return "Reminder time must be in the future.";
     }
