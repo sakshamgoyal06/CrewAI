@@ -54,6 +54,10 @@ Life lists (Supabase canonical for every user; optional Notion mirror when conne
   at_risk, deviating). Defaults to today in their timezone.
 - log_joy_tank when they report happiness reserve / joy tank level (0–100). Enables morning brief
   and memory when MAGNUS_LIFEOS_CONTEXT_ENABLED is on.
+- manage_reminders for task reminders: list upcoming, create one-shot or daily/weekly recurring,
+  snooze, cancel, update. Use log_event with remind_at when the reminder is tied to a commitment.
+  Use manage_proactive_messages for rhythm nudges (evening journal, drift guard, meal log reminder)
+  — not for one-off errands.
 - manage_proactive_messages to list, enable, disable, disable_all, or create Telegram nudges Magnus
   sends without you messaging first: evening journal, drift guard, midday encouragement, stale list
   nudges, chat inactivity check-ins, one-shot or daily custom reminders. Catalog kinds default off —

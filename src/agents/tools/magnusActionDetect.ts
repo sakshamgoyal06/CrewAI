@@ -30,7 +30,10 @@ const CHECKIN_LOG_RE =
   /\b(?:log|write|save|record)\b.{0,60}\b(?:daily\s+)?check[\s-]?ins?\b|\b(?:daily\s+)?check[\s-]?ins?\b.{0,60}\b(?:log|write|save|record)\b|\b(?:log|write|save|record)\b.{0,60}\b(?:workout|gym session|training session|pull a|push a|legs)\b|\b(?:done with|finished)\b.{0,50}\b(?:workout|gym)\b.{0,60}\b(?:log|and log)\b|\blog_daily_checkin\b|\bget_daily_checkin\b/i;
 
 const PROACTIVE_RE =
-  /\b(?:manage_proactive|proactive messages?)\b|\b(?:turn off|disable|stop|enable)\b.{0,40}\b(?:evening|morning|midday|drift|proactive|nudge|reminder|inactivity|stale)\b|\b(?:remind me)\b.{0,80}\b(?:at|tomorrow|tonight|every|daily)\b|\b(?:evening journal|drift guard|stale list|chat inactivity|don't forget to log)\b/i;
+  /\b(?:manage_proactive|proactive messages?)\b|\b(?:turn off|disable|stop|enable)\b.{0,40}\b(?:evening|morning|midday|drift|proactive|nudge|inactivity|stale)\b|\b(?:evening journal|drift guard|stale list|chat inactivity|don't forget to log)\b/i;
+
+const REMINDER_RE =
+  /\b(?:manage_reminders?|my reminders?|what reminders?)\b|\b(?:remind me)\b|\b(?:snooze|cancel)\b.{0,30}\breminder\b|\b(?:don't let me forget|nudge me to)\b/i;
 
 const PROJECT_ACTION_RE =
   /\b(?:job search|job hunting|plan(?:ning)?\s+(?:a\s+)?trip|vacation|lose \d+\s*kg|transformation|skill sprint|birthday party|project status|how'?s my .+ project|lock it in|pause .+ project|complete .+ project)\b/i;
@@ -50,6 +53,7 @@ export function looksLikeMagnusToolAction(message: string): boolean {
     EVENT_LOG_EXPLICIT_RE.test(text) ||
     CHECKIN_LOG_RE.test(text) ||
     PROACTIVE_RE.test(text) ||
+    REMINDER_RE.test(text) ||
     PROJECT_ACTION_RE.test(text)
   );
 }

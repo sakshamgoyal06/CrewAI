@@ -2,26 +2,26 @@
 import type { ChatMessageTestCase, ChatTestSuiteMeta } from "./chatMessageTestSuite.types.js";
 
 export const CHAT_MESSAGE_TEST_SUITE_META: ChatTestSuiteMeta = {
-  "generatedAt": "2026-08-13",
+  "generatedAt": "2026-09-05",
   "totalCases": 1000,
   "bySource": {
     "real_chat": 279,
-    "catalog": 152,
+    "catalog": 155,
     "adversarial": 6,
     "synthetic": 92,
-    "variation": 471
+    "variation": 468
   },
   "byCategory": {
     "general_youtube": 48,
     "happiness_media": 21,
     "follow_up": 14,
-    "general_conversation": 117,
+    "general_conversation": 112,
     "health_fitness": 80,
     "general_day": 13,
     "wealth": 79,
     "health_meal_plan": 106,
-    "general_tools": 13,
-    "wisdom": 74,
+    "general_tools": 18,
+    "wisdom": 71,
     "health_meal": 14,
     "health_meal_log": 76,
     "health_meal_history": 47,
@@ -39,7 +39,8 @@ export const CHAT_MESSAGE_TEST_SUITE_META: ChatTestSuiteMeta = {
     "general_lifeos": 13,
     "general_notion": 3,
     "general_event_log": 10,
-    "general_proactive": 9,
+    "general_reminders": 6,
+    "general_proactive": 6,
     "general_journal": 2,
     "general_zerodha": 1,
     "general_pillar_consultation": 3,
@@ -842,13 +843,13 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "id": "cmt-0056",
     "message": "Remind me to buy tomatoes this Sunday",
     "source": "real_chat",
-    "category": "general_conversation",
+    "category": "general_tools",
     "observedIntent": null,
     "requiresPriorTurn": false,
     "issueTags": [],
     "structural": {
       "explicitMealLog": false,
-      "magnusTools": false,
+      "magnusTools": true,
       "youtubeAction": false
     }
   },
@@ -1802,13 +1803,13 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "id": "cmt-0124",
     "message": "Add a reminder to message bharadwaj to get my brother's surgical stuff on the weekend. Remind me on saturday 12 pm",
     "source": "real_chat",
-    "category": "general_conversation",
+    "category": "general_tools",
     "observedIntent": null,
     "requiresPriorTurn": false,
     "issueTags": [],
     "structural": {
       "explicitMealLog": false,
-      "magnusTools": false,
+      "magnusTools": true,
       "youtubeAction": false
     }
   },
@@ -1816,13 +1817,13 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "id": "cmt-0125",
     "message": "Remind me on sunday 9:30 AM to drop my bike for servicing",
     "source": "real_chat",
-    "category": "general_conversation",
+    "category": "general_tools",
     "observedIntent": null,
     "requiresPriorTurn": false,
     "issueTags": [],
     "structural": {
       "explicitMealLog": false,
-      "magnusTools": false,
+      "magnusTools": true,
       "youtubeAction": false
     }
   },
@@ -3278,13 +3279,13 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "id": "cmt-0229",
     "message": "Remind me too",
     "source": "real_chat",
-    "category": "general_conversation",
+    "category": "general_tools",
     "observedIntent": null,
     "requiresPriorTurn": false,
     "issueTags": [],
     "structural": {
       "explicitMealLog": false,
-      "magnusTools": false,
+      "magnusTools": true,
       "youtubeAction": false
     }
   },
@@ -3752,13 +3753,13 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "id": "cmt-0262",
     "message": "Remind me to buy ghewar on Friday morning",
     "source": "real_chat",
-    "category": "general_conversation",
+    "category": "general_tools",
     "observedIntent": null,
     "requiresPriorTurn": false,
     "issueTags": [],
     "structural": {
       "explicitMealLog": false,
-      "magnusTools": false,
+      "magnusTools": true,
       "youtubeAction": false
     }
   },
@@ -5879,9 +5880,9 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "id": "cmt-0413",
     "message": "remind me tomorrow at 8pm to call mom",
     "source": "catalog",
-    "category": "general_proactive",
+    "category": "general_reminders",
     "idealIntent": "GENERAL",
-    "idealCapability": "proactive",
+    "idealCapability": "reminders",
     "structural": {
       "explicitMealLog": false,
       "magnusTools": true,
@@ -5893,9 +5894,9 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "id": "cmt-0414",
     "message": "remind me every day at 9am to stretch",
     "source": "catalog",
-    "category": "general_proactive",
+    "category": "general_reminders",
     "idealIntent": "GENERAL",
-    "idealCapability": "proactive",
+    "idealCapability": "reminders",
     "structural": {
       "explicitMealLog": false,
       "magnusTools": true,
@@ -5905,6 +5906,62 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
   },
   {
     "id": "cmt-0415",
+    "message": "what reminders do I have this week?",
+    "source": "catalog",
+    "category": "general_reminders",
+    "idealIntent": "GENERAL",
+    "idealCapability": "reminders",
+    "structural": {
+      "explicitMealLog": false,
+      "magnusTools": true,
+      "youtubeAction": false
+    },
+    "issueTags": []
+  },
+  {
+    "id": "cmt-0416",
+    "message": "snooze the bike reminder one hour",
+    "source": "catalog",
+    "category": "general_reminders",
+    "idealIntent": "GENERAL",
+    "idealCapability": "reminders",
+    "structural": {
+      "explicitMealLog": false,
+      "magnusTools": true,
+      "youtubeAction": false
+    },
+    "issueTags": []
+  },
+  {
+    "id": "cmt-0417",
+    "message": "cancel the tomato reminder",
+    "source": "catalog",
+    "category": "general_reminders",
+    "idealIntent": "GENERAL",
+    "idealCapability": "reminders",
+    "structural": {
+      "explicitMealLog": false,
+      "magnusTools": true,
+      "youtubeAction": false
+    },
+    "issueTags": []
+  },
+  {
+    "id": "cmt-0418",
+    "message": "remind me tonight at 9pm to journal",
+    "source": "catalog",
+    "category": "general_reminders",
+    "idealIntent": "GENERAL",
+    "idealCapability": "reminders",
+    "structural": {
+      "explicitMealLog": false,
+      "magnusTools": true,
+      "youtubeAction": false
+    },
+    "issueTags": []
+  },
+  {
+    "id": "cmt-0419",
     "message": "disable evening journal",
     "source": "catalog",
     "category": "general_proactive",
@@ -5918,7 +5975,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0416",
+    "id": "cmt-0420",
     "message": "enable drift guard",
     "source": "catalog",
     "category": "general_proactive",
@@ -5932,7 +5989,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0417",
+    "id": "cmt-0421",
     "message": "turn off stale list nudge",
     "source": "catalog",
     "category": "general_proactive",
@@ -5946,21 +6003,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0418",
-    "message": "remind me tonight at 9pm to journal",
-    "source": "catalog",
-    "category": "general_proactive",
-    "idealIntent": "GENERAL",
-    "idealCapability": "proactive",
-    "structural": {
-      "explicitMealLog": false,
-      "magnusTools": true,
-      "youtubeAction": false
-    },
-    "issueTags": []
-  },
-  {
-    "id": "cmt-0419",
+    "id": "cmt-0422",
     "message": "quick note: great meeting with design team",
     "source": "catalog",
     "category": "general_journal",
@@ -5974,7 +6017,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0420",
+    "id": "cmt-0423",
     "message": "log_note: idea for product roadmap",
     "source": "catalog",
     "category": "general_journal",
@@ -5988,7 +6031,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0421",
+    "id": "cmt-0424",
     "message": "connect zerodha from general",
     "source": "catalog",
     "category": "general_zerodha",
@@ -6002,7 +6045,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0422",
+    "id": "cmt-0425",
     "message": "review my hevy workout and log this in my daily checkins",
     "source": "catalog",
     "category": "general_pillar_consultation",
@@ -6019,7 +6062,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0423",
+    "id": "cmt-0426",
     "message": "add to watchlist and recommend a film like it",
     "source": "catalog",
     "category": "general_pillar_consultation",
@@ -6036,7 +6079,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0424",
+    "id": "cmt-0427",
     "message": "what's the capital of Portugal?",
     "source": "catalog",
     "category": "general_conversation",
@@ -6050,7 +6093,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0425",
+    "id": "cmt-0428",
     "message": "explain quantum entanglement simply",
     "source": "catalog",
     "category": "general_conversation",
@@ -6064,7 +6107,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0426",
+    "id": "cmt-0429",
     "message": "thanks Magnus",
     "source": "catalog",
     "category": "general_conversation",
@@ -6078,7 +6121,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0427",
+    "id": "cmt-0430",
     "message": "good morning",
     "source": "catalog",
     "category": "general_conversation",
@@ -6092,7 +6135,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0428",
+    "id": "cmt-0431",
     "message": "what can you do?",
     "source": "catalog",
     "category": "general_conversation",
@@ -6106,7 +6149,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0429",
+    "id": "cmt-0432",
     "message": "where should we eat on Saturday?",
     "source": "catalog",
     "category": "general_conversation",
@@ -6121,7 +6164,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0430",
+    "id": "cmt-0433",
     "message": "tell me a joke",
     "source": "catalog",
     "category": "general_conversation",
@@ -6135,7 +6178,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0431",
+    "id": "cmt-0434",
     "message": "summarize stoic philosophy",
     "source": "catalog",
     "category": "general_conversation",
@@ -6149,7 +6192,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0432",
+    "id": "cmt-0435",
     "message": "I am having 2 paratha for lunch",
     "source": "adversarial",
     "category": "health_meal_log",
@@ -6163,7 +6206,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     }
   },
   {
-    "id": "cmt-0433",
+    "id": "cmt-0436",
     "message": "When did I add Dune to watchlist?",
     "source": "adversarial",
     "category": "general_lists",
@@ -6177,7 +6220,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     }
   },
   {
-    "id": "cmt-0434",
+    "id": "cmt-0437",
     "message": "Add to high energy workout playlist",
     "source": "adversarial",
     "category": "general_youtube",
@@ -6191,7 +6234,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     }
   },
   {
-    "id": "cmt-0435",
+    "id": "cmt-0438",
     "message": "You logged burrito bowl twice",
     "source": "adversarial",
     "category": "health_meal_history",
@@ -6205,7 +6248,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     }
   },
   {
-    "id": "cmt-0436",
+    "id": "cmt-0439",
     "message": "Add rocky series and recommend one for tonight",
     "source": "adversarial",
     "category": "general_pillar_consultation",
@@ -6219,7 +6262,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     }
   },
   {
-    "id": "cmt-0437",
+    "id": "cmt-0440",
     "message": "I am eating a dahi aloo tikki",
     "source": "adversarial",
     "category": "health_meal_log",
@@ -6234,7 +6277,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     }
   },
   {
-    "id": "cmt-0438",
+    "id": "cmt-0441",
     "message": "meal: dal rice and sabzi",
     "source": "synthetic",
     "category": "health_meal_log",
@@ -6246,7 +6289,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0439",
+    "id": "cmt-0442",
     "message": "I had paneer tikka and 2 rotis for dinner",
     "source": "synthetic",
     "category": "health_meal_log",
@@ -6258,7 +6301,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0440",
+    "id": "cmt-0443",
     "message": "log lunch: chole bhature",
     "source": "synthetic",
     "category": "health_meal_log",
@@ -6270,7 +6313,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0441",
+    "id": "cmt-0444",
     "message": "just had: protein shake after gym",
     "source": "synthetic",
     "category": "health_meal_log",
@@ -6282,7 +6325,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0442",
+    "id": "cmt-0445",
     "message": "ate: idli sambar and filter coffee",
     "source": "synthetic",
     "category": "health_meal_log",
@@ -6294,7 +6337,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0443",
+    "id": "cmt-0446",
     "message": "For breakfast I ate poha and tea",
     "source": "synthetic",
     "category": "health_meal_log",
@@ -6306,7 +6349,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0444",
+    "id": "cmt-0447",
     "message": "I am having dal makhani and naan",
     "source": "synthetic",
     "category": "health_meal_log",
@@ -6320,7 +6363,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0445",
+    "id": "cmt-0448",
     "message": "I am eating a salad right now",
     "source": "synthetic",
     "category": "health_meal_log",
@@ -6334,7 +6377,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0446",
+    "id": "cmt-0449",
     "message": "had biryani for lunch today",
     "source": "synthetic",
     "category": "health_meal_log",
@@ -6346,7 +6389,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0447",
+    "id": "cmt-0450",
     "message": "log snack: almonds and banana",
     "source": "synthetic",
     "category": "health_meal_log",
@@ -6358,7 +6401,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0448",
+    "id": "cmt-0451",
     "message": "did I log breakfast today?",
     "source": "synthetic",
     "category": "health_meal_history",
@@ -6370,7 +6413,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0449",
+    "id": "cmt-0452",
     "message": "undo last meal",
     "source": "synthetic",
     "category": "health_meal_history",
@@ -6384,7 +6427,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0450",
+    "id": "cmt-0453",
     "message": "you logged that twice",
     "source": "synthetic",
     "category": "health_meal_history",
@@ -6398,7 +6441,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0451",
+    "id": "cmt-0454",
     "message": "correct my lunch calories",
     "source": "synthetic",
     "category": "health_meal_history",
@@ -6410,7 +6453,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0452",
+    "id": "cmt-0455",
     "message": "show today's macros",
     "source": "synthetic",
     "category": "health_meal_history",
@@ -6422,7 +6465,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0453",
+    "id": "cmt-0456",
     "message": "review my last Hevy workout",
     "source": "synthetic",
     "category": "health_fitness",
@@ -6434,7 +6477,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0454",
+    "id": "cmt-0457",
     "message": "I missed gym because I'm tired",
     "source": "synthetic",
     "category": "health_fitness",
@@ -6446,7 +6489,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0455",
+    "id": "cmt-0458",
     "message": "what's the gym plan for today?",
     "source": "synthetic",
     "category": "health_fitness",
@@ -6458,7 +6501,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0456",
+    "id": "cmt-0459",
     "message": "log that I skipped cardio",
     "source": "synthetic",
     "category": "health_fitness",
@@ -6470,7 +6513,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0457",
+    "id": "cmt-0460",
     "message": "how was my push session?",
     "source": "synthetic",
     "category": "health_fitness",
@@ -6482,7 +6525,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0458",
+    "id": "cmt-0461",
     "message": "what's my meal plan for tomorrow?",
     "source": "synthetic",
     "category": "health_meal_plan",
@@ -6496,7 +6539,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0459",
+    "id": "cmt-0462",
     "message": "swap lunch and dinner for tomorrow",
     "source": "synthetic",
     "category": "health_meal_plan",
@@ -6508,7 +6551,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0460",
+    "id": "cmt-0463",
     "message": "lock this meal plan in",
     "source": "synthetic",
     "category": "health_meal_plan",
@@ -6520,7 +6563,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0461",
+    "id": "cmt-0464",
     "message": "cancel meal planning",
     "source": "synthetic",
     "category": "health_meal_plan",
@@ -6532,7 +6575,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0462",
+    "id": "cmt-0465",
     "message": "how much poha should I eat tomorrow?",
     "source": "synthetic",
     "category": "health_meal_plan",
@@ -6544,7 +6587,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0463",
+    "id": "cmt-0466",
     "message": "show my kite holdings",
     "source": "synthetic",
     "category": "wealth",
@@ -6556,7 +6599,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0464",
+    "id": "cmt-0467",
     "message": "am I saving enough?",
     "source": "synthetic",
     "category": "wealth",
@@ -6568,7 +6611,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0465",
+    "id": "cmt-0468",
     "message": "when does my ELSS lock-in end?",
     "source": "synthetic",
     "category": "wealth",
@@ -6580,7 +6623,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0466",
+    "id": "cmt-0469",
     "message": "what's my portfolio allocation?",
     "source": "synthetic",
     "category": "wealth",
@@ -6592,7 +6635,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0467",
+    "id": "cmt-0470",
     "message": "what should I watch on the treadmill?",
     "source": "synthetic",
     "category": "happiness",
@@ -6604,7 +6647,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0468",
+    "id": "cmt-0471",
     "message": "restorative weekend ideas",
     "source": "synthetic",
     "category": "happiness",
@@ -6616,7 +6659,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0469",
+    "id": "cmt-0472",
     "message": "learning plan for Spanish",
     "source": "synthetic",
     "category": "wisdom",
@@ -6628,7 +6671,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0470",
+    "id": "cmt-0473",
     "message": "help me ship my side project",
     "source": "synthetic",
     "category": "wisdom",
@@ -6640,7 +6683,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0471",
+    "id": "cmt-0474",
     "message": "prep for promotion conversation",
     "source": "synthetic",
     "category": "wisdom",
@@ -6652,7 +6695,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0472",
+    "id": "cmt-0475",
     "message": "what's on the AI session agenda?",
     "source": "synthetic",
     "category": "wisdom",
@@ -6664,7 +6707,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0473",
+    "id": "cmt-0476",
     "message": "daily piano practice routine",
     "source": "synthetic",
     "category": "wisdom",
@@ -6676,7 +6719,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0474",
+    "id": "cmt-0477",
     "message": "move AI session to 9pm tomorrow",
     "source": "synthetic",
     "category": "general_calendar",
@@ -6688,7 +6731,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0475",
+    "id": "cmt-0478",
     "message": "remove duplicate calendar events",
     "source": "synthetic",
     "category": "general_calendar",
@@ -6702,7 +6745,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0476",
+    "id": "cmt-0479",
     "message": "add gym 7:30am tomorrow to calendar",
     "source": "synthetic",
     "category": "general_calendar",
@@ -6714,7 +6757,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0477",
+    "id": "cmt-0480",
     "message": "what does my whole day look like tomorrow?",
     "source": "synthetic",
     "category": "general_day_overview",
@@ -6726,7 +6769,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0478",
+    "id": "cmt-0481",
     "message": "what's the plan for tomorrow?",
     "source": "synthetic",
     "category": "general_day_overview",
@@ -6738,7 +6781,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0479",
+    "id": "cmt-0482",
     "message": "what do I need to do today?",
     "source": "synthetic",
     "category": "general_day_overview",
@@ -6750,7 +6793,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0480",
+    "id": "cmt-0483",
     "message": "gym plan and meal plan for today",
     "source": "synthetic",
     "category": "general_day_overview",
@@ -6762,7 +6805,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0481",
+    "id": "cmt-0484",
     "message": "search YouTube for jazz",
     "source": "synthetic",
     "category": "general_youtube",
@@ -6774,7 +6817,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0482",
+    "id": "cmt-0485",
     "message": "cue die with zero for treadmill",
     "source": "synthetic",
     "category": "general_youtube",
@@ -6786,7 +6829,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0483",
+    "id": "cmt-0486",
     "message": "find animated explainer on credit cycles",
     "source": "synthetic",
     "category": "general_youtube",
@@ -6798,7 +6841,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0484",
+    "id": "cmt-0487",
     "message": "add 5 rock songs to workout playlist",
     "source": "synthetic",
     "category": "general_youtube",
@@ -6812,7 +6855,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0485",
+    "id": "cmt-0488",
     "message": "add Dune to readlist",
     "source": "synthetic",
     "category": "general_lists",
@@ -6824,7 +6867,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0486",
+    "id": "cmt-0489",
     "message": "what's on my to-do list?",
     "source": "synthetic",
     "category": "general_lists",
@@ -6836,7 +6879,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0487",
+    "id": "cmt-0490",
     "message": "recommend from my watchlist",
     "source": "synthetic",
     "category": "general_lists",
@@ -6848,7 +6891,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0488",
+    "id": "cmt-0491",
     "message": "mark die with zero as done",
     "source": "synthetic",
     "category": "general_lists",
@@ -6860,7 +6903,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0489",
+    "id": "cmt-0492",
     "message": "clean up duplicate watchlist entries",
     "source": "synthetic",
     "category": "general_lists",
@@ -6874,7 +6917,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0490",
+    "id": "cmt-0493",
     "message": "remind me tomorrow 8pm to call mom",
     "source": "synthetic",
     "category": "general_proactive",
@@ -6886,19 +6929,19 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0491",
+    "id": "cmt-0494",
     "message": "remind me Friday morning to buy ghewar",
     "source": "synthetic",
     "category": "general_proactive",
     "structural": {
       "explicitMealLog": false,
-      "magnusTools": false,
+      "magnusTools": true,
       "youtubeAction": false
     },
     "issueTags": []
   },
   {
-    "id": "cmt-0492",
+    "id": "cmt-0495",
     "message": "enable evening journal",
     "source": "synthetic",
     "category": "general_proactive",
@@ -6910,7 +6953,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0493",
+    "id": "cmt-0496",
     "message": "No",
     "source": "synthetic",
     "category": "follow_up",
@@ -6924,7 +6967,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0494",
+    "id": "cmt-0497",
     "message": "Yes add them",
     "source": "synthetic",
     "category": "follow_up",
@@ -6936,7 +6979,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0495",
+    "id": "cmt-0498",
     "message": "That's right",
     "source": "synthetic",
     "category": "follow_up",
@@ -6950,7 +6993,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0496",
+    "id": "cmt-0499",
     "message": "Undo this",
     "source": "synthetic",
     "category": "follow_up",
@@ -6964,7 +7007,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0497",
+    "id": "cmt-0500",
     "message": "Go with 1",
     "source": "synthetic",
     "category": "follow_up",
@@ -6976,7 +7019,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0498",
+    "id": "cmt-0501",
     "message": "Lock it in",
     "source": "synthetic",
     "category": "follow_up",
@@ -6988,7 +7031,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0499",
+    "id": "cmt-0502",
     "message": "What's for today",
     "source": "synthetic",
     "category": "adversarial_ambiguity",
@@ -7000,7 +7043,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0500",
+    "id": "cmt-0503",
     "message": "Plan for tomorrow",
     "source": "synthetic",
     "category": "adversarial_ambiguity",
@@ -7012,7 +7055,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0501",
+    "id": "cmt-0504",
     "message": "Log it",
     "source": "synthetic",
     "category": "adversarial_ambiguity",
@@ -7024,7 +7067,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0502",
+    "id": "cmt-0505",
     "message": "Add that",
     "source": "synthetic",
     "category": "adversarial_ambiguity",
@@ -7036,7 +7079,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0503",
+    "id": "cmt-0506",
     "message": "Check it",
     "source": "synthetic",
     "category": "adversarial_ambiguity",
@@ -7048,7 +7091,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0504",
+    "id": "cmt-0507",
     "message": "Do the thing",
     "source": "synthetic",
     "category": "adversarial_ambiguity",
@@ -7060,7 +7103,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0505",
+    "id": "cmt-0508",
     "message": "Fix it",
     "source": "synthetic",
     "category": "adversarial_ambiguity",
@@ -7072,7 +7115,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0506",
+    "id": "cmt-0509",
     "message": "Same as yesterday",
     "source": "synthetic",
     "category": "adversarial_ambiguity",
@@ -7084,7 +7127,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0507",
+    "id": "cmt-0510",
     "message": "connect kite",
     "source": "synthetic",
     "category": "general_connect",
@@ -7096,7 +7139,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0508",
+    "id": "cmt-0511",
     "message": "sync notion",
     "source": "synthetic",
     "category": "general_connect",
@@ -7108,7 +7151,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0509",
+    "id": "cmt-0512",
     "message": "wrap up my day",
     "source": "synthetic",
     "category": "health_journal",
@@ -7120,7 +7163,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0510",
+    "id": "cmt-0513",
     "message": "journal entry for today",
     "source": "synthetic",
     "category": "health_journal",
@@ -7132,7 +7175,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0511",
+    "id": "cmt-0514",
     "message": "log how I'm feeling",
     "source": "synthetic",
     "category": "health_journal",
@@ -7144,7 +7187,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0512",
+    "id": "cmt-0515",
     "message": "log gym 6am tomorrow",
     "source": "synthetic",
     "category": "general_event_log",
@@ -7156,7 +7199,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0513",
+    "id": "cmt-0516",
     "message": "reschedule gym to Friday",
     "source": "synthetic",
     "category": "general_event_log",
@@ -7168,7 +7211,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0514",
+    "id": "cmt-0517",
     "message": "list my commitments this week",
     "source": "synthetic",
     "category": "general_event_log",
@@ -7180,7 +7223,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0515",
+    "id": "cmt-0518",
     "message": "mark cupboard cleanup as done",
     "source": "synthetic",
     "category": "general_event_log",
@@ -7192,7 +7235,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0516",
+    "id": "cmt-0519",
     "message": "log joy tank 70",
     "source": "synthetic",
     "category": "general_lifeos",
@@ -7204,7 +7247,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0517",
+    "id": "cmt-0520",
     "message": "health pillar at_risk",
     "source": "synthetic",
     "category": "general_lifeos",
@@ -7216,7 +7259,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0518",
+    "id": "cmt-0521",
     "message": "log daily check-in",
     "source": "synthetic",
     "category": "general_lifeos",
@@ -7228,7 +7271,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0519",
+    "id": "cmt-0522",
     "message": "what are my goals?",
     "source": "synthetic",
     "category": "general_lifeos",
@@ -7240,7 +7283,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0520",
+    "id": "cmt-0523",
     "message": "whats on my watchlst",
     "source": "synthetic",
     "category": "edge_typos",
@@ -7252,7 +7295,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0521",
+    "id": "cmt-0524",
     "message": "meal brekdown",
     "source": "synthetic",
     "category": "edge_typos",
@@ -7264,7 +7307,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0522",
+    "id": "cmt-0525",
     "message": "conect zerodha",
     "source": "synthetic",
     "category": "edge_typos",
@@ -7276,7 +7319,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0523",
+    "id": "cmt-0526",
     "message": "mornign brief",
     "source": "synthetic",
     "category": "edge_typos",
@@ -7288,7 +7331,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0524",
+    "id": "cmt-0527",
     "message": "add dil chahta h to watchlist",
     "source": "synthetic",
     "category": "edge_typos",
@@ -7300,7 +7343,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0525",
+    "id": "cmt-0528",
     "message": "log meal: chole bhature",
     "source": "synthetic",
     "category": "edge_typos",
@@ -7312,7 +7355,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0526",
+    "id": "cmt-0529",
     "message": "pull A tommorow",
     "source": "synthetic",
     "category": "edge_typos",
@@ -7324,7 +7367,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0527",
+    "id": "cmt-0530",
     "message": "swiming session was great",
     "source": "synthetic",
     "category": "edge_typos",
@@ -7336,7 +7379,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0528",
+    "id": "cmt-0531",
     "message": "hevy workot review",
     "source": "synthetic",
     "category": "edge_typos",
@@ -7348,7 +7391,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0529",
+    "id": "cmt-0532",
     "message": "readlst items",
     "source": "synthetic",
     "category": "edge_typos",
@@ -7360,7 +7403,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0530",
+    "id": "cmt-0533",
     "message": "/meal oats and banana thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7372,7 +7415,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0531",
+    "id": "cmt-0534",
     "message": "/meal oats and banana pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7384,7 +7427,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0532",
+    "id": "cmt-0535",
     "message": "/meal oats and banana?",
     "source": "variation",
     "category": "health_meal_log",
@@ -7396,7 +7439,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0533",
+    "id": "cmt-0536",
     "message": "hey /meal oats and banana",
     "source": "variation",
     "category": "health_meal_log",
@@ -7408,7 +7451,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0534",
+    "id": "cmt-0537",
     "message": "hey /meal oats and banana thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7420,7 +7463,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0535",
+    "id": "cmt-0538",
     "message": "hey /meal oats and banana pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7432,7 +7475,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0536",
+    "id": "cmt-0539",
     "message": "log meal: paneer tikka thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7444,7 +7487,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0537",
+    "id": "cmt-0540",
     "message": "log meal: paneer tikka pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7456,7 +7499,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0538",
+    "id": "cmt-0541",
     "message": "log meal: paneer tikka?",
     "source": "variation",
     "category": "health_meal_log",
@@ -7468,7 +7511,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0539",
+    "id": "cmt-0542",
     "message": "hey log meal: paneer tikka",
     "source": "variation",
     "category": "health_meal_log",
@@ -7480,7 +7523,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0540",
+    "id": "cmt-0543",
     "message": "hey log meal: paneer tikka thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7492,7 +7535,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0541",
+    "id": "cmt-0544",
     "message": "hey log meal: paneer tikka pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7504,7 +7547,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0542",
+    "id": "cmt-0545",
     "message": "ate: scrambled eggs and toast thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7516,7 +7559,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0543",
+    "id": "cmt-0546",
     "message": "ate: scrambled eggs and toast pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7528,7 +7571,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0544",
+    "id": "cmt-0547",
     "message": "ate: scrambled eggs and toast?",
     "source": "variation",
     "category": "health_meal_log",
@@ -7540,7 +7583,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0545",
+    "id": "cmt-0548",
     "message": "hey ate: scrambled eggs and toast",
     "source": "variation",
     "category": "health_meal_log",
@@ -7552,7 +7595,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0546",
+    "id": "cmt-0549",
     "message": "hey ate: scrambled eggs and toast thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7564,7 +7607,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0547",
+    "id": "cmt-0550",
     "message": "hey ate: scrambled eggs and toast pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7576,7 +7619,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0548",
+    "id": "cmt-0551",
     "message": "just had: protein shake thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7588,7 +7631,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0549",
+    "id": "cmt-0552",
     "message": "just had: protein shake pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7600,7 +7643,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0550",
+    "id": "cmt-0553",
     "message": "just had: protein shake?",
     "source": "variation",
     "category": "health_meal_log",
@@ -7612,7 +7655,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0551",
+    "id": "cmt-0554",
     "message": "hey just had: protein shake",
     "source": "variation",
     "category": "health_meal_log",
@@ -7624,7 +7667,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0552",
+    "id": "cmt-0555",
     "message": "hey just had: protein shake thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7636,7 +7679,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0553",
+    "id": "cmt-0556",
     "message": "hey just had: protein shake pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7648,7 +7691,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0554",
+    "id": "cmt-0557",
     "message": "log breakfast: oats and berries thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7660,7 +7703,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0555",
+    "id": "cmt-0558",
     "message": "log breakfast: oats and berries pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7672,7 +7715,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0556",
+    "id": "cmt-0559",
     "message": "log breakfast: oats and berries?",
     "source": "variation",
     "category": "health_meal_log",
@@ -7684,7 +7727,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0557",
+    "id": "cmt-0560",
     "message": "hey log breakfast: oats and berries",
     "source": "variation",
     "category": "health_meal_log",
@@ -7696,7 +7739,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0558",
+    "id": "cmt-0561",
     "message": "hey log breakfast: oats and berries thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7708,7 +7751,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0559",
+    "id": "cmt-0562",
     "message": "hey log breakfast: oats and berries pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7720,7 +7763,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0560",
+    "id": "cmt-0563",
     "message": "log lunch: chicken salad thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7732,7 +7775,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0561",
+    "id": "cmt-0564",
     "message": "log lunch: chicken salad pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7744,7 +7787,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0562",
+    "id": "cmt-0565",
     "message": "log lunch: chicken salad?",
     "source": "variation",
     "category": "health_meal_log",
@@ -7756,7 +7799,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0563",
+    "id": "cmt-0566",
     "message": "hey log lunch: chicken salad",
     "source": "variation",
     "category": "health_meal_log",
@@ -7768,7 +7811,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0564",
+    "id": "cmt-0567",
     "message": "hey log lunch: chicken salad thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7780,7 +7823,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0565",
+    "id": "cmt-0568",
     "message": "hey log lunch: chicken salad pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7792,7 +7835,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0566",
+    "id": "cmt-0569",
     "message": "log dinner: salmon and veggies thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7804,7 +7847,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0567",
+    "id": "cmt-0570",
     "message": "log dinner: salmon and veggies pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7816,7 +7859,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0568",
+    "id": "cmt-0571",
     "message": "log dinner: salmon and veggies?",
     "source": "variation",
     "category": "health_meal_log",
@@ -7828,7 +7871,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0569",
+    "id": "cmt-0572",
     "message": "hey log dinner: salmon and veggies",
     "source": "variation",
     "category": "health_meal_log",
@@ -7840,7 +7883,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0570",
+    "id": "cmt-0573",
     "message": "hey log dinner: salmon and veggies thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7852,7 +7895,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0571",
+    "id": "cmt-0574",
     "message": "hey log dinner: salmon and veggies pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7864,7 +7907,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0572",
+    "id": "cmt-0575",
     "message": "log snack: almonds and apple thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7876,7 +7919,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0573",
+    "id": "cmt-0576",
     "message": "log snack: almonds and apple pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7888,7 +7931,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0574",
+    "id": "cmt-0577",
     "message": "log snack: almonds and apple?",
     "source": "variation",
     "category": "health_meal_log",
@@ -7900,7 +7943,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0575",
+    "id": "cmt-0578",
     "message": "hey log snack: almonds and apple",
     "source": "variation",
     "category": "health_meal_log",
@@ -7912,7 +7955,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0576",
+    "id": "cmt-0579",
     "message": "hey log snack: almonds and apple thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7924,7 +7967,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0577",
+    "id": "cmt-0580",
     "message": "hey log snack: almonds and apple pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7936,7 +7979,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0578",
+    "id": "cmt-0581",
     "message": "/meal@MagnusBot rice bowl thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7948,7 +7991,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0579",
+    "id": "cmt-0582",
     "message": "/meal@MagnusBot rice bowl pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -7960,7 +8003,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0580",
+    "id": "cmt-0583",
     "message": "/meal@MagnusBot rice bowl?",
     "source": "variation",
     "category": "health_meal_log",
@@ -7972,7 +8015,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0581",
+    "id": "cmt-0584",
     "message": "hey /meal@MagnusBot rice bowl",
     "source": "variation",
     "category": "health_meal_log",
@@ -7984,7 +8027,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0582",
+    "id": "cmt-0585",
     "message": "hey /meal@MagnusBot rice bowl thanks",
     "source": "variation",
     "category": "health_meal_log",
@@ -7996,7 +8039,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0583",
+    "id": "cmt-0586",
     "message": "hey /meal@MagnusBot rice bowl pls",
     "source": "variation",
     "category": "health_meal_log",
@@ -8008,7 +8051,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0584",
+    "id": "cmt-0587",
     "message": "what did I eat today? thanks",
     "source": "variation",
     "category": "health_meal_history",
@@ -8020,7 +8063,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0585",
+    "id": "cmt-0588",
     "message": "what did I eat today? pls",
     "source": "variation",
     "category": "health_meal_history",
@@ -8032,7 +8075,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0586",
+    "id": "cmt-0589",
     "message": "what did I eat today??",
     "source": "variation",
     "category": "health_meal_history",
@@ -8044,7 +8087,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0587",
+    "id": "cmt-0590",
     "message": "hey what did I eat today?",
     "source": "variation",
     "category": "health_meal_history",
@@ -8056,7 +8099,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0588",
+    "id": "cmt-0591",
     "message": "hey what did I eat today? thanks",
     "source": "variation",
     "category": "health_meal_history",
@@ -8068,7 +8111,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0589",
+    "id": "cmt-0592",
     "message": "hey what did I eat today? pls",
     "source": "variation",
     "category": "health_meal_history",
@@ -8080,7 +8123,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0590",
+    "id": "cmt-0593",
     "message": "what did I eat yesterday? thanks",
     "source": "variation",
     "category": "health_meal_history",
@@ -8092,7 +8135,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0591",
+    "id": "cmt-0594",
     "message": "what did I eat yesterday? pls",
     "source": "variation",
     "category": "health_meal_history",
@@ -8104,7 +8147,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0592",
+    "id": "cmt-0595",
     "message": "what did I eat yesterday??",
     "source": "variation",
     "category": "health_meal_history",
@@ -8116,7 +8159,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0593",
+    "id": "cmt-0596",
     "message": "hey what did I eat yesterday?",
     "source": "variation",
     "category": "health_meal_history",
@@ -8128,7 +8171,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0594",
+    "id": "cmt-0597",
     "message": "hey what did I eat yesterday? thanks",
     "source": "variation",
     "category": "health_meal_history",
@@ -8140,7 +8183,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0595",
+    "id": "cmt-0598",
     "message": "hey what did I eat yesterday? pls",
     "source": "variation",
     "category": "health_meal_history",
@@ -8152,7 +8195,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0596",
+    "id": "cmt-0599",
     "message": "show my meals this week thanks",
     "source": "variation",
     "category": "health_meal_history",
@@ -8164,7 +8207,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0597",
+    "id": "cmt-0600",
     "message": "show my meals this week pls",
     "source": "variation",
     "category": "health_meal_history",
@@ -8176,7 +8219,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0598",
+    "id": "cmt-0601",
     "message": "show my meals this week?",
     "source": "variation",
     "category": "health_meal_history",
@@ -8188,7 +8231,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0599",
+    "id": "cmt-0602",
     "message": "hey show my meals this week",
     "source": "variation",
     "category": "health_meal_history",
@@ -8200,7 +8243,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0600",
+    "id": "cmt-0603",
     "message": "hey show my meals this week thanks",
     "source": "variation",
     "category": "health_meal_history",
@@ -8212,7 +8255,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0601",
+    "id": "cmt-0604",
     "message": "hey show my meals this week pls",
     "source": "variation",
     "category": "health_meal_history",
@@ -8224,7 +8267,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0602",
+    "id": "cmt-0605",
     "message": "meal breakdown thanks",
     "source": "variation",
     "category": "health_meal_history",
@@ -8236,7 +8279,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0603",
+    "id": "cmt-0606",
     "message": "meal breakdown pls",
     "source": "variation",
     "category": "health_meal_history",
@@ -8248,7 +8291,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0604",
+    "id": "cmt-0607",
     "message": "meal breakdown?",
     "source": "variation",
     "category": "health_meal_history",
@@ -8260,7 +8303,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0605",
+    "id": "cmt-0608",
     "message": "hey meal breakdown",
     "source": "variation",
     "category": "health_meal_history",
@@ -8272,7 +8315,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0606",
+    "id": "cmt-0609",
     "message": "hey meal breakdown thanks",
     "source": "variation",
     "category": "health_meal_history",
@@ -8284,7 +8327,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0607",
+    "id": "cmt-0610",
     "message": "hey meal breakdown pls",
     "source": "variation",
     "category": "health_meal_history",
@@ -8296,7 +8339,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0608",
+    "id": "cmt-0611",
     "message": "undo my last meal thanks",
     "source": "variation",
     "category": "health_meal_history",
@@ -8310,7 +8353,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0609",
+    "id": "cmt-0612",
     "message": "undo my last meal pls",
     "source": "variation",
     "category": "health_meal_history",
@@ -8324,7 +8367,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0610",
+    "id": "cmt-0613",
     "message": "undo my last meal?",
     "source": "variation",
     "category": "health_meal_history",
@@ -8338,7 +8381,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0611",
+    "id": "cmt-0614",
     "message": "hey undo my last meal",
     "source": "variation",
     "category": "health_meal_history",
@@ -8352,7 +8395,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0612",
+    "id": "cmt-0615",
     "message": "hey undo my last meal thanks",
     "source": "variation",
     "category": "health_meal_history",
@@ -8366,7 +8409,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0613",
+    "id": "cmt-0616",
     "message": "hey undo my last meal pls",
     "source": "variation",
     "category": "health_meal_history",
@@ -8380,7 +8423,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     ]
   },
   {
-    "id": "cmt-0614",
+    "id": "cmt-0617",
     "message": "delete the last meal log thanks",
     "source": "variation",
     "category": "health_meal_history",
@@ -8392,7 +8435,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0615",
+    "id": "cmt-0618",
     "message": "delete the last meal log pls",
     "source": "variation",
     "category": "health_meal_history",
@@ -8404,7 +8447,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0616",
+    "id": "cmt-0619",
     "message": "delete the last meal log?",
     "source": "variation",
     "category": "health_meal_history",
@@ -8416,7 +8459,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0617",
+    "id": "cmt-0620",
     "message": "hey delete the last meal log",
     "source": "variation",
     "category": "health_meal_history",
@@ -8428,7 +8471,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0618",
+    "id": "cmt-0621",
     "message": "hey delete the last meal log thanks",
     "source": "variation",
     "category": "health_meal_history",
@@ -8440,7 +8483,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0619",
+    "id": "cmt-0622",
     "message": "hey delete the last meal log pls",
     "source": "variation",
     "category": "health_meal_history",
@@ -8452,7 +8495,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0620",
+    "id": "cmt-0623",
     "message": "show my macro targets thanks",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8464,7 +8507,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0621",
+    "id": "cmt-0624",
     "message": "show my macro targets pls",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8476,7 +8519,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0622",
+    "id": "cmt-0625",
     "message": "show my macro targets?",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8488,7 +8531,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0623",
+    "id": "cmt-0626",
     "message": "hey show my macro targets",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8500,7 +8543,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0624",
+    "id": "cmt-0627",
     "message": "hey show my macro targets thanks",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8512,7 +8555,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0625",
+    "id": "cmt-0628",
     "message": "hey show my macro targets pls",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8524,7 +8567,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0626",
+    "id": "cmt-0629",
     "message": "set protein to 140g daily thanks",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8536,7 +8579,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0627",
+    "id": "cmt-0630",
     "message": "set protein to 140g daily pls",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8548,7 +8591,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0628",
+    "id": "cmt-0631",
     "message": "set protein to 140g daily?",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8560,7 +8603,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0629",
+    "id": "cmt-0632",
     "message": "hey set protein to 140g daily",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8572,7 +8615,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0630",
+    "id": "cmt-0633",
     "message": "hey set protein to 140g daily thanks",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8584,7 +8627,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0631",
+    "id": "cmt-0634",
     "message": "hey set protein to 140g daily pls",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8596,7 +8639,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0632",
+    "id": "cmt-0635",
     "message": "set calories to 2200 thanks",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8608,7 +8651,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0633",
+    "id": "cmt-0636",
     "message": "set calories to 2200 pls",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8620,7 +8663,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0634",
+    "id": "cmt-0637",
     "message": "set calories to 2200?",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8632,7 +8675,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0635",
+    "id": "cmt-0638",
     "message": "hey set calories to 2200",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8644,7 +8687,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0636",
+    "id": "cmt-0639",
     "message": "hey set calories to 2200 thanks",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8656,7 +8699,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0637",
+    "id": "cmt-0640",
     "message": "hey set calories to 2200 pls",
     "source": "variation",
     "category": "health_meal_targets",
@@ -8668,7 +8711,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0638",
+    "id": "cmt-0641",
     "message": "plan my meals for the week thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8680,7 +8723,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0639",
+    "id": "cmt-0642",
     "message": "plan my meals for the week pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8692,7 +8735,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0640",
+    "id": "cmt-0643",
     "message": "plan my meals for the week?",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8704,7 +8747,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0641",
+    "id": "cmt-0644",
     "message": "hey plan my meals for the week",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8716,7 +8759,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0642",
+    "id": "cmt-0645",
     "message": "hey plan my meals for the week thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8728,7 +8771,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0643",
+    "id": "cmt-0646",
     "message": "hey plan my meals for the week pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8740,7 +8783,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0644",
+    "id": "cmt-0647",
     "message": "help me build a meal plan for next week thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8752,7 +8795,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0645",
+    "id": "cmt-0648",
     "message": "help me build a meal plan for next week pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8764,7 +8807,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0646",
+    "id": "cmt-0649",
     "message": "help me build a meal plan for next week?",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8776,7 +8819,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0647",
+    "id": "cmt-0650",
     "message": "hey help me build a meal plan for next week",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8788,7 +8831,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0648",
+    "id": "cmt-0651",
     "message": "hey help me build a meal plan for next week thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8800,7 +8843,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0649",
+    "id": "cmt-0652",
     "message": "hey help me build a meal plan for next week pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8812,7 +8855,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0650",
+    "id": "cmt-0653",
     "message": "what am I eating tomorrow? thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8824,7 +8867,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0651",
+    "id": "cmt-0654",
     "message": "what am I eating tomorrow? pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8836,7 +8879,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0652",
+    "id": "cmt-0655",
     "message": "what am I eating tomorrow??",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8848,7 +8891,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0653",
+    "id": "cmt-0656",
     "message": "hey what am I eating tomorrow?",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8860,7 +8903,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0654",
+    "id": "cmt-0657",
     "message": "hey what am I eating tomorrow? thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8872,7 +8915,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0655",
+    "id": "cmt-0658",
     "message": "hey what am I eating tomorrow? pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8884,7 +8927,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0656",
+    "id": "cmt-0659",
     "message": "show my meal plan for Monday thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8896,7 +8939,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0657",
+    "id": "cmt-0660",
     "message": "show my meal plan for Monday pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8908,7 +8951,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0658",
+    "id": "cmt-0661",
     "message": "show my meal plan for Monday?",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8920,7 +8963,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0659",
+    "id": "cmt-0662",
     "message": "hey show my meal plan for Monday",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8932,7 +8975,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0660",
+    "id": "cmt-0663",
     "message": "hey show my meal plan for Monday thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8944,7 +8987,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0661",
+    "id": "cmt-0664",
     "message": "hey show my meal plan for Monday pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8956,7 +8999,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0662",
+    "id": "cmt-0665",
     "message": "skip lunch tomorrow thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8968,7 +9011,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0663",
+    "id": "cmt-0666",
     "message": "skip lunch tomorrow pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8980,7 +9023,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0664",
+    "id": "cmt-0667",
     "message": "skip lunch tomorrow?",
     "source": "variation",
     "category": "health_meal_plan",
@@ -8992,7 +9035,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0665",
+    "id": "cmt-0668",
     "message": "hey skip lunch tomorrow",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9004,7 +9047,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0666",
+    "id": "cmt-0669",
     "message": "hey skip lunch tomorrow thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9016,7 +9059,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0667",
+    "id": "cmt-0670",
     "message": "hey skip lunch tomorrow pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9028,7 +9071,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0668",
+    "id": "cmt-0671",
     "message": "swap dinner for salad tomorrow thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9040,7 +9083,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0669",
+    "id": "cmt-0672",
     "message": "swap dinner for salad tomorrow pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9052,7 +9095,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0670",
+    "id": "cmt-0673",
     "message": "swap dinner for salad tomorrow?",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9064,7 +9107,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0671",
+    "id": "cmt-0674",
     "message": "hey swap dinner for salad tomorrow",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9076,7 +9119,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0672",
+    "id": "cmt-0675",
     "message": "hey swap dinner for salad tomorrow thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9088,7 +9131,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0673",
+    "id": "cmt-0676",
     "message": "hey swap dinner for salad tomorrow pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9100,7 +9143,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0674",
+    "id": "cmt-0677",
     "message": "switch lunch and dinner for today thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9112,7 +9155,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0675",
+    "id": "cmt-0678",
     "message": "switch lunch and dinner for today pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9124,7 +9167,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0676",
+    "id": "cmt-0679",
     "message": "switch lunch and dinner for today?",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9136,7 +9179,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0677",
+    "id": "cmt-0680",
     "message": "hey switch lunch and dinner for today",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9148,7 +9191,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0678",
+    "id": "cmt-0681",
     "message": "hey switch lunch and dinner for today thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9160,7 +9203,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0679",
+    "id": "cmt-0682",
     "message": "hey switch lunch and dinner for today pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9172,7 +9215,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0680",
+    "id": "cmt-0683",
     "message": "copy last week meal plan thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9184,7 +9227,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0681",
+    "id": "cmt-0684",
     "message": "copy last week meal plan pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9196,7 +9239,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0682",
+    "id": "cmt-0685",
     "message": "copy last week meal plan?",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9208,7 +9251,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0683",
+    "id": "cmt-0686",
     "message": "hey copy last week meal plan",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9220,7 +9263,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0684",
+    "id": "cmt-0687",
     "message": "hey copy last week meal plan thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9232,7 +9275,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0685",
+    "id": "cmt-0688",
     "message": "hey copy last week meal plan pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9244,7 +9287,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0686",
+    "id": "cmt-0689",
     "message": "save as template high protein thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9256,7 +9299,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0687",
+    "id": "cmt-0690",
     "message": "save as template high protein pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9268,7 +9311,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0688",
+    "id": "cmt-0691",
     "message": "save as template high protein?",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9280,7 +9323,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0689",
+    "id": "cmt-0692",
     "message": "hey save as template high protein",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9292,7 +9335,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0690",
+    "id": "cmt-0693",
     "message": "hey save as template high protein thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9304,7 +9347,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0691",
+    "id": "cmt-0694",
     "message": "hey save as template high protein pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9316,7 +9359,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0692",
+    "id": "cmt-0695",
     "message": "list meal plan templates thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9328,7 +9371,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0693",
+    "id": "cmt-0696",
     "message": "list meal plan templates pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9340,7 +9383,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0694",
+    "id": "cmt-0697",
     "message": "list meal plan templates?",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9352,7 +9395,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0695",
+    "id": "cmt-0698",
     "message": "hey list meal plan templates",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9364,7 +9407,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0696",
+    "id": "cmt-0699",
     "message": "hey list meal plan templates thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9376,7 +9419,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0697",
+    "id": "cmt-0700",
     "message": "hey list meal plan templates pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9388,7 +9431,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0698",
+    "id": "cmt-0701",
     "message": "apply template high protein thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9400,7 +9443,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0699",
+    "id": "cmt-0702",
     "message": "apply template high protein pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9412,7 +9455,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0700",
+    "id": "cmt-0703",
     "message": "apply template high protein?",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9424,7 +9467,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0701",
+    "id": "cmt-0704",
     "message": "hey apply template high protein",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9436,7 +9479,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0702",
+    "id": "cmt-0705",
     "message": "hey apply template high protein thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9448,7 +9491,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0703",
+    "id": "cmt-0706",
     "message": "hey apply template high protein pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9460,7 +9503,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0704",
+    "id": "cmt-0707",
     "message": "shopping list for this week thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9472,7 +9515,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0705",
+    "id": "cmt-0708",
     "message": "shopping list for this week pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9484,7 +9527,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0706",
+    "id": "cmt-0709",
     "message": "shopping list for this week?",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9496,7 +9539,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0707",
+    "id": "cmt-0710",
     "message": "hey shopping list for this week",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9508,7 +9551,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0708",
+    "id": "cmt-0711",
     "message": "hey shopping list for this week thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9520,7 +9563,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0709",
+    "id": "cmt-0712",
     "message": "hey shopping list for this week pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9532,7 +9575,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0710",
+    "id": "cmt-0713",
     "message": "grocery list from my meal plan thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9544,7 +9587,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0711",
+    "id": "cmt-0714",
     "message": "grocery list from my meal plan pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9556,7 +9599,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0712",
+    "id": "cmt-0715",
     "message": "grocery list from my meal plan?",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9568,7 +9611,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0713",
+    "id": "cmt-0716",
     "message": "hey grocery list from my meal plan",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9580,7 +9623,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0714",
+    "id": "cmt-0717",
     "message": "hey grocery list from my meal plan thanks",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9592,7 +9635,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0715",
+    "id": "cmt-0718",
     "message": "hey grocery list from my meal plan pls",
     "source": "variation",
     "category": "health_meal_plan",
@@ -9604,7 +9647,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0716",
+    "id": "cmt-0719",
     "message": "should I train legs today? thanks",
     "source": "variation",
     "category": "health_fitness",
@@ -9616,7 +9659,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0717",
+    "id": "cmt-0720",
     "message": "should I train legs today? pls",
     "source": "variation",
     "category": "health_fitness",
@@ -9628,7 +9671,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0718",
+    "id": "cmt-0721",
     "message": "should I train legs today??",
     "source": "variation",
     "category": "health_fitness",
@@ -9640,7 +9683,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0719",
+    "id": "cmt-0722",
     "message": "hey should I train legs today?",
     "source": "variation",
     "category": "health_fitness",
@@ -9652,7 +9695,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0720",
+    "id": "cmt-0723",
     "message": "hey should I train legs today? thanks",
     "source": "variation",
     "category": "health_fitness",
@@ -9664,7 +9707,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0721",
+    "id": "cmt-0724",
     "message": "hey should I train legs today? pls",
     "source": "variation",
     "category": "health_fitness",
@@ -9676,7 +9719,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0722",
+    "id": "cmt-0725",
     "message": "what's my gym session today? thanks",
     "source": "variation",
     "category": "health_fitness",
@@ -9688,7 +9731,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0723",
+    "id": "cmt-0726",
     "message": "what's my gym session today? pls",
     "source": "variation",
     "category": "health_fitness",
@@ -9700,7 +9743,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0724",
+    "id": "cmt-0727",
     "message": "what's my gym session today??",
     "source": "variation",
     "category": "health_fitness",
@@ -9712,7 +9755,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0725",
+    "id": "cmt-0728",
     "message": "hey what's my gym session today?",
     "source": "variation",
     "category": "health_fitness",
@@ -9724,7 +9767,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0726",
+    "id": "cmt-0729",
     "message": "hey what's my gym session today? thanks",
     "source": "variation",
     "category": "health_fitness",
@@ -9736,7 +9779,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0727",
+    "id": "cmt-0730",
     "message": "hey what's my gym session today? pls",
     "source": "variation",
     "category": "health_fitness",
@@ -9748,7 +9791,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0728",
+    "id": "cmt-0731",
     "message": "Pull data from hevy and review my last workout thanks",
     "source": "variation",
     "category": "health_fitness",
@@ -9760,7 +9803,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0729",
+    "id": "cmt-0732",
     "message": "Pull data from hevy and review my last workout pls",
     "source": "variation",
     "category": "health_fitness",
@@ -9772,7 +9815,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0730",
+    "id": "cmt-0733",
     "message": "Pull data from hevy and review my last workout?",
     "source": "variation",
     "category": "health_fitness",
@@ -9784,7 +9827,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0731",
+    "id": "cmt-0734",
     "message": "hey Pull data from hevy and review my last workout",
     "source": "variation",
     "category": "health_fitness",
@@ -9796,7 +9839,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0732",
+    "id": "cmt-0735",
     "message": "hey Pull data from hevy and review my last workout thanks",
     "source": "variation",
     "category": "health_fitness",
@@ -9808,7 +9851,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0733",
+    "id": "cmt-0736",
     "message": "hey Pull data from hevy and review my last workout pls",
     "source": "variation",
     "category": "health_fitness",
@@ -9820,7 +9863,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0734",
+    "id": "cmt-0737",
     "message": "recap my push workout from yesterday thanks",
     "source": "variation",
     "category": "health_fitness",
@@ -9832,7 +9875,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0735",
+    "id": "cmt-0738",
     "message": "recap my push workout from yesterday pls",
     "source": "variation",
     "category": "health_fitness",
@@ -9844,7 +9887,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0736",
+    "id": "cmt-0739",
     "message": "recap my push workout from yesterday?",
     "source": "variation",
     "category": "health_fitness",
@@ -9856,7 +9899,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0737",
+    "id": "cmt-0740",
     "message": "hey recap my push workout from yesterday",
     "source": "variation",
     "category": "health_fitness",
@@ -9868,7 +9911,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0738",
+    "id": "cmt-0741",
     "message": "hey recap my push workout from yesterday thanks",
     "source": "variation",
     "category": "health_fitness",
@@ -9880,7 +9923,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0739",
+    "id": "cmt-0742",
     "message": "hey recap my push workout from yesterday pls",
     "source": "variation",
     "category": "health_fitness",
@@ -9892,7 +9935,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0740",
+    "id": "cmt-0743",
     "message": "how was my gym session today? thanks",
     "source": "variation",
     "category": "health_fitness",
@@ -9904,7 +9947,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0741",
+    "id": "cmt-0744",
     "message": "how was my gym session today? pls",
     "source": "variation",
     "category": "health_fitness",
@@ -9916,7 +9959,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0742",
+    "id": "cmt-0745",
     "message": "how was my gym session today??",
     "source": "variation",
     "category": "health_fitness",
@@ -9928,7 +9971,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0743",
+    "id": "cmt-0746",
     "message": "hey how was my gym session today?",
     "source": "variation",
     "category": "health_fitness",
@@ -9940,7 +9983,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0744",
+    "id": "cmt-0747",
     "message": "hey how was my gym session today? thanks",
     "source": "variation",
     "category": "health_fitness",
@@ -9952,7 +9995,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0745",
+    "id": "cmt-0748",
     "message": "hey how was my gym session today? pls",
     "source": "variation",
     "category": "health_fitness",
@@ -9964,7 +10007,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0746",
+    "id": "cmt-0749",
     "message": "hevy routine: push day A thanks",
     "source": "variation",
     "category": "health_hevy_write",
@@ -9976,7 +10019,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0747",
+    "id": "cmt-0750",
     "message": "hevy routine: push day A pls",
     "source": "variation",
     "category": "health_hevy_write",
@@ -9988,7 +10031,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0748",
+    "id": "cmt-0751",
     "message": "hevy routine: push day A?",
     "source": "variation",
     "category": "health_hevy_write",
@@ -10000,7 +10043,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0749",
+    "id": "cmt-0752",
     "message": "hey hevy routine: push day A",
     "source": "variation",
     "category": "health_hevy_write",
@@ -10012,7 +10055,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0750",
+    "id": "cmt-0753",
     "message": "hey hevy routine: push day A thanks",
     "source": "variation",
     "category": "health_hevy_write",
@@ -10024,7 +10067,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0751",
+    "id": "cmt-0754",
     "message": "hey hevy routine: push day A pls",
     "source": "variation",
     "category": "health_hevy_write",
@@ -10036,7 +10079,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0752",
+    "id": "cmt-0755",
     "message": "hevy workout: legs and calves thanks",
     "source": "variation",
     "category": "health_hevy_write",
@@ -10048,7 +10091,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0753",
+    "id": "cmt-0756",
     "message": "hevy workout: legs and calves pls",
     "source": "variation",
     "category": "health_hevy_write",
@@ -10060,7 +10103,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0754",
+    "id": "cmt-0757",
     "message": "hevy workout: legs and calves?",
     "source": "variation",
     "category": "health_hevy_write",
@@ -10072,7 +10115,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0755",
+    "id": "cmt-0758",
     "message": "hey hevy workout: legs and calves",
     "source": "variation",
     "category": "health_hevy_write",
@@ -10084,7 +10127,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0756",
+    "id": "cmt-0759",
     "message": "hey hevy workout: legs and calves thanks",
     "source": "variation",
     "category": "health_hevy_write",
@@ -10096,7 +10139,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0757",
+    "id": "cmt-0760",
     "message": "hey hevy workout: legs and calves pls",
     "source": "variation",
     "category": "health_hevy_write",
@@ -10108,7 +10151,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0758",
+    "id": "cmt-0761",
     "message": "how much protein should I aim for? thanks",
     "source": "variation",
     "category": "health_nutrition",
@@ -10120,7 +10163,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0759",
+    "id": "cmt-0762",
     "message": "how much protein should I aim for? pls",
     "source": "variation",
     "category": "health_nutrition",
@@ -10132,7 +10175,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0760",
+    "id": "cmt-0763",
     "message": "how much protein should I aim for??",
     "source": "variation",
     "category": "health_nutrition",
@@ -10144,7 +10187,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0761",
+    "id": "cmt-0764",
     "message": "hey how much protein should I aim for?",
     "source": "variation",
     "category": "health_nutrition",
@@ -10156,7 +10199,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0762",
+    "id": "cmt-0765",
     "message": "hey how much protein should I aim for? thanks",
     "source": "variation",
     "category": "health_nutrition",
@@ -10168,7 +10211,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0763",
+    "id": "cmt-0766",
     "message": "hey how much protein should I aim for? pls",
     "source": "variation",
     "category": "health_nutrition",
@@ -10180,7 +10223,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0764",
+    "id": "cmt-0767",
     "message": "is intermittent fasting okay for me? thanks",
     "source": "variation",
     "category": "health_nutrition",
@@ -10192,7 +10235,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0765",
+    "id": "cmt-0768",
     "message": "is intermittent fasting okay for me? pls",
     "source": "variation",
     "category": "health_nutrition",
@@ -10204,7 +10247,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0766",
+    "id": "cmt-0769",
     "message": "is intermittent fasting okay for me??",
     "source": "variation",
     "category": "health_nutrition",
@@ -10216,7 +10259,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0767",
+    "id": "cmt-0770",
     "message": "hey is intermittent fasting okay for me?",
     "source": "variation",
     "category": "health_nutrition",
@@ -10228,7 +10271,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0768",
+    "id": "cmt-0771",
     "message": "hey is intermittent fasting okay for me? thanks",
     "source": "variation",
     "category": "health_nutrition",
@@ -10240,7 +10283,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0769",
+    "id": "cmt-0772",
     "message": "hey is intermittent fasting okay for me? pls",
     "source": "variation",
     "category": "health_nutrition",
@@ -10252,7 +10295,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0770",
+    "id": "cmt-0773",
     "message": "vegan swap for paneer in this recipe thanks",
     "source": "variation",
     "category": "health_alternates",
@@ -10264,7 +10307,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0771",
+    "id": "cmt-0774",
     "message": "vegan swap for paneer in this recipe pls",
     "source": "variation",
     "category": "health_alternates",
@@ -10276,7 +10319,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0772",
+    "id": "cmt-0775",
     "message": "vegan swap for paneer in this recipe?",
     "source": "variation",
     "category": "health_alternates",
@@ -10288,7 +10331,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0773",
+    "id": "cmt-0776",
     "message": "hey vegan swap for paneer in this recipe",
     "source": "variation",
     "category": "health_alternates",
@@ -10300,7 +10343,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0774",
+    "id": "cmt-0777",
     "message": "hey vegan swap for paneer in this recipe thanks",
     "source": "variation",
     "category": "health_alternates",
@@ -10312,7 +10355,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0775",
+    "id": "cmt-0778",
     "message": "hey vegan swap for paneer in this recipe pls",
     "source": "variation",
     "category": "health_alternates",
@@ -10324,7 +10367,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0776",
+    "id": "cmt-0779",
     "message": "instead of butter what can I use? thanks",
     "source": "variation",
     "category": "health_alternates",
@@ -10336,7 +10379,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0777",
+    "id": "cmt-0780",
     "message": "instead of butter what can I use? pls",
     "source": "variation",
     "category": "health_alternates",
@@ -10348,7 +10391,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0778",
+    "id": "cmt-0781",
     "message": "instead of butter what can I use??",
     "source": "variation",
     "category": "health_alternates",
@@ -10360,7 +10403,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0779",
+    "id": "cmt-0782",
     "message": "hey instead of butter what can I use?",
     "source": "variation",
     "category": "health_alternates",
@@ -10372,7 +10415,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0780",
+    "id": "cmt-0783",
     "message": "hey instead of butter what can I use? thanks",
     "source": "variation",
     "category": "health_alternates",
@@ -10384,7 +10427,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0781",
+    "id": "cmt-0784",
     "message": "hey instead of butter what can I use? pls",
     "source": "variation",
     "category": "health_alternates",
@@ -10396,7 +10439,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0782",
+    "id": "cmt-0785",
     "message": "I'm exhausted and slept badly thanks",
     "source": "variation",
     "category": "health_energy",
@@ -10408,7 +10451,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0783",
+    "id": "cmt-0786",
     "message": "I'm exhausted and slept badly pls",
     "source": "variation",
     "category": "health_energy",
@@ -10420,7 +10463,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0784",
+    "id": "cmt-0787",
     "message": "I'm exhausted and slept badly?",
     "source": "variation",
     "category": "health_energy",
@@ -10432,7 +10475,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0785",
+    "id": "cmt-0788",
     "message": "hey I'm exhausted and slept badly",
     "source": "variation",
     "category": "health_energy",
@@ -10444,7 +10487,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0786",
+    "id": "cmt-0789",
     "message": "hey I'm exhausted and slept badly thanks",
     "source": "variation",
     "category": "health_energy",
@@ -10456,7 +10499,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0787",
+    "id": "cmt-0790",
     "message": "hey I'm exhausted and slept badly pls",
     "source": "variation",
     "category": "health_energy",
@@ -10468,7 +10511,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0788",
+    "id": "cmt-0791",
     "message": "my HRV has been low all week thanks",
     "source": "variation",
     "category": "health_energy",
@@ -10480,7 +10523,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0789",
+    "id": "cmt-0792",
     "message": "my HRV has been low all week pls",
     "source": "variation",
     "category": "health_energy",
@@ -10492,7 +10535,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0790",
+    "id": "cmt-0793",
     "message": "my HRV has been low all week?",
     "source": "variation",
     "category": "health_energy",
@@ -10504,7 +10547,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0791",
+    "id": "cmt-0794",
     "message": "hey my HRV has been low all week",
     "source": "variation",
     "category": "health_energy",
@@ -10516,7 +10559,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0792",
+    "id": "cmt-0795",
     "message": "hey my HRV has been low all week thanks",
     "source": "variation",
     "category": "health_energy",
@@ -10528,7 +10571,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0793",
+    "id": "cmt-0796",
     "message": "hey my HRV has been low all week pls",
     "source": "variation",
     "category": "health_energy",
@@ -10540,7 +10583,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0794",
+    "id": "cmt-0797",
     "message": "wrap up my health day thanks",
     "source": "variation",
     "category": "health_journal",
@@ -10552,7 +10595,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0795",
+    "id": "cmt-0798",
     "message": "wrap up my health day pls",
     "source": "variation",
     "category": "health_journal",
@@ -10564,7 +10607,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0796",
+    "id": "cmt-0799",
     "message": "wrap up my health day?",
     "source": "variation",
     "category": "health_journal",
@@ -10576,7 +10619,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0797",
+    "id": "cmt-0800",
     "message": "hey wrap up my health day",
     "source": "variation",
     "category": "health_journal",
@@ -10588,7 +10631,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0798",
+    "id": "cmt-0801",
     "message": "hey wrap up my health day thanks",
     "source": "variation",
     "category": "health_journal",
@@ -10600,7 +10643,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0799",
+    "id": "cmt-0802",
     "message": "hey wrap up my health day pls",
     "source": "variation",
     "category": "health_journal",
@@ -10612,7 +10655,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0800",
+    "id": "cmt-0803",
     "message": "end of day health journal thanks",
     "source": "variation",
     "category": "health_journal",
@@ -10624,7 +10667,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0801",
+    "id": "cmt-0804",
     "message": "end of day health journal pls",
     "source": "variation",
     "category": "health_journal",
@@ -10636,7 +10679,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0802",
+    "id": "cmt-0805",
     "message": "end of day health journal?",
     "source": "variation",
     "category": "health_journal",
@@ -10648,7 +10691,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0803",
+    "id": "cmt-0806",
     "message": "hey end of day health journal",
     "source": "variation",
     "category": "health_journal",
@@ -10660,7 +10703,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0804",
+    "id": "cmt-0807",
     "message": "hey end of day health journal thanks",
     "source": "variation",
     "category": "health_journal",
@@ -10672,7 +10715,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0805",
+    "id": "cmt-0808",
     "message": "hey end of day health journal pls",
     "source": "variation",
     "category": "health_journal",
@@ -10684,7 +10727,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0806",
+    "id": "cmt-0809",
     "message": "16 week half marathon plan thanks",
     "source": "variation",
     "category": "health_long_term",
@@ -10696,7 +10739,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0807",
+    "id": "cmt-0810",
     "message": "16 week half marathon plan pls",
     "source": "variation",
     "category": "health_long_term",
@@ -10708,7 +10751,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0808",
+    "id": "cmt-0811",
     "message": "16 week half marathon plan?",
     "source": "variation",
     "category": "health_long_term",
@@ -10720,7 +10763,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0809",
+    "id": "cmt-0812",
     "message": "hey 16 week half marathon plan",
     "source": "variation",
     "category": "health_long_term",
@@ -10732,7 +10775,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0810",
+    "id": "cmt-0813",
     "message": "hey 16 week half marathon plan thanks",
     "source": "variation",
     "category": "health_long_term",
@@ -10744,7 +10787,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0811",
+    "id": "cmt-0814",
     "message": "hey 16 week half marathon plan pls",
     "source": "variation",
     "category": "health_long_term",
@@ -10756,7 +10799,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0812",
+    "id": "cmt-0815",
     "message": "build a season plan for strength thanks",
     "source": "variation",
     "category": "health_long_term",
@@ -10768,7 +10811,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0813",
+    "id": "cmt-0816",
     "message": "build a season plan for strength pls",
     "source": "variation",
     "category": "health_long_term",
@@ -10780,7 +10823,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0814",
+    "id": "cmt-0817",
     "message": "build a season plan for strength?",
     "source": "variation",
     "category": "health_long_term",
@@ -10792,7 +10835,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0815",
+    "id": "cmt-0818",
     "message": "hey build a season plan for strength",
     "source": "variation",
     "category": "health_long_term",
@@ -10804,7 +10847,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0816",
+    "id": "cmt-0819",
     "message": "hey build a season plan for strength thanks",
     "source": "variation",
     "category": "health_long_term",
@@ -10816,7 +10859,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0817",
+    "id": "cmt-0820",
     "message": "hey build a season plan for strength pls",
     "source": "variation",
     "category": "health_long_term",
@@ -10828,7 +10871,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0818",
+    "id": "cmt-0821",
     "message": "show my kite portfolio thanks",
     "source": "variation",
     "category": "wealth",
@@ -10840,7 +10883,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0819",
+    "id": "cmt-0822",
     "message": "show my kite portfolio pls",
     "source": "variation",
     "category": "wealth",
@@ -10852,7 +10895,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0820",
+    "id": "cmt-0823",
     "message": "show my kite portfolio?",
     "source": "variation",
     "category": "wealth",
@@ -10864,7 +10907,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0821",
+    "id": "cmt-0824",
     "message": "hey show my kite portfolio",
     "source": "variation",
     "category": "wealth",
@@ -10876,7 +10919,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0822",
+    "id": "cmt-0825",
     "message": "hey show my kite portfolio thanks",
     "source": "variation",
     "category": "wealth",
@@ -10888,7 +10931,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0823",
+    "id": "cmt-0826",
     "message": "hey show my kite portfolio pls",
     "source": "variation",
     "category": "wealth",
@@ -10900,7 +10943,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0824",
+    "id": "cmt-0827",
     "message": "show my net worth on kite thanks",
     "source": "variation",
     "category": "wealth",
@@ -10912,7 +10955,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0825",
+    "id": "cmt-0828",
     "message": "show my net worth on kite pls",
     "source": "variation",
     "category": "wealth",
@@ -10924,7 +10967,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0826",
+    "id": "cmt-0829",
     "message": "show my net worth on kite?",
     "source": "variation",
     "category": "wealth",
@@ -10936,7 +10979,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0827",
+    "id": "cmt-0830",
     "message": "hey show my net worth on kite",
     "source": "variation",
     "category": "wealth",
@@ -10948,7 +10991,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0828",
+    "id": "cmt-0831",
     "message": "hey show my net worth on kite thanks",
     "source": "variation",
     "category": "wealth",
@@ -10960,7 +11003,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0829",
+    "id": "cmt-0832",
     "message": "hey show my net worth on kite pls",
     "source": "variation",
     "category": "wealth",
@@ -10972,7 +11015,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0830",
+    "id": "cmt-0833",
     "message": "show my zerodha holdings thanks",
     "source": "variation",
     "category": "wealth",
@@ -10984,7 +11027,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0831",
+    "id": "cmt-0834",
     "message": "show my zerodha holdings pls",
     "source": "variation",
     "category": "wealth",
@@ -10996,7 +11039,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0832",
+    "id": "cmt-0835",
     "message": "show my zerodha holdings?",
     "source": "variation",
     "category": "wealth",
@@ -11008,7 +11051,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0833",
+    "id": "cmt-0836",
     "message": "hey show my zerodha holdings",
     "source": "variation",
     "category": "wealth",
@@ -11020,7 +11063,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0834",
+    "id": "cmt-0837",
     "message": "hey show my zerodha holdings thanks",
     "source": "variation",
     "category": "wealth",
@@ -11032,7 +11075,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0835",
+    "id": "cmt-0838",
     "message": "hey show my zerodha holdings pls",
     "source": "variation",
     "category": "wealth",
@@ -11044,7 +11087,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0836",
+    "id": "cmt-0839",
     "message": "connect zerodha thanks",
     "source": "variation",
     "category": "wealth",
@@ -11056,7 +11099,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0837",
+    "id": "cmt-0840",
     "message": "connect zerodha pls",
     "source": "variation",
     "category": "wealth",
@@ -11068,7 +11111,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0838",
+    "id": "cmt-0841",
     "message": "connect zerodha?",
     "source": "variation",
     "category": "wealth",
@@ -11080,7 +11123,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0839",
+    "id": "cmt-0842",
     "message": "hey connect zerodha",
     "source": "variation",
     "category": "wealth",
@@ -11092,7 +11135,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0840",
+    "id": "cmt-0843",
     "message": "hey connect zerodha thanks",
     "source": "variation",
     "category": "wealth",
@@ -11104,7 +11147,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0841",
+    "id": "cmt-0844",
     "message": "hey connect zerodha pls",
     "source": "variation",
     "category": "wealth",
@@ -11116,7 +11159,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0842",
+    "id": "cmt-0845",
     "message": "link kite account thanks",
     "source": "variation",
     "category": "wealth",
@@ -11128,7 +11171,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0843",
+    "id": "cmt-0846",
     "message": "link kite account pls",
     "source": "variation",
     "category": "wealth",
@@ -11140,7 +11183,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0844",
+    "id": "cmt-0847",
     "message": "link kite account?",
     "source": "variation",
     "category": "wealth",
@@ -11152,7 +11195,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0845",
+    "id": "cmt-0848",
     "message": "hey link kite account",
     "source": "variation",
     "category": "wealth",
@@ -11164,7 +11207,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0846",
+    "id": "cmt-0849",
     "message": "hey link kite account thanks",
     "source": "variation",
     "category": "wealth",
@@ -11176,7 +11219,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0847",
+    "id": "cmt-0850",
     "message": "hey link kite account pls",
     "source": "variation",
     "category": "wealth",
@@ -11188,7 +11231,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0848",
+    "id": "cmt-0851",
     "message": "am I saving enough for retirement? thanks",
     "source": "variation",
     "category": "wealth",
@@ -11200,7 +11243,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0849",
+    "id": "cmt-0852",
     "message": "am I saving enough for retirement? pls",
     "source": "variation",
     "category": "wealth",
@@ -11212,7 +11255,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0850",
+    "id": "cmt-0853",
     "message": "am I saving enough for retirement??",
     "source": "variation",
     "category": "wealth",
@@ -11224,7 +11267,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0851",
+    "id": "cmt-0854",
     "message": "hey am I saving enough for retirement?",
     "source": "variation",
     "category": "wealth",
@@ -11236,7 +11279,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0852",
+    "id": "cmt-0855",
     "message": "hey am I saving enough for retirement? thanks",
     "source": "variation",
     "category": "wealth",
@@ -11248,7 +11291,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0853",
+    "id": "cmt-0856",
     "message": "hey am I saving enough for retirement? pls",
     "source": "variation",
     "category": "wealth",
@@ -11260,7 +11303,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0854",
+    "id": "cmt-0857",
     "message": "how should I allocate my emergency fund? thanks",
     "source": "variation",
     "category": "wealth",
@@ -11272,7 +11315,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0855",
+    "id": "cmt-0858",
     "message": "how should I allocate my emergency fund? pls",
     "source": "variation",
     "category": "wealth",
@@ -11284,7 +11327,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0856",
+    "id": "cmt-0859",
     "message": "how should I allocate my emergency fund??",
     "source": "variation",
     "category": "wealth",
@@ -11296,7 +11339,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0857",
+    "id": "cmt-0860",
     "message": "hey how should I allocate my emergency fund?",
     "source": "variation",
     "category": "wealth",
@@ -11308,7 +11351,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0858",
+    "id": "cmt-0861",
     "message": "hey how should I allocate my emergency fund? thanks",
     "source": "variation",
     "category": "wealth",
@@ -11320,7 +11363,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0859",
+    "id": "cmt-0862",
     "message": "hey how should I allocate my emergency fund? pls",
     "source": "variation",
     "category": "wealth",
@@ -11332,7 +11375,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0860",
+    "id": "cmt-0863",
     "message": "what is my cash flow this month? thanks",
     "source": "variation",
     "category": "wealth",
@@ -11344,7 +11387,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0861",
+    "id": "cmt-0864",
     "message": "what is my cash flow this month? pls",
     "source": "variation",
     "category": "wealth",
@@ -11356,7 +11399,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0862",
+    "id": "cmt-0865",
     "message": "what is my cash flow this month??",
     "source": "variation",
     "category": "wealth",
@@ -11368,7 +11411,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0863",
+    "id": "cmt-0866",
     "message": "hey what is my cash flow this month?",
     "source": "variation",
     "category": "wealth",
@@ -11380,7 +11423,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0864",
+    "id": "cmt-0867",
     "message": "hey what is my cash flow this month? thanks",
     "source": "variation",
     "category": "wealth",
@@ -11392,7 +11435,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0865",
+    "id": "cmt-0868",
     "message": "hey what is my cash flow this month? pls",
     "source": "variation",
     "category": "wealth",
@@ -11404,7 +11447,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0866",
+    "id": "cmt-0869",
     "message": "FIRE number for my lifestyle thanks",
     "source": "variation",
     "category": "wealth",
@@ -11416,7 +11459,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0867",
+    "id": "cmt-0870",
     "message": "FIRE number for my lifestyle pls",
     "source": "variation",
     "category": "wealth",
@@ -11428,7 +11471,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0868",
+    "id": "cmt-0871",
     "message": "FIRE number for my lifestyle?",
     "source": "variation",
     "category": "wealth",
@@ -11440,7 +11483,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0869",
+    "id": "cmt-0872",
     "message": "hey FIRE number for my lifestyle",
     "source": "variation",
     "category": "wealth",
@@ -11452,7 +11495,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0870",
+    "id": "cmt-0873",
     "message": "hey FIRE number for my lifestyle thanks",
     "source": "variation",
     "category": "wealth",
@@ -11464,7 +11507,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0871",
+    "id": "cmt-0874",
     "message": "hey FIRE number for my lifestyle pls",
     "source": "variation",
     "category": "wealth",
@@ -11476,7 +11519,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0872",
+    "id": "cmt-0875",
     "message": "debt payoff vs investing tradeoff thanks",
     "source": "variation",
     "category": "wealth",
@@ -11488,7 +11531,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0873",
+    "id": "cmt-0876",
     "message": "debt payoff vs investing tradeoff pls",
     "source": "variation",
     "category": "wealth",
@@ -11500,7 +11543,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0874",
+    "id": "cmt-0877",
     "message": "debt payoff vs investing tradeoff?",
     "source": "variation",
     "category": "wealth",
@@ -11512,7 +11555,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0875",
+    "id": "cmt-0878",
     "message": "hey debt payoff vs investing tradeoff",
     "source": "variation",
     "category": "wealth",
@@ -11524,7 +11567,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0876",
+    "id": "cmt-0879",
     "message": "hey debt payoff vs investing tradeoff thanks",
     "source": "variation",
     "category": "wealth",
@@ -11536,7 +11579,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0877",
+    "id": "cmt-0880",
     "message": "hey debt payoff vs investing tradeoff pls",
     "source": "variation",
     "category": "wealth",
@@ -11548,7 +11591,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0878",
+    "id": "cmt-0881",
     "message": "recommend a film like Arrival thanks",
     "source": "variation",
     "category": "happiness",
@@ -11560,7 +11603,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0879",
+    "id": "cmt-0882",
     "message": "recommend a film like Arrival pls",
     "source": "variation",
     "category": "happiness",
@@ -11572,7 +11615,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0880",
+    "id": "cmt-0883",
     "message": "recommend a film like Arrival?",
     "source": "variation",
     "category": "happiness",
@@ -11584,7 +11627,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0881",
+    "id": "cmt-0884",
     "message": "hey recommend a film like Arrival",
     "source": "variation",
     "category": "happiness",
@@ -11596,7 +11639,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0882",
+    "id": "cmt-0885",
     "message": "hey recommend a film like Arrival thanks",
     "source": "variation",
     "category": "happiness",
@@ -11608,7 +11651,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0883",
+    "id": "cmt-0886",
     "message": "hey recommend a film like Arrival pls",
     "source": "variation",
     "category": "happiness",
@@ -11620,7 +11663,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0884",
+    "id": "cmt-0887",
     "message": "books like Project Hail Mary thanks",
     "source": "variation",
     "category": "happiness",
@@ -11632,7 +11675,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0885",
+    "id": "cmt-0888",
     "message": "books like Project Hail Mary pls",
     "source": "variation",
     "category": "happiness",
@@ -11644,7 +11687,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0886",
+    "id": "cmt-0889",
     "message": "books like Project Hail Mary?",
     "source": "variation",
     "category": "happiness",
@@ -11656,7 +11699,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0887",
+    "id": "cmt-0890",
     "message": "hey books like Project Hail Mary",
     "source": "variation",
     "category": "happiness",
@@ -11668,7 +11711,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0888",
+    "id": "cmt-0891",
     "message": "hey books like Project Hail Mary thanks",
     "source": "variation",
     "category": "happiness",
@@ -11680,7 +11723,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0889",
+    "id": "cmt-0892",
     "message": "hey books like Project Hail Mary pls",
     "source": "variation",
     "category": "happiness",
@@ -11692,7 +11735,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0890",
+    "id": "cmt-0893",
     "message": "what game should I play this weekend? thanks",
     "source": "variation",
     "category": "happiness",
@@ -11704,7 +11747,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0891",
+    "id": "cmt-0894",
     "message": "what game should I play this weekend? pls",
     "source": "variation",
     "category": "happiness",
@@ -11716,7 +11759,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0892",
+    "id": "cmt-0895",
     "message": "what game should I play this weekend??",
     "source": "variation",
     "category": "happiness",
@@ -11728,7 +11771,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0893",
+    "id": "cmt-0896",
     "message": "hey what game should I play this weekend?",
     "source": "variation",
     "category": "happiness",
@@ -11740,7 +11783,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0894",
+    "id": "cmt-0897",
     "message": "hey what game should I play this weekend? thanks",
     "source": "variation",
     "category": "happiness",
@@ -11752,7 +11795,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0895",
+    "id": "cmt-0898",
     "message": "hey what game should I play this weekend? pls",
     "source": "variation",
     "category": "happiness",
@@ -11764,7 +11807,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0896",
+    "id": "cmt-0899",
     "message": "music album for a rainy evening thanks",
     "source": "variation",
     "category": "happiness",
@@ -11776,7 +11819,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0897",
+    "id": "cmt-0900",
     "message": "music album for a rainy evening pls",
     "source": "variation",
     "category": "happiness",
@@ -11788,7 +11831,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0898",
+    "id": "cmt-0901",
     "message": "music album for a rainy evening?",
     "source": "variation",
     "category": "happiness",
@@ -11800,7 +11843,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0899",
+    "id": "cmt-0902",
     "message": "hey music album for a rainy evening",
     "source": "variation",
     "category": "happiness",
@@ -11812,7 +11855,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0900",
+    "id": "cmt-0903",
     "message": "hey music album for a rainy evening thanks",
     "source": "variation",
     "category": "happiness",
@@ -11824,7 +11867,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0901",
+    "id": "cmt-0904",
     "message": "hey music album for a rainy evening pls",
     "source": "variation",
     "category": "happiness",
@@ -11836,7 +11879,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0902",
+    "id": "cmt-0905",
     "message": "poetry to read tonight thanks",
     "source": "variation",
     "category": "happiness",
@@ -11848,7 +11891,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0903",
+    "id": "cmt-0906",
     "message": "poetry to read tonight pls",
     "source": "variation",
     "category": "happiness",
@@ -11860,7 +11903,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0904",
+    "id": "cmt-0907",
     "message": "poetry to read tonight?",
     "source": "variation",
     "category": "happiness",
@@ -11872,7 +11915,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0905",
+    "id": "cmt-0908",
     "message": "hey poetry to read tonight",
     "source": "variation",
     "category": "happiness",
@@ -11884,7 +11927,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0906",
+    "id": "cmt-0909",
     "message": "hey poetry to read tonight thanks",
     "source": "variation",
     "category": "happiness",
@@ -11896,7 +11939,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0907",
+    "id": "cmt-0910",
     "message": "hey poetry to read tonight pls",
     "source": "variation",
     "category": "happiness",
@@ -11908,7 +11951,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0908",
+    "id": "cmt-0911",
     "message": "ideas for a restorative weekend thanks",
     "source": "variation",
     "category": "happiness",
@@ -11920,7 +11963,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0909",
+    "id": "cmt-0912",
     "message": "ideas for a restorative weekend pls",
     "source": "variation",
     "category": "happiness",
@@ -11932,7 +11975,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0910",
+    "id": "cmt-0913",
     "message": "ideas for a restorative weekend?",
     "source": "variation",
     "category": "happiness",
@@ -11944,7 +11987,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0911",
+    "id": "cmt-0914",
     "message": "hey ideas for a restorative weekend",
     "source": "variation",
     "category": "happiness",
@@ -11956,7 +11999,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0912",
+    "id": "cmt-0915",
     "message": "hey ideas for a restorative weekend thanks",
     "source": "variation",
     "category": "happiness",
@@ -11968,7 +12011,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0913",
+    "id": "cmt-0916",
     "message": "hey ideas for a restorative weekend pls",
     "source": "variation",
     "category": "happiness",
@@ -11980,7 +12023,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0914",
+    "id": "cmt-0917",
     "message": "weekend trip ideas near mountains thanks",
     "source": "variation",
     "category": "happiness",
@@ -11992,7 +12035,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0915",
+    "id": "cmt-0918",
     "message": "weekend trip ideas near mountains pls",
     "source": "variation",
     "category": "happiness",
@@ -12004,7 +12047,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0916",
+    "id": "cmt-0919",
     "message": "weekend trip ideas near mountains?",
     "source": "variation",
     "category": "happiness",
@@ -12016,7 +12059,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0917",
+    "id": "cmt-0920",
     "message": "hey weekend trip ideas near mountains",
     "source": "variation",
     "category": "happiness",
@@ -12028,7 +12071,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0918",
+    "id": "cmt-0921",
     "message": "hey weekend trip ideas near mountains thanks",
     "source": "variation",
     "category": "happiness",
@@ -12040,7 +12083,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0919",
+    "id": "cmt-0922",
     "message": "hey weekend trip ideas near mountains pls",
     "source": "variation",
     "category": "happiness",
@@ -12052,7 +12095,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0920",
+    "id": "cmt-0923",
     "message": "how do I reconnect with an old friend? thanks",
     "source": "variation",
     "category": "happiness",
@@ -12064,7 +12107,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0921",
+    "id": "cmt-0924",
     "message": "how do I reconnect with an old friend? pls",
     "source": "variation",
     "category": "happiness",
@@ -12076,7 +12119,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0922",
+    "id": "cmt-0925",
     "message": "how do I reconnect with an old friend??",
     "source": "variation",
     "category": "happiness",
@@ -12088,7 +12131,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0923",
+    "id": "cmt-0926",
     "message": "hey how do I reconnect with an old friend?",
     "source": "variation",
     "category": "happiness",
@@ -12100,7 +12143,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0924",
+    "id": "cmt-0927",
     "message": "hey how do I reconnect with an old friend? thanks",
     "source": "variation",
     "category": "happiness",
@@ -12112,7 +12155,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0925",
+    "id": "cmt-0928",
     "message": "hey how do I reconnect with an old friend? pls",
     "source": "variation",
     "category": "happiness",
@@ -12124,7 +12167,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0926",
+    "id": "cmt-0929",
     "message": "plan a low-stress vacation pace thanks",
     "source": "variation",
     "category": "happiness",
@@ -12136,7 +12179,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0927",
+    "id": "cmt-0930",
     "message": "plan a low-stress vacation pace pls",
     "source": "variation",
     "category": "happiness",
@@ -12148,7 +12191,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0928",
+    "id": "cmt-0931",
     "message": "plan a low-stress vacation pace?",
     "source": "variation",
     "category": "happiness",
@@ -12160,7 +12203,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0929",
+    "id": "cmt-0932",
     "message": "hey plan a low-stress vacation pace",
     "source": "variation",
     "category": "happiness",
@@ -12172,7 +12215,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0930",
+    "id": "cmt-0933",
     "message": "hey plan a low-stress vacation pace thanks",
     "source": "variation",
     "category": "happiness",
@@ -12184,7 +12227,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0931",
+    "id": "cmt-0934",
     "message": "hey plan a low-stress vacation pace pls",
     "source": "variation",
     "category": "happiness",
@@ -12196,7 +12239,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0932",
+    "id": "cmt-0935",
     "message": "creative writing habit without burnout thanks",
     "source": "variation",
     "category": "happiness",
@@ -12208,7 +12251,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0933",
+    "id": "cmt-0936",
     "message": "creative writing habit without burnout pls",
     "source": "variation",
     "category": "happiness",
@@ -12220,7 +12263,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0934",
+    "id": "cmt-0937",
     "message": "creative writing habit without burnout?",
     "source": "variation",
     "category": "happiness",
@@ -12232,7 +12275,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0935",
+    "id": "cmt-0938",
     "message": "hey creative writing habit without burnout",
     "source": "variation",
     "category": "happiness",
@@ -12244,7 +12287,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0936",
+    "id": "cmt-0939",
     "message": "hey creative writing habit without burnout thanks",
     "source": "variation",
     "category": "happiness",
@@ -12256,7 +12299,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0937",
+    "id": "cmt-0940",
     "message": "hey creative writing habit without burnout pls",
     "source": "variation",
     "category": "happiness",
@@ -12268,7 +12311,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0938",
+    "id": "cmt-0941",
     "message": "pick up guitar again for fun thanks",
     "source": "variation",
     "category": "happiness",
@@ -12280,7 +12323,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0939",
+    "id": "cmt-0942",
     "message": "pick up guitar again for fun pls",
     "source": "variation",
     "category": "happiness",
@@ -12292,7 +12335,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0940",
+    "id": "cmt-0943",
     "message": "pick up guitar again for fun?",
     "source": "variation",
     "category": "happiness",
@@ -12304,7 +12347,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0941",
+    "id": "cmt-0944",
     "message": "hey pick up guitar again for fun",
     "source": "variation",
     "category": "happiness",
@@ -12316,7 +12359,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0942",
+    "id": "cmt-0945",
     "message": "hey pick up guitar again for fun thanks",
     "source": "variation",
     "category": "happiness",
@@ -12328,7 +12371,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0943",
+    "id": "cmt-0946",
     "message": "hey pick up guitar again for fun pls",
     "source": "variation",
     "category": "happiness",
@@ -12340,7 +12383,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0944",
+    "id": "cmt-0947",
     "message": "board game for 4 players thanks",
     "source": "variation",
     "category": "happiness",
@@ -12352,7 +12395,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0945",
+    "id": "cmt-0948",
     "message": "board game for 4 players pls",
     "source": "variation",
     "category": "happiness",
@@ -12364,7 +12407,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0946",
+    "id": "cmt-0949",
     "message": "board game for 4 players?",
     "source": "variation",
     "category": "happiness",
@@ -12376,7 +12419,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0947",
+    "id": "cmt-0950",
     "message": "hey board game for 4 players",
     "source": "variation",
     "category": "happiness",
@@ -12388,7 +12431,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0948",
+    "id": "cmt-0951",
     "message": "hey board game for 4 players thanks",
     "source": "variation",
     "category": "happiness",
@@ -12400,7 +12443,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0949",
+    "id": "cmt-0952",
     "message": "hey board game for 4 players pls",
     "source": "variation",
     "category": "happiness",
@@ -12412,7 +12455,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0950",
+    "id": "cmt-0953",
     "message": "hobby ideas when I'm too tired to train thanks",
     "source": "variation",
     "category": "happiness",
@@ -12424,7 +12467,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0951",
+    "id": "cmt-0954",
     "message": "hobby ideas when I'm too tired to train pls",
     "source": "variation",
     "category": "happiness",
@@ -12436,7 +12479,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0952",
+    "id": "cmt-0955",
     "message": "hobby ideas when I'm too tired to train?",
     "source": "variation",
     "category": "happiness",
@@ -12448,7 +12491,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0953",
+    "id": "cmt-0956",
     "message": "hey hobby ideas when I'm too tired to train",
     "source": "variation",
     "category": "happiness",
@@ -12460,7 +12503,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0954",
+    "id": "cmt-0957",
     "message": "hey hobby ideas when I'm too tired to train thanks",
     "source": "variation",
     "category": "happiness",
@@ -12472,7 +12515,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0955",
+    "id": "cmt-0958",
     "message": "hey hobby ideas when I'm too tired to train pls",
     "source": "variation",
     "category": "happiness",
@@ -12484,7 +12527,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0956",
+    "id": "cmt-0959",
     "message": "help me build a learning plan for Spanish thanks",
     "source": "variation",
     "category": "wisdom",
@@ -12496,7 +12539,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0957",
+    "id": "cmt-0960",
     "message": "help me build a learning plan for Spanish pls",
     "source": "variation",
     "category": "wisdom",
@@ -12508,7 +12551,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0958",
+    "id": "cmt-0961",
     "message": "help me build a learning plan for Spanish?",
     "source": "variation",
     "category": "wisdom",
@@ -12520,7 +12563,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0959",
+    "id": "cmt-0962",
     "message": "hey help me build a learning plan for Spanish",
     "source": "variation",
     "category": "wisdom",
@@ -12532,7 +12575,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0960",
+    "id": "cmt-0963",
     "message": "hey help me build a learning plan for Spanish thanks",
     "source": "variation",
     "category": "wisdom",
@@ -12544,7 +12587,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0961",
+    "id": "cmt-0964",
     "message": "hey help me build a learning plan for Spanish pls",
     "source": "variation",
     "category": "wisdom",
@@ -12556,7 +12599,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0962",
+    "id": "cmt-0965",
     "message": "study plan for AWS cert thanks",
     "source": "variation",
     "category": "wisdom",
@@ -12568,7 +12611,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0963",
+    "id": "cmt-0966",
     "message": "study plan for AWS cert pls",
     "source": "variation",
     "category": "wisdom",
@@ -12580,7 +12623,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0964",
+    "id": "cmt-0967",
     "message": "study plan for AWS cert?",
     "source": "variation",
     "category": "wisdom",
@@ -12592,7 +12635,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0965",
+    "id": "cmt-0968",
     "message": "hey study plan for AWS cert",
     "source": "variation",
     "category": "wisdom",
@@ -12604,7 +12647,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0966",
+    "id": "cmt-0969",
     "message": "hey study plan for AWS cert thanks",
     "source": "variation",
     "category": "wisdom",
@@ -12616,7 +12659,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0967",
+    "id": "cmt-0970",
     "message": "hey study plan for AWS cert pls",
     "source": "variation",
     "category": "wisdom",
@@ -12628,7 +12671,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0968",
+    "id": "cmt-0971",
     "message": "curriculum for learning Rust in 90 days thanks",
     "source": "variation",
     "category": "wisdom",
@@ -12640,7 +12683,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0969",
+    "id": "cmt-0972",
     "message": "curriculum for learning Rust in 90 days pls",
     "source": "variation",
     "category": "wisdom",
@@ -12652,7 +12695,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0970",
+    "id": "cmt-0973",
     "message": "curriculum for learning Rust in 90 days?",
     "source": "variation",
     "category": "wisdom",
@@ -12664,7 +12707,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0971",
+    "id": "cmt-0974",
     "message": "hey curriculum for learning Rust in 90 days",
     "source": "variation",
     "category": "wisdom",
@@ -12676,7 +12719,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0972",
+    "id": "cmt-0975",
     "message": "hey curriculum for learning Rust in 90 days thanks",
     "source": "variation",
     "category": "wisdom",
@@ -12688,7 +12731,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0973",
+    "id": "cmt-0976",
     "message": "hey curriculum for learning Rust in 90 days pls",
     "source": "variation",
     "category": "wisdom",
@@ -12700,7 +12743,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0974",
+    "id": "cmt-0977",
     "message": "how do I ship my side project faster? thanks",
     "source": "variation",
     "category": "wisdom",
@@ -12712,7 +12755,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0975",
+    "id": "cmt-0978",
     "message": "how do I ship my side project faster? pls",
     "source": "variation",
     "category": "wisdom",
@@ -12724,7 +12767,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0976",
+    "id": "cmt-0979",
     "message": "how do I ship my side project faster??",
     "source": "variation",
     "category": "wisdom",
@@ -12736,7 +12779,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0977",
+    "id": "cmt-0980",
     "message": "hey how do I ship my side project faster?",
     "source": "variation",
     "category": "wisdom",
@@ -12748,7 +12791,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0978",
+    "id": "cmt-0981",
     "message": "hey how do I ship my side project faster? thanks",
     "source": "variation",
     "category": "wisdom",
@@ -12760,7 +12803,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0979",
+    "id": "cmt-0982",
     "message": "hey how do I ship my side project faster? pls",
     "source": "variation",
     "category": "wisdom",
@@ -12772,7 +12815,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0980",
+    "id": "cmt-0983",
     "message": "unblock my app launch thanks",
     "source": "variation",
     "category": "wisdom",
@@ -12784,7 +12827,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0981",
+    "id": "cmt-0984",
     "message": "unblock my app launch pls",
     "source": "variation",
     "category": "wisdom",
@@ -12796,7 +12839,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0982",
+    "id": "cmt-0985",
     "message": "unblock my app launch?",
     "source": "variation",
     "category": "wisdom",
@@ -12808,7 +12851,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0983",
+    "id": "cmt-0986",
     "message": "hey unblock my app launch",
     "source": "variation",
     "category": "wisdom",
@@ -12820,7 +12863,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0984",
+    "id": "cmt-0987",
     "message": "hey unblock my app launch thanks",
     "source": "variation",
     "category": "wisdom",
@@ -12832,7 +12875,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0985",
+    "id": "cmt-0988",
     "message": "hey unblock my app launch pls",
     "source": "variation",
     "category": "wisdom",
@@ -12844,7 +12887,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0986",
+    "id": "cmt-0989",
     "message": "smallest next step on my portfolio site thanks",
     "source": "variation",
     "category": "wisdom",
@@ -12856,7 +12899,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0987",
+    "id": "cmt-0990",
     "message": "smallest next step on my portfolio site pls",
     "source": "variation",
     "category": "wisdom",
@@ -12868,7 +12911,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0988",
+    "id": "cmt-0991",
     "message": "smallest next step on my portfolio site?",
     "source": "variation",
     "category": "wisdom",
@@ -12880,7 +12923,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0989",
+    "id": "cmt-0992",
     "message": "hey smallest next step on my portfolio site",
     "source": "variation",
     "category": "wisdom",
@@ -12892,7 +12935,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0990",
+    "id": "cmt-0993",
     "message": "hey smallest next step on my portfolio site thanks",
     "source": "variation",
     "category": "wisdom",
@@ -12904,7 +12947,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0991",
+    "id": "cmt-0994",
     "message": "hey smallest next step on my portfolio site pls",
     "source": "variation",
     "category": "wisdom",
@@ -12916,7 +12959,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0992",
+    "id": "cmt-0995",
     "message": "prep for a promotion conversation thanks",
     "source": "variation",
     "category": "wisdom",
@@ -12928,7 +12971,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0993",
+    "id": "cmt-0996",
     "message": "prep for a promotion conversation pls",
     "source": "variation",
     "category": "wisdom",
@@ -12940,7 +12983,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0994",
+    "id": "cmt-0997",
     "message": "prep for a promotion conversation?",
     "source": "variation",
     "category": "wisdom",
@@ -12952,7 +12995,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0995",
+    "id": "cmt-0998",
     "message": "hey prep for a promotion conversation",
     "source": "variation",
     "category": "wisdom",
@@ -12964,7 +13007,7 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0996",
+    "id": "cmt-0999",
     "message": "hey prep for a promotion conversation thanks",
     "source": "variation",
     "category": "wisdom",
@@ -12976,44 +13019,8 @@ export const CHAT_MESSAGE_TEST_SUITE: ChatMessageTestCase[] = [
     "issueTags": []
   },
   {
-    "id": "cmt-0997",
-    "message": "hey prep for a promotion conversation pls",
-    "source": "variation",
-    "category": "wisdom",
-    "structural": {
-      "explicitMealLog": false,
-      "magnusTools": false,
-      "youtubeAction": false
-    },
-    "issueTags": []
-  },
-  {
-    "id": "cmt-0998",
-    "message": "how do I position for a senior role? thanks",
-    "source": "variation",
-    "category": "wisdom",
-    "structural": {
-      "explicitMealLog": false,
-      "magnusTools": false,
-      "youtubeAction": false
-    },
-    "issueTags": []
-  },
-  {
-    "id": "cmt-0999",
-    "message": "how do I position for a senior role? pls",
-    "source": "variation",
-    "category": "wisdom",
-    "structural": {
-      "explicitMealLog": false,
-      "magnusTools": false,
-      "youtubeAction": false
-    },
-    "issueTags": []
-  },
-  {
     "id": "cmt-1000",
-    "message": "how do I position for a senior role??",
+    "message": "hey prep for a promotion conversation pls",
     "source": "variation",
     "category": "wisdom",
     "structural": {

@@ -15,6 +15,7 @@ import {
   type ProactiveSubscription,
   type ProactiveSubscriptionRow,
   type ProactiveTriggerType,
+  type WeeklyLocalSchedule,
 } from "./types.js";
 
 const TABLE = "magnus_proactive_subscriptions";
@@ -175,10 +176,12 @@ export async function createRecurringCustomReminder(input: {
   userProfileId: string;
   message: string;
   localHour: number;
+  localMinute?: number;
   windowMinutes?: number;
   deps?: { client?: SupabaseClient };
 }): Promise<StoreResult<ProactiveSubscription>> {
   const hour = Math.min(23, Math.max(0, Math.floor(input.localHour)));
+  const minute = Math.min(59, Math.max(0, Math.floor(input.localMinute ?? 0)));
   const row = {
     user_profile_id: input.userProfileId,
     kind: "custom_reminder",
@@ -187,6 +190,7 @@ export async function createRecurringCustomReminder(input: {
     schedule: {
       type: "recurring_local",
       localHour: hour,
+      localMinute: minute,
       windowMinutes: input.windowMinutes ?? 14,
     } satisfies ProactiveSchedule,
     config: { message: input.message.trim(), recurring: true },
@@ -199,6 +203,145 @@ export async function createRecurringCustomReminder(input: {
   const { data, error } = await client(input.deps).from(TABLE).insert(row).select("*").single();
   if (error || !data) {
     return { ok: false, error: error?.message ?? "insert failed" };
+  }
+  return { ok: true, data: rowToSubscription(data as ProactiveSubscriptionRow) };
+}
+
+export async function createWeeklyCustomReminder(input: {
+  userProfileId: string;
+  message: string;
+  daysOfWeek: number[];
+  localHour: number;
+  localMinute?: number;
+  windowMinutes?: number;
+  deps?: { client?: SupabaseClient };
+}): Promise<StoreResult<ProactiveSubscription>> {
+  const days = [...new Set(input.daysOfWeek.filter((d) => d >= 0 && d <= 6))].sort(
+    (a, b) => a - b,
+  );
+  if (days.length === 0) {
+    return { ok: false, error: "days_of_week must include at least one weekday (0=Sun … 6=Sat)." };
+  }
+  const hour = Math.min(23, Math.max(0, Math.floor(input.localHour)));
+  const minute = Math.min(59, Math.max(0, Math.floor(input.localMinute ?? 0)));
+  const row = {
+    user_profile_id: input.userProfileId,
+    kind: "custom_reminder",
+    enabled: true,
+    trigger_type: "recurring" as ProactiveTriggerType,
+    schedule: {
+      type: "weekly_local",
+      daysOfWeek: days,
+      localHour: hour,
+      localMinute: minute,
+      windowMinutes: input.windowMinutes ?? 14,
+    } satisfies WeeklyLocalSchedule,
+    config: { message: input.message.trim(), recurring: true, weekly: true },
+    user_instruction: input.message.trim(),
+    source: "user_chat" as const,
+    cap_bucket: "user_asked" as ProactiveCapBucket,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await client(input.deps).from(TABLE).insert(row).select("*").single();
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "insert failed" };
+  }
+  return { ok: true, data: rowToSubscription(data as ProactiveSubscriptionRow) };
+}
+
+export async function updateCustomReminder(input: {
+  userProfileId: string;
+  subscriptionId: string;
+  message?: string;
+  at?: Date;
+  deps?: { client?: SupabaseClient };
+}): Promise<StoreResult<ProactiveSubscription>> {
+  const existing = await client(input.deps)
+    .from(TABLE)
+    .select("*")
+    .eq("user_profile_id", input.userProfileId)
+    .eq("id", input.subscriptionId)
+    .eq("kind", "custom_reminder")
+    .maybeSingle();
+
+  if (existing.error || !existing.data) {
+    return { ok: false, error: existing.error?.message ?? "reminder not found" };
+  }
+
+  const sub = rowToSubscription(existing.data as ProactiveSubscriptionRow);
+  const patch: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (input.message?.trim()) {
+    const msg = input.message.trim();
+    patch.config = { ...sub.config, message: msg };
+    patch.user_instruction = msg;
+  }
+
+  if (input.at) {
+    if (sub.triggerType !== "one_shot") {
+      return { ok: false, error: "Only one-shot reminders can change fire time; create a new one." };
+    }
+    patch.schedule = { type: "one_shot", at: input.at.toISOString() };
+    patch.next_fire_at = input.at.toISOString();
+  }
+
+  const { data, error } = await client(input.deps)
+    .from(TABLE)
+    .update(patch)
+    .eq("id", input.subscriptionId)
+    .eq("user_profile_id", input.userProfileId)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "update failed" };
+  }
+  return { ok: true, data: rowToSubscription(data as ProactiveSubscriptionRow) };
+}
+
+export async function snoozeCustomReminder(input: {
+  userProfileId: string;
+  subscriptionId: string;
+  until: Date;
+  deps?: { client?: SupabaseClient };
+}): Promise<StoreResult<ProactiveSubscription>> {
+  const existing = await client(input.deps)
+    .from(TABLE)
+    .select("*")
+    .eq("user_profile_id", input.userProfileId)
+    .eq("id", input.subscriptionId)
+    .eq("kind", "custom_reminder")
+    .maybeSingle();
+
+  if (existing.error || !existing.data) {
+    return { ok: false, error: existing.error?.message ?? "reminder not found" };
+  }
+
+  const sub = rowToSubscription(existing.data as ProactiveSubscriptionRow);
+  if (sub.triggerType !== "one_shot") {
+    return { ok: false, error: "Recurring reminders cannot be snoozed — disable or cancel instead." };
+  }
+
+  const patch = {
+    schedule: { type: "one_shot", at: input.until.toISOString() },
+    next_fire_at: input.until.toISOString(),
+    enabled: true,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await client(input.deps)
+    .from(TABLE)
+    .update(patch)
+    .eq("id", input.subscriptionId)
+    .eq("user_profile_id", input.userProfileId)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "snooze failed" };
   }
   return { ok: true, data: rowToSubscription(data as ProactiveSubscriptionRow) };
 }
