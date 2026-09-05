@@ -2,13 +2,14 @@
  * Holistic day snapshot — calendar, Magnus commitments, planned meals.
  * Used by GENERAL day_overview capability (parser-owned, not regex routing).
  */
-import { startOfLocalDay } from "../../../events/eventTime.js";
+import { startOfLocalDay, localDateKey as eventLocalDateKey } from "../../../events/eventTime.js";
 import { formatLoggedMealsDay } from "../../../meals/formatLoggedMealsDay.js";
 import { sumMealLogsForDay } from "../../../meals/mealDaySummary.js";
 import { localDateKey, timezoneAbbrev } from "../../../nutrition/localDate.js";
 import { offsetDateKey } from "../../../nutrition/parseMealPlanJson.js";
 import { formatPlanDay, getPlanEntriesForDate } from "../../../nutrition/store/mealPlanStore.js";
 import { getSessionsForLocalDate } from "../../../nutrition/store/mealHistoryStore.js";
+import { formatReminderList, listUpcomingReminders } from "../../../proactive/reminderStore.js";
 import { readCalendarEvents } from "../../tools/calendarTool.js";
 import { listEventsTool } from "../../tools/eventLogTool.js";
 import type { AgentContext, AgentResult } from "../../types.js";
@@ -58,7 +59,7 @@ export async function executeDayOverviewCapability(
   const rangeEnd = startOfLocalDay(new Date(), tz, offsetDays + 1);
   const tzAbbrev = timezoneAbbrev(tz);
 
-  const [calendarText, eventLogText, mealEntries, loggedSessions, loggedDayTotals] =
+  const [calendarText, eventLogText, mealEntries, loggedSessions, loggedDayTotals, reminderRows] =
     await Promise.all([
     readCalendarEvents({
       startIso: rangeStart.toISOString(),
@@ -75,7 +76,19 @@ export async function executeDayOverviewCapability(
     getPlanEntriesForDate(ctx.userProfileId, localDate),
     getSessionsForLocalDate(ctx.userProfileId, localDate),
     sumMealLogsForDay(ctx.userProfileId, localDate),
+    listUpcomingReminders({
+      userProfileId: ctx.userProfileId,
+      timezone: tz,
+    }),
   ]);
+
+  const dayReminders = reminderRows.filter(
+    (r) => r.at && eventLocalDateKey(r.at, tz) === localDate,
+  );
+  const remindersText =
+    dayReminders.length > 0
+      ? formatReminderList(dayReminders, tz).replace(/^Upcoming reminders:\n/, "")
+      : "No reminders set for this day.";
 
   const plannedMealsText = formatPlanDay(mealEntries, label, localDate);
   const loggedMealsText = formatLoggedMealsDay(
@@ -93,6 +106,9 @@ export async function executeDayOverviewCapability(
     "",
     "**Commitments (event log)**",
     eventLogText.trim() || "No logged commitments for this day.",
+    "",
+    "**Reminders**",
+    remindersText,
     "",
     "**Meals — logged** (counts toward daily calories)",
     loggedMealsText.trim(),

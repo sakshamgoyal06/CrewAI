@@ -46,9 +46,15 @@ export const GENERAL_CAPABILITY_CATALOG: CapabilityCatalog = {
       disambiguation: "connect Notion, sync lists.",
     },
     {
+      id: "reminders",
+      summary: "List, create, snooze, cancel task reminders (one-shot or recurring)",
+      disambiguation:
+        'remind me to…, what reminders do I have, snooze/cancel a reminder. NOT evening journal / rhythm nudges (use proactive).',
+    },
+    {
       id: "proactive",
-      summary: "Manage proactive Telegram reminders and nudges",
-      disambiguation: "enable/disable reminders, create custom reminder.",
+      summary: "Manage proactive Telegram rhythm nudges (evening journal, drift guard, …)",
+      disambiguation: "enable/disable evening journal, drift guard — not one-off task reminders.",
     },
     {
       id: "journal_note",
@@ -135,6 +141,7 @@ export const GENERAL_CAPABILITY_TOOLS: Record<string, string[]> = {
     "log_daily_checkin",
   ],
   notion: ["connect_notion", "sync_notion", "setup_notion"],
+  reminders: ["manage_reminders", "log_event", "list_events", "update_event"],
   proactive: ["manage_proactive_messages"],
   journal_note: ["log_note"],
   zerodha_connect: ["connect_zerodha", "connect_kite"],

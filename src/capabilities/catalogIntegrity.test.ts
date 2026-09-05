@@ -24,6 +24,7 @@ const MAGNUS_TOOL_NAMES = [
   "reschedule_event",
   "list_events",
   "manage_proactive_messages",
+  "manage_reminders",
   "youtube_search",
   "youtube_recommend",
   "youtube_playlist",

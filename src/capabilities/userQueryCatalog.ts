@@ -1063,23 +1063,57 @@ export const USER_QUERY_CATALOG: UserQueryExpectation[] = [
     magnusTools: true,
   },
 
-  // —— GENERAL: proactive ——
+  // —— GENERAL: reminders ——
   {
-    category: "general_proactive",
+    category: "general_reminders",
     query: "remind me tomorrow at 8pm to call mom",
     idealIntent: "GENERAL",
-    idealCapability: "proactive",
+    idealCapability: "reminders",
     hints: { looks_like_magnus_tool_action: true },
     magnusTools: true,
   },
   {
-    category: "general_proactive",
+    category: "general_reminders",
     query: "remind me every day at 9am to stretch",
     idealIntent: "GENERAL",
-    idealCapability: "proactive",
+    idealCapability: "reminders",
     hints: { looks_like_magnus_tool_action: true },
     magnusTools: true,
   },
+  {
+    category: "general_reminders",
+    query: "what reminders do I have this week?",
+    idealIntent: "GENERAL",
+    idealCapability: "reminders",
+    hints: { looks_like_magnus_tool_action: true },
+    magnusTools: true,
+  },
+  {
+    category: "general_reminders",
+    query: "snooze the bike reminder one hour",
+    idealIntent: "GENERAL",
+    idealCapability: "reminders",
+    hints: { looks_like_magnus_tool_action: true },
+    magnusTools: true,
+  },
+  {
+    category: "general_reminders",
+    query: "cancel the tomato reminder",
+    idealIntent: "GENERAL",
+    idealCapability: "reminders",
+    hints: { looks_like_magnus_tool_action: true },
+    magnusTools: true,
+  },
+  {
+    category: "general_reminders",
+    query: "remind me tonight at 9pm to journal",
+    idealIntent: "GENERAL",
+    idealCapability: "reminders",
+    hints: { looks_like_magnus_tool_action: true },
+    magnusTools: true,
+  },
+
+  // —— GENERAL: proactive (rhythm nudges) ——
   {
     category: "general_proactive",
     query: "disable evening journal",
@@ -1099,14 +1133,6 @@ export const USER_QUERY_CATALOG: UserQueryExpectation[] = [
   {
     category: "general_proactive",
     query: "turn off stale list nudge",
-    idealIntent: "GENERAL",
-    idealCapability: "proactive",
-    hints: { looks_like_magnus_tool_action: true },
-    magnusTools: true,
-  },
-  {
-    category: "general_proactive",
-    query: "remind me tonight at 9pm to journal",
     idealIntent: "GENERAL",
     idealCapability: "proactive",
     hints: { looks_like_magnus_tool_action: true },

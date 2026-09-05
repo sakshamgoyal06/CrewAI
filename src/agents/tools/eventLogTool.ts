@@ -197,6 +197,7 @@ export type UpdateEventStatusInput = {
   actualEnd?: string;
   details?: string;
   calendarEventId?: string;
+  remindAt?: string;
 };
 
 /** Records what became of a commitment that already exists. */
@@ -227,6 +228,10 @@ export async function updateEventStatus(input: UpdateEventStatusInput): Promise<
   if (!actualEnd.ok) {
     return actualEnd.message;
   }
+  const remindAt = parseTime(input.remindAt, timeZone, "reminder time");
+  if (!remindAt.ok) {
+    return remindAt.message;
+  }
 
   const updated = await updateEvent({
     userProfileId: input.userProfileId,
@@ -238,6 +243,7 @@ export async function updateEventStatus(input: UpdateEventStatusInput): Promise<
     ...(actualStart.at ? { startedAt: actualStart.at } : {}),
     ...(actualEnd.at ? { endedAt: actualEnd.at } : {}),
     ...(input.calendarEventId ? { googleEventId: input.calendarEventId } : {}),
+    ...(input.remindAt !== undefined ? { remindAt: remindAt.at } : {}),
   });
 
   if (!updated.ok) {
