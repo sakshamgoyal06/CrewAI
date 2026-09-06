@@ -4,8 +4,29 @@
  * There are deliberately no other commands. Magnus is the whole interface: the user writes in
  * plain language and routing happens invisibly.
  */
+import { isMinimalMode } from "../config/minimalMode.js";
 
 export function buildStartMessage(): string {
+  if (isMinimalMode()) {
+    return [
+      "<b>Magnus is online (minimal mode).</b>",
+      "",
+      "Focused build while we perfect the core: calendar, reminders, lists, YouTube, morning brief, and workouts / Hevy.",
+      "",
+      "Some of what works right now:",
+      "• <b>Calendar</b> — “what's on today?”, “book gym 7am tomorrow”",
+      "• <b>Reminders</b> — “remind me to call the dentist tomorrow at 4pm”",
+      "• <b>Lists</b> — “add Dune to watchlist”, “what's on my readlist?”",
+      "• <b>YouTube</b> — “connect Google”, “find a focus playlist”, “bookmark that song”",
+      "• <b>Morning brief</b> — say “morning brief” or wait for the daily push",
+      "• <b>Training / Hevy</b> — “should I train today?”, “review my last few workouts”",
+      "",
+      "Meals, Notion, money coaching, and other pillars are temporarily parked.",
+      "",
+      "/help for the longer version.",
+    ].join("\n");
+  }
+
   return [
     "<b>Magnus is online.</b>",
     "",
@@ -24,6 +45,35 @@ export function buildStartMessage(): string {
 }
 
 export function buildHelpMessage(): string {
+  if (isMinimalMode()) {
+    return [
+      "<b>How to use me (minimal mode)</b>",
+      "",
+      "Write in plain English. Magnus is running a focused build: calendar, reminders, lists, YouTube, morning brief, workouts / Hevy, and conversation.",
+      "",
+      "<b>Calendar</b>",
+      "“what does my day look like?” · “anything on Friday?” · “add dentist Tuesday 4pm” · “move gym to 8am”",
+      "",
+      "<b>Reminders</b>",
+      "“remind me to … tomorrow at 8pm” · “what reminders do I have?” · “snooze that reminder”",
+      "",
+      "<b>Lists</b>",
+      "“add Dune to my watchlist” · “what's on my readlist?” · “recommend something from my food list”",
+      "",
+      "<b>YouTube / music</b>",
+      "“connect Google” · “search YouTube for lo-fi beats” · “add this to my Magnus playlist” · “bookmark that song”",
+      "",
+      "<b>Morning brief</b>",
+      "“morning brief” for an on-demand push · or wait for the scheduled daily message",
+      "",
+      "<b>Training / Hevy</b>",
+      "“should I train today?” · “review my last few workouts” · “hevy routine: …” when you want to log or create via Hevy",
+      "",
+      "<b>Parked for now</b>",
+      "Meals, Notion, wealth/happiness/wisdom coaching, and project planning. Say what you need — I'll tell you if it's back yet.",
+    ].join("\n");
+  }
+
   return [
     "<b>How to use me</b>",
     "",

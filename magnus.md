@@ -367,8 +367,26 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-<<<<<<< HEAD
-**Last updated:** 2026-09-05 (PR #99 reminder frequencies scoped; reminders management; routing growth snapshot PR #92; Supabase security)
-=======
-**Last updated:** 2026-09-05 (LLM routing parser; reminders management; growth snapshot PR #92; Supabase security)
->>>>>>> origin/main
+## Minimal mode (production strip-down)
+
+When **`MAGNUS_MINIMAL_MODE=true`** (default in **`NODE_ENV=production`** unless explicitly set
+`false`), Magnus runs a **parked** build:
+
+| Live | Parked (code retained; set `MAGNUS_MINIMAL_MODE=false` to restore) |
+|------|-----|
+| Sub-agent **parse → execute → compose**, one Magnus voice | Wealth / Happiness / Wisdom pillars |
+| **Google Calendar** + event log | Meals, nutrition, meal photos |
+| **Hevy / fitness** (Health) | Notion, LifeOS, projects |
+| **Lists** (Supabase — watchlist, readlist, tasks, …) | Notion list mirror, `add_goal` / LifeOS list tools |
+| **YouTube / YT Music** (search, playlists, bookmarks, cue) | — |
+| **Morning brief** (scheduled + manual “morning brief”) | Rhythm subscriptions (evening journal, drift guard, …) |
+| **Reminders** (`manage_reminders`, event `remind_at`, event-reminder cron, gym ↔ Hevy reconcile) | Nutrition nightly, vision/photos |
+| Chat persistence + **pino** logging | Health onboarding gate, project setup FSM |
+
+Implementation: `src/config/minimalMode.ts` filters capability catalogs, Magnus tools, proactive
+jobs, and intent classification. Parked features return a clear user-facing message instead of
+partial behaviour.
+
+---
+
+**Last updated:** 2026-09-06 (minimal mode: calendar, lists, YouTube, morning brief, Hevy, reminders)

@@ -2,6 +2,7 @@
  * During pillar_consultation, Magnus only gets tools the user message actually needs.
  * Capability list comes from the routing context parser — no regex.
  */
+import { intersectMagnusToolNames } from "../../config/minimalMode.js";
 import { GENERAL_CAPABILITY_TOOLS } from "./pillarStrategy/catalogs/generalCatalog.js";
 import type { MagnusRoutingCapability } from "./routingContextParser.js";
 
@@ -35,5 +36,5 @@ export function magnusAllowedToolsForConsultation(
     }
   }
 
-  return [...allowed];
+  return intersectMagnusToolNames([...allowed]);
 }

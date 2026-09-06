@@ -2,6 +2,7 @@
  * Orchestrator prelude: undo last reversible write without disambiguation.
  */
 import { softDeleteMealSession } from "../../nutrition/store/mealHistoryStore.js";
+import { isMinimalMode, parkedFeatureReply } from "../../config/minimalMode.js";
 import {
   clearReversibleAction,
   getReversibleAction,
@@ -20,6 +21,18 @@ async function executeUndo(
 ): Promise<ReversibleActionTurnResult> {
   switch (action.kind) {
     case "meal_undo": {
+      if (isMinimalMode()) {
+        await clearReversibleAction(userProfileId);
+        return {
+          handled: true,
+          replyText: parkedFeatureReply("Meals & nutrition"),
+          metadata: {
+            parked: "meals",
+            pillar_compose: false,
+            magnus_voice_finalized: true,
+          },
+        };
+      }
       const sessionId = action.payload.meal_session_id;
       if (typeof sessionId !== "string" || !sessionId.trim()) {
         await clearReversibleAction(userProfileId);

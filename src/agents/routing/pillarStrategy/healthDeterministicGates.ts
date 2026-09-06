@@ -1,4 +1,5 @@
 import type { AgentContext } from "../../types.js";
+import { isMinimalMode } from "../../../config/minimalMode.js";
 import { isMealCalorieDisputeMessage } from "../../../meals/mealCalorieDispute.js";
 import { isMealPlanningIntent } from "../../../meals/mealLogIntent.js";
 import { parseMealLogCommand } from "../../../meals/parseMealLogCommand.js";
@@ -9,6 +10,9 @@ const NON_MEAL_PHOTO_CAPTION_RE =
 
 /** Deterministic gates before LLM parser — unambiguous entry points. */
 export function healthDeterministicCapability(ctx: AgentContext): string | null {
+  if (isMinimalMode()) {
+    return null;
+  }
   if (isMealCalorieDisputeMessage(ctx.rawMessage)) {
     return "meal_history";
   }

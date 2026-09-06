@@ -1,6 +1,11 @@
 /**
  * Execute one GENERAL plan step — Magnus with capability-filtered tools.
  */
+import {
+  isParkedGeneralCapability,
+  parkedGeneralCapabilityReply,
+  intersectMagnusToolNames,
+} from "../../../config/minimalMode.js";
 import { runMagnusAgent } from "../../magnusAgent.js";
 import type { AgentContext, AgentResult } from "../../types.js";
 import { GENERAL_CAPABILITY_TOOLS } from "./catalogs/generalCatalog.js";
@@ -16,6 +21,18 @@ export async function executeGeneralPlanStep(
   priorContext: string,
 ): Promise<AgentResult> {
   const stepCtx = buildStepAgentContext(ctx, step, priorContext);
+
+  if (isParkedGeneralCapability(step.capability)) {
+    return {
+      text: parkedGeneralCapabilityReply(step.capability),
+      metadata: {
+        specialist: "Magnus",
+        parked_capability: step.capability,
+        pillar_compose: false,
+        magnus_voice_finalized: true,
+      },
+    };
+  }
 
   if (step.capability === "pillar_consultation") {
     return executePillarConsultationStep(ctx, step, priorContext);
@@ -34,8 +51,9 @@ export async function executeGeneralPlanStep(
     return executeProjectCapability(stepCtx, step.capability, step.args);
   }
 
-  const allowedToolNames =
-    GENERAL_CAPABILITY_TOOLS[step.capability] ?? GENERAL_CAPABILITY_TOOLS.conversation ?? [];
+  const allowedToolNames = intersectMagnusToolNames(
+    GENERAL_CAPABILITY_TOOLS[step.capability] ?? GENERAL_CAPABILITY_TOOLS.conversation ?? [],
+  );
 
   return runMagnusAgent(stepCtx, {
     allowedToolNames,

@@ -2,6 +2,7 @@
  * Silent intent classification. The user always talks to Magnus; this decides which pillar
  * executes the turn. Hints carry structural signals; the classifier interprets them.
  */
+import { isMinimalMode, isParkedIntent } from "../config/minimalMode.js";
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 import { parseIntent, type Intent } from "../intent.js";
@@ -81,6 +82,29 @@ growth (when present) — align routing with the user's growth, not just keyword
 When a message could fit two categories, choose the one the user is asking you to act on.
 Reply with only the category name.`;
 
+const MINIMAL_CLASSIFY_SYSTEM = `Classify a message to a personal assistant into exactly one category.
+
+Only two categories are live right now:
+HEALTH — training, workouts, the gym, Hevy routines, exercise programming, recovery from training.
+GENERAL — everything else: calendar and schedule, reminders, commitments/event log, holistic day
+overview, YouTube / YT Music actions, user lists (watchlist, readlist, tasks), ordinary
+conversation, and any topic whose specialist is temporarily parked (meals, money, leisure taste,
+learning plans, Notion, projects).
+
+Do NOT use WEALTH, HAPPINESS, or WISDOM — route those topics to GENERAL and Magnus will explain
+what is parked.
+
+Meal logging, nutrition, and food photos are parked — route food/meal messages to GENERAL, not HEALTH.
+
+Use routing_hints when present:
+- looks_like_health_fitness_read → HEALTH when asking to read/review workouts or Hevy
+- looks_like_youtube_action or looks_like_magnus_tool_action or looks_like_magnus_tool_continuation → GENERAL
+- holistic_day_ask → GENERAL
+- schedule_accuracy_challenge → GENERAL
+- compound_action → GENERAL
+
+Reply with only the category name.`;
+
 function textFromMessage(msg: Message): string {
   for (const block of msg.content) {
     if (block.type === "text") {
@@ -106,7 +130,7 @@ async function classifyIntent(
   const msg = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 16,
-    system: CLASSIFY_SYSTEM,
+    system: isMinimalMode() ? MINIMAL_CLASSIFY_SYSTEM : CLASSIFY_SYSTEM,
     messages: [
       {
         role: "user",
@@ -114,7 +138,11 @@ async function classifyIntent(
       },
     ],
   });
-  return parseIntent(textFromMessage(msg));
+  const intent = parseIntent(textFromMessage(msg));
+  if (isMinimalMode() && isParkedIntent(intent)) {
+    return "GENERAL";
+  }
+  return intent;
 }
 
 /**
@@ -127,6 +155,16 @@ export async function resolveIntentNaturalLanguage(
   const hints =
     options?.routingContext?.routingHints ??
     await buildIntentRoutingHints(userMessage, options?.recentTurns ?? []);
+
+  if (isMinimalMode()) {
+    if (hints.looks_like_health_fitness_read) {
+      return "HEALTH";
+    }
+    if (hints.explicit_meal_log || hints.looks_like_meal_log_read) {
+      return "GENERAL";
+    }
+    return classifyIntent(userMessage, hints, options?.routingContext);
+  }
 
   const pending = options?.routingContext?.pending;
 
