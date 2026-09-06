@@ -117,7 +117,8 @@ shell or `.env`.
 | `src/agents/routing/pillarStrategy/` | Capability catalogs → Haiku plan parser → step executors → composer (`composePillarPlanReply`) |
 | `src/agents/routing/pillarStrategy/dayOverview.ts` | Holistic day snapshot: calendar + commitments + meals |
 | `src/agents/magnusAgent.ts` | Magnus himself: calendar, YouTube, event log, journaling, reminders — tool loop (optional capability-filtered tools on GENERAL) |
-| `src/agents/tools/calendarTool.ts` | Google Calendar; per-user tokens; delete/update sync linked `magnus_events` rows |
+| `src/agents/tools/calendarTool.ts` | Google Calendar; per-user tokens; delete/update sync linked `magnus_events` rows; **read-before-write** guard blocks update/delete without `read_calendar` in the same turn |
+| `src/day/buildDayContext.ts` | Shared calendar + commitments + reminders (+ optional meals) for morning brief and `day_overview` |
 | `src/agents/tools/youtubeConnectTool.ts` | In-chat `connect_google` / aliases — Calendar + YouTube one consent |
 | `src/agents/tools/youtubeTool.ts` | YouTube / YT Music: search, recommend, playlists, bookmarks, cue (per-user token) |
 | `src/agents/tools/eventLogTool.ts` | Event log tools: plan, update, reschedule, list (`magnus_events`) |
@@ -351,11 +352,12 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Schema not reproducible** from `supabase/migrations/` for tables predating April 2026 migrations.
   Baseline migrations for `user_profile` and `magnus_chat_messages` added 2026-08-04; LifeOS tables
   remain in `scripts/magnus_db_hardening.sql` (see `supabase/README.md`).
-- **Semantic recall** — no embeddings; memory is recent-window plus structured reads.
+- **Semantic recall** — `memory_embeddings` (pgvector) + `recall_context` tool (Step 4); topic index in prompts.
 - **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data (Wealth has read-only Zerodha context today; see below).
 - **Kite write (long-term)** — equity order placement/cancel via Kite Connect, behind `MAGNUS_KITE_ORDERS_ENABLED`, static IP on the developer console, and a Telegram **CONFIRM** flow separate from wealth coaching. Probe script: `npm run kite:test-write` (`scripts/wealth/kite/test-write-endpoints.mts`). **Live probe (2026-08-03):** Coin MF writes (`POST/DELETE /mf/orders`, `/mf/sips`) return **403 Insufficient permission** — not available on this app/plan; equity `POST /orders/regular` blocked until **static IP** is configured; equity cancel auth works (404 on fake id). Do not build MF execution in Magnus unless Zerodha opens those APIs.
-- **Morning Brief does not read Google Calendar** — it reads the event log and LifeOS tables; empty
-  LifeOS sections are omitted when `dataAvailability` flags are false (no “unknown” filler).
+- **Morning Brief reads Google Calendar** — shared `buildDayContext()` (Step 6) loads calendar +
+  reminders for today; compact brief JSON includes `calendarToday` and `todayReminders` when connected.
+  Event log commitments remain in `todayCommitments`. Meals omitted in minimal mode.
 - **Activity/inactivity proactive** — `stale_list_nudge` (queued joy/media items idle 14+ days) and
   `chat_inactivity` (no Telegram messages for 3+ days) are opt-in catalog kinds with LLM gate+compose.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube (turn-handler smoke in `src/magnus.smoke.test.ts` only).
@@ -392,4 +394,4 @@ partial behaviour.
 
 ---
 
-**Last updated:** 2026-09-06 (PR #99 multi-user scoping + PR #100 accuracy Steps 0–4)
+**Last updated:** 2026-09-06 (accuracy Steps 5–7: read-before-write, buildDayContext, metamorphic_pass)

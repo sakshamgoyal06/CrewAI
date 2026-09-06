@@ -107,9 +107,11 @@ describe("runMagnusAgent", () => {
     expect(out.text).toBe("Booked gym for 7am.");
   });
 
-  it("moves an event by id, forwarding only the changed field", async () => {
+  it("moves an event by id after reading the calendar", async () => {
+    readCalendarMock.mockResolvedValue('- Tue 28 Jul 07:00–08:00 — Gym [id: evt_1]');
     updateEventMock.mockResolvedValue('Updated "Gym" — now Tue 28 Jul 08:00–09:00.');
     createMock
+      .mockResolvedValueOnce(toolReply("read_calendar", {}))
       .mockResolvedValueOnce(
         toolReply("update_calendar_event", {
           event_id: "evt_1",
@@ -120,6 +122,7 @@ describe("runMagnusAgent", () => {
 
     const out = await runMagnusAgent({ ...CTX, rawMessage: "move gym to 8am" });
 
+    expect(readCalendarMock).toHaveBeenCalled();
     expect(updateEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         eventId: "evt_1",
@@ -129,21 +132,42 @@ describe("runMagnusAgent", () => {
       }),
     );
     expect(out.text).toBe("Moved gym to 8am.");
-    expect(out.metadata.tools_used).toEqual(["update_calendar_event"]);
+    expect(out.metadata.tools_used).toEqual(["read_calendar", "update_calendar_event"]);
   });
 
-  it("deletes an event by id", async () => {
+  it("blocks calendar update without a prior read in the same turn", async () => {
+    createMock
+      .mockResolvedValueOnce(
+        toolReply("update_calendar_event", {
+          event_id: "evt_1",
+          start_iso: "2026-07-28T08:00:00",
+        }),
+      )
+      .mockResolvedValueOnce(textReply("I'll read the calendar first."));
+
+    const out = await runMagnusAgent({ ...CTX, rawMessage: "move gym to 8am" });
+
+    expect(updateEventMock).not.toHaveBeenCalled();
+    expect(out.metadata.tools_used).toEqual(["update_calendar_event"]);
+    expect(out.metadata.tool_outcomes?.[0]?.ok).toBe(false);
+  });
+
+  it("deletes an event by id after reading the calendar", async () => {
+    readCalendarMock.mockResolvedValue('- Tue 28 Jul 19:00–20:00 — Swimming [id: evt_2]');
     deleteEventMock.mockResolvedValue('Deleted "Swimming" (was Tue 28 Jul 19:00–20:00).');
     createMock
+      .mockResolvedValueOnce(toolReply("read_calendar", {}))
       .mockResolvedValueOnce(toolReply("delete_calendar_event", { event_id: "evt_2" }))
       .mockResolvedValueOnce(textReply("Cancelled swimming on Tuesday."));
 
     const out = await runMagnusAgent({ ...CTX, rawMessage: "cancel swimming tuesday" });
 
+    expect(readCalendarMock).toHaveBeenCalled();
     expect(deleteEventMock).toHaveBeenCalledWith(
       expect.objectContaining({ eventId: "evt_2", timeZone: "Asia/Kolkata" }),
     );
     expect(out.text).toBe("Cancelled swimming on Tuesday.");
+    expect(out.metadata.tools_used).toEqual(["read_calendar", "delete_calendar_event"]);
   });
 
   it("never leaks an event id into the reply", async () => {

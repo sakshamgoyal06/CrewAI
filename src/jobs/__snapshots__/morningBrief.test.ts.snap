@@ -12,6 +12,8 @@ exports[`buildMorningBriefUserMessage > matches snapshot (fixed now, no wall-clo
   "weeklyGoals": [],
   "todayCommitments": [],
   "todayMeals": [],
-  "headsUp": []
+  "headsUp": [],
+  "calendarToday": [],
+  "todayReminders": []
 }"
 `;

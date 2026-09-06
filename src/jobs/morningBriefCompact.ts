@@ -11,6 +11,15 @@ export type CompactCommitment = {
   status: string;
 };
 
+export type CompactReminder = {
+  at: string;
+  label: string;
+};
+
+export type CompactCalendarLine = {
+  line: string;
+};
+
 export type CompactMorningBriefPayload = {
   date: string;
   timeZone: string;
@@ -22,6 +31,10 @@ export type CompactMorningBriefPayload = {
   todayCommitments: CompactCommitment[];
   todayMeals: Array<{ slot: string; title: string }>;
   headsUp: string[];
+  /** Google Calendar lines for today when connected (Step 6). */
+  calendarToday: CompactCalendarLine[];
+  /** Proactive reminders scheduled for today. */
+  todayReminders: CompactReminder[];
 };
 
 function eventLocalDateKey(
@@ -137,6 +150,23 @@ export function buildCompactMorningBriefPayload(
   // Cap heads-up items; commitments list is the main plan view.
   const limitedHeadsUp = headsUp.slice(0, 2);
 
+  const calendarToday =
+    bundle.dayContext?.calendarText &&
+    !bundle.dayContext.calendarText.startsWith("Nothing on Google Calendar")
+      ? bundle.dayContext.calendarText
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+          .slice(0, 8)
+          .map((line) => ({ line }))
+      : [];
+
+  const todayReminders =
+    bundle.dayContext?.reminders.slice(0, 6).map((r) => ({
+      at: r.at,
+      label: r.label,
+    })) ?? [];
+
   return {
     date: todayKey,
     timeZone: bundle.timeZone,
@@ -148,5 +178,7 @@ export function buildCompactMorningBriefPayload(
     todayCommitments: todayCommitments.slice(0, 8),
     todayMeals,
     headsUp: limitedHeadsUp,
+    calendarToday,
+    todayReminders,
   };
 }

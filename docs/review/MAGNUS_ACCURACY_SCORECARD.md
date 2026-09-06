@@ -1,6 +1,6 @@
 # Magnus accuracy scorecard
 
-**Generated:** 2026-09-06 (baseline)  
+**Generated:** 2026-09-06 (Steps 5–7)  
 **Command:** `npm run test:accuracy`  
 **Plan:** [`MAGNUS_ACCURACY_PLAN.md`](./MAGNUS_ACCURACY_PLAN.md)
 
@@ -15,16 +15,19 @@
 | minimal_gate | 100% | 100% | ✓ |
 | fault_honesty | 100% | 100% | ✓ |
 | metamorphic_design | 100% | 100% | ✓ |
+| metamorphic_pass | 100% | 98% | ✓ |
+| read_before_write | 100% | 100% | ✓ |
 
 ## Suite composition
 
 | Layer | File | Cases | What it proves |
 |-------|------|-------|----------------|
-| **Accuracy suite** | `magnusAccuracySuite.test.ts` | 112 | Minimal-mode routing, tools, parked gates, metamorphic paraphrases, action integrity |
+| **Accuracy suite** | `magnusAccuracySuite.test.ts` | 130 | Routing, tools, parked gates, read-before-write, metamorphic paraphrases |
 | **Golden path** | `magnusGoldenPath.test.ts` | 100 | Full catalog wiring (all pillars, fixture LLM) |
 | **Catalog integrity** | `catalogIntegrity.test.ts` | 7 | Capability ↔ tool map |
 | **Chat NL suite** | `chatMessageTestSuite.test.ts` | 1000 | Structural coverage + production issue tags |
 | **Action integrity** | `actionIntegrity.test.ts` | 20+ | False-save blocking |
+| **Day context** | `buildDayContext.test.ts` | 1 | Shared calendar/reminder load for brief + overview |
 
 ## Live eval (Step 8 — not CI yet)
 

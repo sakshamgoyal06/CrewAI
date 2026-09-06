@@ -74,7 +74,7 @@ const MISLEADING_LINE_RE =
   /^(?:added|logged|saved|created|scheduled|all done|done)\b|^`checkin:/i;
 
 const TOOL_FAILURE_RE =
-  /^(?:Could not\b|Tool error:|Unknown tool:|Nothing to log|Invalid\b|You're not\b|No lists yet|Check-ins list is not available|Title is required|date must be|Unknown list\b|Item .+ not found)/i;
+  /^(?:Read first:|Could not\b|Tool error:|Unknown tool:|Nothing to log|Invalid\b|You're not\b|No lists yet|Check-ins list is not available|Title is required|date must be|Unknown list\b|Item .+ not found)/i;
 
 /** Classify a Magnus tool return string as success vs failure. */
 export function classifyToolResult(output: string): boolean {

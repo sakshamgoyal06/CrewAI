@@ -154,9 +154,9 @@ Each step lists **work**, **tests to add/update**, and **success gate** (all gat
 
 **Success gate**
 
-- [ ] 100% `read_before_write` cases pass.
-- [ ] Golden path calendar delete/update scenarios still pass with read-then-write fixture.
-- [ ] No increase in false blocks on create-only flows.
+- [x] 100% `read_before_write` cases pass.
+- [x] Golden path calendar delete/update scenarios still pass with read-then-write fixture.
+- [x] No increase in false blocks on create-only flows.
 
 ---
 
@@ -175,9 +175,9 @@ Each step lists **work**, **tests to add/update**, and **success gate** (all gat
 
 **Success gate**
 
-- [ ] `minimal_gate` 100% on accuracy suite.
+- [x] `minimal_gate` 100% on accuracy suite.
 - [ ] Owner manual sim: 7-day minimal-only usage checklist signed off (see `CONNECTION_SMOKE_MATRIX.md`).
-- [ ] Brief includes calendar block when `google_calendar_connected`.
+- [x] Brief includes calendar block when `google_calendar_connected`.
 
 ---
 
@@ -196,7 +196,7 @@ Each step lists **work**, **tests to add/update**, and **success gate** (all gat
 
 **Success gate**
 
-- [ ] Fixture metamorphic: ≥ 98% same routing across paraphrases in group.
+- [x] Fixture metamorphic: ≥ 98% same routing across paraphrases in group.
 - [ ] Live (optional): `pass^3` ≥ 85% on 10 highest-traffic groups.
 - [ ] Document failures in hardening log with root cause.
 

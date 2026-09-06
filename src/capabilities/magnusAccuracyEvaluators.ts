@@ -2,6 +2,7 @@
  * Pure evaluators for the Magnus accuracy suite — no I/O.
  */
 import { enforceActionIntegrity } from "../agents/routing/actionIntegrity.js";
+import { checkReadBeforeWrite } from "../agents/routing/readBeforeWrite.js";
 import type { OrchestratorReply } from "../agents/magnusOrchestrator.js";
 import type { GoldenPathScenario } from "./goldenPathScenarios.js";
 import {
@@ -13,6 +14,8 @@ import {
   type MagnusAccuracyReport,
   type MagnusMetamorphicGroup,
 } from "./magnusAccuracySuite.types.js";
+import { METAMORPHIC_PARAPHRASE_GROUPS } from "./magnusAccuracyScenarios.js";
+import type { ReadBeforeWriteCase } from "./magnusAccuracyScenarios.js";
 
 const VOICE_LEAK_RE =
   /\b(specialist|routing to|handing (?:this )?to|pillar agent|department agent|HealthComposite|Wealth specialist)\b/i;
@@ -142,6 +145,40 @@ export function evaluateMetamorphicGroup(group: MagnusMetamorphicGroup): MagnusA
   return results;
 }
 
+export function evaluateReadBeforeWriteCase(input: ReadBeforeWriteCase): MagnusAccuracyCaseResult {
+  const result = checkReadBeforeWrite(input.writeTool, input.priorReads);
+  const blocked = result.blocked;
+  const failures: string[] = [];
+  if (blocked !== input.expectBlocked) {
+    failures.push(`blocked: expected ${input.expectBlocked}, got ${blocked}`);
+  }
+  return {
+    id: input.id,
+    dimension: "read_before_write",
+    passed: failures.length === 0,
+    failures,
+  };
+}
+
+export function computeMetamorphicPass(
+  results: MagnusAccuracyCaseResult[],
+): number {
+  const byId = new Map(results.map((r) => [r.id, r]));
+  let groupsPassed = 0;
+  for (const group of METAMORPHIC_PARAPHRASE_GROUPS) {
+    const paraphraseResults = group.paraphrases.map((phrase) =>
+      byId.get(`${group.id}:${phrase.slice(0, 16)}`),
+    );
+    if (paraphraseResults.length > 0 && paraphraseResults.every((r) => r?.passed)) {
+      groupsPassed += 1;
+    }
+  }
+  if (METAMORPHIC_PARAPHRASE_GROUPS.length === 0) {
+    return 1;
+  }
+  return groupsPassed / METAMORPHIC_PARAPHRASE_GROUPS.length;
+}
+
 export function evaluateActionIntegrityCase(input: {
   id: string;
   text: string;
@@ -228,6 +265,7 @@ export function buildAccuracyReport(input: {
   const minimalRows = byDimension.get("minimal_gate") ?? [];
   const faultRows = byDimension.get("fault_tolerance") ?? [];
   const morphRows = byDimension.get("metamorphic_design") ?? [];
+  const rbwRows = byDimension.get("read_before_write") ?? [];
 
   const rate = (rows: MagnusAccuracyCaseResult[]) => {
     if (rows.length === 0) return 1;
@@ -243,6 +281,8 @@ export function buildAccuracyReport(input: {
     minimalGate: rate(minimalRows),
     faultHonesty: rate(faultRows),
     metamorphicDesign: rate(morphRows),
+    metamorphicPass: computeMetamorphicPass(input.results),
+    readBeforeWrite: rate(rbwRows),
   };
 
   const allGatesPassed =
@@ -252,7 +292,9 @@ export function buildAccuracyReport(input: {
     metrics.voiceCoherence >= gates.voiceCoherence &&
     metrics.minimalGate >= gates.minimalGate &&
     metrics.faultHonesty >= gates.faultHonesty &&
-    metrics.metamorphicDesign >= gates.metamorphicDesign;
+    metrics.metamorphicDesign >= gates.metamorphicDesign &&
+    metrics.metamorphicPass >= gates.metamorphicPass &&
+    metrics.readBeforeWrite >= gates.readBeforeWrite;
 
   return {
     generatedAt: new Date().toISOString(),
@@ -280,6 +322,8 @@ function dimensionToGateKey(dim: AccuracyDimension): keyof AccuracyGateThreshold
       return "faultHonesty";
     case "metamorphic_design":
       return "metamorphicDesign";
+    case "read_before_write":
+      return "readBeforeWrite";
     case "catalog":
       return "catalogCoherence";
     default:
@@ -306,6 +350,8 @@ export function formatAccuracyReportMarkdown(report: MagnusAccuracyReport): stri
     `| minimal_gate | ${pct(report.metrics.minimalGate)} | ${pct(report.gates.minimalGate)} | ${report.metrics.minimalGate >= report.gates.minimalGate ? "✓" : "✗"} |`,
     `| fault_honesty | ${pct(report.metrics.faultHonesty)} | ${pct(report.gates.faultHonesty)} | ${report.metrics.faultHonesty >= report.gates.faultHonesty ? "✓" : "✗"} |`,
     `| metamorphic_design | ${pct(report.metrics.metamorphicDesign)} | ${pct(report.gates.metamorphicDesign)} | ${report.metrics.metamorphicDesign >= report.gates.metamorphicDesign ? "✓" : "✗"} |`,
+    `| metamorphic_pass | ${pct(report.metrics.metamorphicPass)} | ${pct(report.gates.metamorphicPass)} | ${report.metrics.metamorphicPass >= report.gates.metamorphicPass ? "✓" : "✗"} |`,
+    `| read_before_write | ${pct(report.metrics.readBeforeWrite)} | ${pct(report.gates.readBeforeWrite)} | ${report.metrics.readBeforeWrite >= report.gates.readBeforeWrite ? "✓" : "✗"} |`,
     "",
     "## By dimension",
     "",

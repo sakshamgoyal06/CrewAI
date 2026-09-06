@@ -25,6 +25,8 @@ export type AccuracyGateThresholds = {
   minimalGate: number;
   faultHonesty: number;
   metamorphicDesign: number;
+  metamorphicPass: number;
+  readBeforeWrite: number;
   catalogCoherence: number;
 };
 
@@ -36,6 +38,8 @@ export const DEFAULT_ACCURACY_GATES: AccuracyGateThresholds = {
   minimalGate: 1,
   faultHonesty: 1,
   metamorphicDesign: 1,
+  metamorphicPass: 0.98,
+  readBeforeWrite: 1,
   catalogCoherence: 1,
 };
 
@@ -95,6 +99,8 @@ export type MagnusAccuracyReport = {
     minimalGate: number;
     faultHonesty: number;
     metamorphicDesign: number;
+    metamorphicPass: number;
+    readBeforeWrite: number;
   };
   allGatesPassed: boolean;
   failures: MagnusAccuracyCaseResult[];

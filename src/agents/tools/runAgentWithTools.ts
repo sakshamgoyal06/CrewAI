@@ -14,6 +14,7 @@ import { buildSpecialistIdentity } from "../promptIdentity.js";
 import type { AgentContext, AgentResult } from "../types.js";
 import { OPERATIONS_TOOLS, runOperationsTool } from "../magnusAgent.js";
 import { classifyToolResult, type ToolOutcome } from "../routing/actionIntegrity.js";
+import { checkReadBeforeWrite } from "../routing/readBeforeWrite.js";
 import { PILLAR_MODEL } from "../pillarSpecialist.js";
 import {
   appendInternalLoopTools,
@@ -114,12 +115,15 @@ export async function runAgentWithTools(input: RunAgentWithToolsInput): Promise<
     messages.push({ role: "assistant", content: msg.content });
     const results = [];
     for (const use of uses) {
+      const guard = checkReadBeforeWrite(use.name, toolsUsed);
       toolsUsed.push(use.name);
-      const rawOut = await runOperationsTool(
-        use.name,
-        (use.input ?? {}) as Record<string, unknown>,
-        input.ctx,
-      );
+      const rawOut = guard.blocked
+        ? guard.message
+        : await runOperationsTool(
+            use.name,
+            (use.input ?? {}) as Record<string, unknown>,
+            input.ctx,
+          );
       const out = await maybeSpillToolResult({
         userProfileId: input.ctx.userProfileId,
         toolName: use.name,

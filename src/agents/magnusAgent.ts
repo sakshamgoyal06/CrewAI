@@ -68,6 +68,7 @@ import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
 import { magnusDefaultToolAllowlist } from "../config/minimalMode.js";
 import { classifyToolResult, type ToolOutcome } from "./routing/actionIntegrity.js";
+import { checkReadBeforeWrite } from "./routing/readBeforeWrite.js";
 import { manageProactiveMessages } from "../proactive/manageProactiveTool.js";
 import { manageReminders } from "../proactive/manageRemindersTool.js";
 import {
@@ -1483,12 +1484,11 @@ export async function runMagnusAgent(
     messages.push({ role: "assistant", content: msg.content });
     const results = [];
     for (const use of uses) {
+      const guard = checkReadBeforeWrite(use.name, toolsUsed);
       toolsUsed.push(use.name);
-      const rawOut = await runTool(
-        use.name,
-        (use.input ?? {}) as Record<string, unknown>,
-        ctx,
-      );
+      const rawOut = guard.blocked
+        ? guard.message
+        : await runTool(use.name, (use.input ?? {}) as Record<string, unknown>, ctx);
       const out = await maybeSpillToolResult({
         userProfileId: ctx.userProfileId,
         toolName: use.name,
