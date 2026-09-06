@@ -141,7 +141,7 @@ export async function persistToolArtifact(
   body: string,
   deps: { redis?: RedisLike } = {},
 ): Promise<string> {
-  const sb = deps.redis ?? defaultRedis;
+  const sb = deps.redis ?? (defaultRedis as RedisLike);
   const config = toolResultSpillConfig();
   const artifactId = randomUUID();
   const payload: StoredArtifact = {
@@ -197,15 +197,15 @@ export async function readToolArtifact(input: {
   deps?: { redis?: RedisLike };
 }): Promise<string> {
   const config = toolResultSpillConfig();
-  const sb = input.deps?.redis ?? defaultRedis;
-  const raw = await sb.get(artifactKey(input.userProfileId, input.artifactId.trim()));
-  if (!raw) {
+  const sb = input.deps?.redis ?? (defaultRedis as RedisLike);
+  const rawValue = await sb.get(artifactKey(input.userProfileId, input.artifactId.trim()));
+  if (typeof rawValue !== "string" || !rawValue) {
     return `Artifact not found or expired: ${input.artifactId}`;
   }
 
   let stored: StoredArtifact;
   try {
-    stored = JSON.parse(raw) as StoredArtifact;
+    stored = JSON.parse(rawValue) as StoredArtifact;
   } catch {
     return `Artifact ${input.artifactId} is corrupted.`;
   }
