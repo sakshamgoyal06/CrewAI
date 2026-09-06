@@ -380,7 +380,7 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
       telegram: "production strip-down",
       status: minimalMode ? "ready" : "off",
       detail: minimalMode
-        ? "Only calendar, reminders, Hevy/fitness, and core routing are live. Set MAGNUS_MINIMAL_MODE=false to restore full Magnus."
+        ? "Calendar, reminders, lists, YouTube, morning brief, Hevy/fitness, and core routing. Set MAGNUS_MINIMAL_MODE=false to restore full Magnus."
         : "Full Magnus — all parked modules may run when configured.",
       missing: minimalMode ? [] : ["MAGNUS_MINIMAL_MODE"],
     },
@@ -390,7 +390,7 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
       telegram: "plain text",
       status: "ready",
       detail: minimalMode
-        ? "GENERAL + HEALTH (fitness/Hevy only). Wealth, Happiness, Wisdom parked."
+        ? "GENERAL (calendar, lists, YouTube, reminders, morning brief) + HEALTH (fitness/Hevy only). Wealth, Happiness, Wisdom parked."
         : "Magnus answers everything; health, wealth, happiness and wisdom are routed silently.",
       missing: [],
     },

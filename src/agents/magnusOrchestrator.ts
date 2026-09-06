@@ -97,30 +97,28 @@ export async function runOrchestratorReply(input: {
     });
   }
 
-  if (!isMinimalMode()) {
-    const winConditionTurn = await handleWinConditionPendingTurn({
+  const winConditionTurn = await handleWinConditionPendingTurn({
+    userProfileId: input.userProfileId,
+    message: input.userMessage,
+  });
+  if (winConditionTurn.handled) {
+    const ctx: AgentContext = {
       userProfileId: input.userProfileId,
-      message: input.userMessage,
+      telegramUserId: input.telegramUserId,
+      timezone: input.timezone,
+      rawMessage: input.userMessage,
+      intent: "GENERAL",
+    };
+    return finalizeOrchestratorReply(ctx, {
+      replyText: winConditionTurn.replyText,
+      intent: "GENERAL",
+      delegatedAgent: "Magnus",
+      agentMetadata: {
+        ...winConditionTurn.metadata,
+        pillar_compose: false,
+        magnus_voice_finalized: true,
+      },
     });
-    if (winConditionTurn.handled) {
-      const ctx: AgentContext = {
-        userProfileId: input.userProfileId,
-        telegramUserId: input.telegramUserId,
-        timezone: input.timezone,
-        rawMessage: input.userMessage,
-        intent: "GENERAL",
-      };
-      return finalizeOrchestratorReply(ctx, {
-        replyText: winConditionTurn.replyText,
-        intent: "GENERAL",
-        delegatedAgent: "Magnus",
-        agentMetadata: {
-          ...winConditionTurn.metadata,
-          pillar_compose: false,
-          magnus_voice_finalized: true,
-        },
-      });
-    }
   }
 
   const reversibleTurn = await handleReversibleActionTurn({

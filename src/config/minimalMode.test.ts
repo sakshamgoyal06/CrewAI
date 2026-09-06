@@ -39,10 +39,13 @@ describe("minimalMode", () => {
       "day_overview",
       "calendar",
       "event_log",
+      "youtube",
+      "lists",
       "reminders",
       "conversation",
     ]);
-    expect(isParkedGeneralCapability("youtube")).toBe(true);
+    expect(isParkedGeneralCapability("youtube")).toBe(false);
+    expect(isParkedGeneralCapability("notion")).toBe(true);
 
     const health = filterCapabilityCatalog(HEALTH_CAPABILITY_CATALOG);
     expect(health.capabilities.map((c) => c.id)).toEqual(["hevy_write", "fitness", "generic_ack"]);
@@ -54,20 +57,22 @@ describe("minimalMode", () => {
     expect(isParkedIntent("HEALTH")).toBe(false);
   });
 
-  it("limits proactive jobs to reminders and gym reconcile", () => {
+  it("allows reminders, gym reconcile, and morning brief proactive jobs", () => {
     process.env.MAGNUS_MINIMAL_MODE = "true";
     expect(isMinimalProactiveJobEnabled("event_reminder")).toBe(true);
     expect(isMinimalProactiveJobEnabled("gym_hevy_reconcile")).toBe(true);
-    expect(isMinimalProactiveJobEnabled("morning_brief")).toBe(false);
+    expect(isMinimalProactiveJobEnabled("morning_brief")).toBe(true);
     expect(isMinimalProactiveJobEnabled("proactive_subscriptions")).toBe(false);
   });
 
-  it("exposes a magnus tool allowlist", () => {
+  it("exposes a magnus tool allowlist with lists and youtube", () => {
     process.env.MAGNUS_MINIMAL_MODE = "true";
     const allowlist = magnusDefaultToolAllowlist();
     expect(allowlist).toBeDefined();
     expect(allowlist).toContain("manage_reminders");
-    expect(allowlist).not.toContain("youtube_search");
+    expect(allowlist).toContain("youtube_search");
+    expect(allowlist).toContain("list_items");
+    expect(allowlist).not.toContain("connect_notion");
     expect(MINIMAL_MAGNUS_TOOL_NAMES.has("read_calendar")).toBe(true);
   });
 });

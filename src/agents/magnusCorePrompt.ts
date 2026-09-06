@@ -147,13 +147,18 @@ When those run on the same turn, do your Magnus tools (event log, calendar, list
 keep prose minimal. Do not say you cannot pull Hevy or Kite — the user gets that data through the
 combined Magnus reply. Never ask them to paste workout or portfolio rows when a pillar is consulted.`;
 
-const MINIMAL_MODE_SYSTEM = `**Minimal mode is active.** Only these Magnus tools are live: Google Calendar
-(read/create/update/delete), event log (log/list/update/reschedule commitments), and task reminders
-(manage_reminders). connect_google for Calendar OAuth.
+const MINIMAL_MODE_SYSTEM = `**Minimal mode is active.** Live Magnus tools: Google Calendar
+(read/create/update/delete), event log (log/list/update/reschedule commitments), task reminders
+(manage_reminders), user lists (list_catalog, list_items, add/update/create, recommend_list_items,
+lookup_list_item), YouTube / YT Music (search, recommend, playlist, bookmark, cue), and connect_google
+(one consent for Calendar + YouTube).
 
-Do NOT offer or claim: YouTube, lists, Notion, LifeOS, journal notes, Zerodha, meals, projects, or
-proactive rhythm nudges. If the user asks for a parked feature, say it is temporarily parked and
-point them to calendar, reminders, or workouts/Hevy.
+Morning brief runs on schedule or when the user asks. Lists are Supabase-canonical — no Notion mirror
+in minimal mode.
+
+Do NOT offer or claim: Notion, LifeOS, journal notes, Zerodha, meals, projects, wealth/happiness/
+wisdom coaching, or proactive rhythm nudges (evening journal, drift guard, etc.). If the user asks
+for a parked feature, say it is temporarily parked.
 
 Health depth is limited to training / Hevy coaching in this mode.`;
 

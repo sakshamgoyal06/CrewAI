@@ -1,9 +1,10 @@
 /**
  * Minimal Magnus — production strip-down while core paths are stabilized.
  *
- * Keeps: sub-agent parse → execute → compose, calendar, Hevy/fitness, reminders, logging.
- * Parks: meals, YouTube, Notion, lists, LifeOS, projects, wealth/happiness/wisdom depth,
- * vision/photos, morning brief, rhythm subscriptions, nutrition nightly, and most proactive nudges.
+ * Keeps: sub-agent parse → execute → compose, calendar, Hevy/fitness, reminders, lists,
+ * YouTube, morning brief, logging.
+ * Parks: meals, Notion, LifeOS, projects, wealth/happiness/wisdom depth, vision/photos,
+ * rhythm subscriptions, nutrition nightly, and most proactive nudges.
  *
  * Set MAGNUS_MINIMAL_MODE=false on the host to restore full Magnus.
  */
@@ -20,6 +21,8 @@ const MINIMAL_GENERAL_CAPABILITIES = new Set([
   "event_log",
   "reminders",
   "day_overview",
+  "youtube",
+  "lists",
   "conversation",
   "pillar_consultation",
 ]);
@@ -34,18 +37,33 @@ export const MINIMAL_MAGNUS_TOOL_NAMES = new Set([
   "delete_calendar_event",
   "connect_google",
   "connect_calendar",
+  "connect_youtube",
   "log_event",
   "update_event",
   "reschedule_event",
   "list_events",
   "manage_reminders",
+  "youtube_search",
+  "youtube_recommend",
+  "youtube_playlist",
+  "youtube_bookmark",
+  "youtube_cue",
+  "list_catalog",
+  "list_items",
+  "lookup_list_item",
+  "add_list_item",
+  "update_list_item",
+  "create_list",
+  "recommend_list_items",
 ]);
 
-const MINIMAL_PROACTIVE_JOBS = new Set(["event_reminder", "gym_hevy_reconcile"]);
+const MINIMAL_PROACTIVE_JOBS = new Set([
+  "event_reminder",
+  "gym_hevy_reconcile",
+  "morning_brief",
+]);
 
 const PARKED_GENERAL_CAPABILITY_LABELS: Record<string, string> = {
-  youtube: "YouTube / YT Music",
-  lists: "Lists",
   lifeos: "LifeOS logging",
   notion: "Notion",
   proactive: "Proactive rhythm nudges",
@@ -114,7 +132,8 @@ export function filterCapabilityCatalog(catalog: CapabilityCatalog): CapabilityC
         {
           id: "conversation",
           summary: "Feature parked in minimal mode",
-          disambiguation: "Direct the user to calendar, reminders, or workouts.",
+          disambiguation:
+            "Direct the user to calendar, reminders, lists, YouTube, workouts, or morning brief.",
         },
       ],
     };
@@ -151,7 +170,8 @@ export function magnusDefaultToolAllowlist(): string[] | undefined {
 export function parkedFeatureReply(feature: string): string {
   return (
     `**${feature}** is temporarily parked while Magnus runs in minimal mode. ` +
-    "I can still help with **calendar**, **reminders**, **workouts / Hevy**, and general conversation. " +
+    "I can still help with **calendar**, **reminders**, **lists**, **YouTube**, **morning brief**, " +
+    "**workouts / Hevy**, and general conversation. " +
     "Set `MAGNUS_MINIMAL_MODE=false` on the host to restore full Magnus."
   );
 }

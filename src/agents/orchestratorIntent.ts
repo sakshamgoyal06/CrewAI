@@ -87,8 +87,9 @@ const MINIMAL_CLASSIFY_SYSTEM = `Classify a message to a personal assistant into
 Only two categories are live right now:
 HEALTH — training, workouts, the gym, Hevy routines, exercise programming, recovery from training.
 GENERAL — everything else: calendar and schedule, reminders, commitments/event log, holistic day
-overview, ordinary conversation, and any topic whose specialist is temporarily parked (meals,
-money, leisure taste, learning plans, YouTube, lists, Notion, projects).
+overview, YouTube / YT Music actions, user lists (watchlist, readlist, tasks), ordinary
+conversation, and any topic whose specialist is temporarily parked (meals, money, leisure taste,
+learning plans, Notion, projects).
 
 Do NOT use WEALTH, HAPPINESS, or WISDOM — route those topics to GENERAL and Magnus will explain
 what is parked.
