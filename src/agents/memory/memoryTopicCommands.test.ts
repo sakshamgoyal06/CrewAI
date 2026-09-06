@@ -9,13 +9,15 @@ import {
 vi.mock("./memoryTopics.js", () => ({
   loadMemoryTopics: vi.fn(),
   rememberMemoryTopic: vi.fn(),
-  deleteMemoryTopicsMatching: vi.fn(),
+  deleteMemoryTopicByKey: vi.fn(),
+  resolveForgetTopics: vi.fn(),
 }));
 
 import {
-  deleteMemoryTopicsMatching,
+  deleteMemoryTopicByKey,
   loadMemoryTopics,
   rememberMemoryTopic,
+  resolveForgetTopics,
 } from "./memoryTopics.js";
 
 describe("parseMemoryTopicCommand", () => {
@@ -89,13 +91,75 @@ describe("tryHandleMemoryTopicCommand", () => {
   });
 
   it("forgets matching topics", async () => {
-    vi.mocked(deleteMemoryTopicsMatching).mockResolvedValue(2);
+    vi.mocked(resolveForgetTopics).mockResolvedValue({
+      status: "clear",
+      matches: [
+        {
+          topic: {
+            id: "1",
+            user_profile_id: "u",
+            topic_key: "schedule:gym",
+            label: "Gym",
+            body: "Gym",
+            source: "user",
+            created_at: "",
+            updated_at: "",
+          },
+          score: 0.9,
+          signals: { phrase: 1, topicKey: 0, tokenCoverage: 1, semantic: 0 },
+        },
+      ],
+    });
+    vi.mocked(deleteMemoryTopicByKey).mockResolvedValue(true);
 
     const result = await tryHandleMemoryTopicCommand("u", "forget gym");
     expect(result).toEqual({
       handled: true,
-      replyText: 'Forgot 2 memory topics matching "gym".',
+      replyText: 'Forgot 1 memory topic matching "gym".',
     });
+  });
+
+  it("asks for disambiguation when multiple topics match", async () => {
+    vi.mocked(resolveForgetTopics).mockResolvedValue({
+      status: "ambiguous",
+      matches: [
+        {
+          topic: {
+            id: "1",
+            user_profile_id: "u",
+            topic_key: "a",
+            label: "Gym morning",
+            body: "",
+            source: null,
+            created_at: "",
+            updated_at: "",
+          },
+          score: 0.7,
+          signals: { phrase: 0, topicKey: 0, tokenCoverage: 1, semantic: 0 },
+        },
+        {
+          topic: {
+            id: "2",
+            user_profile_id: "u",
+            topic_key: "b",
+            label: "Gym evening",
+            body: "",
+            source: null,
+            created_at: "",
+            updated_at: "",
+          },
+          score: 0.68,
+          signals: { phrase: 0, topicKey: 0, tokenCoverage: 1, semantic: 0 },
+        },
+      ],
+    });
+
+    const result = await tryHandleMemoryTopicCommand("u", "forget gym");
+    expect(result.handled).toBe(true);
+    if (result.handled) {
+      expect(result.replyText).toContain("several memory topics");
+      expect(result.replyText).toContain("Gym morning");
+    }
   });
 
   it("returns not handled for normal chat", async () => {

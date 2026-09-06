@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+vi.mock("./memoryEmbeddings.js", () => ({
+  searchMemoryEmbeddings: vi.fn().mockResolvedValue([]),
+  indexTopicEmbedding: vi.fn().mockResolvedValue(undefined),
+  indexMemoryChunk: vi.fn().mockResolvedValue(undefined),
+}));
 
 import {
   deriveTopicKey,
