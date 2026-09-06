@@ -2,11 +2,10 @@
  * Execute one GENERAL plan step — Magnus with capability-filtered tools.
  */
 import {
-  isMinimalMode,
   isParkedGeneralCapability,
   parkedGeneralCapabilityReply,
+  intersectMagnusToolNames,
 } from "../../../config/minimalMode.js";
-import { intersectMagnusToolNames } from "../../../config/minimalMode.js";
 import { runMagnusAgent } from "../../magnusAgent.js";
 import type { AgentContext, AgentResult } from "../../types.js";
 import { GENERAL_CAPABILITY_TOOLS } from "./catalogs/generalCatalog.js";

@@ -79,7 +79,7 @@ export async function executeDayOverviewCapability(
       : getPlanEntriesForDate(ctx.userProfileId, localDate),
     isMinimalMode() ? Promise.resolve([]) : getSessionsForLocalDate(ctx.userProfileId, localDate),
     isMinimalMode()
-      ? Promise.resolve({ totalKcal: 0, proteinG: 0, carbsG: 0, fatG: 0 })
+      ? Promise.resolve({ date: localDate, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 })
       : sumMealLogsForDay(ctx.userProfileId, localDate),
     listUpcomingReminders({
       userProfileId: ctx.userProfileId,
@@ -95,13 +95,10 @@ export async function executeDayOverviewCapability(
       ? formatReminderList(dayReminders, tz).replace(/^Upcoming reminders:\n/, "")
       : "No reminders set for this day.";
 
-  const plannedMealsText = formatPlanDay(mealEntries, label, localDate);
-  const loggedMealsText = formatLoggedMealsDay(
-    loggedSessions,
-    loggedDayTotals,
-    label,
-    localDate,
-  );
+  const plannedMealsText = isMinimalMode() ? "" : formatPlanDay(mealEntries, label, localDate);
+  const loggedMealsText = isMinimalMode()
+    ? ""
+    : formatLoggedMealsDay(loggedSessions, loggedDayTotals, label, localDate);
 
   const sections = [
     `**${label}** (${localDate}, ${tzAbbrev})`,
