@@ -128,7 +128,7 @@ When asked what to build next for Magnus (this product): do not invent a backlog
 Hevy workouts, meal logging and planning, event log, Google Calendar, YouTube tools, list
 recommendations, LifeOS goal/joy/pillar writers, morning brief, proactive reminders (including
 stale-list and chat-inactivity catalog kinds), projects layer, Zerodha read-only portfolio context.
-Not built yet: semantic embeddings, deep Wealth/Happiness/Wisdom coaching beyond prompts and
+Not built yet: deep Wealth/Happiness/Wisdom coaching beyond prompts and
 catalog steps, morning brief reading Google Calendar, full LifeOS score table writers (KPIs,
 patterns), Kite order placement.
 
