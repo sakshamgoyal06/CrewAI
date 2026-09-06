@@ -1,3 +1,4 @@
+import { isMinimalMode, parkedFeatureReply } from "../../config/minimalMode.js";
 import type { AgentContext, AgentResult, DepartmentAgent } from "../types.js";
 import {
   getMealLogPending,
@@ -20,6 +21,16 @@ function pendingConfirmationPlan(): ReturnType<typeof planFromSingleCapability> 
 }
 
 export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult> {
+  if (isMinimalMode()) {
+    const mealLogPending = await getMealLogPending(ctx.userProfileId);
+    if (mealLogPending) {
+      return {
+        text: parkedFeatureReply("Meals & nutrition"),
+        metadata: { parked: "meals", pillar_compose: false, magnus_voice_finalized: true },
+      };
+    }
+  }
+
   const healthRow = await fetchUserHealthProfile(ctx.userProfileId);
   const healthPreferences = formatHealthPreferencesForPrompt(healthRow);
   const { block: healthReferenceBlock } = await loadHealthReferenceBlock(ctx.userProfileId);
@@ -31,6 +42,7 @@ export async function routeHealthMessage(ctx: AgentContext): Promise<AgentResult
 
   const mealLogPending = await getMealLogPending(ctx.userProfileId);
   if (
+    !isMinimalMode() &&
     mealLogPending &&
     (isMealLogConfirmationYes(ctx.rawMessage) || isMealLogConfirmationNo(ctx.rawMessage))
   ) {

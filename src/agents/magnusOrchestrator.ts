@@ -6,6 +6,14 @@
  */
 import type { Intent } from "../intent.js";
 import { logger } from "../logger.js";
+import {
+  isMealRelatedTurn,
+  isMinimalMode,
+  isParkedIntent,
+  magnusDefaultToolAllowlist,
+  parkedFeatureReply,
+  parkedIntentReply,
+} from "../config/minimalMode.js";
 import { runMagnusAgent } from "./magnusAgent.js";
 import { executeGeneralStrategy } from "./routing/pillarStrategy/executeGeneralStrategy.js";
 import { resolveIntentNaturalLanguage } from "./orchestratorIntent.js";
@@ -69,11 +77,7 @@ export async function runOrchestratorReply(input: {
   displayName?: string;
   mealPhoto?: { fileId: string; caption?: string | null };
 }): Promise<OrchestratorReply> {
-  const winConditionTurn = await handleWinConditionPendingTurn({
-    userProfileId: input.userProfileId,
-    message: input.userMessage,
-  });
-  if (winConditionTurn.handled) {
+  if (isMinimalMode() && input.mealPhoto?.fileId) {
     const ctx: AgentContext = {
       userProfileId: input.userProfileId,
       telegramUserId: input.telegramUserId,
@@ -82,15 +86,41 @@ export async function runOrchestratorReply(input: {
       intent: "GENERAL",
     };
     return finalizeOrchestratorReply(ctx, {
-      replyText: winConditionTurn.replyText,
+      replyText: parkedFeatureReply("Photo / vision"),
       intent: "GENERAL",
       delegatedAgent: "Magnus",
       agentMetadata: {
-        ...winConditionTurn.metadata,
+        parked: "photo_vision",
         pillar_compose: false,
         magnus_voice_finalized: true,
       },
     });
+  }
+
+  if (!isMinimalMode()) {
+    const winConditionTurn = await handleWinConditionPendingTurn({
+      userProfileId: input.userProfileId,
+      message: input.userMessage,
+    });
+    if (winConditionTurn.handled) {
+      const ctx: AgentContext = {
+        userProfileId: input.userProfileId,
+        telegramUserId: input.telegramUserId,
+        timezone: input.timezone,
+        rawMessage: input.userMessage,
+        intent: "GENERAL",
+      };
+      return finalizeOrchestratorReply(ctx, {
+        replyText: winConditionTurn.replyText,
+        intent: "GENERAL",
+        delegatedAgent: "Magnus",
+        agentMetadata: {
+          ...winConditionTurn.metadata,
+          pillar_compose: false,
+          magnus_voice_finalized: true,
+        },
+      });
+    }
   }
 
   const reversibleTurn = await handleReversibleActionTurn({
@@ -122,6 +152,7 @@ export async function runOrchestratorReply(input: {
   const healthRoute = intentToPillarRoute("HEALTH");
 
   if (
+    !isMinimalMode() &&
     healthProfile &&
     !healthProfile.onboarding_completed_at &&
     !isMealCommand(input.userMessage) &&
@@ -180,18 +211,19 @@ export async function runOrchestratorReply(input: {
     preview: t.content.slice(0, 280),
   }));
 
-  const photoContext = input.mealPhoto?.fileId
-    ? await buildPhotoContext({
-        photo: input.mealPhoto,
-        recentTurns: photoTurnPreviews,
-      })
-    : undefined;
+  const photoContext =
+    !isMinimalMode() && input.mealPhoto?.fileId
+      ? await buildPhotoContext({
+          photo: input.mealPhoto,
+          recentTurns: photoTurnPreviews,
+        })
+      : undefined;
 
   const effectiveUserMessage = photoContext
     ? augmentMessageWithPhotoContext(input.userMessage, photoContext)
     : input.userMessage;
 
-  const intent = photoContext
+  let intent = photoContext
     ? resolvePhotoIntent(photoContext)
     : assembled.parserSignals.prefer_intent_health
       ? ("HEALTH" as Intent)
@@ -199,11 +231,57 @@ export async function runOrchestratorReply(input: {
           routingContext: assembled,
         });
 
+  if (isMinimalMode()) {
+    if (isParkedIntent(intent)) {
+      const ctx: AgentContext = {
+        userProfileId: input.userProfileId,
+        telegramUserId: input.telegramUserId,
+        timezone: input.timezone,
+        rawMessage: effectiveUserMessage,
+        intent: "GENERAL",
+      };
+      return finalizeOrchestratorReply(ctx, {
+        replyText: parkedIntentReply(intent),
+        intent: "GENERAL",
+        delegatedAgent: "Magnus",
+        agentMetadata: {
+          parked_intent: intent,
+          pillar_compose: false,
+          magnus_voice_finalized: true,
+        },
+      });
+    }
+
+    if (
+      isMealRelatedTurn({ message: effectiveUserMessage, mealPhoto: input.mealPhoto }) ||
+      isMealCommand(effectiveUserMessage)
+    ) {
+      const ctx: AgentContext = {
+        userProfileId: input.userProfileId,
+        telegramUserId: input.telegramUserId,
+        timezone: input.timezone,
+        rawMessage: effectiveUserMessage,
+        intent: "GENERAL",
+      };
+      return finalizeOrchestratorReply(ctx, {
+        replyText: parkedFeatureReply("Meals & nutrition"),
+        intent: "GENERAL",
+        delegatedAgent: "Magnus",
+        agentMetadata: {
+          parked: "meals",
+          pillar_compose: false,
+          magnus_voice_finalized: true,
+        },
+      });
+    }
+  }
+
   if (
     intent === "HEALTH" &&
     !healthProfile &&
     !isMealCommand(effectiveUserMessage) &&
-    !isMealPhotoPurpose(photoContext)
+    !isMealPhotoPurpose(photoContext) &&
+    !isMinimalMode()
   ) {
     const started = await startHealthOnboarding({
       userMessage: input.userMessage,
@@ -277,7 +355,9 @@ export async function runOrchestratorReply(input: {
     "turn routed",
   );
 
-  const sessionPrelude = await tryResolveActiveProjectSessionTurn(ctx);
+  const sessionPrelude = isMinimalMode()
+    ? { handled: false as const, sessionAbandoned: false as const }
+    : await tryResolveActiveProjectSessionTurn(ctx);
   if (sessionPrelude.handled) {
     return finalizeOrchestratorReply(ctx, {
       replyText: sessionPrelude.result.text,
@@ -338,7 +418,9 @@ export async function runOrchestratorReply(input: {
   }
 
   logger.warn({ intent }, "no specialist registered for intent; Magnus answering");
-  const fallback = await runMagnusAgent(ctx);
+  const fallback = await runMagnusAgent(ctx, {
+    allowedToolNames: magnusDefaultToolAllowlist(),
+  });
   return finalizeOrchestratorReply(ctx, {
     replyText: fallback.text,
     intent,

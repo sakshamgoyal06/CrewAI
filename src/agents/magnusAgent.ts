@@ -66,6 +66,7 @@ import {
 } from "../lifeos/lifeosTool.js";
 import type { AgentContext, AgentResult } from "./types.js";
 import { buildMagnusSystem, MAGNUS_CORE_SYSTEM } from "./magnusCorePrompt.js";
+import { magnusDefaultToolAllowlist } from "../config/minimalMode.js";
 import { classifyToolResult, type ToolOutcome } from "./routing/actionIntegrity.js";
 import { manageProactiveMessages } from "../proactive/manageProactiveTool.js";
 import { manageReminders } from "../proactive/manageRemindersTool.js";
@@ -1404,7 +1405,7 @@ export async function runMagnusAgent(
 
   const toolsUsed: string[] = [];
   const toolOutcomes: ToolOutcome[] = [];
-  const allowed = options?.allowedToolNames;
+  const allowed = options?.allowedToolNames ?? magnusDefaultToolAllowlist();
   const tools =
     allowed === undefined
       ? TOOLS

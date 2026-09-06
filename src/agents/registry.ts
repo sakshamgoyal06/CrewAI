@@ -4,6 +4,7 @@
  * Health is a composite with its own sub-router and external data. The other three are single
  * prompt-only agents built on `runPillarSpecialist`.
  */
+import { isMinimalMode, isParkedIntent } from "../config/minimalMode.js";
 import type { Intent } from "../intent.js";
 import { happinessAgent } from "./happiness/happinessAgent.js";
 import { healthCompositeAgent } from "./health/healthRouter.js";
@@ -12,12 +13,21 @@ import type { AgentContext, AgentResult, DepartmentAgent } from "./types.js";
 import { wealthAgent } from "./wealth/wealthAgent.js";
 import { wisdomAgent } from "./wisdom/wisdomAgent.js";
 
-const departmentAgents: DepartmentAgent[] = [
+const FULL_DEPARTMENT_AGENTS: DepartmentAgent[] = [
   healthCompositeAgent,
   wealthAgent,
   happinessAgent,
   wisdomAgent,
 ];
+
+function departmentAgentsForMode(): DepartmentAgent[] {
+  if (!isMinimalMode()) {
+    return FULL_DEPARTMENT_AGENTS;
+  }
+  return FULL_DEPARTMENT_AGENTS.filter(
+    (agent) => !agent.departmentId || !isParkedIntent(agent.departmentId as Intent),
+  );
+}
 
 function agentMatches(agent: DepartmentAgent, intent: Intent, ctx?: AgentContext): boolean {
   if (agent.handles !== undefined) {
@@ -27,7 +37,10 @@ function agentMatches(agent: DepartmentAgent, intent: Intent, ctx?: AgentContext
 }
 
 export function findAgentForIntent(intent: Intent, ctx?: AgentContext): DepartmentAgent | null {
-  return departmentAgents.find((a) => agentMatches(a, intent, ctx)) ?? null;
+  if (isMinimalMode() && isParkedIntent(intent)) {
+    return null;
+  }
+  return departmentAgentsForMode().find((a) => agentMatches(a, intent, ctx)) ?? null;
 }
 
 export type DispatchOutcome = {

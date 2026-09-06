@@ -4,6 +4,7 @@
 import { dispatchToAgent } from "../../registry.js";
 import { runMagnusAgent } from "../../magnusAgent.js";
 import { magnusAllowedToolsForConsultation } from "../consultationMagnusTools.js";
+import { filterConsultablePillars } from "../../../config/minimalMode.js";
 import { reconcileConsultationOutputs } from "../agentConsultation.js";
 import { buildMagnusConsultationDelegationBlock } from "../consultationOutcome.js";
 import type { ConsultablePillarIntent } from "../pillarConsultationSignals.js";
@@ -37,7 +38,9 @@ export async function executePillarConsultationStep(
   priorContext: string,
 ): Promise<AgentResult> {
   const stepCtx = buildStepAgentContext(ctx, step, priorContext);
-  const pillars = normalizePillarArg(step.args.pillars);
+  const pillars = filterConsultablePillars(
+    normalizePillarArg(step.args.pillars),
+  ) as ConsultablePillarIntent[];
   const consultationDelegation = buildMagnusConsultationDelegationBlock(pillars);
 
   const [magnus, ...pillarDispatches] = await Promise.all([

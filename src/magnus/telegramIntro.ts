@@ -4,8 +4,26 @@
  * There are deliberately no other commands. Magnus is the whole interface: the user writes in
  * plain language and routing happens invisibly.
  */
+import { isMinimalMode } from "../config/minimalMode.js";
 
 export function buildStartMessage(): string {
+  if (isMinimalMode()) {
+    return [
+      "<b>Magnus is online (minimal mode).</b>",
+      "",
+      "Core paths only while we stabilize: calendar, reminders, workouts / Hevy, and plain conversation.",
+      "",
+      "Some of what works right now:",
+      "• <b>Calendar</b> — “what's on today?”, “book gym 7am tomorrow”",
+      "• <b>Reminders</b> — “remind me to call the dentist tomorrow at 4pm”",
+      "• <b>Training / Hevy</b> — “should I train today?”, “review my last few workouts”",
+      "",
+      "Meals, YouTube, lists, Notion, money coaching, and other pillars are temporarily parked.",
+      "",
+      "/help for the longer version.",
+    ].join("\n");
+  }
+
   return [
     "<b>Magnus is online.</b>",
     "",
@@ -24,6 +42,26 @@ export function buildStartMessage(): string {
 }
 
 export function buildHelpMessage(): string {
+  if (isMinimalMode()) {
+    return [
+      "<b>How to use me (minimal mode)</b>",
+      "",
+      "Write in plain English. Magnus is running a stripped-down build: calendar, reminders, workouts / Hevy, and conversation.",
+      "",
+      "<b>Calendar</b>",
+      "“what does my day look like?” · “anything on Friday?” · “add dentist Tuesday 4pm” · “move gym to 8am”",
+      "",
+      "<b>Reminders</b>",
+      "“remind me to … tomorrow at 8pm” · “what reminders do I have?” · “snooze that reminder”",
+      "",
+      "<b>Training / Hevy</b>",
+      "“should I train today?” · “review my last few workouts” · “hevy routine: …” when you want to log or create via Hevy",
+      "",
+      "<b>Parked for now</b>",
+      "Meals, YouTube, lists, Notion, morning brief, wealth/happiness/wisdom coaching, and project planning. Say what you need — I'll tell you if it's back yet.",
+    ].join("\n");
+  }
+
   return [
     "<b>How to use me</b>",
     "",

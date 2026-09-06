@@ -1,3 +1,4 @@
+import { filterCapabilityCatalog } from "../../../../config/minimalMode.js";
 import type { PillarId } from "../types.js";
 import type { CapabilityCatalog } from "../types.js";
 import { GENERAL_CAPABILITY_CATALOG } from "./generalCatalog.js";
@@ -15,7 +16,7 @@ const CATALOGS: Record<PillarId, CapabilityCatalog> = {
 };
 
 export function getCapabilityCatalog(pillar: PillarId): CapabilityCatalog {
-  return CATALOGS[pillar];
+  return filterCapabilityCatalog(CATALOGS[pillar]);
 }
 
 export function isValidCapability(pillar: PillarId, capability: string): boolean {

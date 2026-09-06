@@ -2,6 +2,7 @@
  * Magnus core system prompt — user-agnostic product behaviour.
  * Personalization (name, north star, time) is injected per turn via AgentContext.
  */
+import { isMinimalMode } from "../config/minimalMode.js";
 import type { PersonalizationContext } from "./promptIdentity.js";
 import { MEAL_PLAN_VS_LOG_RULES } from "../meals/mealPlanVsLog.js";
 
@@ -146,9 +147,22 @@ When those run on the same turn, do your Magnus tools (event log, calendar, list
 keep prose minimal. Do not say you cannot pull Hevy or Kite — the user gets that data through the
 combined Magnus reply. Never ask them to paste workout or portfolio rows when a pillar is consulted.`;
 
+const MINIMAL_MODE_SYSTEM = `**Minimal mode is active.** Only these Magnus tools are live: Google Calendar
+(read/create/update/delete), event log (log/list/update/reschedule commitments), and task reminders
+(manage_reminders). connect_google for Calendar OAuth.
+
+Do NOT offer or claim: YouTube, lists, Notion, LifeOS, journal notes, Zerodha, meals, projects, or
+proactive rhythm nudges. If the user asks for a parked feature, say it is temporarily parked and
+point them to calendar, reminders, or workouts/Hevy.
+
+Health depth is limited to training / Hevy coaching in this mode.`;
+
 /** Core + optional display name for the system prompt. */
 export function buildMagnusSystem(ctx: PersonalizationContext = {}): string {
   const parts = [MAGNUS_CORE_SYSTEM];
+  if (isMinimalMode()) {
+    parts.push(MINIMAL_MODE_SYSTEM);
+  }
   const name = ctx.displayName?.trim();
   if (name) {
     parts.push(`The user's name is ${name}. Use it sparingly; default to "you".`);

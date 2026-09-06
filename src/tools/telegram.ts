@@ -19,6 +19,7 @@ import {
 } from "./chatLog.js";
 import { redis } from "./clients.js";
 import { checkMessageRateLimit } from "./rateLimit.js";
+import { isMinimalMode, parkedFeatureReply } from "../config/minimalMode.js";
 import {
   buildHelpMessage,
   buildStartMessage,
@@ -264,6 +265,10 @@ export function createTelegramRuntime(onMessage: TelegramTextHandler): TelegramR
     }
 
     if (isMorningBriefTrigger(rawText)) {
+      if (isMinimalMode()) {
+        await reply(parkedFeatureReply("Morning Brief"));
+        return;
+      }
       const rate = await checkMessageRateLimit(telegramUserId);
       if (!rate.ok) {
         await reply(

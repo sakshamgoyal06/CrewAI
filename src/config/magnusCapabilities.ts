@@ -7,6 +7,7 @@
  */
 
 import { resolveTelegramRuntime } from "./telegramRuntime.js";
+import { isMinimalMode, minimalModeLogFields } from "./minimalMode.js";
 
 export type EnvBag = Record<string, string | undefined>;
 
@@ -34,6 +35,7 @@ export type Capability = {
 
 export type CapabilitySummary = {
   production: boolean;
+  minimalMode: boolean;
   core: readonly CoreRequirement[];
   /** False when the process would fail to boot or Telegram could not connect. */
   coreOk: boolean;
@@ -368,16 +370,28 @@ function proactiveCapability(env: EnvBag): Capability {
 
 export function describeCapabilities(env: EnvBag = process.env): CapabilitySummary {
   const production = val(env, "NODE_ENV") === "production";
+  const minimalMode = isMinimalMode(env);
   const core = coreRequirements(env, production);
 
   const capabilities: Capability[] = [
+    {
+      id: "minimal_mode",
+      title: "Minimal mode",
+      telegram: "production strip-down",
+      status: minimalMode ? "ready" : "off",
+      detail: minimalMode
+        ? "Only calendar, reminders, Hevy/fitness, and core routing are live. Set MAGNUS_MINIMAL_MODE=false to restore full Magnus."
+        : "Full Magnus — all parked modules may run when configured.",
+      missing: minimalMode ? [] : ["MAGNUS_MINIMAL_MODE"],
+    },
     {
       id: "chat",
       title: "Chat + pillar routing",
       telegram: "plain text",
       status: "ready",
-      detail:
-        "Magnus answers everything; health, wealth, happiness and wisdom are routed silently.",
+      detail: minimalMode
+        ? "GENERAL + HEALTH (fitness/Hevy only). Wealth, Happiness, Wisdom parked."
+        : "Magnus answers everything; health, wealth, happiness and wisdom are routed silently.",
       missing: [],
     },
     workoutsCapability(),
@@ -402,6 +416,7 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
 
   return {
     production,
+    minimalMode,
     core,
     coreOk: core.every((c) => c.ok),
     capabilities,
@@ -411,6 +426,7 @@ export function describeCapabilities(env: EnvBag = process.env): CapabilitySumma
 /** Compact shape for a single structured boot log line. */
 export function capabilityLogFields(summary: CapabilitySummary): Record<string, unknown> {
   return {
+    ...minimalModeLogFields(process.env),
     coreOk: summary.coreOk,
     ready: summary.capabilities.filter((c) => c.status === "ready").map((c) => c.id),
     partial: summary.capabilities.filter((c) => c.status === "partial").map((c) => c.id),

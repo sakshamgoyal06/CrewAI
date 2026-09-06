@@ -2,6 +2,7 @@
  * Holistic day snapshot — calendar, Magnus commitments, planned meals.
  * Used by GENERAL day_overview capability (parser-owned, not regex routing).
  */
+import { isMinimalMode } from "../../../config/minimalMode.js";
 import { startOfLocalDay, localDateKey as eventLocalDateKey } from "../../../events/eventTime.js";
 import { formatLoggedMealsDay } from "../../../meals/formatLoggedMealsDay.js";
 import { sumMealLogsForDay } from "../../../meals/mealDaySummary.js";
@@ -73,9 +74,13 @@ export async function executeDayOverviewCapability(
       from: localDate,
       to: localDate,
     }),
-    getPlanEntriesForDate(ctx.userProfileId, localDate),
-    getSessionsForLocalDate(ctx.userProfileId, localDate),
-    sumMealLogsForDay(ctx.userProfileId, localDate),
+    isMinimalMode()
+      ? Promise.resolve([])
+      : getPlanEntriesForDate(ctx.userProfileId, localDate),
+    isMinimalMode() ? Promise.resolve([]) : getSessionsForLocalDate(ctx.userProfileId, localDate),
+    isMinimalMode()
+      ? Promise.resolve({ totalKcal: 0, proteinG: 0, carbsG: 0, fatG: 0 })
+      : sumMealLogsForDay(ctx.userProfileId, localDate),
     listUpcomingReminders({
       userProfileId: ctx.userProfileId,
       timezone: tz,
@@ -109,13 +114,18 @@ export async function executeDayOverviewCapability(
     "",
     "**Reminders**",
     remindersText,
-    "",
-    "**Meals — logged** (counts toward daily calories)",
-    loggedMealsText.trim(),
-    "",
-    "**Meals — planned** (menu only; not counted until logged)",
-    plannedMealsText.trim() || "No meals planned for this day.",
   ];
+
+  if (!isMinimalMode()) {
+    sections.push(
+      "",
+      "**Meals — logged** (counts toward daily calories)",
+      loggedMealsText.trim(),
+      "",
+      "**Meals — planned** (menu only; not counted until logged)",
+      plannedMealsText.trim() || "No meals planned for this day.",
+    );
+  }
 
   const userGraphNote =
     ctx.memoryBlock?.trim() && ctx.memoryBlock.length < 1200
