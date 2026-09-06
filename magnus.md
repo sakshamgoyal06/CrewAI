@@ -394,4 +394,4 @@ partial behaviour.
 
 ---
 
-**Last updated:** 2026-09-06 (accuracy Steps 5–7: read-before-write, buildDayContext, metamorphic_pass)
+**Last updated:** 2026-09-06 (forget matching: UK/US spelling + token match on memory topics)

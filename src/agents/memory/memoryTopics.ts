@@ -34,6 +34,92 @@ const TOPIC_KEY_MAX = 96;
 const LABEL_MAX = 120;
 const BODY_MAX = 2000;
 
+/** UK → US normalizations for fuzzy forget/recall matching. */
+const UK_US_SPELLING: Record<string, string> = {
+  favourite: "favorite",
+  favourites: "favorites",
+  colour: "color",
+  colours: "colors",
+  behaviour: "behavior",
+  behaviours: "behaviors",
+  organise: "organize",
+  organised: "organized",
+  organising: "organizing",
+  centre: "center",
+  centres: "centers",
+  metre: "meter",
+  metres: "meters",
+};
+
+const FORGET_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "about",
+  "are",
+  "for",
+  "i",
+  "in",
+  "is",
+  "it",
+  "its",
+  "me",
+  "my",
+  "of",
+  "our",
+  "that",
+  "the",
+  "this",
+  "to",
+  "was",
+  "we",
+  "were",
+  "your",
+]);
+
+/** Normalize text for case-insensitive memory topic matching. */
+export function normalizeMemoryMatchText(text: string): string {
+  let normalized = text.toLowerCase().trim();
+  for (const [uk, us] of Object.entries(UK_US_SPELLING)) {
+    normalized = normalized.replace(new RegExp(`\\b${uk}\\b`, "g"), us);
+  }
+  return normalized
+    .replace(/[_:/]+/g, " ")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Significant tokens from a forget query (stop words removed). */
+export function forgetQueryTokens(query: string): string[] {
+  return normalizeMemoryMatchText(query)
+    .split(" ")
+    .filter((token) => token.length > 0 && !FORGET_STOP_WORDS.has(token));
+}
+
+function topicMatchHaystack(topic: MemoryTopicRow): string {
+  return normalizeMemoryMatchText(`${topic.topic_key} ${topic.label} ${topic.body}`);
+}
+
+/** Whether a stored topic matches a forget query (phrase or all tokens). */
+export function topicMatchesForgetQuery(topic: MemoryTopicRow, query: string): boolean {
+  const normalizedQuery = normalizeMemoryMatchText(query);
+  if (!normalizedQuery) {
+    return false;
+  }
+
+  const haystack = topicMatchHaystack(topic);
+  if (haystack.includes(normalizedQuery)) {
+    return true;
+  }
+
+  const tokens = forgetQueryTokens(query);
+  if (tokens.length === 0) {
+    return false;
+  }
+
+  return tokens.every((token) => haystack.includes(token));
+}
+
 /** Normalize free text into a stable topic_key + short label. */
 export function deriveTopicKey(fact: string): { topicKey: string; label: string } {
   const trimmed = fact.trim();
@@ -42,7 +128,7 @@ export function deriveTopicKey(fact: string): { topicKey: string; label: string 
   let prefix = "fact";
   if (/\b(?:avoid|never|don'?t|except|rule)\b/i.test(lower)) {
     prefix = "rule";
-  } else if (/\b(?:prefers?|likes?|favorite|usually)\b/i.test(lower)) {
+  } else if (/\b(?:prefers?|likes?|favorite|favourite|usually)\b/i.test(lower)) {
     prefix = "preference";
   } else if (/\b(?:goal|target|north star|aim)\b/i.test(lower)) {
     prefix = "goal";
@@ -192,18 +278,13 @@ export async function deleteMemoryTopicsMatching(
   query: string,
   deps: { supabase?: SupabaseClient } = {},
 ): Promise<number> {
-  const q = query.trim().toLowerCase();
-  if (!q) {
+  if (!query.trim()) {
     return 0;
   }
   const topics = await loadMemoryTopics(userProfileId, 200, deps);
   let deleted = 0;
   for (const t of topics) {
-    if (
-      t.topic_key.toLowerCase().includes(q) ||
-      t.label.toLowerCase().includes(q) ||
-      t.body.toLowerCase().includes(q)
-    ) {
+    if (topicMatchesForgetQuery(t, query)) {
       const ok = await deleteMemoryTopicByKey(userProfileId, t.topic_key, deps);
       if (ok) {
         deleted += 1;
