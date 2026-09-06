@@ -5,6 +5,8 @@ import type { MemoryContext, MemoryEventEntry } from "./types.js";
 
 export type FormatMemoryBlockOptions = {
   semanticFacts?: string[];
+  /** Topic index lines (labels only — Step 1/2). */
+  topicIndexLines?: string[];
   /** When true, omit chat snippets (history is in `messages[]`). */
   omitChatSnippets?: boolean;
 };
@@ -99,7 +101,11 @@ export function formatMemoryBlockForSystem(
     parts.push(`Recent Magnus daily logs (newest first):\n${lines.join("\n")}`);
   }
 
-  if (options.semanticFacts && options.semanticFacts.length > 0) {
+  if (options.topicIndexLines && options.topicIndexLines.length > 0) {
+    parts.push(
+      `Memory topics (index — ask or recall for full detail):\n${options.topicIndexLines.join("\n")}`,
+    );
+  } else if (options.semanticFacts && options.semanticFacts.length > 0) {
     const lines = options.semanticFacts.map((f) => {
       const snip = f.slice(0, config.semanticFactSnippetChars);
       const ell = f.length > config.semanticFactSnippetChars ? "…" : "";

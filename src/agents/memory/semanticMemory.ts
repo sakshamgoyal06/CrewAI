@@ -4,6 +4,7 @@ import { logger } from "../../logger.js";
 import { anthropic, supabase as defaultSupabase } from "../../tools/clients.js";
 import { loggableError } from "../../util/loggableError.js";
 import type { MemoryConfig } from "./memoryConfig.js";
+import { upsertMemoryTopicsFromFacts } from "./memoryTopics.js";
 
 export const SEMANTIC_SUMMARY_PERIOD = "semantic_facts";
 
@@ -129,7 +130,10 @@ export async function updateSemanticMemoryAfterTurn(input: {
   config: MemoryConfig;
   deps?: { supabase?: SupabaseClient };
 }): Promise<void> {
-  if (!input.config.semanticExtractEnabled || !input.config.semanticPersistEnabled) {
+  if (!input.config.semanticExtractEnabled) {
+    return;
+  }
+  if (!input.config.topicsEnabled && !input.config.semanticPersistEnabled) {
     return;
   }
   const facts = await extractSemanticFacts({
@@ -137,5 +141,9 @@ export async function updateSemanticMemoryAfterTurn(input: {
     assistantReply: input.assistantReply,
     config: input.config,
   });
-  await persistSemanticFacts(input.userProfileId, facts, input.deps);
+  if (input.config.topicsEnabled) {
+    await upsertMemoryTopicsFromFacts(input.userProfileId, facts, input.deps);
+  } else if (input.config.semanticPersistEnabled) {
+    await persistSemanticFacts(input.userProfileId, facts, input.deps);
+  }
 }

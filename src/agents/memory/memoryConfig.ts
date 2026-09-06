@@ -33,6 +33,15 @@ export type MemoryConfig = {
   /** Persist extracted facts to `memory_summaries`. */
   semanticPersistEnabled: boolean;
 
+  /** Step 2 — upsert durable topics in `memory_topics`. */
+  topicsEnabled: boolean;
+  /** Inject topic index (labels) instead of full fact bodies in the memory block. */
+  topicIndexOnly: boolean;
+  /** Verbatim turn cap for GENERAL calendar/list focused turns. */
+  generalFocusedVerbatimTurns: number;
+  /** Max topic index lines in the memory block. */
+  topicIndexMaxInPrompt: number;
+
   /** Phase 4 — intent/query-aware inclusion of memory slices. */
   adaptiveRetrievalEnabled: boolean;
   /** Max characters for the structured memory block (goals, logs, facts — not chat). */
@@ -100,6 +109,11 @@ export function memoryConfig(): MemoryConfig {
     semanticModel: envStr("MAGNUS_MEMORY_SEMANTIC_MODEL", "claude-haiku-4-5"),
     semanticFactsMaxInPrompt: envInt("MAGNUS_MEMORY_SEMANTIC_FACTS_MAX", 12),
     semanticPersistEnabled: envBool("MAGNUS_MEMORY_SEMANTIC_PERSIST", true),
+
+    topicsEnabled: envBool("MAGNUS_MEMORY_TOPICS_ENABLED", true),
+    topicIndexOnly: envBool("MAGNUS_MEMORY_TOPIC_INDEX_ONLY", true),
+    generalFocusedVerbatimTurns: envInt("MAGNUS_MEMORY_GENERAL_VERBATIM_TURNS", 8),
+    topicIndexMaxInPrompt: envInt("MAGNUS_MEMORY_TOPIC_INDEX_MAX", 12),
 
     adaptiveRetrievalEnabled: envBool("MAGNUS_MEMORY_ADAPTIVE_RETRIEVAL", true),
     memoryBlockMaxChars: envInt("MAGNUS_MEMORY_BLOCK_MAX_CHARS", 6000),

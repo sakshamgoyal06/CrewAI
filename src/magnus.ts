@@ -7,6 +7,7 @@
  */
 import { runOrchestratorReply } from "./agents/magnusOrchestrator.js";
 import { runPostTurnMemoryMaintenance } from "./agents/memory/memoryAgent.js";
+import { tryHandleMemoryTopicCommand } from "./agents/memory/memoryTopicCommands.js";
 import { scheduleProactiveCron } from "./proactive/cron.js";
 import { splitPlainForTelegram } from "./magnus/telegramChunk.js";
 import { markdownishToTelegramHtml } from "./magnus/telegramFormat.js";
@@ -143,6 +144,29 @@ export async function handleMessage(
   }
 
   try {
+    const memoryCmd = await tryHandleMemoryTopicCommand(user.profileId, userMessage);
+    if (memoryCmd.handled) {
+      const replyText = memoryCmd.replyText;
+      const asstLog = await recordMagnusChatMessage({
+        user_profile_id: user.profileId,
+        telegram_user_id: user.telegramUserId,
+        role: "assistant",
+        content: replyText,
+        source: "telegram",
+        intent: "memory_topic",
+        message_type: conversationFields.message_type,
+        delivery_trigger: conversationFields.delivery_trigger,
+        metadata: { ...metaBase, memory_topic_command: true },
+      });
+      if (!asstLog.ok) {
+        log.warn({ err: asstLog.error }, "memory command reply not persisted to chat log");
+      }
+      const htmlChunks = plainChunksToTelegramHtml(replyText?.trim() || "…").filter(
+        (c) => c.trim().length > 0,
+      );
+      return htmlChunks.length > 0 ? htmlChunks : [toTelegramHtml("…")];
+    }
+
     const orchestrated = await runOrchestratorWithTimeout({
       userMessage,
       userProfileId: user.profileId,

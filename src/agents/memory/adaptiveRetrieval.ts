@@ -12,6 +12,8 @@ export type MemoryRetrievalProfile = {
   includePatterns: boolean;
   includeRollingSummaries: boolean;
   includeSemanticFacts: boolean;
+  /** When true, inject topic labels only (full bodies loaded on demand / user ask). */
+  includeTopicIndexOnly?: boolean;
   includeGaps: boolean;
   /** When false, chat snippets are omitted from the memory block (history is in `messages[]`). */
   includeChatSnippetsInBlock: boolean;

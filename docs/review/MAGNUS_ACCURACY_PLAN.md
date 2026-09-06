@@ -49,9 +49,9 @@ Each step lists **work**, **tests to add/update**, and **success gate** (all gat
 
 **Success gate**
 
-- [ ] `npm run test:accuracy` passes with all dimension gates documented in scorecard.
-- [ ] `magnusGoldenPath.test.ts`: 100/100 fixture scenarios pass.
-- [ ] No regression in `catalogIntegrity.test.ts`.
+- [x] `npm run test:accuracy` passes with all dimension gates documented in scorecard.
+- [x] `magnusGoldenPath.test.ts`: 100/100 fixture scenarios pass.
+- [x] No regression in `catalogIntegrity.test.ts`.
 
 **Owner checkpoint:** Accuracy scorecard committed; baseline numbers recorded in `MAGNUS_ACCURACY_SCORECARD.md`.
 
@@ -72,8 +72,8 @@ Each step lists **work**, **tests to add/update**, and **success gate** (all gat
 
 **Success gate**
 
-- [ ] Average structured memory block ≤ 3.5KB on calendar/list fixture turns (measure in test).
-- [ ] `routing@1` unchanged vs Step 0 baseline (±0%).
+- [x] Average structured memory block ≤ 3.5KB on calendar/list fixture turns (measure in test).
+- [x] `routing@1` unchanged vs Step 0 baseline (±0%).
 - [ ] Pillar context map GENERAL rows marked verified for minimal.
 
 ---
@@ -93,9 +93,9 @@ Each step lists **work**, **tests to add/update**, and **success gate** (all gat
 
 **Success gate**
 
-- [ ] Zero duplicate topic keys per user in integration test (100 synthetic turns).
-- [ ] User edit/delete round-trip test passes.
-- [ ] `action_integrity` still 100%.
+- [x] Zero duplicate topic keys per user in integration test (100 synthetic turns).
+- [x] User edit/delete round-trip test passes.
+- [x] `action_integrity` still 100%.
 
 ---
 

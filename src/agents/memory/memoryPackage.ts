@@ -1,7 +1,7 @@
 import type { Intent } from "../../intent.js";
 import type { MemoryRetrievalProfile } from "./adaptiveRetrieval.js";
-import { resolveMemoryRetrievalProfile } from "./adaptiveRetrieval.js";
 import { memoryConfig } from "./memoryConfig.js";
+import { selectContextSlice } from "./selectContextSlice.js";
 import { loadSemanticFacts } from "./semanticMemory.js";
 import {
   excludeDuplicateCurrentUserTurn,
@@ -11,6 +11,11 @@ import {
 } from "./summaryBuffer.js";
 import type { MemoryContext, MemoryChatTurn } from "./types.js";
 import { formatMemoryBlockForSystem } from "./format.js";
+import {
+  formatMemoryTopicIndex,
+  loadMemoryTopicIndex,
+  loadMemoryTopics,
+} from "./memoryTopics.js";
 import {
   formatUserKnowledgeBlock,
   loadUserKnowledgeLayer,
@@ -36,7 +41,11 @@ export async function buildMemoryPackage(input: {
   userProfileId: string;
 }): Promise<MemoryPackage> {
   const config = memoryConfig();
-  const profile = resolveMemoryRetrievalProfile(input.intent, input.rawMessage, config);
+  const profile = selectContextSlice({
+    intent: input.intent,
+    rawMessage: input.rawMessage,
+    config,
+  });
 
   const allTurns = input.memory.recentSignals.recentChatTurns.map((t) => ({
     ...t,
@@ -64,15 +73,32 @@ export async function buildMemoryPackage(input: {
   }
 
   let semanticFacts: string[] = [];
+  let topicIndexLines: string[] | undefined;
+
   if (profile.includeSemanticFacts && config.semanticExtractEnabled) {
-    semanticFacts = await loadSemanticFacts(
-      input.userProfileId,
-      config.semanticFactsMaxInPrompt,
-    );
+    if (config.topicsEnabled && profile.includeTopicIndexOnly !== false && config.topicIndexOnly) {
+      const index = await loadMemoryTopicIndex(
+        input.userProfileId,
+        config.topicIndexMaxInPrompt,
+      );
+      topicIndexLines = formatMemoryTopicIndex(index);
+    } else if (config.topicsEnabled) {
+      const topics = await loadMemoryTopics(
+        input.userProfileId,
+        config.semanticFactsMaxInPrompt,
+      );
+      semanticFacts = topics.map((t) => t.body);
+    } else {
+      semanticFacts = await loadSemanticFacts(
+        input.userProfileId,
+        config.semanticFactsMaxInPrompt,
+      );
+    }
   }
 
   const memoryBlockBase = formatMemoryBlockForSystem(input.memory, profile, {
     semanticFacts,
+    topicIndexLines,
     omitChatSnippets: config.conversationMessagesEnabled,
   });
 
