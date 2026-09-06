@@ -6,6 +6,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { logger } from "../../logger.js";
 import { supabase as defaultSupabase } from "../../tools/clients.js";
 import { loggableError } from "../../util/loggableError.js";
+import {
+  rankTopicsForForgetQueryWithSemantic,
+  resolveForgetMatches,
+  type ForgetResolveResult,
+} from "./memoryTopicMatch.js";
+
+export {
+  forgetQueryTokens,
+  normalizeMemoryMatchText,
+  topicMatchesForgetQuery,
+  type ForgetResolveResult,
+  type ScoredTopicMatch,
+} from "./memoryTopicMatch.js";
 
 export type MemoryTopicRow = {
   id: string;
@@ -42,7 +55,7 @@ export function deriveTopicKey(fact: string): { topicKey: string; label: string 
   let prefix = "fact";
   if (/\b(?:avoid|never|don'?t|except|rule)\b/i.test(lower)) {
     prefix = "rule";
-  } else if (/\b(?:prefers?|likes?|favorite|usually)\b/i.test(lower)) {
+  } else if (/\b(?:prefers?|likes?|favorite|favourite|usually)\b/i.test(lower)) {
     prefix = "preference";
   } else if (/\b(?:goal|target|north star|aim)\b/i.test(lower)) {
     prefix = "goal";
@@ -186,28 +199,40 @@ export async function deleteMemoryTopicByKey(
   return (count ?? 0) > 0;
 }
 
-/** Fuzzy delete: match label or body containing query (case-insensitive). */
+/** Resolve forget query → topics to delete (hybrid keyword + semantic, with disambiguation). */
+export async function resolveForgetTopics(
+  userProfileId: string,
+  query: string,
+  deps: { supabase?: SupabaseClient } = {},
+): Promise<ForgetResolveResult> {
+  if (!query.trim()) {
+    return { status: "none" };
+  }
+  const topics = await loadMemoryTopics(userProfileId, 200, deps);
+  const ranked = await rankTopicsForForgetQueryWithSemantic({
+    userProfileId,
+    topics,
+    query,
+  });
+  return resolveForgetMatches(ranked);
+}
+
+/** Fuzzy delete: hybrid match with confidence threshold and disambiguation. */
 export async function deleteMemoryTopicsMatching(
   userProfileId: string,
   query: string,
   deps: { supabase?: SupabaseClient } = {},
 ): Promise<number> {
-  const q = query.trim().toLowerCase();
-  if (!q) {
+  const resolved = await resolveForgetTopics(userProfileId, query, deps);
+  if (resolved.status !== "clear") {
     return 0;
   }
-  const topics = await loadMemoryTopics(userProfileId, 200, deps);
+
   let deleted = 0;
-  for (const t of topics) {
-    if (
-      t.topic_key.toLowerCase().includes(q) ||
-      t.label.toLowerCase().includes(q) ||
-      t.body.toLowerCase().includes(q)
-    ) {
-      const ok = await deleteMemoryTopicByKey(userProfileId, t.topic_key, deps);
-      if (ok) {
-        deleted += 1;
-      }
+  for (const match of resolved.matches) {
+    const ok = await deleteMemoryTopicByKey(userProfileId, match.topic.topic_key, deps);
+    if (ok) {
+      deleted += 1;
     }
   }
   return deleted;

@@ -4,9 +4,10 @@
  */
 import { memoryConfig } from "./memoryConfig.js";
 import {
-  deleteMemoryTopicsMatching,
+  deleteMemoryTopicByKey,
   loadMemoryTopics,
   rememberMemoryTopic,
+  resolveForgetTopics,
 } from "./memoryTopics.js";
 
 export type MemoryTopicCommand =
@@ -82,7 +83,30 @@ export async function tryHandleMemoryTopicCommand(
       };
     }
     case "forget": {
-      const deleted = await deleteMemoryTopicsMatching(userProfileId, cmd.query);
+      const resolved = await resolveForgetTopics(userProfileId, cmd.query);
+      if (resolved.status === "none") {
+        return {
+          handled: true,
+          replyText: `I couldn't find anything matching "${cmd.query}" to forget.`,
+        };
+      }
+      if (resolved.status === "ambiguous") {
+        const lines = resolved.matches.map((m) => `- ${m.topic.label}`).join("\n");
+        return {
+          handled: true,
+          replyText:
+            `I found several memory topics matching "${cmd.query}":\n${lines}\n\n` +
+            "Be more specific — e.g. **forget lauki** or **forget job search ML**.",
+        };
+      }
+
+      let deleted = 0;
+      for (const match of resolved.matches) {
+        const ok = await deleteMemoryTopicByKey(userProfileId, match.topic.topic_key);
+        if (ok) {
+          deleted += 1;
+        }
+      }
       if (deleted === 0) {
         return {
           handled: true,

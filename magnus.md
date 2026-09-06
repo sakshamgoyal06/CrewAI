@@ -138,7 +138,7 @@ shell or `.env`.
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
 | `src/agents/health/healthRouter.ts` | Health composite: pillar plan parser (LLM) → capability executors (compose pipeline) |
 | `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
-| `src/agents/memory/` | `loadMemoryContext`, `selectContextSlice`, `memory_topics`, **`memory_embeddings` / `recall_context`**, `memoryTopicCommands`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
+| `src/agents/memory/` | `loadMemoryContext`, `selectContextSlice`, `memory_topics`, **`memoryTopicMatch`** (hybrid forget: keyword + semantic + disambiguation), **`memory_embeddings` / `recall_context`**, `memoryTopicCommands`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
 | `src/agents/context/` | `assembleRoutingContext`, `loadGrowthSnapshot`, `growthHelpers` — frontload before classify (PR #92) |
 | `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
 | `src/meals/` | Meal parsing, estimate chain, `meal_logs` writes, **intake collapse** (one occasion → one log), **session similarity dedupe**, **slot correction** |
@@ -394,4 +394,4 @@ partial behaviour.
 
 ---
 
-**Last updated:** 2026-09-06 (accuracy Steps 5–7: read-before-write, buildDayContext, metamorphic_pass)
+**Last updated:** 2026-09-06 (hybrid forget matching: keyword + semantic + disambiguation)

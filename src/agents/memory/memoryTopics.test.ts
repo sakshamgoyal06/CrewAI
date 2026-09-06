@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+vi.mock("./memoryEmbeddings.js", () => ({
+  searchMemoryEmbeddings: vi.fn().mockResolvedValue([]),
+  indexTopicEmbedding: vi.fn().mockResolvedValue(undefined),
+  indexMemoryChunk: vi.fn().mockResolvedValue(undefined),
+}));
 
 import {
   deriveTopicKey,
@@ -10,6 +16,8 @@ import {
   deleteMemoryTopicByKey,
   deleteMemoryTopicsMatching,
   loadMemoryTopics,
+  normalizeMemoryMatchText,
+  topicMatchesForgetQuery,
 } from "./memoryTopics.js";
 
 type Row = { topic_key: string; label: string; body: string; user_profile_id: string };
@@ -164,6 +172,42 @@ describe("memory topic upsert", () => {
     const deleted = await deleteMemoryTopicsMatching("user-1", "peanut", { supabase: sb });
     expect(deleted).toBe(1);
     expect(store.length).toBe(0);
+  });
+
+  it("fuzzy delete matches UK spelling and partial phrases", async () => {
+    const store: Row[] = [];
+    const sb = inMemorySupabase(store);
+    await upsertMemoryTopic(
+      "user-1",
+      factToTopicUpsert("my favorite color is black", "user"),
+      { supabase: sb },
+    );
+
+    expect(
+      topicMatchesForgetQuery(
+        {
+          id: "1",
+          user_profile_id: "user-1",
+          topic_key: "preference:my_favorite_color_is_black",
+          label: "my favorite color is black",
+          body: "my favorite color is black",
+          source: "user",
+          created_at: "",
+          updated_at: "",
+        },
+        "my favourite color",
+      ),
+    ).toBe(true);
+
+    const deleted = await deleteMemoryTopicsMatching("user-1", "my favourite color", {
+      supabase: sb,
+    });
+    expect(deleted).toBe(1);
+    expect(store.length).toBe(0);
+  });
+
+  it("normalizeMemoryMatchText folds UK spellings", () => {
+    expect(normalizeMemoryMatchText("my favourite colour")).toBe("my favorite color");
   });
 
   it("load returns upserted topics", async () => {
