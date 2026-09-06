@@ -4,6 +4,8 @@ import { memoryConfig } from "./memoryConfig.js";
 import type { MemoryPackage } from "./memoryPackage.js";
 import { updateSemanticMemoryAfterTurn } from "./semanticMemory.js";
 import { updateRollingSummaryAfterTurn } from "./summaryBuffer.js";
+import { indexChatTurnEmbedding } from "./memoryEmbeddings.js";
+import { memoryEmbeddingConfig } from "./memoryEmbeddingConfig.js";
 import type { MemoryChatTurn } from "./types.js";
 
 /**
@@ -17,7 +19,12 @@ export async function runPostTurnMemoryMaintenance(input: {
   chronologicalTurns: MemoryChatTurn[];
 }): Promise<void> {
   const config = memoryConfig();
-  if (!config.summaryBufferEnabled && !config.semanticExtractEnabled) {
+  const embedConfig = memoryEmbeddingConfig();
+  if (
+    !config.summaryBufferEnabled &&
+    !config.semanticExtractEnabled &&
+    !embedConfig.enabled
+  ) {
     return;
   }
 
@@ -35,6 +42,13 @@ export async function runPostTurnMemoryMaintenance(input: {
         userMessage: input.userMessage,
         assistantReply: input.assistantReply,
         config,
+      });
+    }
+    if (embedConfig.enabled && embedConfig.indexChatTurns) {
+      await indexChatTurnEmbedding({
+        userProfileId: input.userProfileId,
+        userMessage: input.userMessage,
+        assistantReply: input.assistantReply,
       });
     }
   } catch (e) {

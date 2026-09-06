@@ -19,6 +19,7 @@ const MAGNUS_TOOL_NAMES = [
   "update_calendar_event",
   "delete_calendar_event",
   "log_note",
+  "recall_context",
   "log_event",
   "update_event",
   "reschedule_event",
@@ -120,7 +121,7 @@ describe("capability catalog integrity", () => {
   it("keeps pillar_consultation and day_overview tool-free (executor-owned)", () => {
     expect(GENERAL_CAPABILITY_TOOLS.pillar_consultation).toEqual([]);
     expect(GENERAL_CAPABILITY_TOOLS.day_overview).toEqual([]);
-    expect(GENERAL_CAPABILITY_TOOLS.conversation).toEqual([]);
+    expect(GENERAL_CAPABILITY_TOOLS.conversation).toEqual(["recall_context"]);
   });
 
   it("excludes internal read_tool_artifact from catalog and Magnus tool map", () => {

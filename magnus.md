@@ -136,7 +136,7 @@ shell or `.env`.
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
 | `src/agents/health/healthRouter.ts` | Health composite: pillar plan parser (LLM) → capability executors (compose pipeline) |
 | `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
-| `src/agents/memory/` | `loadMemoryContext`, `selectContextSlice`, `memory_topics` upsert/load, `memoryTopicCommands`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
+| `src/agents/memory/` | `loadMemoryContext`, `selectContextSlice`, `memory_topics`, **`memory_embeddings` / `recall_context`**, `memoryTopicCommands`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
 | `src/agents/context/` | `assembleRoutingContext`, `loadGrowthSnapshot`, `growthHelpers` — frontload before classify (PR #92) |
 | `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
 | `src/meals/` | Meal parsing, estimate chain, `meal_logs` writes, **intake collapse** (one occasion → one log), **session similarity dedupe**, **slot correction** |
@@ -182,7 +182,7 @@ shell or `.env`.
    Magnus tool loop, not `day_overview`. On `GENERAL`, the plan parser may choose `pillar_consultation`,
    `day_overview`, `calendar`, etc. Pillar specialists are prompt-only except Health (capability
    executors) and Wealth (Kite read in executor).
-6. **Memory** — Loaded once per turn: recent chat, rolling summary, **memory topics** (upsert by `topic_key` in `memory_topics`; index-only labels in prompts when `MAGNUS_MEMORY_TOPIC_INDEX_ONLY=true`), structured profile/goals/logs, **active projects block** in user knowledge. **`selectContextSlice`** trims context for calendar/list focused GENERAL turns (≤8 verbatim turns, ≤3.5KB block). **Tool result spill:** outputs > `MAGNUS_TOOL_RESULT_SPILL_CHARS` persist to Redis; loop sees `{ artifact_id, preview, count }`; internal `read_tool_artifact` for full body. Telegram: **remember …** / **forget …** / **what do you remember?** handled before orchestrator (no model). Post-turn extract upserts topics (newer wins). **Accountability Agent** at orchestrator exit: `action_ledger` + `accountability` metadata on tool turns. Tunable via `MAGNUS_MEMORY_*` and `MAGNUS_TOOL_RESULT_*`.
+6. **Memory** — Loaded once per turn: recent chat, rolling summary, **memory topics** (upsert by `topic_key` in `memory_topics`; index-only labels in prompts when `MAGNUS_MEMORY_TOPIC_INDEX_ONLY=true`), structured profile/goals/logs, **active projects block** in user knowledge. **`selectContextSlice`** trims context for calendar/list focused GENERAL turns (≤8 verbatim turns, ≤3.5KB block). **Tool result spill:** outputs > `MAGNUS_TOOL_RESULT_SPILL_CHARS` persist to Redis; loop sees `{ artifact_id, preview, count }`; internal `read_tool_artifact` for full body. **Semantic recall:** `memory_embeddings` (pgvector) + Layer-2 **`recall_context`** tool; embed on journal/topic/decision-turn writes. Telegram: **remember …** / **forget …** / **what do you remember?** handled before orchestrator (no model). Post-turn extract upserts topics (newer wins). **Accountability Agent** at orchestrator exit: `action_ledger` + `accountability` metadata on tool turns. Tunable via `MAGNUS_MEMORY_*`, `MAGNUS_TOOL_RESULT_*`, `MAGNUS_EMBED_*`.
 7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
    routing in `metadata` (`delegated_agent`, `agent_metadata`). Columns `message_type`
    (`conversation` | `automated`) and `delivery_trigger` (`manual`, `scheduled`, `http`,
@@ -259,7 +259,7 @@ shell or `.env`.
 ## Database
 
 **Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`, `meal_plan_sessions`, `meal_plan_templates`,
-`user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries` (rolling summary; legacy semantic facts when topics disabled), `memory_topics` (curated topic upsert), `projects`, `features`, `project_sessions`,
+`user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries` (rolling summary; legacy semantic facts when topics disabled), `memory_topics` (curated topic upsert), `memory_embeddings` (pgvector recall), `projects`, `features`, `project_sessions`,
 `magnus_youtube_bookmarks`, `magnus_youtube_cues`, `magnus_youtube_state` (includes `playlist_aliases` JSONB for pillar playlist ids).
 
 **Read only:** `workouts`, `goals`, `daily_scores`, `happiness_reserve`,
@@ -390,4 +390,4 @@ partial behaviour.
 
 ---
 
-**Last updated:** 2026-09-06 (Step 3 tool result spill + Steps 0–2 memory topics)
+**Last updated:** 2026-09-06 (Step 4 pgvector recall + Steps 0–3)

@@ -55,6 +55,7 @@ export const MINIMAL_MAGNUS_TOOL_NAMES = new Set([
   "update_list_item",
   "create_list",
   "recommend_list_items",
+  "recall_context",
 ]);
 
 const MINIMAL_PROACTIVE_JOBS = new Set([

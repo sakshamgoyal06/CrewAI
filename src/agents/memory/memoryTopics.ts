@@ -142,7 +142,16 @@ export async function upsertMemoryTopic(
       { err: loggableError(error), userProfileId, topicKey: topic.topicKey },
       "memory: topic upsert failed",
     );
+    return;
   }
+
+  const { indexTopicEmbedding } = await import("./memoryEmbeddings.js");
+  void indexTopicEmbedding({
+    userProfileId,
+    topicKey: topic.topicKey,
+    body: topic.body,
+    deps,
+  }).catch(() => {});
 }
 
 export async function upsertMemoryTopicsFromFacts(

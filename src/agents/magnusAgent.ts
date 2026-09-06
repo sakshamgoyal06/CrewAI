@@ -75,6 +75,7 @@ import {
   maybeSpillToolResult,
   readToolArtifact,
 } from "./tools/toolResultSpill.js";
+import { recallContext } from "./tools/recallContextTool.js";
 
 const MODEL = "claude-sonnet-4-6";
 // Calendar + event log + YouTube bulk ops in one turn needs headroom (env override).
@@ -183,6 +184,29 @@ const TOOLS: Tool[] = [
         },
       },
       required: ["text"],
+    },
+  },
+  {
+    name: "recall_context",
+    description:
+      "Search durable memory (journal notes, topics, past decision turns) by meaning. Use when the user asks what you remember, what you decided, or prior context — not for live calendar/list reads.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Natural-language recall query, e.g. what did we decide about the job search?",
+        },
+        limit: {
+          type: "number",
+          description: "Max chunks to return (default 5, max 20).",
+        },
+        since: {
+          type: "string",
+          description: "Optional ISO date — only chunks on or after this timestamp.",
+        },
+      },
+      required: ["query"],
     },
   },
   {
@@ -1051,6 +1075,13 @@ async function runTool(
           date: typeof input.date === "string" ? input.date : undefined,
           eventId: typeof input.event_id === "string" ? input.event_id : undefined,
           timeZone,
+        });
+      case "recall_context":
+        return await recallContext({
+          userProfileId: ctx.userProfileId,
+          query: String(input.query ?? ""),
+          limit: num(input.limit),
+          since: str(input.since),
         });
       case "log_event":
         return await logEvent({

@@ -106,6 +106,15 @@ export async function logNote(input: {
     return `Could not save the note: ${saved.error ?? "unknown error"}.`;
   }
 
+  if (saved.id) {
+    const { indexJournalEmbedding } = await import("../memory/memoryEmbeddings.js");
+    void indexJournalEmbedding({
+      userProfileId: input.userProfileId,
+      dailyLogId: saved.id,
+      body: text,
+    }).catch(() => {});
+  }
+
   let linkedTitle: string | null = null;
   if (input.eventId?.trim() && saved.id) {
     linkedTitle = await linkToEvent({

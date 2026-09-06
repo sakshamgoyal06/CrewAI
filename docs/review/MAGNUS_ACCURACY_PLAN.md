@@ -134,9 +134,9 @@ Each step lists **work**, **tests to add/update**, and **success gate** (all gat
 
 **Success gate**
 
-- [ ] `recall@5` ≥ 90% on seeded fixture set.
-- [ ] Recall tool never invoked in routing frontload (static analysis / orchestrator test).
-- [ ] `routing@1` unchanged vs Step 1.
+- [x] `recall@5` ≥ 90% on seeded fixture set.
+- [x] Recall tool never invoked in routing frontload (static analysis / orchestrator test).
+- [x] `routing@1` unchanged vs Step 1.
 
 ---
 

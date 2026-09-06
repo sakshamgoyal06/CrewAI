@@ -145,7 +145,7 @@ export const GENERAL_CAPABILITY_TOOLS: Record<string, string[]> = {
   proactive: ["manage_proactive_messages"],
   journal_note: ["log_note"],
   zerodha_connect: ["connect_zerodha", "connect_kite"],
-  conversation: [],
+  conversation: ["recall_context"],
   project_setup: [],
   project_manage: ["list_items", "add_list_item", "update_list_item", "log_note"],
   project_status: ["list_items", "list_lifeos_goals"],
