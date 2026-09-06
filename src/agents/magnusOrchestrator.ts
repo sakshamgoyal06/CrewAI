@@ -231,12 +231,15 @@ export async function runOrchestratorReply(input: {
 
   if (isMinimalMode()) {
     if (isParkedIntent(intent)) {
+      const parkedRoute = intentToPillarRoute(intent);
       const ctx: AgentContext = {
         userProfileId: input.userProfileId,
         telegramUserId: input.telegramUserId,
         timezone: input.timezone,
         rawMessage: effectiveUserMessage,
         intent: "GENERAL",
+        pillar: parkedRoute.pillar,
+        department: parkedRoute.department,
       };
       return finalizeOrchestratorReply(ctx, {
         replyText: parkedIntentReply(intent),
@@ -244,6 +247,8 @@ export async function runOrchestratorReply(input: {
         delegatedAgent: "Magnus",
         agentMetadata: {
           parked_intent: intent,
+          pillar: parkedRoute.pillar,
+          department: parkedRoute.department,
           pillar_compose: false,
           magnus_voice_finalized: true,
         },

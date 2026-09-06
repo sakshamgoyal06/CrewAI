@@ -30,7 +30,7 @@ export async function tryResolveActiveProjectSessionTurn(
     parsed.intent === "cancel_setup" &&
     projectSetupIntentActionable(parsed)
   ) {
-    await abandonProjectSession(session.id);
+    await abandonProjectSession(ctx.userProfileId, session.id);
     return { handled: false, sessionAbandoned: true };
   }
 

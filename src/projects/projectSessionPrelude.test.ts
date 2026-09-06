@@ -61,7 +61,7 @@ describe("tryResolveActiveProjectSessionTurn", () => {
       rawMessage: "Abandon job search. Focus on tomorrow.",
     } as never);
 
-    expect(abandonMock).toHaveBeenCalledWith("sess-1");
+    expect(abandonMock).toHaveBeenCalledWith("user-1", "sess-1");
     expect(out.handled).toBe(false);
     expect(out.sessionAbandoned).toBe(true);
   });

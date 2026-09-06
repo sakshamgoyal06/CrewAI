@@ -1,6 +1,11 @@
 /**
  * Execute one HEALTH plan step — loads user context and runs the matching pipeline.
  */
+import {
+  isMinimalHealthCapability,
+  isMinimalMode,
+  parkedFeatureReply,
+} from "../../../config/minimalMode.js";
 import type { AgentContext, AgentResult } from "../../types.js";
 import { softDeleteMostRecentSession, getSessionsForLocalDate, updateMealSessionSlot } from "../../../nutrition/store/mealHistoryStore.js";
 import { runAlternatesRecommenderAgent } from "../../health/alternatesRecommenderAgent.js";
@@ -43,6 +48,18 @@ export async function executeHealthPlanStep(
 ): Promise<AgentResult> {
   const stepCtx = buildStepAgentContext(ctx, step, priorContext);
   const cap = step.capability;
+
+  if (isMinimalMode() && !isMinimalHealthCapability(cap)) {
+    return {
+      text: parkedFeatureReply("Meals & nutrition"),
+      metadata: {
+        specialist: "HealthComposite",
+        parked_capability: cap,
+        pillar_compose: false,
+        magnus_voice_finalized: true,
+      },
+    };
+  }
 
   switch (cap) {
     case "meal_log": {

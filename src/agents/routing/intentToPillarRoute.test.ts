@@ -11,7 +11,7 @@ const INTENT_TO_ROUTE = {
   WEALTH: { pillar: "wealth", department: "net_worth_balance_sheet" },
   HAPPINESS: { pillar: "joy", department: "culture_leisure" },
   WISDOM: { pillar: "wisdom", department: "learning_plan_development" },
-  GENERAL: { pillar: "wisdom", department: "tracking_habits" },
+  GENERAL: { pillar: "wisdom", department: "magnus" },
 } satisfies Record<Intent, PillarRoute>;
 
 describe("intentToPillarRoute", () => {

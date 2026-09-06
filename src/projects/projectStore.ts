@@ -139,6 +139,7 @@ export async function createProject(input: {
 }
 
 export async function updateProject(
+  userProfileId: string,
   projectId: string,
   patch: Partial<{
     title: string;
@@ -160,7 +161,11 @@ export async function updateProject(
     }
   }
 
-  const { error } = await supabase.from("projects").update(payload).eq("id", projectId);
+  const { error } = await supabase
+    .from("projects")
+    .update(payload)
+    .eq("id", projectId)
+    .eq("user_profile_id", userProfileId);
   if (error) {
     return { ok: false, error: error.message };
   }
@@ -195,10 +200,14 @@ export async function createProjectMilestones(
   return { ok: true, features: (data ?? []) as FeatureRow[] };
 }
 
-export async function listProjectMilestones(projectId: string): Promise<FeatureRow[]> {
+export async function listProjectMilestones(
+  userProfileId: string,
+  projectId: string,
+): Promise<FeatureRow[]> {
   const { data, error } = await supabase
     .from("features")
     .select("*")
+    .eq("user_profile_id", userProfileId)
     .eq("project_id", projectId)
     .eq("is_deleted", false)
     .order("sort_order", { ascending: true });
