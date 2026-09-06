@@ -74,7 +74,7 @@ Each step lists **work**, **tests to add/update**, and **success gate** (all gat
 
 - [x] Average structured memory block ≤ 3.5KB on calendar/list fixture turns (measure in test).
 - [x] `routing@1` unchanged vs Step 0 baseline (±0%).
-- [ ] Pillar context map GENERAL rows marked verified for minimal.
+- [x] Pillar context map GENERAL rows marked verified for minimal.
 
 ---
 

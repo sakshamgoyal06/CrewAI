@@ -36,7 +36,7 @@ All user-owned rows include `user_profile_id UUID NOT NULL REFERENCES user_profi
 
 | Category | Tables | In `supabase/migrations/`? |
 |----------|--------|---------------------------|
-| **Migrated (repo)** | `magnus_daily_logs`, `user_health_profile`, `meal_logs`, `memory_summaries`, `magnus_events`, `magnus_youtube_*`, `user_program_memory`, `user_integrations`, `magnus_user_lists`, `magnus_list_items` | Yes |
+| **Migrated (repo)** | `magnus_daily_logs`, `user_health_profile`, `meal_logs`, `memory_summaries`, `memory_topics`, `magnus_events`, `magnus_youtube_*`, `user_program_memory`, `user_integrations`, `magnus_user_lists`, `magnus_list_items` | Yes |
 | **Hosted only** | `user_profile`, `magnus_chat_messages`, LifeOS domain tables (see §5) | **No** — applied directly to hosted project |
 | **Reference SQL** | Hardening script | `scripts/magnus_db_hardening.sql` (not a migration) |
 
@@ -159,6 +159,19 @@ Rolling conversation summary + semantic facts. Migration: `20260729100000_memory
 
 Append-only by period; latest row wins on read.
 
+### 4.9a `memory_topics`
+
+Curated user memory topics (Claude-style). Migration: `20260906160000_memory_topics.sql`. **Applied to hosted Supabase 2026-09-06.**
+
+| Column | Notes |
+|--------|-------|
+| `topic_key` | Stable slug per user (unique with `user_profile_id`) |
+| `label` | Short title for prompt index |
+| `body` | Full fact text; upsert replaces same key |
+| `source` | `extract` \| `user` |
+
+Upsert by `(user_profile_id, topic_key)`; RLS `service_role_only`.
+
 ### 4.10 `magnus_youtube_*`
 
 Migration: `20260802120000_magnus_youtube.sql` + `20260803160000` (playlist aliases).
@@ -223,6 +236,7 @@ erDiagram
     user_profile ||--o{ magnus_events : plans
     user_profile ||--o{ meal_logs : logs
     user_profile ||--o{ memory_summaries : summarizes
+    user_profile ||--o{ memory_topics : remembers
     user_profile ||--o{ magnus_youtube_bookmarks : saves
     user_profile ||--o{ magnus_youtube_cues : queues
     user_profile ||--o{ magnus_youtube_state : state
@@ -329,6 +343,7 @@ Not Postgres, but part of durable/fast state:
 | `20260810160000_projects_and_sessions.sql` | projects + project_sessions |
 | `20260905170000_supabase_security_hardening.sql` | LifeOS views `security_invoker`; chat purge RPC locked to `service_role` |
 | `20260905173000_revoke_graphql_api_roles.sql` | Revoke `anon`/`authenticated` grants on all `public` tables (GraphQL lockdown) |
+| `20260906160000_memory_topics.sql` | `memory_topics` — upsert-by-key curated memory |
 
 ---
 
