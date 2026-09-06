@@ -70,6 +70,11 @@ import { magnusDefaultToolAllowlist } from "../config/minimalMode.js";
 import { classifyToolResult, type ToolOutcome } from "./routing/actionIntegrity.js";
 import { manageProactiveMessages } from "../proactive/manageProactiveTool.js";
 import { manageReminders } from "../proactive/manageRemindersTool.js";
+import {
+  appendInternalLoopTools,
+  maybeSpillToolResult,
+  readToolArtifact,
+} from "./tools/toolResultSpill.js";
 
 const MODEL = "claude-sonnet-4-6";
 // Calendar + event log + YouTube bulk ops in one turn needs headroom (env override).
@@ -995,6 +1000,13 @@ async function runTool(
   const timeZone = ctx.timezone?.trim() || "UTC";
   try {
     switch (name) {
+      case "read_tool_artifact":
+        return await readToolArtifact({
+          userProfileId: ctx.userProfileId,
+          artifactId: String(input.artifact_id ?? ""),
+          offsetChars: num(input.offset_chars),
+          maxChars: num(input.max_chars),
+        });
       case "read_calendar":
         return await readCalendarEvents({
           startIso: typeof input.start_iso === "string" ? input.start_iso : undefined,
@@ -1406,10 +1418,11 @@ export async function runMagnusAgent(
   const toolsUsed: string[] = [];
   const toolOutcomes: ToolOutcome[] = [];
   const allowed = options?.allowedToolNames ?? magnusDefaultToolAllowlist();
-  const tools =
+  const tools = appendInternalLoopTools(
     allowed === undefined
       ? TOOLS
-      : TOOLS.filter((t) => "name" in t && allowed.includes(String(t.name)));
+      : TOOLS.filter((t) => "name" in t && allowed.includes(String(t.name))),
+  );
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
     const msg = await anthropic.messages.create({
@@ -1440,11 +1453,16 @@ export async function runMagnusAgent(
     const results = [];
     for (const use of uses) {
       toolsUsed.push(use.name);
-      const out = await runTool(
+      const rawOut = await runTool(
         use.name,
         (use.input ?? {}) as Record<string, unknown>,
         ctx,
       );
+      const out = await maybeSpillToolResult({
+        userProfileId: ctx.userProfileId,
+        toolName: use.name,
+        rawOutput: rawOut,
+      });
       toolOutcomes.push({
         name: use.name,
         ok: classifyToolResult(out),

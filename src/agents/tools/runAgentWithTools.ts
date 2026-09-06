@@ -15,6 +15,10 @@ import type { AgentContext, AgentResult } from "../types.js";
 import { OPERATIONS_TOOLS, runOperationsTool } from "../magnusAgent.js";
 import { classifyToolResult, type ToolOutcome } from "../routing/actionIntegrity.js";
 import { PILLAR_MODEL } from "../pillarSpecialist.js";
+import {
+  appendInternalLoopTools,
+  maybeSpillToolResult,
+} from "./toolResultSpill.js";
 
 const DEFAULT_MAX_ROUNDS = Math.min(
   Math.max(Number.parseInt(process.env.MAGNUS_PILLAR_TOOL_ROUNDS ?? "6", 10) || 6, 2),
@@ -66,10 +70,11 @@ export async function runAgentWithTools(input: RunAgentWithToolsInput): Promise<
   }
 
   const allowed = input.allowedToolNames;
-  const tools =
+  const tools = appendInternalLoopTools(
     allowed === undefined
       ? OPERATIONS_TOOLS
-      : OPERATIONS_TOOLS.filter((t) => "name" in t && allowed.includes(String(t.name)));
+      : OPERATIONS_TOOLS.filter((t) => "name" in t && allowed.includes(String(t.name))),
+  );
 
   const messages: MessageParam[] = buildAgentMessages(
     input.ctx,
@@ -110,11 +115,16 @@ export async function runAgentWithTools(input: RunAgentWithToolsInput): Promise<
     const results = [];
     for (const use of uses) {
       toolsUsed.push(use.name);
-      const out = await runOperationsTool(
+      const rawOut = await runOperationsTool(
         use.name,
         (use.input ?? {}) as Record<string, unknown>,
         input.ctx,
       );
+      const out = await maybeSpillToolResult({
+        userProfileId: input.ctx.userProfileId,
+        toolName: use.name,
+        rawOutput: rawOut,
+      });
       toolOutcomes.push({
         name: use.name,
         ok: classifyToolResult(out),

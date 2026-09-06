@@ -122,4 +122,11 @@ describe("capability catalog integrity", () => {
     expect(GENERAL_CAPABILITY_TOOLS.day_overview).toEqual([]);
     expect(GENERAL_CAPABILITY_TOOLS.conversation).toEqual([]);
   });
+
+  it("excludes internal read_tool_artifact from catalog and Magnus tool map", () => {
+    expect(MAGNUS_TOOL_NAMES.includes("read_tool_artifact" as never)).toBe(false);
+    for (const tools of Object.values(GENERAL_CAPABILITY_TOOLS)) {
+      expect(tools).not.toContain("read_tool_artifact");
+    }
+  });
 });

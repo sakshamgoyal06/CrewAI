@@ -113,9 +113,9 @@ Each step lists **work**, **tests to add/update**, and **success gate** (all gat
 
 **Success gate**
 
-- [ ] Fixture turn with 50 calendar events stays under 8K tokens added to loop.
-- [ ] `tool_select@1` ≥ 95% on calendar scenarios.
-- [ ] No truncation data loss in artifact round-trip test.
+- [x] Fixture turn with 50 calendar events stays under 8K tokens added to loop.
+- [x] `tool_select@1` ≥ 95% on calendar scenarios.
+- [x] No truncation data loss in artifact round-trip test.
 
 ---
 
