@@ -12,6 +12,7 @@ import {
   isParkedIntent,
   magnusDefaultToolAllowlist,
   parkedFeatureReply,
+  parkedGeneralTopicReply,
   parkedIntentReply,
 } from "../config/minimalMode.js";
 import { runMagnusAgent } from "./magnusAgent.js";
@@ -267,6 +268,27 @@ export async function runOrchestratorReply(input: {
         delegatedAgent: "Magnus",
         agentMetadata: {
           parked: "meals",
+          pillar_compose: false,
+          magnus_voice_finalized: true,
+        },
+      });
+    }
+
+    const parkedTopic = parkedGeneralTopicReply(effectiveUserMessage);
+    if (parkedTopic) {
+      const ctx: AgentContext = {
+        userProfileId: input.userProfileId,
+        telegramUserId: input.telegramUserId,
+        timezone: input.timezone,
+        rawMessage: effectiveUserMessage,
+        intent: "GENERAL",
+      };
+      return finalizeOrchestratorReply(ctx, {
+        replyText: parkedTopic,
+        intent: "GENERAL",
+        delegatedAgent: "Magnus",
+        agentMetadata: {
+          parked_general_topic: true,
           pillar_compose: false,
           magnus_voice_finalized: true,
         },

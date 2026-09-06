@@ -304,6 +304,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npm run dev` | Watch mode |
 | `npm run build` / `npm start` | Compile to `dist/`, run compiled |
 | `npm test` | Vitest unit tests |
+| `npm run test:accuracy` | Magnus accuracy suite — routing, tools, integrity, minimal gates (`docs/review/MAGNUS_ACCURACY_SCORECARD.md`) |
 | `npm run telegram:check` | Capability report + current Telegram config (`-- --json`, `-- --probe-conflict`) |
 | `npm run telegram:setup` | Apply Telegram config: webhook, commands, menu button, description |
 | `npm run test:supabase` | Supabase insert/delete smoke test (+ `memory_summaries` reachable) |
@@ -389,4 +390,4 @@ partial behaviour.
 
 ---
 
-**Last updated:** 2026-09-06 (minimal mode: calendar, lists, YouTube, morning brief, Hevy, reminders)
+**Last updated:** 2026-09-06 (accuracy suite + minimal parked-topic routing)

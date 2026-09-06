@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   filterCapabilityCatalog,
+  isMealRelatedTurn,
   isMinimalMode,
   isMinimalProactiveJobEnabled,
   isParkedGeneralCapability,
@@ -63,6 +64,12 @@ describe("minimalMode", () => {
     expect(isMinimalProactiveJobEnabled("gym_hevy_reconcile")).toBe(true);
     expect(isMinimalProactiveJobEnabled("morning_brief")).toBe(true);
     expect(isMinimalProactiveJobEnabled("proactive_subscriptions")).toBe(false);
+  });
+
+  it("does not treat list recommend as meal", () => {
+    expect(
+      isMealRelatedTurn({ message: "recommend dinner from my food list" }),
+    ).toBe(false);
   });
 
   it("exposes a magnus tool allowlist with lists and youtube", () => {

@@ -205,6 +205,13 @@ export function isMealRelatedTurn(input: {
     return true;
   }
   const lower = input.message.trim().toLowerCase();
+  if (
+    /\b(?:recommend|watchlist|readlist|from my .+ list|list_items|add .+ to .+list)\b/i.test(
+      lower,
+    )
+  ) {
+    return false;
+  }
   return (
     /\b(?:log|logged|ate|had|eating|lunch|breakfast|dinner|snack|meal|calorie|macro|protein)\b/i.test(
       lower,
@@ -214,4 +221,32 @@ export function isMealRelatedTurn(input: {
 
 export function parkedPillarIds(): readonly PillarId[] {
   return ["WEALTH", "HAPPINESS", "WISDOM"];
+}
+
+/**
+ * When minimal mode classifies a parked pillar topic as GENERAL, still return a parked reply.
+ */
+export function parkedGeneralTopicReply(message: string): string | null {
+  const lower = message.trim().toLowerCase();
+  if (/\b(?:notion|lifeos|connect_notion|sync_notion|setup_notion)\b/i.test(lower)) {
+    return parkedGeneralCapabilityReply("notion");
+  }
+  if (
+    /\b(?:zerodha|kite|portfolio|holdings|sips?|net worth|budget|investing|stock holdings)\b/i.test(
+      lower,
+    )
+  ) {
+    return parkedIntentReply("WEALTH");
+  }
+  if (
+    /\b(?:recommend a movie|pick a movie|poetry mic|leisure coach|happiness coach)\b/i.test(
+      lower,
+    )
+  ) {
+    return parkedIntentReply("HAPPINESS");
+  }
+  if (/\b(?:learning plan|career coach|wisdom coach|skill sprint)\b/i.test(lower)) {
+    return parkedIntentReply("WISDOM");
+  }
+  return null;
 }
