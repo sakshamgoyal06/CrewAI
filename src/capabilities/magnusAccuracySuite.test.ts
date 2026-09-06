@@ -12,6 +12,7 @@ import {
   buildAccuracyReport,
   evaluateActionIntegrityCase,
   evaluateOrchestratorCase,
+  evaluateReadBeforeWriteCase,
   formatAccuracyReportMarkdown,
 } from "./magnusAccuracyEvaluators.js";
 import {
@@ -22,6 +23,7 @@ import {
   ALL_MINIMAL_ORCHESTRATOR_CASES,
   FAULT_TOLERANCE_CASES,
   METAMORPHIC_PARAPHRASE_GROUPS,
+  READ_BEFORE_WRITE_CASES,
   toGoldenPathScenario,
 } from "./magnusAccuracyScenarios.js";
 import type { MagnusAccuracyCaseResult } from "./magnusAccuracySuite.types.js";
@@ -293,10 +295,20 @@ describe("magnus accuracy suite", () => {
     }
   });
 
+  describe("read-before-write guards (Step 5)", () => {
+    for (const c of READ_BEFORE_WRITE_CASES) {
+      it(c.id, () => {
+        const result = evaluateReadBeforeWriteCase(c);
+        suiteResults.push(result);
+        expect(result.failures, c.id).toEqual([]);
+      });
+    }
+  });
+
   describe("metamorphic paraphrase groups (ReliabilityBench ε)", () => {
     for (const group of METAMORPHIC_PARAPHRASE_GROUPS) {
       it(`${group.id} has coherent expectations`, () => {
-        expect(group.paraphrases.length).toBeGreaterThanOrEqual(2);
+        expect(group.paraphrases.length).toBeGreaterThanOrEqual(4);
         expect(group.idealIntent).toBeTruthy();
         expect(group.idealCapability).toBeTruthy();
         suiteResults.push({
@@ -390,6 +402,15 @@ describe("magnus accuracy suite", () => {
       );
       expect(report.metrics.toolSelectAt1).toBeGreaterThanOrEqual(
         DEFAULT_ACCURACY_GATES.toolSelectAt1,
+      );
+      expect(report.metrics.metamorphicDesign).toBeGreaterThanOrEqual(
+        DEFAULT_ACCURACY_GATES.metamorphicDesign,
+      );
+      expect(report.metrics.metamorphicPass).toBeGreaterThanOrEqual(
+        DEFAULT_ACCURACY_GATES.metamorphicPass,
+      );
+      expect(report.metrics.readBeforeWrite).toBeGreaterThanOrEqual(
+        DEFAULT_ACCURACY_GATES.readBeforeWrite,
       );
       expect(report.allGatesPassed).toBe(true);
     });

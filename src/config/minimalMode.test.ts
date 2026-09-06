@@ -67,6 +67,12 @@ describe("minimalMode", () => {
     expect(isMinimalProactiveJobEnabled("proactive_subscriptions")).toBe(false);
   });
 
+  it("does not treat log a note as meal", () => {
+    expect(
+      isMealRelatedTurn({ message: "log a note: thailand trip in september" }),
+    ).toBe(false);
+  });
+
   it("does not treat list recommend as meal", () => {
     expect(
       isMealRelatedTurn({ message: "recommend dinner from my food list" }),

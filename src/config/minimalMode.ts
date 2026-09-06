@@ -206,6 +206,9 @@ export function isMealRelatedTurn(input: {
     return true;
   }
   const lower = input.message.trim().toLowerCase();
+  if (/\b(?:log a note|log note|journal note)\b/i.test(lower)) {
+    return false;
+  }
   if (
     /\b(?:recommend|watchlist|readlist|from my .+ list|list_items|add .+ to .+list)\b/i.test(
       lower,

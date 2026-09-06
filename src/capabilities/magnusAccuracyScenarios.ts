@@ -238,6 +238,91 @@ export const METAMORPHIC_PARAPHRASE_GROUPS: MagnusMetamorphicGroup[] = [
     idealIntent: "HEALTH",
     idealCapability: "fitness",
   },
+  {
+    id: "morph-reminders",
+    category: "general_reminders",
+    paraphrases: [
+      "remind me to call mom tomorrow at 6pm",
+      "set a reminder for gym at 7am tomorrow",
+      "nudge me at 9pm to review the deck",
+      "ping me tomorrow morning to send the email",
+    ],
+    idealIntent: "GENERAL",
+    idealCapability: "reminders",
+    expectedPrimaryTool: "manage_reminders",
+  },
+  {
+    id: "morph-youtube",
+    category: "general_youtube",
+    paraphrases: [
+      "search YouTube for lo-fi study beats",
+      "find a jazz playlist on YouTube",
+      "look up a focus music video on youtube",
+      "youtube search ambient coding music",
+    ],
+    idealIntent: "GENERAL",
+    idealCapability: "youtube",
+    expectedPrimaryTool: "youtube_search",
+  },
+];
+
+export type ReadBeforeWriteCase = {
+  id: string;
+  writeTool: string;
+  priorReads: string[];
+  expectBlocked: boolean;
+};
+
+/** Step 5 — read-before-write guard matrix (pure, no I/O). */
+export const READ_BEFORE_WRITE_CASES: ReadBeforeWriteCase[] = [
+  {
+    id: "rbw-cal-update-block",
+    writeTool: "update_calendar_event",
+    priorReads: [],
+    expectBlocked: true,
+  },
+  {
+    id: "rbw-cal-delete-block",
+    writeTool: "delete_calendar_event",
+    priorReads: [],
+    expectBlocked: true,
+  },
+  {
+    id: "rbw-cal-update-allow",
+    writeTool: "update_calendar_event",
+    priorReads: ["read_calendar"],
+    expectBlocked: false,
+  },
+  {
+    id: "rbw-cal-delete-allow-spill",
+    writeTool: "delete_calendar_event",
+    priorReads: ["read_calendar", "read_tool_artifact"],
+    expectBlocked: false,
+  },
+  {
+    id: "rbw-cal-create-allow",
+    writeTool: "create_calendar_event",
+    priorReads: [],
+    expectBlocked: false,
+  },
+  {
+    id: "rbw-list-update-block",
+    writeTool: "update_list_item",
+    priorReads: [],
+    expectBlocked: true,
+  },
+  {
+    id: "rbw-list-update-allow",
+    writeTool: "update_list_item",
+    priorReads: ["list_items"],
+    expectBlocked: false,
+  },
+  {
+    id: "rbw-list-add-allow",
+    writeTool: "add_list_item",
+    priorReads: [],
+    expectBlocked: false,
+  },
 ];
 
 /** Build orchestrator cases from catalog entries compatible with minimal mode. */

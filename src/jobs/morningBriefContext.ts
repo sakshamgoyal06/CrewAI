@@ -4,6 +4,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isMinimalMode } from "../config/minimalMode.js";
 import { reconcileFromRecentJournalLogs } from "../events/eventCompletionReconcile.js";
 import { hasMorningOrientationToday } from "../proactive/rhythm/checkinRhythm.js";
 import { localWeekdayIndex } from "../proactive/rhythm/localWeekday.js";
@@ -15,6 +16,7 @@ import { offsetDateKey } from "../nutrition/parseMealPlanJson.js";
 import { buildCompactMorningBriefPayload } from "./morningBriefCompact.js";
 import { getLocalTimeParts } from "./morningBriefTime.js";
 import { logger } from "../logger.js";
+import { buildDayContext } from "../day/buildDayContext.js";
 
 export type MorningBriefContextBundle = {
   /** ISO timestamp for the "now" used in this brief (injected for tests). */
@@ -59,6 +61,8 @@ export type MorningBriefContextBundle = {
   weekPriorities?: string | null;
   /** True when today's check-in already has morning intention or energy. */
   hasMorningIntentionToday?: boolean;
+  /** Shared day context — Google Calendar + reminders for today (Step 6). */
+  dayContext?: import("../day/buildDayContext.js").DayContext;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST row shape varies
@@ -314,12 +318,28 @@ export async function fetchMorningBriefContext(
 
   const patternRows = filterEmergingPlusPatterns(rawPatterns ?? []);
 
-  const meals = await loadMealProactiveSnapshot({
+  const localParts = getLocalTimeParts(now, timeZone);
+  const dayContext = await buildDayContext({
     userProfileId,
     timezone: timeZone,
-    now,
-    recentUserChatSnippet: "",
-  }).catch(() => null);
+    localDate: localParts.dateKey,
+    label: "Today",
+    offsetDays: 0,
+    includeMeals: !isMinimalMode(),
+  }).catch((err) => {
+    logger.debug({ err: String(err) }, "morning brief day context skipped");
+    return undefined;
+  });
+
+  const meals =
+    isMinimalMode()
+      ? null
+      : await loadMealProactiveSnapshot({
+          userProfileId,
+          timezone: timeZone,
+          now,
+          recentUserChatSnippet: "",
+        }).catch(() => null);
 
   const nutritionBrief =
     meals &&
@@ -349,7 +369,6 @@ export async function fetchMorningBriefContext(
     magnusInsights: magnusInsights.length > 0,
   };
 
-  const localParts = getLocalTimeParts(now, timeZone);
   const dayIndex = localWeekdayIndex(now, timeZone);
   const daysFromMonday = dayIndex === 0 ? 6 : dayIndex - 1;
   const mondayKey = offsetDateKey(localParts.dateKey, -daysFromMonday);
@@ -378,6 +397,7 @@ export async function fetchMorningBriefContext(
     dataAvailability,
     weekPriorities,
     hasMorningIntentionToday,
+    dayContext,
   };
 }
 
