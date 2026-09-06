@@ -35,8 +35,11 @@ export async function evaluateProjectConflicts(
   return null;
 }
 
-export async function deprioritizeProject(projectId: string): Promise<void> {
-  await updateProject(projectId, { energy_budget: "low", priority_rank: 3 });
+export async function deprioritizeProject(
+  userProfileId: string,
+  projectId: string,
+): Promise<void> {
+  await updateProject(userProfileId, projectId, { energy_budget: "low", priority_rank: 3 });
 }
 
 export async function prioritizeProject(
@@ -44,10 +47,10 @@ export async function prioritizeProject(
   projectId: string,
 ): Promise<void> {
   const active = await listActiveProjects(userProfileId);
-  await updateProject(projectId, { priority_rank: 1, energy_budget: "high" });
+  await updateProject(userProfileId, projectId, { priority_rank: 1, energy_budget: "high" });
   for (const p of active) {
     if (p.id !== projectId) {
-      await updateProject(p.id, {
+      await updateProject(userProfileId, p.id, {
         priority_rank: Math.min(p.priority_rank + 1, 5),
         energy_budget: p.energy_budget === "high" ? "medium" : p.energy_budget,
       });

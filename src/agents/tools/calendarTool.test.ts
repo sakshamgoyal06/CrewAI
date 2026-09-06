@@ -28,6 +28,8 @@ vi.mock("../../users/userIntegrations.js", () => ({
   loadUserIntegrations: vi.fn().mockResolvedValue({}),
 }));
 
+import { loadUserIntegrations } from "../../users/userIntegrations.js";
+
 import {
   createCalendarEvent,
   deleteCalendarEvent,
@@ -36,12 +38,40 @@ import {
 } from "./calendarTool.js";
 
 const IST = "Asia/Kolkata";
+const USER = "00000000-0000-0000-0000-000000000001";
+
+function enablePlatformOAuth(): void {
+  process.env.GOOGLE_CLIENT_ID = "test-client-id";
+  process.env.GOOGLE_CLIENT_SECRET = "test-client-secret";
+}
 
 describe("readCalendarEvents", () => {
   beforeEach(() => {
+    enablePlatformOAuth();
     configuredMock.mockReset();
     listEventsMock.mockReset();
     configuredMock.mockReturnValue(true);
+    vi.mocked(loadUserIntegrations).mockResolvedValue({});
+  });
+
+  it("uses per-user refresh token when userProfileId is set", async () => {
+    configuredMock.mockReturnValue(false);
+    vi.mocked(loadUserIntegrations).mockResolvedValue({
+      googleCalendarRefreshToken: "user-refresh",
+    });
+    listEventsMock.mockResolvedValue([]);
+
+    await readCalendarEvents({ userProfileId: USER, timeZone: IST });
+
+    expect(listEventsMock).toHaveBeenCalled();
+  });
+
+  it("does not treat host token as connected for a user without their own token", async () => {
+    configuredMock.mockReturnValue(true);
+    vi.mocked(loadUserIntegrations).mockResolvedValue({});
+    const out = await readCalendarEvents({ userProfileId: USER, timeZone: IST });
+    expect(out).toContain("not connected");
+    expect(listEventsMock).not.toHaveBeenCalled();
   });
 
   it("explains what to set when Calendar is not connected", async () => {
@@ -165,6 +195,7 @@ describe("readCalendarEvents", () => {
 
 describe("createCalendarEvent", () => {
   beforeEach(() => {
+    enablePlatformOAuth();
     configuredMock.mockReset();
     createEventMock.mockReset();
     configuredMock.mockReturnValue(true);
@@ -215,6 +246,7 @@ describe("createCalendarEvent", () => {
 
 describe("updateCalendarEvent", () => {
   beforeEach(() => {
+    enablePlatformOAuth();
     configuredMock.mockReset();
     getEventMock.mockReset();
     updateEventMock.mockReset();
@@ -286,6 +318,7 @@ describe("updateCalendarEvent", () => {
 
 describe("deleteCalendarEvent", () => {
   beforeEach(() => {
+    enablePlatformOAuth();
     configuredMock.mockReset();
     getEventMock.mockReset();
     deleteEventMock.mockReset();

@@ -94,7 +94,7 @@ function rowToProfile(
 
 /**
  * Resolves or creates `user_profile` for this Telegram user (`ctx.from.id` as string).
- * Reuses legacy single row with NULL telegram_chat_id when exactly one such row exists.
+ * Each Telegram id maps to exactly one row via unique `telegram_chat_id`.
  */
 export async function resolveTelegramUserProfile(
   telegramUserId: string,

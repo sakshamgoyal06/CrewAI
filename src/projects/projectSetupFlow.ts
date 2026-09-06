@@ -118,13 +118,13 @@ async function lockSessionToProject(
   );
 
   if (listId) {
-    await updateProject(project.id, { checklist_list_id: listId });
+    await updateProject(ctx.userProfileId, project.id, { checklist_list_id: listId });
   }
 
   const milestones =
     session.draft_milestones.length > 0 ? session.draft_milestones : theme.defaultMilestones;
   await createProjectMilestones(ctx.userProfileId, project.id, milestones);
-  await lockProjectSession(session.id);
+  await lockProjectSession(ctx.userProfileId, session.id);
 
   return {
     text:
@@ -159,7 +159,7 @@ async function applyDraftPatch(
   parsed: ParsedProjectSetupTurn,
   themeDefaults: ReturnType<typeof getProjectTheme>,
 ): Promise<ProjectSessionRow> {
-  const patch: Parameters<typeof updateProjectSession>[1] = {
+  const patch: Parameters<typeof updateProjectSession>[2] = {
     status: "draft",
     step: "review",
   };
@@ -184,7 +184,7 @@ async function applyDraftPatch(
     patch.draft_milestones = themeDefaults.defaultMilestones;
   }
 
-  await updateProjectSession(session.id, patch);
+  await updateProjectSession(session.user_profile_id, session.id, patch);
   return (await getActiveProjectSession(session.user_profile_id))!;
 }
 
@@ -206,7 +206,7 @@ export async function runProjectSetupFlow(
     projectSetupIntentActionable(parsed)
   ) {
     if (session) {
-      await abandonProjectSession(session.id);
+      await abandonProjectSession(ctx.userProfileId, session.id);
     }
     return {
       text: "Cancelled project planning.",
@@ -232,7 +232,7 @@ export async function runProjectSetupFlow(
       };
     }
     session = created.session;
-    await updateProjectSession(session.id, {
+    await updateProjectSession(ctx.userProfileId, session.id, {
       project_type: themeId,
       primary_pillar: theme.primaryPillar.toLowerCase(),
       draft_checklist: parsed.checklist ?? theme.defaultChecklist,
@@ -251,7 +251,7 @@ export async function runProjectSetupFlow(
   }
 
   if (parsed.intent === "skip_defaults") {
-    await updateProjectSession(session.id, {
+    await updateProjectSession(ctx.userProfileId, session.id, {
       step: "review",
       status: "draft",
       draft_checklist:

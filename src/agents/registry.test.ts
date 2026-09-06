@@ -92,6 +92,7 @@ function parserPlan(capability: string, pillar: "WEALTH" | "HAPPINESS" | "WISDOM
 
 describe("pillar dispatch", () => {
   beforeEach(() => {
+    process.env.MAGNUS_MINIMAL_MODE = "false";
     process.env.MAGNUS_PILLAR_PLAN_COMPOSE = "false";
     messagesCreate.mockReset();
     messagesCreate.mockResolvedValue({
@@ -125,6 +126,14 @@ describe("pillar dispatch", () => {
 
   it("has no specialist for GENERAL — Magnus answers those himself", () => {
     expect(findAgentForIntent("GENERAL")).toBeNull();
+  });
+
+  it("parks wealth/happiness/wisdom specialists in minimal mode", () => {
+    process.env.MAGNUS_MINIMAL_MODE = "true";
+    expect(findAgentForIntent("WEALTH")).toBeNull();
+    expect(findAgentForIntent("HAPPINESS")).toBeNull();
+    expect(findAgentForIntent("WISDOM")).toBeNull();
+    expect(findAgentForIntent("HEALTH")).not.toBeNull();
   });
 
   it("keeps light pillar replies bounded", async () => {

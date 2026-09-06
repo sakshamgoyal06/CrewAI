@@ -28,18 +28,18 @@ const NOT_CONFIGURED =
   "Google Calendar is not connected for this account. Ask me to connect Google (one link covers Calendar and YouTube).";
 
 async function calendarReady(userProfileId?: string): Promise<boolean> {
-  if (googleCalendarConfigured()) {
-    return true;
-  }
-  if (!userProfileId?.trim()) {
+  const platformOk =
+    Boolean(process.env.GOOGLE_CLIENT_ID?.trim()) &&
+    Boolean(process.env.GOOGLE_CLIENT_SECRET?.trim());
+  if (!platformOk) {
     return false;
   }
+  if (!userProfileId?.trim()) {
+    // Host-level dev token only when no user context (scripts / legacy).
+    return googleCalendarConfigured();
+  }
   const integrations = await loadUserIntegrations(userProfileId);
-  return Boolean(
-    integrations.googleCalendarRefreshToken &&
-      process.env.GOOGLE_CLIENT_ID?.trim() &&
-      process.env.GOOGLE_CLIENT_SECRET?.trim(),
-  );
+  return Boolean(integrations.googleCalendarRefreshToken);
 }
 
 function formatWhen(event: CalendarEventBrief, timeZone: string): string {
