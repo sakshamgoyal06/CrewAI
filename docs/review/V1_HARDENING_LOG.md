@@ -10,11 +10,8 @@
 | Date | PR | Agent / human | Segments | Gates A–D | Summary |
 |------|-----|---------------|----------|-----------|---------|
 | 2026-08-16 | docs | — | Plan created | — | Initial review artifact suite pushed to `main` |
-<<<<<<< HEAD
 | 2026-08-17 | docs | — | PR #99 scope | — | Added segment **10.3 Reminder frequencies** (coriander incident); interval/until/replace-on-correct |
-=======
 | 2026-09-05 | — | agent | routing spine | — | LLM `routingContextParser` replaces regex routing (conversationSignals, magnusActionDetect, deterministic plan bypasses) |
->>>>>>> origin/main
 | 2026-08-18 | #92 | agent | 3.1 (partial) | A pass (scoped) | Generic growth snapshot: day frame, commitments, errands, projects, slipping routines by activity_key |
 | 2026-08-17 | #91 / GitHub #92 | owner | 0.1–2.1 | A pass | Merged foundation PR |
 

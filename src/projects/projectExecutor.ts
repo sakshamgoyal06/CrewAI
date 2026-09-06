@@ -80,7 +80,7 @@ export async function runProjectStatus(ctx: AgentContext): Promise<AgentResult> 
 
   const blocks: string[] = [];
   for (const s of summaries) {
-    const milestones = await listProjectMilestones(s.id);
+    const milestones = await listProjectMilestones(ctx.userProfileId, s.id);
     const doneMs = milestones.filter((m) => m.status === "done").length;
     blocks.push(
       [
@@ -119,7 +119,7 @@ export async function runProjectManage(ctx: AgentContext, args: Record<string, u
   }
 
   if (/\b(?:pause|hold|freeze)\b/.test(raw)) {
-    await updateProject(project.id, { status: "paused" });
+    await updateProject(ctx.userProfileId, project.id, { status: "paused" });
     return {
       text: `Paused **${project.title}**. Checklist nudges are off until you resume.`,
       metadata: { specialist: "Magnus", project_id: project.id, pillar_compose: true },
@@ -127,7 +127,7 @@ export async function runProjectManage(ctx: AgentContext, args: Record<string, u
   }
 
   if (/\b(?:resume|unpause|continue)\b/.test(raw)) {
-    await updateProject(project.id, { status: "active" });
+    await updateProject(ctx.userProfileId, project.id, { status: "active" });
     return {
       text: `Resumed **${project.title}**.`,
       metadata: { specialist: "Magnus", project_id: project.id, pillar_compose: true },
@@ -135,7 +135,7 @@ export async function runProjectManage(ctx: AgentContext, args: Record<string, u
   }
 
   if (/\b(?:complete|done|finished|we did it)\b/.test(raw)) {
-    await updateProject(project.id, { status: "completed" });
+    await updateProject(ctx.userProfileId, project.id, { status: "completed" });
     return {
       text: `Marked **${project.title}** complete. Nice work.`,
       metadata: { specialist: "Magnus", project_id: project.id, pillar_compose: true },
@@ -143,7 +143,7 @@ export async function runProjectManage(ctx: AgentContext, args: Record<string, u
   }
 
   if (/\b(?:drop|abandon|cancel project)\b/.test(raw)) {
-    await updateProject(project.id, { status: "abandoned" });
+    await updateProject(ctx.userProfileId, project.id, { status: "abandoned" });
     return {
       text: `Dropped **${project.title}**.`,
       metadata: { specialist: "Magnus", project_id: project.id, pillar_compose: true },
@@ -151,10 +151,10 @@ export async function runProjectManage(ctx: AgentContext, args: Record<string, u
   }
 
   if (/\b(?:primary|priorit)\b/.test(raw)) {
-    await updateProject(project.id, { priority_rank: 1, energy_budget: "high" });
+    await updateProject(ctx.userProfileId, project.id, { priority_rank: 1, energy_budget: "high" });
     const others = (await listActiveProjects(ctx.userProfileId)).filter((p) => p.id !== project.id);
     for (const o of others) {
-      await updateProject(o.id, { priority_rank: o.priority_rank + 1, energy_budget: "medium" });
+      await updateProject(ctx.userProfileId, o.id, { priority_rank: o.priority_rank + 1, energy_budget: "medium" });
     }
     return {
       text: `Made **${project.title}** your primary project for now.`,

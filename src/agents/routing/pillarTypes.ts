@@ -21,6 +21,7 @@ export type DepartmentId =
   // Wisdom
   | "learning_plan_development"
   | "tracking_habits"
+  | "magnus"
   | "build_ship"
   // Joy
   | "relationships"
@@ -50,6 +51,7 @@ export function isDepartmentId(value: string): value is DepartmentId {
     case "fire_independence_goals":
     case "learning_plan_development":
     case "tracking_habits":
+    case "magnus":
     case "build_ship":
     case "relationships":
     case "adventure_trips":
@@ -75,6 +77,7 @@ export function pillarForDepartment(department: DepartmentId): Pillar {
       return "wealth";
     case "learning_plan_development":
     case "tracking_habits":
+    case "magnus":
     case "build_ship":
       return "wisdom";
     case "relationships":

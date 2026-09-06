@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   filterCapabilityCatalog,
+  filterConsultablePillars,
   isMealRelatedTurn,
   isMinimalMode,
   isMinimalProactiveJobEnabled,
@@ -81,5 +82,10 @@ describe("minimalMode", () => {
     expect(allowlist).toContain("list_items");
     expect(allowlist).not.toContain("connect_notion");
     expect(MINIMAL_MAGNUS_TOOL_NAMES.has("read_calendar")).toBe(true);
+  });
+
+  it("filters consultable pillars to HEALTH in minimal mode", () => {
+    process.env.MAGNUS_MINIMAL_MODE = "true";
+    expect(filterConsultablePillars(["HEALTH", "WEALTH"])).toEqual(["HEALTH"]);
   });
 });

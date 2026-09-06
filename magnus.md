@@ -132,6 +132,7 @@ shell or `.env`.
 | `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
 | `src/events/` | Event log domain: timezone helpers, Supabase store, calendar sync, formatting, **completion reconcile** (`eventCompletionReconcile.ts` — journal text → `missed`/`planned` → `done`) |
 | `src/youtube/` | Bookmarks, cue queue, Magnus playlist state, **`playlistResolve`** (pillar aliases vs YT account title match; `youtubeAccountOnly` when user says YT Music) |
+| `src/agents/pillarPhilosophy.ts` | Four-pillar definitions, intent→route map, live vs parked in minimal mode |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
 | `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
 | `src/agents/health/healthRouter.ts` | Health composite: pillar plan parser (LLM) → capability executors (compose pipeline) |
@@ -166,12 +167,13 @@ shell or `.env`.
 
 ## Behaviour
 
-1. **Identity** — Each Telegram user is keyed by `ctx.from.id` → `user_profile.telegram_chat_id` → canonical `user_profile.id`. Personalised fields: `display_name`, `timezone`, `north_star_goal`, `user_tier`, `access_flags`. New users get neutral defaults (`timezone: UTC`); owner seeding via `scripts/provision-owner-user.mts`.
-2. **Access** — `allowlisted`, `user_tier`, `access_flags` on `user_profile`. Not allowlisted means
+1. **Identity (multi-user)** — Each Telegram user is keyed by `ctx.from.id` → unique `user_profile.telegram_chat_id` → canonical `user_profile.id`. All domain tables use `user_profile_id`; writes must scope by it (see `projectStore`, `projectSessionStore`). Personalised fields: `display_name`, `timezone`, `north_star_goal`, `user_tier`, `access_flags`. New users auto-insert on first message; `allowlisted=false` until provisioned (`scripts/provision-owner-user.mts` or manual Supabase flip). Per-user integrations live in `user_integrations` (Calendar, YouTube, Hevy, Notion, Kite) — not host env.
+2. **Four pillars + Magnus** — Five intents: **GENERAL** (Magnus coordinator, tools) + **HEALTH**, **WEALTH**, **HAPPINESS**, **WISDOM** specialists. Canonical definitions in `src/agents/pillarPhilosophy.ts`. User never addresses a specialist; routing is silent; one Magnus voice at exit. Minimal mode may **park runtime depth** for some pillars without removing the model — metadata still records the intended pillar.
+3. **Access** — `allowlisted`, `user_tier`, `access_flags` on `user_profile`. Not allowlisted means
    a fixed refusal and no chat rows.
-3. **Rate limit** — Redis fixed 60s window per user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, 0 disables).
-4. **Dedupe** — `update_id` claimed in Redis for 24h, so webhook retries never double-reply.
-5. **Classification** — Five intents. `GENERAL` is Magnus's own work, not a fallback bucket.
+4. **Rate limit** — Redis fixed 60s window per user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, 0 disables).
+5. **Dedupe** — `update_id` claimed in Redis for 24h, so webhook retries never double-reply.
+6. **Classification** — Five intents. `GENERAL` is Magnus's own work, not a fallback bucket.
    Each turn: **`assembleRoutingContext`** loads identity, integrations, pending FSM state,
    recent turns, active work, standing rules, and a **growth snapshot** (day frame, north star goals,
    commitments/errands, project consistency, slipping routines by `activity_key`, issues,
@@ -188,8 +190,8 @@ shell or `.env`.
    (`conversation` | `automated`) and `delivery_trigger` (`manual`, `scheduled`, `http`,
    `event_reminder`, `system`, …) classify normal chat vs Magnus-initiated outbound and why it
    was sent. **Project setup:** draft sessions do **not** hijack calendar/day/gym/meals; lock/cancel parsed by LLM (`parseProjectSetupTurn`) in orchestrator prelude before routing.
-8. **Replies** — One reply per turn, chunked only for Telegram's size limit, sent as HTML.
-9. **Proactive Telegram** — Magnus can initiate messages without a user turn: in-process cron
+9. **Replies** — One reply per turn, chunked only for Telegram's size limit, sent as HTML.
+10. **Proactive Telegram** — Magnus can initiate messages without a user turn: in-process cron
    (`MAGNUS_PROACTIVE_CRON_ENABLED`, default on) runs scheduled jobs every
    `MAGNUS_PROACTIVE_CRON_INTERVAL_MINUTES` (default 5). Jobs: **morning brief** (local hour from
    `MAGNUS_MORNING_BRIEF_LOCAL_HOUR` in `user_profile.timezone`; Redis dedupe per calendar day),
@@ -211,13 +213,13 @@ shell or `.env`.
    reminders exempt).    Manual brief: say `morning brief` or
    `/morningbrief`. After the brief, the next reply to the win question goes through a confirm loop (yes → log `morning_intention` on check-in; no → try again; explicit skip ends the loop). Outbound uses HTML formatting and is logged to `magnus_chat_messages` with
    `metadata.proactive`.
-10. **Event log** — Magnus tools `log_event`, `update_event`, `reschedule_event`, `list_events` write
+11. **Event log** — Magnus tools `log_event`, `update_event`, `reschedule_event`, `list_events` write
    to `magnus_events`. Moving a commitment closes the old row and opens a linked replacement (never
    edits time in place). A second `log_event` for the same activity with a different time within two
    hours is rejected — Magnus must call `reschedule_event` instead. Calendar delete/update cancels or
    reschedules the linked event-log row automatically. Memory and the Morning Brief read commitments
    around today plus per-activity adherence from `magnus_event_activity_stats`.
-11. **Google (Calendar + YouTube)** — Per-user tokens in `user_integrations`. In chat: “connect
+12. **Google (Calendar + YouTube)** — Per-user tokens in `user_integrations`. In chat: “connect
     Google” → one consent; `GET /oauth/google/callback` stores the same refresh token on
     `google_calendar_refresh_token` and `google_youtube_refresh_token`. Host needs a **Web**
     OAuth client (`GOOGLE_CLIENT_ID` / `SECRET`). YouTube playlists resolve by pillar name
@@ -225,16 +227,16 @@ shell or `.env`.
     `magnus_youtube_state.playlist_aliases`. When the exact playlist is missing or `add` has no
     `playlist_id`, the tool lists close matches (or all playlists) for the user to pick — never
     silently defaults to Magnus on add. Bulk actions: `clear` (empty playlist), `dedupe` (remove duplicate videos).
-12. **Intent routing** — Only Magnus (`GENERAL`) has tools. YouTube actions, list/LifeOS/Notion
+13. **Intent routing** — Only Magnus (`GENERAL`) has tools. YouTube actions, list/LifeOS/Notion
     phrases, and short continuations after a Magnus tool turn coerce to `GENERAL`. Pillar specialists
     are prompt-only and must not claim tool actions (see `pillarSpecialist.ts` guard). Health has
     sub-router depth; Wealth loads Kite read-only portfolio context. **Photo turns:** `src/vision/`
     analyzes caption + recent chat, infers purpose (`meal_log`, `list_items`, …) and routes to the
     correct pillar; `meal_log_photo` only when purpose is food. Short meal-slot follow-ups (`Dinner?`)
     after meal context route to HEALTH `meal_plan_read`.
-13. **Gym schedule** — Fitness turns inject today's session from locked `weekly_schedule` program memory
+14. **Gym schedule** — Fitness turns inject today's session from locked `weekly_schedule` program memory
     (Mon-first table) before Hevy history.
-14. **Pillar execution plans** — Every routed pillar runs a Haiku **plan parser**
+15. **Pillar execution plans** — Every routed pillar runs a Haiku **plan parser**
     (`MAGNUS_PILLAR_STRATEGY_MODEL`, default `claude-haiku-4-5`) that sees the user message,
     **routing hints** (meal session flags, integration connectivity, recent turn previews), and returns
     an ordered **steps[]** array (1–`MAGNUS_PILLAR_PLAN_MAX_STEPS`, default 4). **Architecture:
@@ -390,4 +392,4 @@ partial behaviour.
 
 ---
 
-**Last updated:** 2026-09-06 (Step 4 pgvector recall + Steps 0–3)
+**Last updated:** 2026-09-06 (PR #99 multi-user scoping + PR #100 accuracy Steps 0–4)

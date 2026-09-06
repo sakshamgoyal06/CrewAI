@@ -86,6 +86,7 @@ export async function createProjectSession(
 }
 
 export async function updateProjectSession(
+  userProfileId: string,
   sessionId: string,
   patch: Partial<{
     status: ProjectSessionStatus;
@@ -110,7 +111,11 @@ export async function updateProjectSession(
     }
   }
 
-  const { error } = await supabase.from("project_sessions").update(payload).eq("id", sessionId);
+  const { error } = await supabase
+    .from("project_sessions")
+    .update(payload)
+    .eq("id", sessionId)
+    .eq("user_profile_id", userProfileId);
   if (error) {
     return { ok: false, error: error.message };
   }
@@ -118,13 +123,15 @@ export async function updateProjectSession(
 }
 
 export async function abandonProjectSession(
+  userProfileId: string,
   sessionId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  return updateProjectSession(sessionId, { status: "abandoned", step: "intent" });
+  return updateProjectSession(userProfileId, sessionId, { status: "abandoned", step: "intent" });
 }
 
 export async function lockProjectSession(
+  userProfileId: string,
   sessionId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  return updateProjectSession(sessionId, { status: "locked", step: "review" });
+  return updateProjectSession(userProfileId, sessionId, { status: "locked", step: "review" });
 }

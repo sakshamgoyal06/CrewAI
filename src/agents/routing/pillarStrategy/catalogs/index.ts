@@ -20,7 +20,7 @@ export function getCapabilityCatalog(pillar: PillarId): CapabilityCatalog {
 }
 
 export function isValidCapability(pillar: PillarId, capability: string): boolean {
-  return CATALOGS[pillar].capabilities.some((c) => c.id === capability);
+  return getCapabilityCatalog(pillar).capabilities.some((c) => c.id === capability);
 }
 
 export function formatCatalogForPrompt(catalog: CapabilityCatalog): string {
