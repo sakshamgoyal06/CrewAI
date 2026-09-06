@@ -112,8 +112,8 @@ export async function buildDayContext(input: BuildDayContextInput): Promise<DayC
       : "No reminders set for this day.";
 
   const reminders: DayContextReminder[] = dayReminders.map((r) => ({
-    at: r.at,
-    label: r.message?.trim() || "Reminder",
+    at: r.at!.toISOString(),
+    label: r.title.trim() || "Reminder",
   }));
 
   const plannedMealsText = includeMeals

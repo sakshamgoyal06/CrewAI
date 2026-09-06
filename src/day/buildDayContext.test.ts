@@ -47,8 +47,12 @@ describe("buildDayContext", () => {
     listEventsMock.mockResolvedValue("- Gym (planned)");
     listRemindersMock.mockResolvedValue([
       {
+        kind: "standalone",
+        id: "r1",
+        title: "Gym reminder",
         at: new Date("2026-08-12T09:00:00.000Z"),
-        message: "Gym reminder",
+        scheduleLabel: null,
+        recurring: false,
       },
     ]);
   });
