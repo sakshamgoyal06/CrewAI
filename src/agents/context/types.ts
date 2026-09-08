@@ -35,6 +35,10 @@ export type RoutingPendingState = {
     status: string;
     horizon?: string;
   };
+  eveningJournal?: {
+    phase: string;
+    dateKey: string;
+  };
 };
 
 export type RoutingActiveWork = {
@@ -77,6 +81,7 @@ export type RoutingGrowthContext = {
     dailyPlanIntention?: string;
     morningNotes: string[];
     winConditionPending?: { phase: string; candidateText?: string };
+    eveningJournalPending?: { phase: string; dateKey: string };
   };
 
   northStar: {

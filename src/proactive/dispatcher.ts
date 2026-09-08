@@ -1,4 +1,5 @@
 import { logger } from "../logger.js";
+import { armEveningJournalPendingAfterNudge } from "../logging/handleEveningJournalPending.js";
 import { getProactiveKind } from "./kinds/registry.js";
 import type { ProactiveKindContext } from "./kinds/types.js";
 import { incrementAdaptiveCap, runProactiveGuards } from "./guards.js";
@@ -10,6 +11,12 @@ import {
   markSubscriptionSent,
 } from "./subscriptions/store.js";
 import type { ProactiveSubscription } from "./subscriptions/types.js";
+import {
+  DEFAULT_CATALOG_CAP,
+  DEFAULT_CATALOG_COOLDOWN_HOURS,
+  DEFAULT_CATALOG_SCHEDULE,
+  DEFAULT_CATALOG_TRIGGER,
+} from "./subscriptions/types.js";
 import { listAllowlistedTelegramTargets } from "./targets.js";
 import type { ProactiveMessageKind } from "./types.js";
 
@@ -30,6 +37,7 @@ function allowQuietOverride(sub: ProactiveSubscription): boolean {
 async function processSubscription(
   ctx: ProactiveKindContext,
   handler: NonNullable<ReturnType<typeof getProactiveKind>>,
+  options?: { skipMarkSent?: boolean },
 ): Promise<void> {
   const evalResult = await handler.evaluate(ctx);
   if (!evalResult.candidate) {
@@ -72,13 +80,50 @@ async function processSubscription(
     intent: ctx.subscription.kind,
   });
 
-  await markSubscriptionSent(ctx.subscription.id, ctx.now, {
-    disable: ctx.subscription.triggerType === "one_shot",
-  });
+  if (!options?.skipMarkSent) {
+    await markSubscriptionSent(ctx.subscription.id, ctx.now, {
+      disable: ctx.subscription.triggerType === "one_shot",
+    });
+  }
+
+  if (ctx.subscription.kind === "evening_journal") {
+    await armEveningJournalPendingAfterNudge(ctx.userProfileId, ctx.signals.local.dateKey);
+  }
 
   if (handler.capBucket === "adaptive") {
     await incrementAdaptiveCap(ctx.userProfileId, ctx.signals.local.dateKey);
   }
+}
+
+/** Companion kinds run automatically when their parent catalog kind is enabled. */
+const COMPANION_PARENT_KIND: Record<string, string> = {
+  evening_log_followup: "evening_journal",
+};
+
+function syntheticCompanionSubscription(
+  userProfileId: string,
+  kind: string,
+): ProactiveSubscription {
+  const cap = DEFAULT_CATALOG_CAP[kind as keyof typeof DEFAULT_CATALOG_CAP] ?? "adaptive";
+  return {
+    id: `companion:${kind}:${userProfileId}`,
+    userProfileId,
+    kind,
+    enabled: true,
+    triggerType: DEFAULT_CATALOG_TRIGGER[kind as keyof typeof DEFAULT_CATALOG_TRIGGER] ?? "conditional",
+    schedule: DEFAULT_CATALOG_SCHEDULE[kind as keyof typeof DEFAULT_CATALOG_SCHEDULE] ?? {
+      type: "conditional",
+    },
+    config: {},
+    userInstruction: null,
+    source: "system_default",
+    capBucket: cap,
+    cooldownHours: DEFAULT_CATALOG_COOLDOWN_HOURS[kind as keyof typeof DEFAULT_CATALOG_COOLDOWN_HOURS] ?? null,
+    lastSentAt: null,
+    nextFireAt: null,
+    createdAt: "",
+    updatedAt: "",
+  };
 }
 
 /**
@@ -128,6 +173,25 @@ export async function runProactiveDispatcher(now: Date): Promise<void> {
         };
 
         await processSubscription(ctx, handler);
+      }
+
+      for (const [companionKind, parentKind] of Object.entries(COMPANION_PARENT_KIND)) {
+        if (!allSubs.some((s) => s.kind === parentKind && s.enabled)) {
+          continue;
+        }
+        const handler = getProactiveKind(companionKind);
+        if (!handler) {
+          continue;
+        }
+        const ctx: ProactiveKindContext = {
+          now,
+          userProfileId: target.userProfileId,
+          telegramChatId: target.telegramChatId,
+          timezone: target.timezone,
+          subscription: syntheticCompanionSubscription(target.userProfileId, companionKind),
+          signals,
+        };
+        await processSubscription(ctx, handler, { skipMarkSent: true });
       }
     } catch (err) {
       logger.error(

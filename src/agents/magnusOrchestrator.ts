@@ -40,6 +40,13 @@ import { isMealPhotoPurpose, resolvePhotoIntent } from "../vision/resolvePhotoIn
 import { assembleRoutingContext } from "./context/assembleRoutingContext.js";
 import { tryResolveActiveProjectSessionTurn } from "../projects/projectSessionPrelude.js";
 import { handleWinConditionPendingTurn } from "../jobs/handleWinConditionPending.js";
+import {
+  armEveningJournalPendingFromUser,
+  handleEveningJournalPendingTurn,
+  hasActiveEveningJournalSession,
+} from "../logging/handleEveningJournalPending.js";
+import { isEveningJournalTrigger } from "../logging/eveningJournalTrigger.js";
+import { getLocalTimeParts } from "../jobs/morningBriefTime.js";
 import { handleReversibleActionTurn } from "./routing/handleReversibleAction.js";
 
 export type OrchestratorReply = {
@@ -120,6 +127,44 @@ export async function runOrchestratorReply(input: {
         magnus_voice_finalized: true,
       },
     });
+  }
+
+  const timezone = input.timezone?.trim() || "UTC";
+  const localDateKey = getLocalTimeParts(new Date(), timezone).dateKey;
+
+  if (isEveningJournalTrigger(input.userMessage)) {
+    await armEveningJournalPendingFromUser(input.userProfileId, localDateKey);
+  }
+
+  const eveningJournalActive = await hasActiveEveningJournalSession(
+    input.userProfileId,
+    localDateKey,
+  );
+  if (eveningJournalActive || isEveningJournalTrigger(input.userMessage)) {
+    const eveningTurn = await handleEveningJournalPendingTurn({
+      userProfileId: input.userProfileId,
+      message: input.userMessage,
+      dateKey: localDateKey,
+    });
+    if (eveningTurn.handled) {
+      const ctx: AgentContext = {
+        userProfileId: input.userProfileId,
+        telegramUserId: input.telegramUserId,
+        timezone: input.timezone,
+        rawMessage: input.userMessage,
+        intent: "GENERAL",
+      };
+      return finalizeOrchestratorReply(ctx, {
+        replyText: eveningTurn.replyText,
+        intent: "GENERAL",
+        delegatedAgent: "Magnus",
+        agentMetadata: {
+          ...eveningTurn.metadata,
+          pillar_compose: false,
+          magnus_voice_finalized: true,
+        },
+      });
+    }
   }
 
   const reversibleTurn = await handleReversibleActionTurn({

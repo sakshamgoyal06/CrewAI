@@ -10,6 +10,7 @@ import { fetchUserHealthProfile } from "../health/healthOnboarding.js";
 import { loadSemanticFacts } from "../memory/semanticMemory.js";
 import { loadUserProgramMemory } from "../../users/userProgramMemory.js";
 import { loadUserIntegrations } from "../../users/userIntegrations.js";
+import { getEveningJournalPending } from "../../logging/eveningJournalPending.js";
 import { getMealLogPending } from "../../meals/mealLogPending.js";
 import { getReversibleAction } from "../routing/reversibleAction.js";
 import { getActiveMealPlanSession } from "../../nutrition/planning/mealPlanningSessionStore.js";
@@ -93,6 +94,7 @@ export async function assembleRoutingContext(
     reversible,
     projectSession,
     mealPlanSession,
+    eveningJournalPending,
     standing,
     growth,
   ] = await Promise.all([
@@ -103,6 +105,7 @@ export async function assembleRoutingContext(
     getReversibleAction(input.userProfileId),
     getActiveProjectSession(input.userProfileId),
     getActiveMealPlanSession(input.userProfileId),
+    getEveningJournalPending(input.userProfileId),
     loadStandingContext(input.userProfileId),
     loadGrowthSnapshot({
       userProfileId: input.userProfileId,
@@ -149,6 +152,12 @@ export async function assembleRoutingContext(
       step: mealPlanSession.step,
       status: mealPlanSession.status,
       horizon,
+    };
+  }
+  if (eveningJournalPending) {
+    pending.eveningJournal = {
+      phase: eveningJournalPending.phase,
+      dateKey: eveningJournalPending.dateKey,
     };
   }
 

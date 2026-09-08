@@ -98,6 +98,7 @@ export function rowToSubscription(row: ProactiveSubscriptionRow): ProactiveSubsc
 
 export const CATALOG_KINDS = [
   "evening_journal",
+  "evening_log_followup",
   "week_planning",
   "weekly_wrap",
   "monthly_goal_review",
@@ -128,6 +129,7 @@ export function isCatalogKind(kind: string): kind is CatalogProactiveKind {
 
 export const CATALOG_KIND_LABELS: Record<CatalogProactiveKind, string> = {
   evening_journal: "Evening review / journal",
+  evening_log_followup: "Evening log follow-up (companion to evening journal)",
   week_planning: "Monday week planning",
   weekly_wrap: "Friday weekly wrap-up",
   monthly_goal_review: "Monthly goal review",
@@ -144,6 +146,7 @@ export const CATALOG_KIND_LABELS: Record<CatalogProactiveKind, string> = {
 
 export const DEFAULT_CATALOG_SCHEDULE: Record<CatalogProactiveKind, ProactiveSchedule> = {
   evening_journal: { type: "recurring_local", localHour: 21, windowMinutes: 14 },
+  evening_log_followup: { type: "conditional" },
   week_planning: { type: "recurring_local", localHour: 8, windowMinutes: 20 },
   weekly_wrap: { type: "recurring_local", localHour: 18, windowMinutes: 20 },
   monthly_goal_review: { type: "recurring_local", localHour: 10, windowMinutes: 30 },
@@ -160,6 +163,7 @@ export const DEFAULT_CATALOG_SCHEDULE: Record<CatalogProactiveKind, ProactiveSch
 
 export const DEFAULT_CATALOG_CAP: Record<CatalogProactiveKind, ProactiveCapBucket> = {
   evening_journal: "scheduled",
+  evening_log_followup: "adaptive",
   week_planning: "scheduled",
   weekly_wrap: "scheduled",
   monthly_goal_review: "scheduled",
@@ -176,6 +180,7 @@ export const DEFAULT_CATALOG_CAP: Record<CatalogProactiveKind, ProactiveCapBucke
 
 export const DEFAULT_CATALOG_TRIGGER: Record<CatalogProactiveKind, ProactiveTriggerType> = {
   evening_journal: "recurring",
+  evening_log_followup: "conditional",
   week_planning: "recurring",
   weekly_wrap: "recurring",
   monthly_goal_review: "recurring",
@@ -192,6 +197,7 @@ export const DEFAULT_CATALOG_TRIGGER: Record<CatalogProactiveKind, ProactiveTrig
 
 export const DEFAULT_CATALOG_COOLDOWN_HOURS: Partial<Record<CatalogProactiveKind, number>> = {
   drift_guard: 24,
+  evening_log_followup: 20,
   midday_encouragement: 24,
   stale_list_nudge: 72,
   chat_inactivity: 48,

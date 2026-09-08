@@ -132,6 +132,7 @@ shell or `.env`.
 | `src/lists/listService.ts` | List catalog + `log_daily_checkin` / `get_daily_checkin` writers (checkins list + LifeOS dual-write) |
 | `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
 | `src/events/` | Event log domain: timezone helpers, Supabase store, calendar sync, formatting, **completion reconcile** (`eventCompletionReconcile.ts` — journal text → `missed`/`planned` → `done`) |
+| `src/logging/` | **Daily logging framework**: unified `dailyLogStatus`, evening journal FSM (`eveningJournalPending`), decline tracking, proactive gating, companion `evening_log_followup` |
 | `src/youtube/` | Bookmarks, cue queue, Magnus playlist state, **`playlistResolve`** (pillar aliases vs YT account title match; `youtubeAccountOnly` when user says YT Music) |
 | `src/agents/pillarPhilosophy.ts` | Four-pillar definitions, intent→route map, live vs parked in minimal mode |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
@@ -200,9 +201,9 @@ shell or `.env`.
    reconcile** (3 hours after planned gym time: if Hevy has a session that day, mark the event log
    `done` with Hevy start/end and tell the user; otherwise ask once if they missed it / want to
    postpone), **nutrition nightly** (~23:00 local: recompute rollups, anomaly flags, sync persistent
-   lapse patterns to `program_learnings`; `MAGNUS_NUTRITION_NIGHTLY_ENABLED`), **subscription dispatcher** (`evening_journal`, `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
+   lapse patterns to `program_learnings`; `MAGNUS_NUTRITION_NIGHTLY_ENABLED`), **subscription dispatcher** (`evening_journal`, `evening_log_followup` (auto when evening journal enabled), `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
    `chat_inactivity`, `custom_reminder`, `meal_log_reminder`, `meal_adherence_nudge`, `meal_eod_reconciliation`, `meal_gap_nudge`, `weekly_nutrition_review` via `magnus_proactive_subscriptions` — modular kind registry in
-   `src/proactive/kinds/`). **Rhythm cadence** (catalog kinds): **Morning Brief** (~7:00 local, scheduled job — short focus/plan/meals read + optional intention question; replaces separate morning orientation), `evening_journal` (~21:00, day summary + EOD review), `week_planning` (Monday ~8:00), `weekly_wrap` (Friday ~18:00, includes nutrition week slice), `monthly_goal_review` (1st of month ~10:00). Owner provision seeds evening/weekly/monthly rhythm via `seedDefaultRhythmSubscriptions`.    User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
+   `src/proactive/kinds/`). **Daily logging framework** (`src/logging/`): unified per-day status (`empty` → `morning_only` → `partial` → `complete` / `declined`); morning win loop (`winConditionPending`); evening journal session (`eveningJournalPending`: `awaiting_engagement` → `collecting` → `confirming` → `log_daily_checkin`); explicit skip sets `logging_declined` so nudges stop; companion follow-up ~22:00 only when primary nudge sent and session still open. **Rhythm cadence** (catalog kinds): **Morning Brief** (~7:00 local, scheduled job — short focus/plan/meals read + optional intention question; replaces separate morning orientation), `evening_journal` (~21:00, day summary + EOD review), `week_planning` (Monday ~8:00), `weekly_wrap` (Friday ~18:00, includes nutrition week slice), `monthly_goal_review` (1st of month ~10:00). Owner provision seeds evening/weekly/monthly rhythm via `seedDefaultRhythmSubscriptions`.    User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
    catalog kinds, create one-shot or daily custom reminders (`create_reminder` /
    `create_recurring_reminder`). **Task reminders** use `manage_reminders`: list, create,
    create_recurring (daily or weekly), update, snooze, cancel — standalone (`custom_reminder`) or
@@ -394,4 +395,4 @@ partial behaviour.
 
 ---
 
-**Last updated:** 2026-09-06 (hybrid forget matching: keyword + semantic + disambiguation)
+**Last updated:** 2026-09-08 (daily logging framework: unified status, evening journal FSM, follow-up nudges)

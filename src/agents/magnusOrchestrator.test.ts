@@ -167,6 +167,12 @@ vi.mock("../jobs/handleWinConditionPending.js", () => ({
   armWinConditionPendingAfterBrief: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../logging/handleEveningJournalPending.js", () => ({
+  handleEveningJournalPendingTurn: vi.fn().mockResolvedValue({ handled: false }),
+  armEveningJournalPendingFromUser: vi.fn().mockResolvedValue(undefined),
+  hasActiveEveningJournalSession: vi.fn().mockResolvedValue(false),
+}));
+
 vi.mock("./routing/handleReversibleAction.js", () => ({
   handleReversibleActionTurn: vi.fn().mockResolvedValue({ handled: false }),
 }));

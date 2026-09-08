@@ -41,6 +41,7 @@ export type ProactiveKindHandler = {
 
 export type ProactiveMessageKind =
   | "evening_journal"
+  | "evening_log_followup"
   | "week_planning"
   | "weekly_wrap"
   | "monthly_goal_review"
