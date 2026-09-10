@@ -12,6 +12,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/product/PRD.md`** | Product requirements — user stories, functional reqs |
 | **`docs/product/TRD.md`** | Technical requirements — stack, interfaces, security, deploy |
 | **`docs/product/ACTIVITY_TAXONOMY.md`** | Operations · Goals · Projects activity layer |
+| **`docs/product/MINIMAL_MODE_FOCUS.md`** | Minimal mode Phase 1 focus (workouts, calendar, lists, reminders, logging) and meal sequencing |
 | **`docs/product/PROJECT_DEFINITION.md`** | Project anatomy, lifecycle, UX |
 | **`docs/product/FRONTLOAD_CONTEXT.md`** | Routing context frontload — per-turn assembly before classify (PR #92) |
 | **`docs/diagrams/ARCHITECTURE_DIAGRAMS.md`** | Mermaid diagrams: context, sequence, routing, deployment |
@@ -376,26 +377,39 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-## Minimal mode (production strip-down)
+## Minimal mode (production scope fence)
 
 When **`MAGNUS_MINIMAL_MODE=true`** (default in **`NODE_ENV=production`** unless explicitly set
-`false`), Magnus runs a **parked** build:
+`false`), Magnus runs a **scoped** build. Full product direction: **`docs/product/MINIMAL_MODE_FOCUS.md`**.
 
-| Live | Parked (code retained; set `MAGNUS_MINIMAL_MODE=false` to restore) |
+**Problem we solve in Phase 1:** is the user **sticking to their plan**, or are **commitments failing**?
+That needs trustworthy event-log closure (activity completion, gym ↔ Hevy, missed sweep) plus daily
+logging ritual — not a single cross-pillar adherence score yet.
+
+### Phase 1 — perfect these five
+
+| Focus | Live capabilities |
+|-------|-------------------|
+| **Workouts** | Hevy / fitness, gym ↔ Hevy reconcile, drift guard |
+| **Calendar** | Google Calendar + `magnus_events` event log |
+| **Lists** | Supabase lists (watchlist, readlist, tasks, …) |
+| **Reminders** | `manage_reminders`, event `remind_at`, event-reminder cron, custom reminders |
+| **Logging** | Morning win intention, evening journal FSM, activity completion, `log_note` / check-in tools |
+
+**Supporting (live):** YouTube / YT Music, morning brief, conversation.  
+**Phase 2 (after Phase 1 is solid):** meal logging & nutrition — explicitly parked until then.
+
+| Live | Parked (set `MAGNUS_MINIMAL_MODE=false` to restore) |
 |------|-----|
+| Phase 1 focus areas above | **Meals**, nutrition, meal photos |
 | Sub-agent **parse → execute → compose**, one Magnus voice | Wealth / Happiness / Wisdom pillars |
-| **Google Calendar** + event log | Meals, nutrition, meal photos |
-| **Hevy / fitness** (Health) | Notion, LifeOS, projects |
-| **Lists** (Supabase — watchlist, readlist, tasks, …) | Notion list mirror, `add_goal` / LifeOS list tools |
-| **YouTube / YT Music** (search, playlists, bookmarks, cue) | — |
-| **Morning brief** (scheduled + manual “morning brief”) | Rhythm subscriptions (evening journal, drift guard, …) |
-| **Reminders** (`manage_reminders`, event `remind_at`, event-reminder cron, gym ↔ Hevy reconcile) | Nutrition nightly, vision/photos |
-| Chat persistence + **pino** logging | Health onboarding gate, project setup FSM |
+| Proactive: evening journal, drift guard, activity completion, gym reconcile | Meal proactive kinds, week/month rhythm, nutrition nightly |
+| | Notion, LifeOS, projects, vision/photos, health onboarding gate |
 
-Implementation: `src/config/minimalMode.ts` filters capability catalogs, Magnus tools, proactive
-jobs, and intent classification. Parked features return a clear user-facing message instead of
-partial behaviour.
+Implementation: `src/config/minimalMode.ts` — `MINIMAL_FOCUS_AREAS`, capability catalogs, Magnus
+tool allowlist, proactive jobs/kinds filter, intent classification. Parked features return a clear
+user-facing message (meals deferred to Phase 2).
 
 ---
 
-**Last updated:** 2026-09-10 (activity completion logging, parser-only routing for parked/minimal/evening journal)
+**Last updated:** 2026-09-10 (minimal mode Phase 1 focus: workouts, calendar, lists, reminders, logging; meals Phase 2)

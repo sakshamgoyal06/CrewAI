@@ -1,10 +1,13 @@
 /**
- * Minimal Magnus — production strip-down while core paths are stabilized.
+ * Minimal Magnus — production scope fence while core operations are perfected.
  *
- * Keeps: sub-agent parse → execute → compose, calendar, Hevy/fitness, reminders, lists,
- * YouTube, morning brief, logging.
+ * **Phase 1 focus** (see `docs/product/MINIMAL_MODE_FOCUS.md`): workouts, calendar, lists,
+ * reminders, and logging — plus plan-adherence closure (activity completion, gym ↔ Hevy,
+ * evening journal). **Meals come in Phase 2** after these paths are solid.
+ *
+ * Supporting (live but not a focus pillar): YouTube, morning brief, conversation.
  * Parks: meals, Notion, LifeOS, projects, wealth/happiness/wisdom depth, vision/photos,
- * rhythm subscriptions, nutrition nightly, and most proactive nudges.
+ * nutrition nightly, and non-core proactive rhythm kinds.
  *
  * Set MAGNUS_MINIMAL_MODE=false on the host to restore full Magnus.
  */
@@ -17,6 +20,17 @@ export type EnvBag = Record<string, string | undefined>;
 
 const PARKED_INTENTS = new Set<Intent>(["WEALTH", "HAPPINESS", "WISDOM"]);
 
+/** Phase 1 product focus — perfect these before re-enabling meals (see MINIMAL_MODE_FOCUS.md). */
+export const MINIMAL_FOCUS_AREAS = [
+  "workouts",
+  "calendar",
+  "lists",
+  "reminders",
+  "logging",
+] as const;
+
+export type MinimalFocusArea = (typeof MINIMAL_FOCUS_AREAS)[number];
+
 const MINIMAL_GENERAL_CAPABILITIES = new Set([
   "calendar",
   "event_log",
@@ -24,6 +38,7 @@ const MINIMAL_GENERAL_CAPABILITIES = new Set([
   "day_overview",
   "youtube",
   "lists",
+  "journal_note",
   "conversation",
   "pillar_consultation",
 ]);
@@ -57,6 +72,9 @@ export const MINIMAL_MAGNUS_TOOL_NAMES = new Set([
   "create_list",
   "recommend_list_items",
   "recall_context",
+  "log_note",
+  "get_daily_checkin",
+  "log_daily_checkin",
 ]);
 
 const MINIMAL_PROACTIVE_JOBS = new Set([
@@ -64,6 +82,15 @@ const MINIMAL_PROACTIVE_JOBS = new Set([
   "activity_completion",
   "gym_hevy_reconcile",
   "morning_brief",
+  "proactive_subscriptions",
+]);
+
+/** Catalog proactive kinds allowed in minimal mode (meals and rhythm planning excluded). */
+const MINIMAL_PROACTIVE_KINDS = new Set([
+  "evening_journal",
+  "evening_log_followup",
+  "drift_guard",
+  "custom_reminder",
 ]);
 
 const PARKED_GENERAL_CAPABILITY_LABELS: Record<string, string> = {
@@ -114,6 +141,14 @@ export function isMinimalProactiveJobEnabled(jobId: string): boolean {
     return true;
   }
   return MINIMAL_PROACTIVE_JOBS.has(jobId);
+}
+
+/** Subscription catalog kinds + custom reminders allowed in minimal mode. */
+export function isMinimalProactiveKindEnabled(kind: string): boolean {
+  if (!isMinimalMode()) {
+    return true;
+  }
+  return MINIMAL_PROACTIVE_KINDS.has(kind);
 }
 
 export function filterCapabilityCatalog(catalog: CapabilityCatalog): CapabilityCatalog {
@@ -173,8 +208,8 @@ export function magnusDefaultToolAllowlist(): string[] | undefined {
 export function parkedFeatureReply(feature: string): string {
   return (
     `**${feature}** is temporarily parked while Magnus runs in minimal mode. ` +
-    "I can still help with **calendar**, **reminders**, **lists**, **YouTube**, **morning brief**, " +
-    "**workouts / Hevy**, and general conversation. " +
+    "Right now I'm focused on **workouts**, **calendar**, **lists**, **reminders**, and **logging** " +
+    "(plus YouTube and morning brief). **Meal logging** comes next after these are solid. " +
     "Set `MAGNUS_MINIMAL_MODE=false` on the host to restore full Magnus."
   );
 }
@@ -194,9 +229,11 @@ export function minimalModeLogFields(env: EnvBag = process.env): Record<string, 
   }
   return {
     minimalMode: true,
+    focusAreas: [...MINIMAL_FOCUS_AREAS],
     activeGeneralCapabilities: [...MINIMAL_GENERAL_CAPABILITIES],
     activeHealthCapabilities: [...MINIMAL_HEALTH_CAPABILITIES],
     activeProactiveJobs: [...MINIMAL_PROACTIVE_JOBS],
+    activeProactiveKinds: [...MINIMAL_PROACTIVE_KINDS],
   };
 }
 
