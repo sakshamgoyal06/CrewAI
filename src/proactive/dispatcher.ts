@@ -1,3 +1,4 @@
+import { isMinimalProactiveKindEnabled } from "../config/minimalMode.js";
 import { logger } from "../logger.js";
 import { armEveningJournalPendingAfterNudge } from "../logging/handleEveningJournalPending.js";
 import { getProactiveKind } from "./kinds/registry.js";
@@ -158,6 +159,9 @@ export async function runProactiveDispatcher(now: Date): Promise<void> {
       }
 
       for (const sub of allSubs) {
+        if (!isMinimalProactiveKindEnabled(sub.kind)) {
+          continue;
+        }
         const handler = getProactiveKind(sub.kind);
         if (!handler) {
           continue;
@@ -176,6 +180,9 @@ export async function runProactiveDispatcher(now: Date): Promise<void> {
       }
 
       for (const [companionKind, parentKind] of Object.entries(COMPANION_PARENT_KIND)) {
+        if (!isMinimalProactiveKindEnabled(companionKind)) {
+          continue;
+        }
         if (!allSubs.some((s) => s.kind === parentKind && s.enabled)) {
           continue;
         }
