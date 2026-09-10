@@ -1,7 +1,11 @@
 /**
  * Helpers for accuracy-suite orchestrator fixture runs (no hoisted state).
  */
-import type { ParkedFeatureTopic, RoutingContextSignals } from "../agents/routing/routingContextParser.js";
+import type {
+  MagnusRoutingCapability,
+  ParkedFeatureTopic,
+  RoutingContextSignals,
+} from "../agents/routing/routingContextParser.js";
 import { NEUTRAL_ROUTING_CONTEXT } from "../agents/routing/routingContextParser.js";
 import type { GoldenPathScenario } from "./goldenPathScenarios.js";
 import type { MagnusAccuracyOrchestratorCase } from "./magnusAccuracySuite.types.js";
@@ -48,15 +52,17 @@ export function parserSignalsForAccuracyCase(
   if (scenario.idealCapability === "day_overview") {
     signals.holistic_day_ask = true;
   }
-  if (
-    scenario.idealCapability === "calendar" ||
-    scenario.idealCapability === "event_log" ||
-    scenario.idealCapability === "reminders" ||
-    scenario.idealCapability === "lists" ||
-    scenario.idealCapability === "youtube"
-  ) {
+  const capabilityToMagnusRouting: Partial<Record<string, MagnusRoutingCapability>> = {
+    calendar: "calendar",
+    event_log: "event_log",
+    reminders: "proactive",
+    lists: "lists",
+    youtube: "youtube",
+  };
+  const magnusCap = capabilityToMagnusRouting[scenario.idealCapability];
+  if (magnusCap) {
     signals.looks_like_magnus_tool_action = true;
-    signals.magnus_capabilities = [scenario.idealCapability];
+    signals.magnus_capabilities = [magnusCap];
   }
 
   return signals;
