@@ -211,8 +211,12 @@ shell or `.env`.
    catalog kinds, create one-shot or daily custom reminders (`create_reminder` /
    `create_recurring_reminder`). **Task reminders** use `manage_reminders`: list, create,
    create_recurring (daily or weekly), update, snooze, cancel — standalone (`custom_reminder`) or
-   commitment-linked (`magnus_events.remind_at`). Relative time parsing for one-shots (`tomorrow 8pm`,
-   `Sunday 9:30am`, `in 30 minutes`, `6 months from today on the 1st`). Reschedule carries
+   commitment-linked (`magnus_events.remind_at`). **One-shot custom reminders** deliver only within
+   `MAGNUS_ONE_SHOT_REMINDER_MAX_LATE_HOURS` (default 24) after `at`; older rows are disabled with
+   `config.status: missed` — no stale backlog dumps. **Activity completion** nudges and auto-miss use the
+   same 24h window when logging is still open (`planned` / `in_progress` → `missed` via sweep). Relative
+   time parsing for one-shots (`tomorrow 8pm`, `Sunday 9:30am`, `in 30 minutes`, `6 months from today on
+   the 1st`). Reschedule carries
    `remind_at` by the same delta as `planned_start_at`. `day_overview` includes reminders for the day.
    LLM gate+compose (Haiku) for evening journal, drift guard, midday encouragement, stale list nudges,
    and chat inactivity; quiet hours 23:00–06:00 local; adaptive cap 3/day (scheduled + user-asked
@@ -412,4 +416,4 @@ user-facing message (meals deferred to Phase 2).
 
 ---
 
-**Last updated:** 2026-09-10 (minimal mode Phase 1 focus: workouts, calendar, lists, reminders, logging; meals Phase 2)
+**Last updated:** 2026-09-10 (one-shot reminder 24h late window + auto-miss; minimal mode Phase 1 focus)

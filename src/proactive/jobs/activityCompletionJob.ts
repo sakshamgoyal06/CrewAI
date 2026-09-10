@@ -1,9 +1,11 @@
 /**
  * Post-activity completion check-ins — nudge after planned end + grace, arm completion FSM.
  */
+import { sweepMissedEvents } from "../../events/eventStore.js";
 import { EVENT_COLUMNS } from "../../events/eventTypes.js";
 import { formatInstant } from "../../events/eventTime.js";
 import { isGymEvent } from "../../events/gymHevyMatch.js";
+import { oneShotReminderMaxLateHours } from "../oneShotReminderExpiry.js";
 import {
   markActivityCompletionNudged,
   wasActivityCompletionNudged,
@@ -15,6 +17,7 @@ import { loadUserIntegrations } from "../../users/userIntegrations.js";
 import { claimProactiveDelivery } from "../dedupe.js";
 import { activityCompletionJobEnabled, activityCompletionGraceMinutes } from "../env.js";
 import { sendProactiveTelegram } from "../outbound.js";
+import { listAllowlistedTelegramTargets } from "../targets.js";
 import type { ScheduledProactiveJob } from "./types.js";
 
 type DueEventRow = {
@@ -74,8 +77,23 @@ export const activityCompletionScheduledJob: ScheduledProactiveJob = {
   enabled: activityCompletionJobEnabled,
   async run({ now }) {
     const graceMin = activityCompletionGraceMinutes();
-    const lookbackHours = 36;
+    const lookbackHours = oneShotReminderMaxLateHours();
     const from = new Date(now.getTime() - lookbackHours * 60 * 60 * 1000);
+
+    const targets = await listAllowlistedTelegramTargets();
+    for (const target of targets) {
+      const swept = await sweepMissedEvents({
+        userProfileId: target.userProfileId,
+        graceMinutes: lookbackHours * 60,
+        maxAgeDays: 14,
+      });
+      if (swept.ok && swept.data > 0) {
+        logger.info(
+          { userProfileId: target.userProfileId, missedCount: swept.data },
+          "activity completion: swept stale planned events as missed",
+        );
+      }
+    }
 
     const { data: events, error } = await supabase
       .from("magnus_events")

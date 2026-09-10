@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { oneShotReminderMaxLateMs } from "../oneShotReminderExpiry.js";
 import { supabase as defaultClient } from "../../tools/clients.js";
 import {
   CATALOG_KINDS,
@@ -430,10 +431,67 @@ export async function markSubscriptionSent(
   await client(opts?.deps).from(TABLE).update(patch).eq("id", subscriptionId);
 }
 
+/** Disable a one-shot reminder that was never delivered inside the late window. */
+export async function markSubscriptionMissed(
+  subscriptionId: string,
+  missedAt: Date,
+  existingConfig?: Record<string, unknown>,
+  opts?: { deps?: { client?: SupabaseClient } },
+): Promise<void> {
+  const config = {
+    ...(existingConfig ?? {}),
+    status: "missed",
+    missed_at: missedAt.toISOString(),
+  };
+  await client(opts?.deps)
+    .from(TABLE)
+    .update({
+      enabled: false,
+      next_fire_at: null,
+      updated_at: missedAt.toISOString(),
+      config,
+    })
+    .eq("id", subscriptionId);
+}
+
+/**
+ * One-shot reminders past the late window are marked missed — never delivered as a stale backlog.
+ */
+export async function expireStaleOneShotReminders(
+  now: Date,
+  deps?: { client?: SupabaseClient },
+): Promise<number> {
+  const cutoff = new Date(now.getTime() - oneShotReminderMaxLateMs()).toISOString();
+  const { data, error } = await client(deps)
+    .from(TABLE)
+    .select("id, config")
+    .eq("enabled", true)
+    .eq("kind", "custom_reminder")
+    .eq("trigger_type", "one_shot")
+    .not("next_fire_at", "is", null)
+    .lt("next_fire_at", cutoff)
+    .limit(100);
+
+  if (error || !data?.length) {
+    return 0;
+  }
+
+  for (const row of data) {
+    await markSubscriptionMissed(
+      row.id as string,
+      now,
+      (row.config as Record<string, unknown>) ?? {},
+      { deps },
+    );
+  }
+  return data.length;
+}
+
 export async function listDueCustomReminders(
   now: Date,
   deps?: { client?: SupabaseClient },
 ): Promise<ProactiveSubscription[]> {
+  const earliest = new Date(now.getTime() - oneShotReminderMaxLateMs()).toISOString();
   const { data, error } = await client(deps)
     .from(TABLE)
     .select("*")
@@ -441,6 +499,7 @@ export async function listDueCustomReminders(
     .eq("kind", "custom_reminder")
     .eq("trigger_type", "one_shot")
     .not("next_fire_at", "is", null)
+    .gte("next_fire_at", earliest)
     .lte("next_fire_at", now.toISOString())
     .limit(100);
 

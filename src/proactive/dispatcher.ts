@@ -7,6 +7,7 @@ import { incrementAdaptiveCap, runProactiveGuards } from "./guards.js";
 import { sendProactiveTelegram } from "./outbound.js";
 import { buildProactiveSignals } from "./signals.js";
 import {
+  expireStaleOneShotReminders,
   listDueCustomReminders,
   listEnabledSubscriptions,
   markSubscriptionSent,
@@ -131,6 +132,8 @@ function syntheticCompanionSubscription(
  * Evaluate subscription-based proactive messages for all allowlisted users.
  */
 export async function runProactiveDispatcher(now: Date): Promise<void> {
+  await expireStaleOneShotReminders(now);
+
   const targets = await listAllowlistedTelegramTargets();
   const dueCustom = await listDueCustomReminders(now);
   const dueCustomByUser = new Map<string, ProactiveSubscription[]>();
