@@ -7,4 +7,8 @@ export {
   hasActiveEveningJournalSession,
 } from "./handleEveningJournalPending.js";
 export { getEveningJournalPending } from "./eveningJournalPending.js";
-export { isEveningJournalTrigger } from "./eveningJournalTrigger.js";
+export {
+  armActivityCompletionPending,
+  handleActivityCompletionPendingTurn,
+  hasActiveActivityCompletionSession,
+} from "./handleActivityCompletionPending.js";

@@ -17,6 +17,7 @@ import {
 } from "./magnusAccuracyEvaluators.js";
 import {
   buildAnthropicMockHandler,
+  parserSignalsForAccuracyCase,
 } from "./magnusAccuracyOrchestratorHarness.js";
 import {
   ACTION_INTEGRITY_ACCURACY_CASES,
@@ -194,8 +195,16 @@ vi.mock("../agents/routing/pillarStrategy/dayOverview.js", () => ({
   }),
 }));
 
+const assembleRoutingContextMock = vi.hoisted(() => vi.fn());
+
 vi.mock("../agents/context/assembleRoutingContext.js", () => ({
-  assembleRoutingContext: vi.fn().mockResolvedValue({
+  assembleRoutingContext: assembleRoutingContextMock,
+}));
+
+function defaultAssembledRoutingContext(
+  parserSignals: ReturnType<typeof parserSignalsForAccuracyCase>,
+) {
+  return {
     userProfileId: "00000000-0000-0000-0000-000000000099",
     assembledAt: new Date().toISOString(),
     identity: { timezone: "Asia/Kolkata", northStarGoal: "", healthOnboardingComplete: true },
@@ -222,25 +231,10 @@ vi.mock("../agents/context/assembleRoutingContext.js", () => ({
       kpis: { pillarStatus: [], topRoutines: [] },
     },
     routingHints: {},
-    parserSignals: {
-      explicit_meal_log: false,
-      looks_like_meal_log_read: false,
-      looks_like_youtube_action: false,
-      looks_like_magnus_tool_action: false,
-      looks_like_magnus_tool_continuation: false,
-      looks_like_health_fitness_read: false,
-      looks_like_wealth_portfolio_read: false,
-      holistic_day_ask: false,
-      saved_media_pick: false,
-      schedule_accuracy_challenge: false,
-      compound_action: false,
-      prefer_intent_health: false,
-      consult_pillars: [],
-      magnus_capabilities: [],
-    },
+    parserSignals,
     gaps: [],
-  }),
-}));
+  };
+}
 
 vi.mock("../agents/routing/pillarStrategy/executePillarConsultation.js", () => ({
   executePillarConsultationStep: vi.fn().mockResolvedValue({
@@ -260,6 +254,10 @@ describe("magnus accuracy suite", () => {
     accuracyState.scenario = null;
     accuracyCreateMock.mockReset();
     accuracyCreateMock.mockImplementation(buildAnthropicMockHandler(accuracyState));
+    assembleRoutingContextMock.mockReset();
+    assembleRoutingContextMock.mockImplementation(async () =>
+      defaultAssembledRoutingContext(parserSignalsForAccuracyCase(accuracyState.scenario)),
+    );
   });
 
   afterEach(() => {

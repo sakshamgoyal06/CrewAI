@@ -7,12 +7,11 @@
 import type { Intent } from "../intent.js";
 import { logger } from "../logger.js";
 import {
-  isMealRelatedTurn,
   isMinimalMode,
   isParkedIntent,
   magnusDefaultToolAllowlist,
   parkedFeatureReply,
-  parkedGeneralTopicReply,
+  parkedFeatureReplyForTopic,
   parkedIntentReply,
 } from "../config/minimalMode.js";
 import { runMagnusAgent } from "./magnusAgent.js";
@@ -29,7 +28,6 @@ import {
   runHealthOnboardingTurn,
   startHealthOnboarding,
 } from "./health/healthOnboarding.js";
-import { isMealCommand } from "../meals/parseMealLogCommand.js";
 import { dispatchToAgent } from "./registry.js";
 import { intentToPillarRoute } from "./routing/intentToPillarRoute.js";
 import type { AgentContext } from "./types.js";
@@ -43,9 +41,8 @@ import { handleWinConditionPendingTurn } from "../jobs/handleWinConditionPending
 import {
   armEveningJournalPendingFromUser,
   handleEveningJournalPendingTurn,
-  hasActiveEveningJournalSession,
 } from "../logging/handleEveningJournalPending.js";
-import { isEveningJournalTrigger } from "../logging/eveningJournalTrigger.js";
+import { handleActivityCompletionPendingTurn } from "../logging/handleActivityCompletionPending.js";
 import { getLocalTimeParts } from "../jobs/morningBriefTime.js";
 import { handleReversibleActionTurn } from "./routing/handleReversibleAction.js";
 
@@ -130,41 +127,30 @@ export async function runOrchestratorReply(input: {
   }
 
   const timezone = input.timezone?.trim() || "UTC";
-  const localDateKey = getLocalTimeParts(new Date(), timezone).dateKey;
 
-  if (isEveningJournalTrigger(input.userMessage)) {
-    await armEveningJournalPendingFromUser(input.userProfileId, localDateKey);
-  }
-
-  const eveningJournalActive = await hasActiveEveningJournalSession(
-    input.userProfileId,
-    localDateKey,
-  );
-  if (eveningJournalActive || isEveningJournalTrigger(input.userMessage)) {
-    const eveningTurn = await handleEveningJournalPendingTurn({
+  const activityTurn = await handleActivityCompletionPendingTurn({
+    userProfileId: input.userProfileId,
+    message: input.userMessage,
+    timeZone: timezone,
+  });
+  if (activityTurn.handled) {
+    const ctx: AgentContext = {
       userProfileId: input.userProfileId,
-      message: input.userMessage,
-      dateKey: localDateKey,
+      telegramUserId: input.telegramUserId,
+      timezone: input.timezone,
+      rawMessage: input.userMessage,
+      intent: "GENERAL",
+    };
+    return finalizeOrchestratorReply(ctx, {
+      replyText: activityTurn.replyText,
+      intent: "GENERAL",
+      delegatedAgent: "Magnus",
+      agentMetadata: {
+        ...activityTurn.metadata,
+        pillar_compose: false,
+        magnus_voice_finalized: true,
+      },
     });
-    if (eveningTurn.handled) {
-      const ctx: AgentContext = {
-        userProfileId: input.userProfileId,
-        telegramUserId: input.telegramUserId,
-        timezone: input.timezone,
-        rawMessage: input.userMessage,
-        intent: "GENERAL",
-      };
-      return finalizeOrchestratorReply(ctx, {
-        replyText: eveningTurn.replyText,
-        intent: "GENERAL",
-        delegatedAgent: "Magnus",
-        agentMetadata: {
-          ...eveningTurn.metadata,
-          pillar_compose: false,
-          magnus_voice_finalized: true,
-        },
-      });
-    }
   }
 
   const reversibleTurn = await handleReversibleActionTurn({
@@ -192,6 +178,49 @@ export async function runOrchestratorReply(input: {
     });
   }
 
+  const assembled = await assembleRoutingContext({
+    userProfileId: input.userProfileId,
+    telegramUserId: input.telegramUserId,
+    userMessage: input.userMessage,
+    displayName: input.displayName,
+    timezone: input.timezone,
+    northStarGoal: input.northStarGoal,
+  });
+
+  const localDateKey = getLocalTimeParts(new Date(), timezone).dateKey;
+  if (
+    assembled.parserSignals.looks_like_evening_journal &&
+    !assembled.pending.eveningJournal
+  ) {
+    await armEveningJournalPendingFromUser(input.userProfileId, localDateKey);
+  }
+  if (assembled.pending.eveningJournal || assembled.parserSignals.looks_like_evening_journal) {
+    const eveningTurn = await handleEveningJournalPendingTurn({
+      userProfileId: input.userProfileId,
+      message: input.userMessage,
+      dateKey: localDateKey,
+    });
+    if (eveningTurn.handled) {
+      const ctx: AgentContext = {
+        userProfileId: input.userProfileId,
+        telegramUserId: input.telegramUserId,
+        timezone: input.timezone,
+        rawMessage: input.userMessage,
+        intent: "GENERAL",
+      };
+      return finalizeOrchestratorReply(ctx, {
+        replyText: eveningTurn.replyText,
+        intent: "GENERAL",
+        delegatedAgent: "Magnus",
+        agentMetadata: {
+          ...eveningTurn.metadata,
+          pillar_compose: false,
+          magnus_voice_finalized: true,
+        },
+      });
+    }
+  }
+
   const healthProfile = await fetchUserHealthProfile(input.userProfileId);
   const healthRoute = intentToPillarRoute("HEALTH");
 
@@ -199,7 +228,7 @@ export async function runOrchestratorReply(input: {
     !isMinimalMode() &&
     healthProfile &&
     !healthProfile.onboarding_completed_at &&
-    !isMealCommand(input.userMessage) &&
+    !assembled.parserSignals.explicit_meal_log &&
     !input.mealPhoto?.fileId
   ) {
     const ob = await runHealthOnboardingTurn(
@@ -230,15 +259,6 @@ export async function runOrchestratorReply(input: {
       },
     });
   }
-
-  const assembled = await assembleRoutingContext({
-    userProfileId: input.userProfileId,
-    telegramUserId: input.telegramUserId,
-    userMessage: input.userMessage,
-    displayName: input.displayName,
-    timezone: input.timezone,
-    northStarGoal: input.northStarGoal,
-  });
 
   const recentTurns = assembled.recentTurns.map((t) => ({
     role: t.role,
@@ -301,10 +321,15 @@ export async function runOrchestratorReply(input: {
       });
     }
 
-    if (
-      isMealRelatedTurn({ message: effectiveUserMessage, mealPhoto: input.mealPhoto }) ||
-      isMealCommand(effectiveUserMessage)
-    ) {
+    const parkedTopic = parkedFeatureReplyForTopic(assembled.parserSignals.parked_feature_topic);
+    const parkedMeals =
+      assembled.parserSignals.parked_feature_topic === "meals" ||
+      assembled.parserSignals.explicit_meal_log;
+    const replyText =
+      parkedTopic ??
+      (input.mealPhoto?.fileId ? parkedFeatureReply("Photo / vision") : null) ??
+      (parkedMeals ? parkedFeatureReply("Meals & nutrition") : null);
+    if (replyText) {
       const ctx: AgentContext = {
         userProfileId: input.userProfileId,
         telegramUserId: input.telegramUserId,
@@ -313,32 +338,12 @@ export async function runOrchestratorReply(input: {
         intent: "GENERAL",
       };
       return finalizeOrchestratorReply(ctx, {
-        replyText: parkedFeatureReply("Meals & nutrition"),
-        intent: "GENERAL",
-        delegatedAgent: "Magnus",
-        agentMetadata: {
-          parked: "meals",
-          pillar_compose: false,
-          magnus_voice_finalized: true,
-        },
-      });
-    }
-
-    const parkedTopic = parkedGeneralTopicReply(effectiveUserMessage);
-    if (parkedTopic) {
-      const ctx: AgentContext = {
-        userProfileId: input.userProfileId,
-        telegramUserId: input.telegramUserId,
-        timezone: input.timezone,
-        rawMessage: effectiveUserMessage,
-        intent: "GENERAL",
-      };
-      return finalizeOrchestratorReply(ctx, {
-        replyText: parkedTopic,
+        replyText,
         intent: "GENERAL",
         delegatedAgent: "Magnus",
         agentMetadata: {
           parked_general_topic: true,
+          parked_feature_topic: assembled.parserSignals.parked_feature_topic,
           pillar_compose: false,
           magnus_voice_finalized: true,
         },
@@ -349,7 +354,7 @@ export async function runOrchestratorReply(input: {
   if (
     intent === "HEALTH" &&
     !healthProfile &&
-    !isMealCommand(effectiveUserMessage) &&
+    !assembled.parserSignals.explicit_meal_log &&
     !isMealPhotoPurpose(photoContext) &&
     !isMinimalMode()
   ) {

@@ -28,6 +28,21 @@ const GENERAL_CAPABILITIES = [
 
 export type MagnusRoutingCapability = (typeof GENERAL_CAPABILITIES)[number];
 
+export type ParkedFeatureTopic =
+  | "meals"
+  | "notion"
+  | "wealth"
+  | "happiness"
+  | "wisdom"
+  | null;
+
+export type RoutingPendingContext = {
+  meal_plan_session?: boolean;
+  meal_log_confirm?: boolean;
+  evening_journal?: boolean;
+  activity_completion?: { event_title: string };
+};
+
 export type RoutingContextSignals = {
   explicit_meal_log: boolean;
   looks_like_meal_log_read: boolean;
@@ -42,6 +57,10 @@ export type RoutingContextSignals = {
   compound_action: boolean;
   /** Orchestrator may coerce to HEALTH before top-level classifier (meal reads, slot follow-ups). */
   prefer_intent_health: boolean;
+  /** User-initiated evening journal / check-in (not a pending session reply). */
+  looks_like_evening_journal: boolean;
+  /** Minimal mode: topic maps to a parked feature (meals, notion, wealth, …). */
+  parked_feature_topic: ParkedFeatureTopic;
   consult_pillars: ConsultablePillarIntent[];
   magnus_capabilities: MagnusRoutingCapability[];
 };
@@ -59,6 +78,8 @@ export const NEUTRAL_ROUTING_CONTEXT: RoutingContextSignals = {
   schedule_accuracy_challenge: false,
   compound_action: false,
   prefer_intent_health: false,
+  looks_like_evening_journal: false,
+  parked_feature_topic: null,
   consult_pillars: [],
   magnus_capabilities: [],
 };
@@ -80,7 +101,14 @@ You receive the current user message and recent chat previews. Output **only** J
 - **saved_media_pick**: pick from saved playlist/watchlist for an activity (treadmill, gym) — not open-ended taste coaching.
 - **schedule_accuracy_challenge**: true ONLY when the user **disputes** schedule accuracy ("you're not looking at the calendar", "that wrong", "didn't check calendar"). **FALSE** when they ask to check, clean, delete, or manage calendar events — those are magnus_tool_action + calendar capability.
 - **compound_action**: multiple distinct asks in one message ("add to calendar AND suggest a video").
-- **prefer_intent_health**: true when HEALTH should win before the five-way classifier: meal slot follow-up after meal context, meal day breakdown, explicit meal log command, meal slot correction.
+- **prefer_intent_health**: true when HEALTH should win before the five-way classifier: meal slot follow-up after meal context, meal day breakdown, explicit meal log command, meal slot correction, **or** the user is continuing an active meal_plan_session (see pending_context).
+- **looks_like_evening_journal**: user wants to start an evening check-in / end-of-day journal (not replying inside an existing session unless pending says otherwise).
+- **parked_feature_topic**: when minimal mode would park the topic — one of "meals", "notion", "wealth", "happiness", "wisdom", or null when the message is about live capabilities (calendar, lists, gym, reminders).
+
+When **pending_context** is present, use it:
+- meal_plan_session true → prefer_intent_health for plan edits (swap, lock, breakfast slot, etc.)
+- meal_log_confirm true → short yes/no is meal confirm, not a new topic
+- evening_journal / activity_completion → short replies continue that session; do not set looks_like_evening_journal
 
 ## Pillar consultation
 
@@ -97,7 +125,7 @@ You receive the current user message and recent chat previews. Output **only** J
 Use **recent_turns** for follow-ups. Interpret meaning; do not keyword-match.
 
 Output shape:
-{"explicit_meal_log":false,"looks_like_meal_log_read":false,"looks_like_youtube_action":false,"looks_like_magnus_tool_action":false,"looks_like_magnus_tool_continuation":false,"looks_like_health_fitness_read":false,"looks_like_wealth_portfolio_read":false,"holistic_day_ask":false,"saved_media_pick":false,"schedule_accuracy_challenge":false,"compound_action":false,"prefer_intent_health":false,"consult_pillars":[],"magnus_capabilities":[]}`;
+{"explicit_meal_log":false,"looks_like_meal_log_read":false,"looks_like_youtube_action":false,"looks_like_magnus_tool_action":false,"looks_like_magnus_tool_continuation":false,"looks_like_health_fitness_read":false,"looks_like_wealth_portfolio_read":false,"holistic_day_ask":false,"saved_media_pick":false,"schedule_accuracy_challenge":false,"compound_action":false,"prefer_intent_health":false,"looks_like_evening_journal":false,"parked_feature_topic":null,"consult_pillars":[],"magnus_capabilities":[]}`;
 
 function textFromMessage(msg: Message): string {
   for (const block of msg.content) {
@@ -125,6 +153,23 @@ function parseCapabilities(raw: unknown): MagnusRoutingCapability[] {
     }
   }
   return out;
+}
+
+function parseParkedTopic(raw: unknown): ParkedFeatureTopic {
+  if (raw === null || raw === undefined || raw === "") {
+    return null;
+  }
+  const id = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (
+    id === "meals" ||
+    id === "notion" ||
+    id === "wealth" ||
+    id === "happiness" ||
+    id === "wisdom"
+  ) {
+    return id;
+  }
+  return null;
 }
 
 function parseConsultPillars(raw: unknown): ConsultablePillarIntent[] {
@@ -171,6 +216,8 @@ function parseRoutingJson(text: string): RoutingContextSignals | null {
       schedule_accuracy_challenge: asBool(raw.schedule_accuracy_challenge),
       compound_action: asBool(raw.compound_action),
       prefer_intent_health: asBool(raw.prefer_intent_health),
+      looks_like_evening_journal: asBool(raw.looks_like_evening_journal),
+      parked_feature_topic: parseParkedTopic(raw.parked_feature_topic),
       consult_pillars: parseConsultPillars(raw.consult_pillars),
       magnus_capabilities: parseCapabilities(raw.magnus_capabilities),
     };
@@ -182,6 +229,7 @@ function parseRoutingJson(text: string): RoutingContextSignals | null {
 export type RoutingContextInput = {
   userMessage: string;
   recentTurns?: RoutingChatTurn[];
+  pending?: RoutingPendingContext;
 };
 
 /**
@@ -197,6 +245,7 @@ export async function parseRoutingContext(input: RoutingContextInput): Promise<R
     {
       message: input.userMessage.trim(),
       recent_turns: recent,
+      pending_context: input.pending ?? {},
     },
     null,
     2,

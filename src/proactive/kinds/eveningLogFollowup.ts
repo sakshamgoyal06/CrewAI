@@ -6,7 +6,7 @@ import { isInLocalHourWindow } from "../scheduleWindow.js";
 import { getEveningJournalPending } from "../../logging/eveningJournalPending.js";
 import { getSubscriptionByKind } from "../subscriptions/store.js";
 import { gateAndCompose } from "../llm/gateAndCompose.js";
-import type { ProactiveKindHandler, ProactiveEvaluateResult, ProactiveKindContext } from "./types.js";
+import type { ProactiveKindHandler, ProactiveEvaluateResult } from "./types.js";
 
 const FOLLOWUP_HOUR = 22;
 const FOLLOWUP_WINDOW_MIN = 45;

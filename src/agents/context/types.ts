@@ -39,6 +39,10 @@ export type RoutingPendingState = {
     phase: string;
     dateKey: string;
   };
+  activityCompletion?: {
+    phase: string;
+    eventTitle: string;
+  };
 };
 
 export type RoutingActiveWork = {

@@ -177,14 +177,8 @@ export async function resolveIntentNaturalLanguage(
     }
   }
 
-  if (hints.explicit_meal_log || hints.looks_like_meal_log_read) {
-    return "HEALTH";
-  }
-
-  if (
-    pending?.mealPlanSession &&
-    /\b(meal\s+plan|breakfast|lunch|dinner|snack|swap|change|lock|plan)\b/i.test(userMessage)
-  ) {
+  const signals = options?.routingContext?.parserSignals;
+  if (signals?.prefer_intent_health || hints.explicit_meal_log || hints.looks_like_meal_log_read) {
     return "HEALTH";
   }
 

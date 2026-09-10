@@ -1,4 +1,3 @@
-import { parseMealLogCommand } from "../../../meals/parseMealLogCommand.js";
 import { getActiveMealPlanSession } from "../../../nutrition/planning/mealPlanningSessionStore.js";
 import { getActiveProjectSession } from "../../../projects/projectSessionStore.js";
 import { listActiveProjects } from "../../../projects/projectStore.js";
@@ -59,7 +58,7 @@ export async function buildRoutingHints(ctx: AgentContext): Promise<RoutingHints
     photo_purpose: photoAnalysis?.purpose ?? null,
     photo_description_preview: photoAnalysis?.description?.slice(0, 240) ?? null,
     photo_extracted_items: photoAnalysis?.extracted_items?.slice(0, 24) ?? [],
-    explicit_meal_log: parseMealLogCommand(ctx.rawMessage).kind === "meal",
+    explicit_meal_log: Boolean(ctx.routingContext?.explicit_meal_log),
     active_meal_plan_session: Boolean(active),
     meal_plan_session_step: active?.step ?? null,
     active_project_session: Boolean(projectSession),

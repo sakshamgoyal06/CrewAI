@@ -1,4 +1,5 @@
 import { isMinimalProactiveJobEnabled } from "../config/minimalMode.js";
+import { activityCompletionScheduledJob } from "./jobs/activityCompletionJob.js";
 import { eventReminderScheduledJob } from "./jobs/eventReminderJob.js";
 import { gymHevyReconcileScheduledJob } from "./jobs/gymHevyReconcileJob.js";
 import { morningBriefScheduledJob } from "./jobs/morningBriefJob.js";
@@ -8,6 +9,7 @@ import type { ScheduledProactiveJob } from "./jobs/types.js";
 
 const ALL_SCHEDULED_JOBS: ScheduledProactiveJob[] = [
   morningBriefScheduledJob,
+  activityCompletionScheduledJob,
   eventReminderScheduledJob,
   gymHevyReconcileScheduledJob,
   nutritionNightlyScheduledJob,

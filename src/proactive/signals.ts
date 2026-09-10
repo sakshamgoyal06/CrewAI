@@ -10,7 +10,8 @@ import {
   loadUserProgramMemory,
   type ProgramMemorySection,
 } from "../users/userProgramMemory.js";
-import { loadDailyLogStatus, type DailyLogStatus } from "../logging/dailyLogStatus.js";
+import { loadDailyLogStatus } from "../logging/dailyLogStatus.js";
+import type { DailyLogStatus } from "../logging/types.js";
 import { loadMealProactiveSnapshot, type MealProactiveSnapshot } from "../nutrition/mealProactiveSignals.js";
 
 export type ProactiveSignalSnapshot = {
