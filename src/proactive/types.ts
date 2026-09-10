@@ -6,8 +6,10 @@
 export type ProactiveMessageKind =
   | "morning_brief"
   | "event_reminder"
+  | "activity_completion"
   | "gym_hevy_reconcile"
   | "evening_journal"
+  | "evening_log_followup"
   | "week_planning"
   | "weekly_wrap"
   | "monthly_goal_review"

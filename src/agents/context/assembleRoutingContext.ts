@@ -10,6 +10,9 @@ import { fetchUserHealthProfile } from "../health/healthOnboarding.js";
 import { loadSemanticFacts } from "../memory/semanticMemory.js";
 import { loadUserProgramMemory } from "../../users/userProgramMemory.js";
 import { loadUserIntegrations } from "../../users/userIntegrations.js";
+import { getActivityCompletionPending } from "../../logging/activityCompletionPending.js";
+import { getEveningJournalPending } from "../../logging/eveningJournalPending.js";
+import type { RoutingPendingContext } from "../routing/routingContextParser.js";
 import { getMealLogPending } from "../../meals/mealLogPending.js";
 import { getReversibleAction } from "../routing/reversibleAction.js";
 import { getActiveMealPlanSession } from "../../nutrition/planning/mealPlanningSessionStore.js";
@@ -93,6 +96,8 @@ export async function assembleRoutingContext(
     reversible,
     projectSession,
     mealPlanSession,
+    eveningJournalPending,
+    activityCompletionPending,
     standing,
     growth,
   ] = await Promise.all([
@@ -103,6 +108,8 @@ export async function assembleRoutingContext(
     getReversibleAction(input.userProfileId),
     getActiveProjectSession(input.userProfileId),
     getActiveMealPlanSession(input.userProfileId),
+    getEveningJournalPending(input.userProfileId),
+    getActivityCompletionPending(input.userProfileId),
     loadStandingContext(input.userProfileId),
     loadGrowthSnapshot({
       userProfileId: input.userProfileId,
@@ -112,9 +119,27 @@ export async function assembleRoutingContext(
   ]);
 
   const recentTurns = normalizeRoutingRecentTurns(recentRaw);
+
+  const pendingForParser: RoutingPendingContext = {};
+  if (mealPending) {
+    pendingForParser.meal_log_confirm = true;
+  }
+  if (mealPlanSession) {
+    pendingForParser.meal_plan_session = true;
+  }
+  if (eveningJournalPending) {
+    pendingForParser.evening_journal = true;
+  }
+  if (activityCompletionPending) {
+    pendingForParser.activity_completion = {
+      event_title: activityCompletionPending.eventTitle,
+    };
+  }
+
   const parserSignals = await parseRoutingContext({
     userMessage: input.userMessage,
     recentTurns: recentRaw,
+    pending: pendingForParser,
   });
   const routingHints = routingContextToIntentHints(parserSignals);
 
@@ -149,6 +174,18 @@ export async function assembleRoutingContext(
       step: mealPlanSession.step,
       status: mealPlanSession.status,
       horizon,
+    };
+  }
+  if (eveningJournalPending) {
+    pending.eveningJournal = {
+      phase: eveningJournalPending.phase,
+      dateKey: eveningJournalPending.dateKey,
+    };
+  }
+  if (activityCompletionPending) {
+    pending.activityCompletion = {
+      phase: activityCompletionPending.phase,
+      eventTitle: activityCompletionPending.eventTitle,
     };
   }
 

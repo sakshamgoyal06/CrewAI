@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   filterCapabilityCatalog,
   filterConsultablePillars,
-  isMealRelatedTurn,
   isMinimalMode,
   isMinimalProactiveJobEnabled,
   isParkedGeneralCapability,
@@ -59,24 +58,13 @@ describe("minimalMode", () => {
     expect(isParkedIntent("HEALTH")).toBe(false);
   });
 
-  it("allows reminders, gym reconcile, and morning brief proactive jobs", () => {
+  it("allows reminders, activity completion, gym reconcile, and morning brief proactive jobs", () => {
     process.env.MAGNUS_MINIMAL_MODE = "true";
     expect(isMinimalProactiveJobEnabled("event_reminder")).toBe(true);
+    expect(isMinimalProactiveJobEnabled("activity_completion")).toBe(true);
     expect(isMinimalProactiveJobEnabled("gym_hevy_reconcile")).toBe(true);
     expect(isMinimalProactiveJobEnabled("morning_brief")).toBe(true);
     expect(isMinimalProactiveJobEnabled("proactive_subscriptions")).toBe(false);
-  });
-
-  it("does not treat log a note as meal", () => {
-    expect(
-      isMealRelatedTurn({ message: "log a note: thailand trip in september" }),
-    ).toBe(false);
-  });
-
-  it("does not treat list recommend as meal", () => {
-    expect(
-      isMealRelatedTurn({ message: "recommend dinner from my food list" }),
-    ).toBe(false);
   });
 
   it("exposes a magnus tool allowlist with lists and youtube", () => {

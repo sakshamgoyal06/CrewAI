@@ -5,6 +5,7 @@
 import { lifeosContextEnabled } from "../../config/lifeosContext.js";
 import { getLocalTimeParts } from "../../jobs/morningBriefTime.js";
 import { getWinConditionPending } from "../../jobs/winConditionPending.js";
+import { getEveningJournalPending } from "../../logging/eveningJournalPending.js";
 import { loadListMemoryContext } from "../../lists/listMemory.js";
 import { ensureUserLists } from "../../lists/listService.js";
 import { fetchCheckinItem, fetchListBySlug, queryListItems } from "../../lists/listStore.js";
@@ -456,6 +457,7 @@ export async function loadGrowthSnapshot(
     listMemory,
     programRows,
     winPending,
+    eveningJournalPending,
     checkinToday,
     dailyPlanIntention,
     dailyLogsRaw,
@@ -470,6 +472,7 @@ export async function loadGrowthSnapshot(
     loadListMemoryContext(input.userProfileId),
     loadUserProgramMemory(input.userProfileId),
     getWinConditionPending(input.userProfileId),
+    getEveningJournalPending(input.userProfileId),
     loadTodayCheckin(input.userProfileId, local.dateKey),
     loadDailyPlanIntention(input.userProfileId, local.dateKey),
     loadRecentDailyLogs(input.userProfileId, MAX_LOG_SNIPPETS),
@@ -553,6 +556,9 @@ export async function loadGrowthSnapshot(
       morningNotes,
       winConditionPending: winPending
         ? { phase: winPending.phase, candidateText: winPending.candidateText }
+        : undefined,
+      eveningJournalPending: eveningJournalPending
+        ? { phase: eveningJournalPending.phase, dateKey: eveningJournalPending.dateKey }
         : undefined,
     },
     northStar: {

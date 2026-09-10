@@ -39,10 +39,23 @@ export const eveningJournalHandler: ProactiveKindHandler = {
       signals: ctx.signals,
     });
 
+    const dailyLog = ctx.signals.dailyLog;
+    if (!dailyLog.shouldNudgeEvening) {
+      return {
+        candidate: false,
+        reason: dailyLog.hasEveningReflection
+          ? "evening_already_logged"
+          : dailyLog.declinedEvening
+            ? "evening_declined_today"
+            : "outside_evening_nudge_window",
+      };
+    }
+
     return {
       candidate: true,
       signals: {
-        hasCheckinToday: ctx.signals.hasCheckinToday,
+        completeness: dailyLog.completeness,
+        hasEveningReflection: dailyLog.hasEveningReflection,
         localHour: ctx.signals.local.hour,
         daySummaryText: daySummary.text,
         commitmentsDone: daySummary.done,
@@ -52,8 +65,11 @@ export const eveningJournalHandler: ProactiveKindHandler = {
   },
 
   async llmGate(ctx, evalResult) {
-    if (ctx.signals.hasCheckinToday) {
-      return { send: false, skipReason: "checkin_already_logged" };
+    if (ctx.signals.dailyLog.hasEveningReflection) {
+      return { send: false, skipReason: "evening_already_logged" };
+    }
+    if (ctx.signals.dailyLog.declinedEvening) {
+      return { send: false, skipReason: "evening_declined_today" };
     }
 
     const result = await gateAndCompose({
@@ -63,7 +79,8 @@ export const eveningJournalHandler: ProactiveKindHandler = {
       contextBlock: [
         `Kind: evening_journal`,
         `Local time: ${ctx.signals.local.dateKey} ${ctx.signals.local.hour}:${ctx.signals.local.minute}`,
-        `Check-in logged today: ${ctx.signals.hasCheckinToday}`,
+        `Logging completeness: ${ctx.signals.dailyLog.completeness}`,
+        `Evening reflection logged: ${ctx.signals.dailyLog.hasEveningReflection}`,
         evalResult.signals?.daySummaryText ?? "",
         `Recent user chat: ${ctx.signals.recentUserChatSnippet || "(none)"}`,
         evalResult.signals ? `Evaluate: ${JSON.stringify(evalResult.signals)}` : "",

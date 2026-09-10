@@ -132,6 +132,7 @@ shell or `.env`.
 | `src/lists/listService.ts` | List catalog + `log_daily_checkin` / `get_daily_checkin` writers (checkins list + LifeOS dual-write) |
 | `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
 | `src/events/` | Event log domain: timezone helpers, Supabase store, calendar sync, formatting, **completion reconcile** (`eventCompletionReconcile.ts` — journal text → `missed`/`planned` → `done`) |
+| `src/logging/` | **Logging framework**: unified `dailyLogStatus`, evening journal FSM (`eveningJournalPending`), **activity completion** FSM (`activityCompletionPending` + Haiku parser), decline tracking, proactive gating, companion `evening_log_followup` |
 | `src/youtube/` | Bookmarks, cue queue, Magnus playlist state, **`playlistResolve`** (pillar aliases vs YT account title match; `youtubeAccountOnly` when user says YT Music) |
 | `src/agents/pillarPhilosophy.ts` | Four-pillar definitions, intent→route map, live vs parked in minimal mode |
 | `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
@@ -151,6 +152,7 @@ shell or `.env`.
 | `src/proactive/` | Magnus-initiated Telegram: outbound HTML, dedupe, kind registry, dispatcher, subscriptions |
 | `src/proactive/rhythm/` | Day/week/month rhythm summaries for proactive check-ins |
 | `src/proactive/jobs/gymHevyReconcileJob.ts` | Cron: gym ↔ Hevy reconciliation for connected users |
+| `src/proactive/jobs/activityCompletionJob.ts` | Cron: post-activity completion nudge after planned end + grace; arms completion FSM |
 | `src/proactive/jobs/nutritionNightlyJob.ts` | Cron: EOD rollup recompute, anomaly flags, program-memory sync |
 | `src/tools/telegram.ts` | Telegraf bot, `/start` and `/help`, rate limit, update dedupe, webhook mount |
 | `src/tools/telegramWatchdog.ts` | Liveness probe; exits so the host restarts |
@@ -196,13 +198,15 @@ shell or `.env`.
    (`MAGNUS_PROACTIVE_CRON_ENABLED`, default on) runs scheduled jobs every
    `MAGNUS_PROACTIVE_CRON_INTERVAL_MINUTES` (default 5). Jobs: **morning brief** (local hour from
    `MAGNUS_MORNING_BRIEF_LOCAL_HOUR` in `user_profile.timezone`; Redis dedupe per calendar day),
-   **event reminders** (`remind_at` on `magnus_events`, sets `reminded_at` after send), **gym ↔ Hevy
+   **event reminders** (`remind_at` on `magnus_events`, sets `reminded_at` after send),    **gym ↔ Hevy
    reconcile** (3 hours after planned gym time: if Hevy has a session that day, mark the event log
    `done` with Hevy start/end and tell the user; otherwise ask once if they missed it / want to
-   postpone), **nutrition nightly** (~23:00 local: recompute rollups, anomaly flags, sync persistent
-   lapse patterns to `program_learnings`; `MAGNUS_NUTRITION_NIGHTLY_ENABLED`), **subscription dispatcher** (`evening_journal`, `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
+   postpone), **activity completion** (planned end + `MAGNUS_ACTIVITY_COMPLETION_GRACE_MINUTES`, default 30m:
+   nudge for done/missed/skip/postpone; Haiku parser + confirm-before-save; postpones sync linked Google
+   Calendar when `google_event_id` set; skips gym events when Hevy is connected), **nutrition nightly** (~23:00 local: recompute rollups, anomaly flags, sync persistent
+   lapse patterns to `program_learnings`; `MAGNUS_NUTRITION_NIGHTLY_ENABLED`), **subscription dispatcher** (`evening_journal`, `evening_log_followup` (auto when evening journal enabled), `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
    `chat_inactivity`, `custom_reminder`, `meal_log_reminder`, `meal_adherence_nudge`, `meal_eod_reconciliation`, `meal_gap_nudge`, `weekly_nutrition_review` via `magnus_proactive_subscriptions` — modular kind registry in
-   `src/proactive/kinds/`). **Rhythm cadence** (catalog kinds): **Morning Brief** (~7:00 local, scheduled job — short focus/plan/meals read + optional intention question; replaces separate morning orientation), `evening_journal` (~21:00, day summary + EOD review), `week_planning` (Monday ~8:00), `weekly_wrap` (Friday ~18:00, includes nutrition week slice), `monthly_goal_review` (1st of month ~10:00). Owner provision seeds evening/weekly/monthly rhythm via `seedDefaultRhythmSubscriptions`.    User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
+   `src/proactive/kinds/`). **Logging framework** (`src/logging/`): unified per-day status (`empty` → `morning_only` → `partial` → `complete` / `declined`); morning win loop (`winConditionPending`); evening journal session (`eveningJournalPending`: `awaiting_engagement` → `collecting` → `confirming` → `log_daily_checkin`); **activity completion** session (`activityCompletionPending`: `awaiting_response` → `confirming` → `update_event` / `reschedule_event`); explicit skip sets `logging_declined` so nudges stop; companion follow-up ~22:00 only when primary nudge sent and session still open. **Routing:** `routingContextParser` (Haiku) classifies structural signals (`prefer_intent_health`, `parked_feature_topic`, `looks_like_evening_journal`, pending FSM context) — no regex routing bypass in orchestrator or minimal-mode parking. **Rhythm cadence** (catalog kinds): **Morning Brief** (~7:00 local, scheduled job — short focus/plan/meals read + optional intention question; replaces separate morning orientation), `evening_journal` (~21:00, day summary + EOD review), `week_planning` (Monday ~8:00), `weekly_wrap` (Friday ~18:00, includes nutrition week slice), `monthly_goal_review` (1st of month ~10:00). Owner provision seeds evening/weekly/monthly rhythm via `seedDefaultRhythmSubscriptions`.    User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
    catalog kinds, create one-shot or daily custom reminders (`create_reminder` /
    `create_recurring_reminder`). **Task reminders** use `manage_reminders`: list, create,
    create_recurring (daily or weekly), update, snooze, cancel — standalone (`custom_reminder`) or
@@ -394,4 +398,4 @@ partial behaviour.
 
 ---
 
-**Last updated:** 2026-09-06 (hybrid forget matching: keyword + semantic + disambiguation)
+**Last updated:** 2026-09-10 (activity completion logging, parser-only routing for parked/minimal/evening journal)

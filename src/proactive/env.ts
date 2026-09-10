@@ -77,6 +77,30 @@ export function eventReminderJobEnabled(): boolean {
 }
 
 /** Gym ↔ Hevy reconciliation: check Hevy after planned time + grace. */
+/** Post-activity completion check-in after planned end + grace. */
+export function activityCompletionJobEnabled(): boolean {
+  const raw = process.env.MAGNUS_ACTIVITY_COMPLETION_ENABLED?.trim().toLowerCase();
+  if (envTruthy(raw)) {
+    return true;
+  }
+  if (envFalsy(raw)) {
+    return false;
+  }
+  return proactiveCronEnabled();
+}
+
+export function activityCompletionGraceMinutes(): number {
+  const raw = process.env.MAGNUS_ACTIVITY_COMPLETION_GRACE_MINUTES?.trim();
+  if (raw === undefined || raw === "") {
+    return 30;
+  }
+  const n = Number.parseInt(raw, 10);
+  if (Number.isNaN(n) || n < 5 || n > 240) {
+    return 30;
+  }
+  return n;
+}
+
 export function gymHevyReconcileJobEnabled(): boolean {
   const raw = process.env.MAGNUS_GYM_HEVY_RECONCILE_ENABLED?.trim().toLowerCase();
   if (envTruthy(raw)) {

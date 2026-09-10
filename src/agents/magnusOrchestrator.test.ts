@@ -83,6 +83,8 @@ vi.mock("./routing/routingContextParser.js", () => ({
     schedule_accuracy_challenge: false,
     compound_action: false,
     prefer_intent_health: false,
+    looks_like_evening_journal: false,
+    parked_feature_topic: null,
     consult_pillars: [],
     magnus_capabilities: [],
   }),
@@ -165,6 +167,18 @@ vi.mock("../projects/projectSessionPrelude.js", () => ({
 vi.mock("../jobs/handleWinConditionPending.js", () => ({
   handleWinConditionPendingTurn: vi.fn().mockResolvedValue({ handled: false }),
   armWinConditionPendingAfterBrief: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../logging/handleEveningJournalPending.js", () => ({
+  handleEveningJournalPendingTurn: vi.fn().mockResolvedValue({ handled: false }),
+  armEveningJournalPendingFromUser: vi.fn().mockResolvedValue(undefined),
+  hasActiveEveningJournalSession: vi.fn().mockResolvedValue(false),
+}));
+
+vi.mock("../logging/handleActivityCompletionPending.js", () => ({
+  handleActivityCompletionPendingTurn: vi.fn().mockResolvedValue({ handled: false }),
+  armActivityCompletionPending: vi.fn().mockResolvedValue(undefined),
+  hasActiveActivityCompletionSession: vi.fn().mockResolvedValue(false),
 }));
 
 vi.mock("./routing/handleReversibleAction.js", () => ({

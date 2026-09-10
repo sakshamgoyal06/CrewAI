@@ -10,13 +10,18 @@ import {
   loadUserProgramMemory,
   type ProgramMemorySection,
 } from "../users/userProgramMemory.js";
+import { loadDailyLogStatus } from "../logging/dailyLogStatus.js";
+import type { DailyLogStatus } from "../logging/types.js";
 import { loadMealProactiveSnapshot, type MealProactiveSnapshot } from "../nutrition/mealProactiveSignals.js";
 
 export type ProactiveSignalSnapshot = {
   now: Date;
   timezone: string;
   local: LocalTimeParts;
+  /** @deprecated Prefer `dailyLog.hasEveningReflection` — kept for backward compatibility. */
   hasCheckinToday: boolean;
+  /** Unified per-day logging status for proactive gating. */
+  dailyLog: DailyLogStatus;
   hevyConnected: boolean;
   gymPlannedToday: boolean;
   workoutLoggedToday: boolean;
@@ -143,13 +148,18 @@ export async function buildProactiveSignals(input: {
   const local = getLocalTimeParts(input.now, input.timezone);
   const dayIndex = localWeekdayIndex(input.now, input.timezone);
 
-  const [integrations, programRows, knowledge, checkin, workout, chat] = await Promise.all([
+  const [integrations, programRows, knowledge, checkin, workout, chat, dailyLog] = await Promise.all([
     loadUserIntegrations(input.userProfileId),
     loadUserProgramMemory(input.userProfileId),
     loadUserKnowledgeLayer(input.userProfileId),
     hasCheckinForDate(input.userProfileId, local.dateKey),
     hasWorkoutToday(input.userProfileId, local.dateKey),
     recentUserChatSnippet(input.userProfileId, input.telegramChatId),
+    loadDailyLogStatus({
+      userProfileId: input.userProfileId,
+      dateKey: local.dateKey,
+      localHour: local.hour,
+    }),
   ]);
 
   const meals = await loadMealProactiveSnapshot({
@@ -191,7 +201,8 @@ export async function buildProactiveSignals(input: {
     now: input.now,
     timezone: input.timezone,
     local,
-    hasCheckinToday: checkin,
+    hasCheckinToday: checkin || dailyLog.hasEveningReflection,
+    dailyLog,
     hevyConnected: Boolean(integrations.hevyApiKey),
     gymPlannedToday: isGymDayInSchedule(weeklySchedule, dayIndex),
     workoutLoggedToday: workout,

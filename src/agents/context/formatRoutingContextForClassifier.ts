@@ -44,6 +44,7 @@ export function formatRoutingContextForClassifier(ctx: RoutingContext): Record<s
         feeling: ctx.growth.dayFrame.feeling ?? null,
         morning_notes: ctx.growth.dayFrame.morningNotes,
         win_condition_pending: ctx.growth.dayFrame.winConditionPending ?? null,
+        evening_journal_pending: ctx.growth.dayFrame.eveningJournalPending ?? null,
       },
       north_star: {
         statement: ctx.growth.northStar.statement ?? null,

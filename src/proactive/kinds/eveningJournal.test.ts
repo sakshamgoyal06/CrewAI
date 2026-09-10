@@ -14,6 +14,21 @@ vi.mock("../rhythm/daySummary.js", () => ({
 import { emptyMealProactiveSnapshot } from "../../nutrition/mealProactiveSignals.js";
 import { eveningJournalHandler } from "./eveningJournal.js";
 import type { ProactiveKindContext } from "./types.js";
+import type { DailyLogStatus } from "../../logging/types.js";
+
+function emptyDailyLog(dateKey: string): DailyLogStatus {
+  return {
+    dateKey,
+    completeness: "empty",
+    hasMorningIntention: false,
+    hasEveningReflection: false,
+    hasJournalNote: false,
+    hasHealthJournal: false,
+    declinedEvening: false,
+    shouldNudgeEvening: true,
+    shouldFollowUpEvening: false,
+  };
+}
 
 function ctx(overrides: Partial<ProactiveKindContext> = {}): ProactiveKindContext {
   return {
@@ -43,6 +58,7 @@ function ctx(overrides: Partial<ProactiveKindContext> = {}): ProactiveKindContex
       timezone: "UTC",
       local: { hour: 21, minute: 5, dateKey: "2026-08-06" },
       hasCheckinToday: false,
+      dailyLog: emptyDailyLog("2026-08-06"),
       hevyConnected: true,
       gymPlannedToday: false,
       workoutLoggedToday: false,
@@ -74,10 +90,18 @@ describe("eveningJournalHandler", () => {
     expect(result.candidate).toBe(false);
   });
 
-  it("skips llm gate when check-in exists", async () => {
+  it("skips llm gate when evening reflection exists", async () => {
     const gate = await eveningJournalHandler.llmGate(
       ctx({
-        signals: { ...ctx().signals, hasCheckinToday: true },
+        signals: {
+          ...ctx().signals,
+          hasCheckinToday: true,
+          dailyLog: {
+            ...emptyDailyLog("2026-08-06"),
+            completeness: "complete",
+            hasEveningReflection: true,
+          },
+        },
       }),
       { candidate: true },
     );

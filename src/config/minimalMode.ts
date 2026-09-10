@@ -8,6 +8,7 @@
  *
  * Set MAGNUS_MINIMAL_MODE=false on the host to restore full Magnus.
  */
+import type { ParkedFeatureTopic } from "../agents/routing/routingContextParser.js";
 import type { Intent } from "../intent.js";
 import type { CapabilityCatalog } from "../agents/routing/pillarStrategy/types.js";
 import type { PillarId } from "../agents/routing/pillarStrategy/types.js";
@@ -60,6 +61,7 @@ export const MINIMAL_MAGNUS_TOOL_NAMES = new Set([
 
 const MINIMAL_PROACTIVE_JOBS = new Set([
   "event_reminder",
+  "activity_completion",
   "gym_hevy_reconcile",
   "morning_brief",
 ]);
@@ -198,59 +200,25 @@ export function minimalModeLogFields(env: EnvBag = process.env): Record<string, 
   };
 }
 
-export function isMealRelatedTurn(input: {
-  message: string;
-  mealPhoto?: { fileId: string } | null;
-}): boolean {
-  if (input.mealPhoto?.fileId) {
-    return true;
+/** Map routing-parser parked topic to a user-facing parked reply (minimal mode). */
+export function parkedFeatureReplyForTopic(topic: ParkedFeatureTopic): string | null {
+  switch (topic) {
+    case "meals":
+      return parkedFeatureReply("Meals & nutrition");
+    case "notion":
+      return parkedGeneralCapabilityReply("notion");
+    case "wealth":
+      return parkedIntentReply("WEALTH");
+    case "happiness":
+      return parkedIntentReply("HAPPINESS");
+    case "wisdom":
+      return parkedIntentReply("WISDOM");
+    default:
+      return null;
   }
-  const lower = input.message.trim().toLowerCase();
-  if (/\b(?:log a note|log note|journal note)\b/i.test(lower)) {
-    return false;
-  }
-  if (
-    /\b(?:recommend|watchlist|readlist|from my .+ list|list_items|add .+ to .+list)\b/i.test(
-      lower,
-    )
-  ) {
-    return false;
-  }
-  return (
-    /\b(?:log|logged|ate|had|eating|lunch|breakfast|dinner|snack|meal|calorie|macro|protein)\b/i.test(
-      lower,
-    ) && !/\b(?:train|workout|gym|hevy|calendar|remind)\b/i.test(lower)
-  );
 }
 
 export function parkedPillarIds(): readonly PillarId[] {
   return ["WEALTH", "HAPPINESS", "WISDOM"];
 }
 
-/**
- * When minimal mode classifies a parked pillar topic as GENERAL, still return a parked reply.
- */
-export function parkedGeneralTopicReply(message: string): string | null {
-  const lower = message.trim().toLowerCase();
-  if (/\b(?:notion|lifeos|connect_notion|sync_notion|setup_notion)\b/i.test(lower)) {
-    return parkedGeneralCapabilityReply("notion");
-  }
-  if (
-    /\b(?:zerodha|kite|portfolio|holdings|sips?|net worth|budget|investing|stock holdings)\b/i.test(
-      lower,
-    )
-  ) {
-    return parkedIntentReply("WEALTH");
-  }
-  if (
-    /\b(?:recommend a movie|pick a movie|poetry mic|leisure coach|happiness coach)\b/i.test(
-      lower,
-    )
-  ) {
-    return parkedIntentReply("HAPPINESS");
-  }
-  if (/\b(?:learning plan|career coach|wisdom coach|skill sprint)\b/i.test(lower)) {
-    return parkedIntentReply("WISDOM");
-  }
-  return null;
-}

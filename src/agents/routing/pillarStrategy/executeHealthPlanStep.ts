@@ -26,7 +26,7 @@ import { tryHevyWriteAgent } from "../../../pillars/health/workouts/agents/hevyW
 import type { MealParserComponent } from "../../health/mealParserAgent.js";
 import { parseMealLogCommand, type MealLogKind, type MealSlot } from "../../../meals/parseMealLogCommand.js";
 import { sanitizeMealLogRawText } from "../../../meals/sanitizeMealLogRawText.js";
-import { isMealPlanningIntent, isMealSlotCorrectionMessage, extractPastMealFoodText, extractMealSlotFromMessage, inferMealLogCandidate, normalizeMealLogText } from "../../../meals/mealLogIntent.js";
+import { isMealSlotCorrectionMessage, extractPastMealFoodText, extractMealSlotFromMessage, inferMealLogCandidate, normalizeMealLogText } from "../../../meals/mealLogIntent.js";
 import { resolveMealSlotCorrection } from "../../../meals/mealSlotCorrection.js";
 import {
   clearMealLogPending,
@@ -95,18 +95,6 @@ export async function executeHealthPlanStep(
         await clearMealLogPending(ctx.userProfileId);
       }
 
-      if (isMealPlanningIntent(original)) {
-        return {
-          text: "That sounds like a **meal plan** (future meals), not food you've eaten yet. Say what you **ate** to log it, or ask to see your **meal plan**.",
-          metadata: {
-            specialist: "nutrition",
-            department: "HEALTH",
-            meal_log: false,
-            meal_planning_blocked: true,
-            pillar_compose: false,
-          },
-        };
-      }
       const mealParsed = parseMealLogCommand(stepCtx.rawMessage);
       const rawCandidate =
         extractPastMealFoodText(original) ??
