@@ -1,3 +1,4 @@
+import { isOneShotReminderDeliverable } from "../oneShotReminderExpiry.js";
 import { isInLocalHourWindow } from "../scheduleWindow.js";
 import type { ProactiveEvaluateResult, ProactiveKindHandler } from "./types.js";
 import type { OneShotSchedule, WeeklyLocalSchedule } from "../subscriptions/types.js";
@@ -72,9 +73,12 @@ export const customReminderHandler: ProactiveKindHandler = {
     if (sched?.type !== "one_shot" || !sched.at) {
       return { candidate: false, reason: "invalid_schedule" };
     }
-    const at = new Date(sched.at).getTime();
-    if (Number.isNaN(at) || at > ctx.now.getTime()) {
-      return { candidate: false, reason: "not_due" };
+    const at = new Date(sched.at);
+    if (!isOneShotReminderDeliverable(at, ctx.now)) {
+      if (Number.isNaN(at.getTime()) || at.getTime() > ctx.now.getTime()) {
+        return { candidate: false, reason: "not_due" };
+      }
+      return { candidate: false, reason: "expired" };
     }
     return { candidate: true, reason: "due" };
   },
