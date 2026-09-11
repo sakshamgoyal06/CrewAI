@@ -23,6 +23,7 @@ import {
 } from "../../health/nutritionOrchestrated.js";
 import { runNutritionCapability } from "../../health/nutritionAgent.js";
 import { tryHevyWriteAgent } from "../../../pillars/health/workouts/agents/hevyWriteAgent.js";
+import { asHevyWriteKindHint } from "../../../pillars/health/workouts/hevy/parseHevyWriteCommand.js";
 import type { MealParserComponent } from "../../health/mealParserAgent.js";
 import { parseMealLogCommand, type MealLogKind, type MealSlot } from "../../../meals/parseMealLogCommand.js";
 import { sanitizeMealLogRawText } from "../../../meals/sanitizeMealLogRawText.js";
@@ -286,10 +287,13 @@ export async function executeHealthPlanStep(
       return runHealthJournalAgent(stepCtx);
 
     case "hevy_write": {
-      const r = await tryHevyWriteAgent(stepCtx);
+      const r = await tryHevyWriteAgent(stepCtx, undefined, {
+        capabilitySelected: true,
+        kindHint: asHevyWriteKindHint(step.args?.hevy_kind),
+      });
       return (
         r ?? {
-          text: "Use **hevy routine:** or **hevy workout:** with details.",
+          text: "Tell me the exercises you want in Hevy (sets and reps) and I'll create it.",
           metadata: { specialist: "HevyWrite", hevy_write: false },
         }
       );

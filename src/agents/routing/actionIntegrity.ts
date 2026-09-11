@@ -35,9 +35,13 @@ const READ_ONLY_TOOLS = new Set([
 const FIRST_PERSON_WRITE_RE =
   /\b(?:I've|I have|I'?ve) (?:added|logged|saved|created|scheduled|booked|removed|deleted|updated|mirrored|set up|linked|connected)\b/i;
 
-/** e.g. "Added X to watchlist", "Saved template to library" */
+/**
+ * e.g. "Added X to watchlist", "Saved template to library".
+ * The lookbehind keeps adjectival uses out ("your scheduled Pull B ... on rows", "the updated plan
+ * in Notion") — those describe the user's own state, not a write this turn made.
+ */
 const ACTION_TO_TARGET_RE =
-  /\b(?:added|logged|saved|created|scheduled|booked|removed|deleted|updated|mirrored)\b(?:\s+\S+){0,8}\s+(?:to|on|in)\b/i;
+  /(?<!\b(?:your|the|a|an|my|our|their|its|this|that|these|those|each|every|next|last|previous|upcoming|any|no)\s)\b(?:added|logged|saved|created|scheduled|booked|removed|deleted|updated|mirrored)\b(?:\s+\S+){0,8}\s+(?:to|on|in)\b/i;
 
 /** e.g. "Saved template **name**", "Logged daily check-in" at line start */
 const LINE_START_ACTION_RE =

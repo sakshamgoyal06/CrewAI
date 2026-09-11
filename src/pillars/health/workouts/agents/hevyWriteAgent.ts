@@ -7,7 +7,10 @@ import {
   updateHevyRoutine,
 } from "../hevy/hevyClient.js";
 import { hevyApiKeyForUser } from "../hevy/hevyEnv.js";
-import { parseHevyWriteCommand } from "../hevy/parseHevyWriteCommand.js";
+import {
+  resolveHevyWriteRequest,
+  type HevyWriteKindHint,
+} from "../hevy/parseHevyWriteCommand.js";
 import type {
   HevyExerciseTemplateBrief,
   HevyPostRoutineBody,
@@ -187,13 +190,15 @@ async function llmHevyWorkoutJson(
 }
 
 /**
- * Creates a Hevy routine or logs a workout when the user uses `hevy routine:` / `hevy workout:` or `/hevy routine:`.
+ * Creates a Hevy routine or logs a workout. Explicit `hevy routine:` / `hevy workout:` prefixes
+ * work anywhere; plain language works when the pillar plan parser selected `hevy_write`.
  */
 export async function tryHevyWriteAgent(
   ctx: AgentContext,
   client: typeof anthropic = anthropic,
+  options?: { capabilitySelected?: boolean; kindHint?: HevyWriteKindHint | null },
 ): Promise<AgentResult | null> {
-  const parsed = parseHevyWriteCommand(ctx.rawMessage, ctx.slashCommandKey);
+  const parsed = resolveHevyWriteRequest(ctx.rawMessage, ctx.slashCommandKey, options);
   if (parsed.kind === "none") {
     return null;
   }

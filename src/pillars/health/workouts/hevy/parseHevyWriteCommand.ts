@@ -69,3 +69,46 @@ export function parseHevyWriteCommand(
 export function isHevyWriteCommand(rawMessage: string, slashCommandKey?: string): boolean {
   return parseHevyWriteCommand(rawMessage, slashCommandKey).kind !== "none";
 }
+
+/** Sub-action of an already-selected `hevy_write` capability, supplied by the plan parser. */
+export type HevyWriteKindHint = "routine" | "workout" | "routine_update";
+
+export function asHevyWriteKindHint(value: unknown): HevyWriteKindHint | null {
+  return value === "routine" || value === "workout" || value === "routine_update" ? value : null;
+}
+
+/**
+ * Resolve a Hevy write request. Explicit `hevy routine:` / `hevy workout:` prefixes win; when the
+ * pillar plan parser already selected `hevy_write`, plain language is accepted with the whole
+ * message as the plan text so users are never told to retype a command prefix.
+ */
+export function resolveHevyWriteRequest(
+  rawMessage: string,
+  slashCommandKey: string | undefined,
+  options?: { capabilitySelected?: boolean; kindHint?: HevyWriteKindHint | null },
+): ParsedHevyWrite {
+  const explicit = parseHevyWriteCommand(rawMessage, slashCommandKey);
+  if (explicit.kind !== "none") {
+    return explicit;
+  }
+  if (!options?.capabilitySelected) {
+    return { kind: "none" };
+  }
+
+  const text = rawMessage.trim();
+  if (!text) {
+    return { kind: "none" };
+  }
+
+  if (options.kindHint === "routine_update") {
+    const uuid = text.match(new RegExp(ROUTINE_ID, "i"));
+    if (uuid?.[1]) {
+      return { kind: "routine_update", routineId: uuid[1], text };
+    }
+    return { kind: "routine", text };
+  }
+  if (options.kindHint === "workout") {
+    return { kind: "workout", text };
+  }
+  return { kind: "routine", text };
+}

@@ -22,10 +22,17 @@ import {
 import { listAllowlistedTelegramTargets } from "./targets.js";
 import type { ProactiveMessageKind } from "./types.js";
 
+/** Same reminder text asked for twice creates two rows; the user should still be told once. */
+function recurringReminderFingerprint(sub: ProactiveSubscription): string {
+  const message =
+    typeof sub.config?.message === "string" ? sub.config.message : (sub.userInstruction ?? sub.id);
+  return message.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 120) || sub.id;
+}
+
 function dedupeKeyFor(sub: ProactiveSubscription, dateKey: string): string {
   if (sub.kind === "custom_reminder") {
     if (sub.triggerType === "recurring") {
-      return `custom_reminder:recurring:${sub.id}:${dateKey}`;
+      return `custom_reminder:recurring:${sub.userProfileId}:${recurringReminderFingerprint(sub)}:${dateKey}`;
     }
     return `custom_reminder:${sub.id}`;
   }

@@ -43,6 +43,10 @@ import {
   handleEveningJournalPendingTurn,
 } from "../logging/handleEveningJournalPending.js";
 import { handleActivityCompletionPendingTurn } from "../logging/handleActivityCompletionPending.js";
+import {
+  formatReconcileSummary,
+  reconcileEventCompletionsFromText,
+} from "../events/eventCompletionReconcile.js";
 import { getLocalTimeParts } from "../jobs/morningBriefTime.js";
 import { handleReversibleActionTurn } from "./routing/handleReversibleAction.js";
 
@@ -59,6 +63,7 @@ export type OrchestratorReply = {
 async function finalizeOrchestratorReply(
   ctx: AgentContext,
   reply: OrchestratorReply,
+  options?: { appendNote?: string | null },
 ): Promise<OrchestratorReply> {
   const composed = await vetAndCompose({
     ctx,
@@ -66,9 +71,10 @@ async function finalizeOrchestratorReply(
     metadata: reply.agentMetadata ?? {},
     intent: reply.intent,
   });
+  const note = options?.appendNote?.trim();
   return {
     ...reply,
-    replyText: composed.text,
+    replyText: note ? `${composed.text}\n\n${note}` : composed.text,
     agentMetadata: composed.metadata,
   };
 }
@@ -221,6 +227,24 @@ export async function runOrchestratorReply(input: {
     }
   }
 
+  // "I went to gym" closes the matching commitment even when a pillar answers the turn read-only.
+  let completionReconcileNote: string | null = null;
+  if (assembled.parserSignals.looks_like_activity_completion_report) {
+    try {
+      const reconciled = await reconcileEventCompletionsFromText({
+        userProfileId: input.userProfileId,
+        text: input.userMessage,
+        timeZone: timezone,
+      });
+      completionReconcileNote = formatReconcileSummary(reconciled);
+    } catch (err) {
+      logger.warn(
+        { err: String(err), userProfileId: input.userProfileId },
+        "activity completion reconcile failed",
+      );
+    }
+  }
+
   const healthProfile = await fetchUserHealthProfile(input.userProfileId);
   const healthRoute = intentToPillarRoute("HEALTH");
 
@@ -289,11 +313,13 @@ export async function runOrchestratorReply(input: {
 
   let intent = photoContext
     ? resolvePhotoIntent(photoContext)
-    : assembled.parserSignals.prefer_intent_health
-      ? ("HEALTH" as Intent)
-      : await resolveIntentNaturalLanguage(effectiveUserMessage, {
-          routingContext: assembled,
-        });
+    : assembled.parserSignals.looks_like_journal_note
+      ? ("GENERAL" as Intent)
+      : assembled.parserSignals.prefer_intent_health
+        ? ("HEALTH" as Intent)
+        : await resolveIntentNaturalLanguage(effectiveUserMessage, {
+            routingContext: assembled,
+          });
 
   if (isMinimalMode()) {
     if (isParkedIntent(intent)) {
@@ -449,47 +475,57 @@ export async function runOrchestratorReply(input: {
 
   if (intent === "GENERAL") {
     const magnus = await executeGeneralStrategy(ctx);
-    return finalizeOrchestratorReply(ctx, {
-      replyText: magnus.text,
-      intent,
-      agentMetadata: {
-        ...magnus.metadata,
-        ...(abandonedProjectSession ? { project_session_abandoned: true } : {}),
-        ...(photoContext
-          ? {
-              photo_vision: {
-                purpose: photoContext.analysis.purpose,
-                confidence: photoContext.analysis.confidence,
-              },
-            }
-          : {}),
+    return finalizeOrchestratorReply(
+      ctx,
+      {
+        replyText: magnus.text,
+        intent,
+        agentMetadata: {
+          ...magnus.metadata,
+          ...(completionReconcileNote ? { event_completion_reconciled: true } : {}),
+          ...(abandonedProjectSession ? { project_session_abandoned: true } : {}),
+          ...(photoContext
+            ? {
+                photo_vision: {
+                  purpose: photoContext.analysis.purpose,
+                  confidence: photoContext.analysis.confidence,
+                },
+              }
+            : {}),
+        },
+        memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
       },
-      memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
-    });
+      { appendNote: completionReconcileNote },
+    );
   }
 
   const delegated = await dispatchToAgent(ctx, intent);
   if (delegated) {
-    return finalizeOrchestratorReply(ctx, {
-      replyText: delegated.result.text,
-      intent,
-      delegatedAgent: delegated.agentName,
-      agentMetadata: {
-        pillar: pillarRoute.pillar,
-        department: pillarRoute.department,
-        ...delegated.result.metadata,
-        ...(abandonedProjectSession ? { project_session_abandoned: true } : {}),
-        ...(photoContext
-          ? {
-              photo_vision: {
-                purpose: photoContext.analysis.purpose,
-                confidence: photoContext.analysis.confidence,
-              },
-            }
-          : {}),
+    return finalizeOrchestratorReply(
+      ctx,
+      {
+        replyText: delegated.result.text,
+        intent,
+        delegatedAgent: delegated.agentName,
+        agentMetadata: {
+          pillar: pillarRoute.pillar,
+          department: pillarRoute.department,
+          ...delegated.result.metadata,
+          ...(completionReconcileNote ? { event_completion_reconciled: true } : {}),
+          ...(abandonedProjectSession ? { project_session_abandoned: true } : {}),
+          ...(photoContext
+            ? {
+                photo_vision: {
+                  purpose: photoContext.analysis.purpose,
+                  confidence: photoContext.analysis.confidence,
+                },
+              }
+            : {}),
+        },
+        memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
       },
-      memoryPackageChronologicalTurns: memoryPackage.chronologicalTurns,
-    });
+      { appendNote: completionReconcileNote },
+    );
   }
 
   logger.warn({ intent }, "no specialist registered for intent; Magnus answering");

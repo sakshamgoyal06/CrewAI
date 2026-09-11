@@ -27,10 +27,31 @@ function client(deps?: { client?: SupabaseClient }): SupabaseClient {
   return deps?.client ?? defaultClient;
 }
 
+/** Ensure default rhythm catalog rows exist (idempotent — does not re-enable user-disabled kinds). */
+export async function ensureDefaultRhythmSubscriptions(
+  userProfileId: string,
+  deps?: { client?: SupabaseClient },
+): Promise<void> {
+  for (const kind of RHYTHM_DEFAULT_ENABLED_KINDS) {
+    const existing = await getSubscriptionByKind(userProfileId, kind, deps);
+    if (!existing) {
+      await upsertCatalogSubscription({
+        userProfileId,
+        kind,
+        enabled: true,
+        source: "system_default",
+        deps,
+      });
+    }
+  }
+}
+
 export async function listEnabledSubscriptions(
   userProfileId: string,
   deps?: { client?: SupabaseClient },
 ): Promise<ProactiveSubscription[]> {
+  await ensureDefaultRhythmSubscriptions(userProfileId, deps);
+
   const { data, error } = await client(deps)
     .from(TABLE)
     .select("*")

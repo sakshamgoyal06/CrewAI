@@ -49,6 +49,9 @@ vi.mock("./routing/routingContextParser.js", () => ({
     schedule_accuracy_challenge: false,
     compound_action: false,
     prefer_intent_health: false,
+    looks_like_evening_journal: false,
+    looks_like_journal_note: false,
+    parked_feature_topic: null,
     consult_pillars: [],
     magnus_capabilities: [],
   },
@@ -64,6 +67,7 @@ vi.mock("./routing/routingContextParser.js", () => ({
     saved_media_pick: Boolean(signals.saved_media_pick),
     schedule_accuracy_challenge: Boolean(signals.schedule_accuracy_challenge),
     compound_action: Boolean(signals.compound_action),
+    looks_like_journal_note: Boolean(signals.looks_like_journal_note),
   }),
 }));
 
@@ -87,6 +91,9 @@ function mockRoutingSignals(overrides: Record<string, unknown> = {}): void {
     schedule_accuracy_challenge: false,
     compound_action: false,
     prefer_intent_health: false,
+    looks_like_evening_journal: false,
+    looks_like_journal_note: false,
+    parked_feature_topic: null,
     consult_pillars: [],
     magnus_capabilities: [],
     ...overrides,
@@ -124,6 +131,16 @@ describe("resolveIntentNaturalLanguage", () => {
     mockRoutingSignals({ explicit_meal_log: true });
     await expect(resolveIntentNaturalLanguage("meal: two eggs and toast")).resolves.toBe("HEALTH");
     expect(parseRoutingContextMock).toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits to GENERAL for journal note saves without calling classifier", async () => {
+    mockRoutingSignals({ looks_like_journal_note: true, looks_like_magnus_tool_action: true });
+    await expect(
+      resolveIntentNaturalLanguage(
+        "Also note a journal entry that yesterday was a really great day. I went swimming.",
+      ),
+    ).resolves.toBe("GENERAL");
     expect(createMock).not.toHaveBeenCalled();
   });
 

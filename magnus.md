@@ -416,4 +416,14 @@ user-facing message (meals deferred to Phase 2).
 
 ---
 
-**Last updated:** 2026-09-10 (one-shot reminder 24h late window + auto-miss; minimal mode Phase 1 focus)
+**Last updated:** 2026-09-11 (journal-note routing; rhythm auto-seed; Hevy write in plain language; activity completion reconcile)
+
+**Recent behaviour (2026-09-11):**
+
+- **Journal saves** ("note a journal entry", retrospective notes about yesterday) route to **GENERAL** `journal_note` → `log_note` even when the content mentions swimming or training — not Health `generic_ack`.
+- **Rhythm subscriptions auto-seed** — `ensureDefaultRhythmSubscriptions` runs inside `listEnabledSubscriptions`, so users provisioned before rhythm kinds existed start receiving `evening_journal` without a reprovision. Idempotent; never re-enables a kind the user disabled.
+- **Hevy writes accept plain language** — `hevy_write` no longer requires the `hevy routine:` / `hevy workout:` prefix. When the plan parser picks the capability, `resolveHevyWriteRequest` uses the whole message as plan text and `args.hevy_kind` (`routine` | `workout` | `routine_update`) picks the sub-action. Prefixes still work. The fitness prompt must never claim Magnus lacks Hevy access.
+- **Activity completion reports close commitments** — `looks_like_activity_completion_report` runs `reconcileEventCompletionsFromText` in the orchestrator prelude, so "I went to gym" marks the planned `magnus_events` row `done` regardless of which pillar answers. The `attended_activity` rule requires title overlap; parenthetical qualifiers ("Morning gym (walk swap)") are stripped before scoring.
+- **Action integrity** no longer treats adjectival participles as write claims ("your scheduled Pull B … on rows" used to trigger "I haven't actually saved that yet" on read-only turns).
+- **Recurring custom reminders dedupe by message text** per user per day, so duplicate subscription rows with the same text only send once.
+- Calendar activity swaps should **rename** the existing Google event, not only add an orphan event-log row.
