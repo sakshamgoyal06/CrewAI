@@ -289,11 +289,13 @@ export async function runOrchestratorReply(input: {
 
   let intent = photoContext
     ? resolvePhotoIntent(photoContext)
-    : assembled.parserSignals.prefer_intent_health
-      ? ("HEALTH" as Intent)
-      : await resolveIntentNaturalLanguage(effectiveUserMessage, {
-          routingContext: assembled,
-        });
+    : assembled.parserSignals.looks_like_journal_note
+      ? ("GENERAL" as Intent)
+      : assembled.parserSignals.prefer_intent_health
+        ? ("HEALTH" as Intent)
+        : await resolveIntentNaturalLanguage(effectiveUserMessage, {
+            routingContext: assembled,
+          });
 
   if (isMinimalMode()) {
     if (isParkedIntent(intent)) {

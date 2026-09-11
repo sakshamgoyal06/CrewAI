@@ -36,7 +36,8 @@ WISDOM — getting better: learning something, courses, practice, career directi
 skills, and shipping projects.
 GENERAL — everything else, and specifically: the calendar and schedule, **what the whole day or week
 looks like** (calendar events, commitments, and meals together — not food alone), reminders,
-journaling and logging, YouTube / YT Music actions (search, playlists, bookmarks, cue/queue,
+journaling and logging (including "note a journal entry", "save to my journal", retrospective
+notes about yesterday — even when the content mentions workouts or swimming), YouTube / YT Music actions (search, playlists, bookmarks, cue/queue,
 recommendations to open), user lists (watchlist, readlist, tasks, goals catalog — read, add,
 update, recommend from saved items), LifeOS logging (joy tank, pillar status, goals table), Notion
 connect/sync, event log (log/reschedule/list commitments), questions spanning several categories,
@@ -47,6 +48,7 @@ day", "what's on my calendar tomorrow") — those are GENERAL even if food or me
 the answer.
 
 Use routing_hints when present:
+- looks_like_journal_note → GENERAL (save a journal/daily log note — not Health coaching, even if content mentions workouts)
 - explicit_meal_log or looks_like_meal_log_read → HEALTH (logging food eaten, or reading **logged** meal history/macros — never the meal **plan** menu)
 - looks_like_youtube_action or looks_like_magnus_tool_action or looks_like_magnus_tool_continuation → GENERAL (Magnus has tools)
 - holistic_day_ask → GENERAL (whole-day schedule: calendar + commitments + meals — use day_overview, not meal plan alone)
@@ -86,10 +88,11 @@ const MINIMAL_CLASSIFY_SYSTEM = `Classify a message to a personal assistant into
 
 Only two categories are live right now:
 HEALTH — training, workouts, the gym, Hevy routines, exercise programming, recovery from training.
-GENERAL — everything else: calendar and schedule, reminders, commitments/event log, holistic day
-overview, YouTube / YT Music actions, user lists (watchlist, readlist, tasks), ordinary
-conversation, and any topic whose specialist is temporarily parked (meals, money, leisure taste,
-learning plans, Notion, projects).
+GENERAL — everything else: calendar and schedule, reminders, commitments/event log, **journal
+notes and daily logging** (log_note — even when the note is about swimming, gym, or training),
+holistic day overview, YouTube / YT Music actions, user lists (watchlist, readlist, tasks),
+ordinary conversation, and any topic whose specialist is temporarily parked (meals, money, leisure
+taste, learning plans, Notion, projects).
 
 Do NOT use WEALTH, HAPPINESS, or WISDOM — route those topics to GENERAL and Magnus will explain
 what is parked.
@@ -97,6 +100,7 @@ what is parked.
 Meal logging, nutrition, and food photos are parked — route food/meal messages to GENERAL, not HEALTH.
 
 Use routing_hints when present:
+- looks_like_journal_note → GENERAL (save a journal/daily log note — not Health coaching)
 - looks_like_health_fitness_read → HEALTH when asking to read/review workouts or Hevy
 - looks_like_youtube_action or looks_like_magnus_tool_action or looks_like_magnus_tool_continuation → GENERAL
 - holistic_day_ask → GENERAL
@@ -155,6 +159,10 @@ export async function resolveIntentNaturalLanguage(
   const hints =
     options?.routingContext?.routingHints ??
     await buildIntentRoutingHints(userMessage, options?.recentTurns ?? []);
+
+  if (hints.looks_like_journal_note) {
+    return "GENERAL";
+  }
 
   if (isMinimalMode()) {
     if (hints.looks_like_health_fitness_read) {

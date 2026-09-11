@@ -59,6 +59,8 @@ export type RoutingContextSignals = {
   prefer_intent_health: boolean;
   /** User-initiated evening journal / check-in (not a pending session reply). */
   looks_like_evening_journal: boolean;
+  /** User wants to save a journal note / daily log entry (log_note) — any day, not only EOD ritual. */
+  looks_like_journal_note: boolean;
   /** Minimal mode: topic maps to a parked feature (meals, notion, wealth, …). */
   parked_feature_topic: ParkedFeatureTopic;
   consult_pillars: ConsultablePillarIntent[];
@@ -79,6 +81,7 @@ export const NEUTRAL_ROUTING_CONTEXT: RoutingContextSignals = {
   compound_action: false,
   prefer_intent_health: false,
   looks_like_evening_journal: false,
+  looks_like_journal_note: false,
   parked_feature_topic: null,
   consult_pillars: [],
   magnus_capabilities: [],
@@ -93,7 +96,7 @@ You receive the current user message and recent chat previews. Output **only** J
 - **explicit_meal_log**: true only for explicit command forms: "meal:", "/meal", "log meal:", "log breakfast:", "ate:", "just had:".
 - **looks_like_meal_log_read**: user wants **logged** meal history, macros, breakdown, or undo — NOT the meal **plan** menu.
 - **looks_like_youtube_action**: YouTube / YT Music actions (search, playlist, bookmark, cue, connect Google/YouTube) or a YouTube/YT Music URL.
-- **looks_like_magnus_tool_action**: Magnus operations tools needed now: lists (watchlist/readlist/tasks), LifeOS (joy tank, pillar status, goals), Notion connect/sync, event log, proactive reminders, calendar writes/reads/deletes.
+- **looks_like_magnus_tool_action**: Magnus operations tools needed now: lists (watchlist/readlist/tasks), LifeOS (joy tank, pillar status, goals), Notion connect/sync, event log, **journal notes** (log_note), proactive reminders, calendar writes/reads/deletes.
 - **looks_like_magnus_tool_continuation**: short affirmative follow-up ("yes", "do it", "go ahead") continuing a Magnus tool offer from the last assistant turn.
 - **looks_like_health_fitness_read**: read/review workouts, Hevy, gym session data (not logging food).
 - **looks_like_wealth_portfolio_read**: read portfolio, holdings, Zerodha/Kite, SIPs (not Magnus list actions).
@@ -103,6 +106,7 @@ You receive the current user message and recent chat previews. Output **only** J
 - **compound_action**: multiple distinct asks in one message ("add to calendar AND suggest a video").
 - **prefer_intent_health**: true when HEALTH should win before the five-way classifier: meal slot follow-up after meal context, meal day breakdown, explicit meal log command, meal slot correction, **or** the user is continuing an active meal_plan_session (see pending_context).
 - **looks_like_evening_journal**: user wants to start an evening check-in / end-of-day journal (not replying inside an existing session unless pending says otherwise).
+- **looks_like_journal_note**: user wants to **save** a journal entry or daily log note (log_note) — e.g. "note a journal entry", "log this", "save to my journal", "remember that yesterday…". True even when the note mentions workouts, swimming, or health — the **action** is logging, not coaching. Set magnus_capabilities to include "journal". Do NOT set prefer_intent_health for journal saves.
 - **parked_feature_topic**: when minimal mode would park the topic — one of "meals", "notion", "wealth", "happiness", "wisdom", or null when the message is about live capabilities (calendar, lists, gym, reminders).
 
 When **pending_context** is present, use it:
@@ -120,12 +124,13 @@ When **pending_context** is present, use it:
   - calendar bulk read/delete/create → ["calendar"]
   - remind me at 9am → ["proactive"]
   - add to watchlist → ["lists"]
+  - note/save a journal entry → ["journal"]
   - connect notion → ["notion","connect"]
 
 Use **recent_turns** for follow-ups. Interpret meaning; do not keyword-match.
 
 Output shape:
-{"explicit_meal_log":false,"looks_like_meal_log_read":false,"looks_like_youtube_action":false,"looks_like_magnus_tool_action":false,"looks_like_magnus_tool_continuation":false,"looks_like_health_fitness_read":false,"looks_like_wealth_portfolio_read":false,"holistic_day_ask":false,"saved_media_pick":false,"schedule_accuracy_challenge":false,"compound_action":false,"prefer_intent_health":false,"looks_like_evening_journal":false,"parked_feature_topic":null,"consult_pillars":[],"magnus_capabilities":[]}`;
+{"explicit_meal_log":false,"looks_like_meal_log_read":false,"looks_like_youtube_action":false,"looks_like_magnus_tool_action":false,"looks_like_magnus_tool_continuation":false,"looks_like_health_fitness_read":false,"looks_like_wealth_portfolio_read":false,"holistic_day_ask":false,"saved_media_pick":false,"schedule_accuracy_challenge":false,"compound_action":false,"prefer_intent_health":false,"looks_like_evening_journal":false,"looks_like_journal_note":false,"parked_feature_topic":null,"consult_pillars":[],"magnus_capabilities":[]}`;
 
 function textFromMessage(msg: Message): string {
   for (const block of msg.content) {
@@ -217,6 +222,7 @@ function parseRoutingJson(text: string): RoutingContextSignals | null {
       compound_action: asBool(raw.compound_action),
       prefer_intent_health: asBool(raw.prefer_intent_health),
       looks_like_evening_journal: asBool(raw.looks_like_evening_journal),
+      looks_like_journal_note: asBool(raw.looks_like_journal_note),
       parked_feature_topic: parseParkedTopic(raw.parked_feature_topic),
       consult_pillars: parseConsultPillars(raw.consult_pillars),
       magnus_capabilities: parseCapabilities(raw.magnus_capabilities),
@@ -289,5 +295,6 @@ export function routingContextToIntentHints(
     saved_media_pick: signals.saved_media_pick,
     schedule_accuracy_challenge: signals.schedule_accuracy_challenge,
     compound_action: signals.compound_action,
+    looks_like_journal_note: signals.looks_like_journal_note,
   };
 }

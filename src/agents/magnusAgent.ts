@@ -137,7 +137,7 @@ const TOOLS: Tool[] = [
   {
     name: "update_calendar_event",
     description:
-      "Change an existing event: move it, rename it, change location or description. Requires the id from read_calendar. Send only the fields that change.",
+      "Change an existing event: move it, rename it, change location or description. Requires the id from read_calendar. Send only the fields that change. When swapping one activity for another at the same time (e.g. gym instead of walk), pass summary with the new activity title.",
     input_schema: {
       type: "object",
       properties: {

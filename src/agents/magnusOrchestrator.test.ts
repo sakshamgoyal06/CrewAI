@@ -84,6 +84,7 @@ vi.mock("./routing/routingContextParser.js", () => ({
     compound_action: false,
     prefer_intent_health: false,
     looks_like_evening_journal: false,
+    looks_like_journal_note: false,
     parked_feature_topic: null,
     consult_pillars: [],
     magnus_capabilities: [],

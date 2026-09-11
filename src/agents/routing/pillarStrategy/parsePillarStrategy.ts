@@ -119,7 +119,9 @@ GENERAL-specific:
 - **day_overview** when the user wants the **whole day** — calendar, schedule, commitments, and meals together. Examples: "what does my day/tomorrow look like", "entire day tomorrow", "what's on tomorrow", "walk me through Monday". Pass date_hint in args when clear: "today", "tomorrow", "yesterday", or YYYY-MM-DD.
 - **lists** when the user sends a **photo of items to save** (routing_hints.photo_purpose=list_items) — add detected titles from photo_extracted_items to the list they asked for (readlist, watchlist, etc.) using recent_turns for which list.
 - **pillar_consultation** when the turn needs Magnus tools AND pillar specialist depth in one reply. Set args.pillars to subset of ["HEALTH","WEALTH","HAPPINESS","WISDOM"]. Examples: log check-in + review workout, calendar edit + nutrition advice, list update + portfolio context.
+- **journal_note** when the user wants to save a journal entry or daily log note (log_note) — including retrospective notes ("yesterday was great", swimming milestones). Not health EOD journal.
 - **calendar** only when they want Google Calendar / schedule **without** also wanting meals and commitments woven in.
+- **event_log** / **calendar** when the user **swaps** one activity for another at the same time (e.g. "gym instead of walk"): read calendar first, then **update_calendar_event** with a new **summary/title** for the new activity — do not leave the old title. Prefer updating the existing event over creating a duplicate log_event row.
 - Holistic day asks are NEVER satisfied by conversation alone — use day_overview.
 - When routing_hints.compound_action=true, emit **multiple steps** in logical order (e.g. calendar then youtube, gym plan then meal plan) — do not stop after the first sub-request.
 - Use routing_hints integration flags (google_calendar_connected, etc.) — if calendar not connected, day_overview still runs but calendar section may be empty.

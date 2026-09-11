@@ -416,4 +416,6 @@ user-facing message (meals deferred to Phase 2).
 
 ---
 
-**Last updated:** 2026-09-10 (one-shot reminder 24h late window + auto-miss; minimal mode Phase 1 focus)
+**Last updated:** 2026-09-11 (journal-note routing to log_note; rhythm subscription auto-seed; calendar swap guidance)
+
+**Recent behaviour (2026-09-11):** Explicit journal/daily-log saves ("note a journal entry", retrospective notes about yesterday) route to **GENERAL** `journal_note` → `log_note` even when content mentions swimming or training — not Health `generic_ack`. Default rhythm subscriptions (`evening_journal`, week/month rhythm) are **auto-seeded** on first proactive list for users missing rows. Calendar activity swaps should **rename** the existing Google event, not only add an orphan event-log row.

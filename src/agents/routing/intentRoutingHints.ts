@@ -20,6 +20,7 @@ export type IntentRoutingHints = {
   saved_media_pick: boolean;
   schedule_accuracy_challenge: boolean;
   compound_action: boolean;
+  looks_like_journal_note: boolean;
 };
 
 export async function buildIntentRoutingHints(
