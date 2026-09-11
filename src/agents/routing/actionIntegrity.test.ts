@@ -95,6 +95,18 @@ describe("enforceActionIntegrity", () => {
     expect(out.text).not.toContain("`checkin:");
   });
 
+  it("leaves read-only coaching alone when a past participle is adjectival", () => {
+    const out = enforceActionIntegrity({
+      text:
+        "Nice work on that Pull A session. Your lifts looked solid.\n\n" +
+        "One heads-up: your scheduled Pull B (which is thickness-focused on rows again) would be overkill. " +
+        "Focus on the 7 PM swim instead.",
+      metadata: { specialist: "Fitness", health_order: "fitness", workout_source: "hevy" },
+    });
+    expect(out.corrected).toBe(false);
+    expect(out.text).not.toContain("haven't actually saved");
+  });
+
   it("allows Magnus replies when a write tool succeeded", () => {
     const out = enforceActionIntegrity({
       text: "Done — **Die With Zero** is on your readlist.",

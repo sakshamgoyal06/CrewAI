@@ -107,8 +107,9 @@ export const HEALTH_CAPABILITY_CATALOG: CapabilityCatalog = {
     },
     {
       id: "hevy_write",
-      summary: "Create Hevy routine or log workout via API",
-      disambiguation: 'Explicit "hevy routine:" or "hevy workout:" prefix only.',
+      summary: "Create/replace a Hevy routine or log a workout via the Hevy API",
+      disambiguation:
+        'Any ask to build, create, or save a routine/split into Hevy, or log a workout to Hevy — plain language is fine ("create a push/pull/legs routine and add to hevy"). Explicit "hevy routine:" / "hevy workout:" prefixes also work. Set args.hevy_kind to "routine", "workout", or "routine_update". NOT read-only session review (use fitness).',
     },
     {
       id: "fitness",

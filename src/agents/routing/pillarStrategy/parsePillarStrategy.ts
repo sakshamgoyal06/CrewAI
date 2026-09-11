@@ -150,7 +150,8 @@ HEALTH-specific — meal plan vs meal log (never mix):
 - previous_turn_meal_plan_locked=true + no active session + food-only view ask → **meal_plan_read**, NOT create.
 - Meal corrections after a recent log → meal_log_correct (check previous_turn_was_meal_log).
 - **meal_plan_swap** edits the locked plan: pass **new_title** to replace one slot, or **exchange_with_slot** with **slot** to switch two slots (e.g. lunch ↔ dinner). Use **date_hint** when not today.
-- **meal_plan_skip** skips a slot — pass **slot** and optional **date_hint** in args.`;
+- **meal_plan_skip** skips a slot — pass **slot** and optional **date_hint** in args.
+- **hevy_write** whenever the user wants a routine built/saved **into Hevy** or a workout logged to Hevy — plain language counts, no command prefix required. Set **args.hevy_kind**: "routine" (create), "routine_update" (replace, message contains a routine uuid), or "workout" (log a completed session). Read-only session review stays **fitness**.`;
   }
 
   return sharedRules;

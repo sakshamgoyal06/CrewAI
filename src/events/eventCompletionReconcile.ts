@@ -16,6 +16,8 @@ export type CompletionRule = {
   titleMatch: RegExp;
   /** When present anywhere in the note, skip this rule (e.g. "haven't picked up"). */
   blockWhen?: RegExp;
+  /** Broad rules only fire when the event title actually overlaps the note. */
+  requireTitleOverlap?: boolean;
 };
 
 /** Ordered: more specific rules first. */
@@ -47,6 +49,16 @@ export const EVENT_COMPLETION_RULES: CompletionRule[] = [
     id: "generic_done",
     pattern: /\b(?:done|finished|completed)\b/i,
     titleMatch: /.*/,
+    requireTitleOverlap: true,
+  },
+  {
+    id: "attended_activity",
+    pattern:
+      /\b(?:went\s+(?:to|for)|made\s+it\s+to|just\s+(?:did|got\s+back\s+from)|did\s+my|finished\s+my|hit\s+the)\b/i,
+    titleMatch: /.*/,
+    blockWhen:
+      /\b(?:haven'?t|have\s+not|not\s+yet|didn'?t|did\s+not|skipped|missed|will|going\s+to|planning\s+to|should\s+i)\b/i,
+    requireTitleOverlap: true,
   },
 ];
 
@@ -69,12 +81,14 @@ function eventMatchesRule(event: EventRow, rule: CompletionRule): boolean {
 }
 
 /**
- * Score how well an event title aligns with note text (for generic_done fallback).
- * Returns 0 when no meaningful overlap.
+ * Score how well an event title aligns with note text (for broad rules).
+ * Parenthetical qualifiers ("Morning gym (walk swap)") describe provenance, not the activity, so
+ * they are dropped before scoring. Returns 0 when no meaningful overlap.
  */
 function titleOverlapScore(note: string, title: string): number {
   const noteLower = note.toLowerCase();
   const tokens = title
+    .replace(/[([][^)\]]*[)\]]/g, " ")
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((t) => t.length > 2);
@@ -110,7 +124,7 @@ export function findCompletionMatches(
       if (!eventMatchesRule(event, rule)) {
         continue;
       }
-      if (rule.id === "generic_done" && titleOverlapScore(text, event.title) < 0.5) {
+      if (rule.requireTitleOverlap && titleOverlapScore(text, event.title) < 0.5) {
         continue;
       }
       matched.push({

@@ -89,3 +89,28 @@ describe("findCompletionMatches", () => {
     expect(matches).toHaveLength(0);
   });
 });
+
+describe("attended activity reports", () => {
+  const gym = [row({ id: "gym", title: "Morning gym (walk swap)", status: "planned" })];
+
+  it("closes a planned commitment when the user says they went", () => {
+    const matches = findCompletionMatches("I went to gym. Check hevy", gym);
+    expect(matches.map((m) => m.eventId)).toEqual(["gym"]);
+  });
+
+  it("ignores parenthetical qualifiers when scoring the title", () => {
+    const matches = findCompletionMatches("did my gym session", gym);
+    expect(matches.map((m) => m.eventId)).toEqual(["gym"]);
+  });
+
+  it("does not close a commitment the user has not done yet", () => {
+    expect(findCompletionMatches("going to gym later tonight", gym)).toHaveLength(0);
+    expect(findCompletionMatches("I skipped the gym today", gym)).toHaveLength(0);
+    expect(findCompletionMatches("should I go to gym?", gym)).toHaveLength(0);
+  });
+
+  it("does not close unrelated commitments", () => {
+    const swim = [row({ id: "swim", title: "Evening Swim", status: "planned" })];
+    expect(findCompletionMatches("I went to gym", swim)).toHaveLength(0);
+  });
+});
