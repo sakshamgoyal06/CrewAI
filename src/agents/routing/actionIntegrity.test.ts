@@ -4,6 +4,7 @@ import {
   classifyToolResult,
   claimsPersistence,
   enforceActionIntegrity,
+  mentionsVagueFailure,
   stripMisleadingClaimLines,
 } from "./actionIntegrity.js";
 
@@ -222,5 +223,87 @@ describe("stripMisleadingClaimLines", () => {
     expect(cleaned).not.toContain("`checkin:");
     expect(cleaned).toContain("Solid session");
     expect(cleaned).toContain("See you tomorrow");
+  });
+});
+
+// "There's a backend hiccup" is not a thing this system can produce. When the model says it,
+// the user is left unable to tell what broke — and the reply escapes the write-claim checks
+// precisely because it admits failure.
+describe("mentionsVagueFailure", () => {
+  it("recognises invented causes", () => {
+    expect(mentionsVagueFailure("There's a backend hiccup preventing me from saving it")).toBe(true);
+    expect(mentionsVagueFailure("Something went wrong on my end")).toBe(true);
+    expect(mentionsVagueFailure("The tasks tool is acting up")).toBe(true);
+    expect(mentionsVagueFailure("I'm having trouble saving that")).toBe(true);
+    expect(mentionsVagueFailure("I can't save this right now")).toBe(true);
+  });
+
+  it("leaves real, specific explanations alone", () => {
+    expect(mentionsVagueFailure('add_list_item returned "Unknown list \\"holiday\\""')).toBe(false);
+    expect(mentionsVagueFailure("Google Calendar is not connected — here is the consent link")).toBe(
+      false,
+    );
+    expect(mentionsVagueFailure("Added 13 to tasks.")).toBe(false);
+  });
+});
+
+describe("enforceActionIntegrity — euphemised tool failures", () => {
+  const failedAdd = {
+    tool_outcomes: [
+      {
+        name: "add_list_item",
+        ok: false,
+        preview: 'Could not save to tasks: permission denied for table magnus_list_items',
+      },
+    ],
+  };
+
+  it("replaces the invented cause with the real tool error and keeps the content", () => {
+    const result = enforceActionIntegrity({
+      text: "There's a backend hiccup preventing me from saving it to your tasks tool right now, but here's everything organized:\n\n1. Book cab\n2. Pack bags",
+      metadata: failedAdd,
+    });
+
+    expect(result.corrected).toBe(true);
+    expect(result.reason).toBe("euphemised_tool_failure");
+    expect(result.text).not.toMatch(/hiccup/i);
+    expect(result.text).toContain("Nothing was saved.");
+    expect(result.text).toContain("add_list_item");
+    expect(result.text).toContain("permission denied");
+    expect(result.text).toContain("Book cab");
+    expect(result.text).toContain("Pack bags");
+  });
+
+  it("tells the user why when a write claim had no evidence and a tool really failed", () => {
+    const result = enforceActionIntegrity({
+      text: "Added all 13 items to your tasks list.",
+      metadata: failedAdd,
+    });
+
+    expect(result.corrected).toBe(true);
+    expect(result.text).toContain("I haven't actually saved that yet.");
+    expect(result.text).toContain("permission denied");
+    expect(result.text).not.toContain("Tell me again in one message");
+  });
+
+  it("does not fire when the write actually succeeded", () => {
+    const result = enforceActionIntegrity({
+      text: "Added 13 to tasks.",
+      metadata: {
+        tool_outcomes: [{ name: "add_list_items", ok: true, preview: "Added 13 to tasks: ..." }],
+      },
+    });
+
+    expect(result.corrected).toBe(false);
+    expect(result.text).toBe("Added 13 to tasks.");
+  });
+
+  it("leaves an honest, specific failure explanation untouched", () => {
+    const text =
+      'add_list_item came back with "Unknown list \\"holiday\\"". Nothing saved — want me to create that list first?';
+    const result = enforceActionIntegrity({ text, metadata: failedAdd });
+
+    expect(result.reason).not.toBe("euphemised_tool_failure");
+    expect(result.text).toContain("Unknown list");
   });
 });

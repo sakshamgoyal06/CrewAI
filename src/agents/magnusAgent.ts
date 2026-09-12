@@ -47,6 +47,7 @@ import {
   getDailyCheckin,
   logDailyCheckin,
   magnusAddListItem,
+  magnusAddListItems,
   magnusCreateList,
   magnusLinkNotionList,
   magnusListCatalog,
@@ -628,7 +629,8 @@ const TOOLS: Tool[] = [
   },
   {
     name: "add_list_item",
-    description: "Add an item to any user list. Mirrors to Notion when that list is linked.",
+    description:
+      "Add ONE item to a user list. For two or more items in the same turn use add_list_items instead.",
     input_schema: {
       type: "object",
       properties: {
@@ -646,6 +648,40 @@ const TOOLS: Tool[] = [
         },
       },
       required: ["list", "title"],
+    },
+  },
+  {
+    name: "add_list_items",
+    description:
+      "Add SEVERAL items to one list in a single call. Always use this instead of repeating add_list_item — a 13-item list is one call, not 13. Items already on the list are left alone. The result names exactly which items saved and which failed.",
+    input_schema: {
+      type: "object",
+      properties: {
+        list: { type: "string", description: "List slug or alias." },
+        items: {
+          type: "array",
+          description: "Items to add, in the order they should appear.",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              notes: { type: "string" },
+              url: { type: "string" },
+              status: { type: "string" },
+              priority: { type: "string", enum: ["High", "Medium", "Low"] },
+            },
+            required: ["title"],
+          },
+        },
+        status: { type: "string", description: "Default status for every item." },
+        priority: {
+          type: "string",
+          enum: ["High", "Medium", "Low"],
+          description: "Default priority for every item.",
+        },
+        pillar: { type: "string", enum: ["health", "wealth", "wisdom", "joy", "happiness"] },
+      },
+      required: ["list", "items"],
     },
   },
   {
@@ -1028,6 +1064,41 @@ const str = (value: unknown): string | undefined =>
 const num = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
 
+/** Models send batch items as plain strings about as often as objects. Accept both. */
+function parseListItemsInput(
+  raw: unknown,
+): { title: string; notes?: string; url?: string; status?: string; priority?: string }[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: { title: string; notes?: string; url?: string; status?: string; priority?: string }[] =
+    [];
+  for (const entry of raw) {
+    if (typeof entry === "string") {
+      if (entry.trim()) {
+        out.push({ title: entry.trim() });
+      }
+      continue;
+    }
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const row = entry as Record<string, unknown>;
+    const title = str(row.title) ?? str(row.name) ?? str(row.item);
+    if (!title) {
+      continue;
+    }
+    out.push({
+      title: title.trim(),
+      notes: str(row.notes),
+      url: str(row.url),
+      status: str(row.status),
+      priority: str(row.priority),
+    });
+  }
+  return out;
+}
+
 async function runTool(
   name: string,
   input: Record<string, unknown>,
@@ -1280,6 +1351,15 @@ async function runTool(
           notes: str(input.notes),
           url: str(input.url),
           author: str(input.author),
+          priority: str(input.priority),
+          pillar: str(input.pillar),
+        });
+      case "add_list_items":
+        return await magnusAddListItems({
+          userProfileId: ctx.userProfileId,
+          list: String(input.list ?? ""),
+          items: parseListItemsInput(input.items),
+          status: str(input.status),
           priority: str(input.priority),
           pillar: str(input.pillar),
         });

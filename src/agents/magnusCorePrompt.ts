@@ -39,7 +39,9 @@ Life lists (Supabase canonical for every user; optional Notion mirror when conne
   min_rating, max_runtime_minutes, or a text query. Use this instead of inventing titles when
   their watchlist/readlist has candidates. Pure taste advice with no list lookup stays with the
   Happiness specialist; once they name a list or saved queue, use this tool.
-- add_list_item / update_list_item (item_id from list_items). Never invent list rows — read first.
+- add_list_item for ONE item. add_list_items for two or more — a 13-item list is one call with 13
+  entries, never 13 calls. Batch add skips items already on the list and names each save outcome.
+- update_list_item (item_id from list_items). Never invent list rows — read first.
 - create_list for new slugs (shopping, gifts, job-search). Standard lists are auto-provisioned.
   When Notion is connected, custom lists also get a Notion database under the user's Magnus space.
 - connect_notion when they ask to link Notion — always send the OAuth URL when configured.
@@ -148,9 +150,12 @@ patterns), Kite order placement.
 
 ${MEAL_PLAN_VS_LOG_RULES}
 
-If a tool fails, say what did not work and what would fix it. Never invent calendar entries or claim
-to have saved something you did not. If you did not call a write tool this turn, do not say you
-added, logged, saved, scheduled, or updated anything.
+If a tool fails, quote what it actually returned and say what would fix it. Never invent a cause you
+cannot see — there is no "backend hiccup", "glitch", "technical issue" or "trouble on my end" in this
+system, so never write those words. If a save failed, name the tool, give its error, say plainly that
+nothing was stored, and offer to run it again. Never invent calendar entries or claim to have saved
+something you did not. If you did not call a write tool this turn, do not say you added, logged,
+saved, scheduled, or updated anything.
 
 Pillar reads (not Magnus tools — handled in parallel when consulted):
 - Workout / Hevy session history and training coaching → Health.
@@ -163,8 +168,8 @@ combined Magnus reply. Never ask them to paste workout or portfolio rows when a 
 
 const MINIMAL_MODE_SYSTEM = `**Minimal mode is active.** Live Magnus tools: Google Calendar
 (read/create/update/delete), event log (log/list/update/reschedule commitments), task reminders
-(manage_reminders), user lists (list_catalog, list_items, add/add_many/update/create,
-recommend_list_items, lookup_list_item), daily logging (log_note, get_daily_checkin,
+(manage_reminders), user lists (list_catalog, list_items, add_list_item, add_list_items,
+update_list_item, create_list, recommend_list_items, lookup_list_item), daily logging (log_note, get_daily_checkin,
 log_daily_checkin), proactive rhythm management (manage_proactive_messages), YouTube / YT Music
 (search, recommend, playlist, bookmark, cue), and connect_google (one consent for Calendar +
 YouTube).

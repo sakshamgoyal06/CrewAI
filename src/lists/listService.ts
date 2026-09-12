@@ -16,7 +16,12 @@ import {
   mirrorCreateItem,
   mirrorUpdateItem,
 } from "./listNotionMirror.js";
-import { describeUnknownList, isValidCustomSlug, normalizeSlug } from "./listSlug.js";
+import {
+  describeUnknownList,
+  isValidCustomSlug,
+  matchListByName,
+  normalizeSlug,
+} from "./listSlug.js";
 import {
   fetchCheckinItem,
   fetchListBySlug,
@@ -126,12 +131,16 @@ async function resolveList(userProfileId: string, rawList: string): Promise<List
   if (!slug) {
     return null;
   }
-  await ensureUserLists(userProfileId);
+  const lists = await ensureUserLists(userProfileId);
   const row = await fetchListBySlug(userProfileId, slug);
   if (!row.ok) {
     throw new Error(row.error);
   }
-  return row.data;
+  if (row.data) {
+    return row.data;
+  }
+  // The user named a list they own in words that do not spell its slug.
+  return matchListByName(lists, rawList);
 }
 
 export async function listCatalog(userProfileId: string): Promise<string> {
@@ -342,6 +351,60 @@ export async function recommendListItems(input: {
   return `Recommendations from ${list.slug} (${picks.length} of ${matched.length} matches):\n${lines.join("\n")}`;
 }
 
+type NewListItem = {
+  title: string;
+  status?: string;
+  notes?: string;
+  url?: string;
+  author?: string;
+  priority?: string;
+  pillar?: string;
+};
+
+function normalizePriority(value: string | undefined): "High" | "Medium" | "Low" | undefined {
+  return value === "High" || value === "Medium" || value === "Low" ? value : undefined;
+}
+
+async function saveOneItem(
+  userProfileId: string,
+  list: ListRow,
+  item: NewListItem,
+): Promise<{ ok: true; id: string; mirrored: boolean } | { ok: false; error: string }> {
+  const status = item.status ?? list.default_status ?? undefined;
+  const extra: Record<string, unknown> = {};
+  if (item.pillar) {
+    extra.pillar = item.pillar;
+  }
+
+  const notionPageId = await mirrorCreateItem(userProfileId, list, {
+    title: item.title,
+    status,
+    notes: item.notes,
+    url: item.url,
+    author: item.author,
+    priority: item.priority,
+    extra,
+  });
+
+  const saved = await insertListItem({
+    userProfileId,
+    listId: list.id,
+    title: item.title,
+    status,
+    notes: item.notes,
+    url: item.url,
+    author: item.author,
+    priority: normalizePriority(item.priority),
+    extra,
+    notionPageId: notionPageId ?? undefined,
+  });
+
+  if (!saved.ok) {
+    return { ok: false, error: saved.error };
+  }
+  return { ok: true, id: saved.data.id, mirrored: Boolean(notionPageId) };
+}
+
 export async function addListItem(input: {
   userProfileId: string;
   list: string;
@@ -363,44 +426,97 @@ export async function addListItem(input: {
     return "Title is required.";
   }
 
-  const status = input.status ?? list.default_status ?? undefined;
-  const extra: Record<string, unknown> = {};
-  if (input.pillar) {
-    extra.pillar = input.pillar;
-  }
-
-  const notionPageId = await mirrorCreateItem(input.userProfileId, list, {
-    title,
-    status,
-    notes: input.notes,
-    url: input.url,
-    author: input.author,
-    priority: input.priority,
-    extra,
-  });
-
-  const saved = await insertListItem({
-    userProfileId: input.userProfileId,
-    listId: list.id,
-    title,
-    status,
-    notes: input.notes,
-    url: input.url,
-    author: input.author,
-    priority:
-      input.priority === "High" || input.priority === "Medium" || input.priority === "Low"
-        ? input.priority
-        : undefined,
-    extra,
-    notionPageId: notionPageId ?? undefined,
-  });
-
+  const saved = await saveOneItem(input.userProfileId, list, { ...input, title });
   if (!saved.ok) {
     return `Could not save to ${list.slug}: ${saved.error}`;
   }
 
-  const mirrorNote = notionPageId ? " (mirrored to Notion)" : "";
-  return `Added to ${list.slug}: "${title}" id:${saved.data.id}${mirrorNote}.`;
+  const mirrorNote = saved.mirrored ? " (mirrored to Notion)" : "";
+  return `Added to ${list.slug}: "${title}" id:${saved.id}${mirrorNote}.`;
+}
+
+/**
+ * Add a whole list in one call. Asking for "a todo list for the trip" is one request,
+ * not thirteen, and one call per item burns the tool-round budget before the list is
+ * saved. Reports per-item outcomes so a partial failure cannot be read as success.
+ */
+export async function addListItems(input: {
+  userProfileId: string;
+  list: string;
+  items: NewListItem[];
+  status?: string;
+  priority?: string;
+  pillar?: string;
+}): Promise<string> {
+  const list = await resolveList(input.userProfileId, input.list);
+  if (!list) {
+    return describeUnknownList(input.list);
+  }
+
+  const cleaned: NewListItem[] = [];
+  const seen = new Set<string>();
+  for (const raw of input.items) {
+    const title = raw.title?.trim();
+    if (!title) {
+      continue;
+    }
+    const key = title.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    cleaned.push({
+      ...raw,
+      title,
+      status: raw.status ?? input.status,
+      priority: raw.priority ?? input.priority,
+      pillar: raw.pillar ?? input.pillar,
+    });
+  }
+
+  if (cleaned.length === 0) {
+    return "No items to add — every title was empty.";
+  }
+
+  const existing = await queryListItems({
+    userProfileId: input.userProfileId,
+    listId: list.id,
+    openStatuses: list.open_statuses,
+    limit: 200,
+  });
+  const alreadyOpen = new Set(
+    existing.ok ? existing.data.map((row) => row.title.trim().toLowerCase()) : [],
+  );
+
+  const added: string[] = [];
+  const skipped: string[] = [];
+  const failed: { title: string; error: string }[] = [];
+
+  for (const item of cleaned) {
+    if (alreadyOpen.has(item.title.toLowerCase())) {
+      skipped.push(item.title);
+      continue;
+    }
+    const saved = await saveOneItem(input.userProfileId, list, item);
+    if (saved.ok) {
+      added.push(`"${item.title}" id:${saved.id}`);
+    } else {
+      failed.push({ title: item.title, error: saved.error });
+    }
+  }
+
+  const parts: string[] = [];
+  if (added.length > 0) {
+    parts.push(`Added ${added.length} to ${list.slug}: ${added.join(", ")}.`);
+  }
+  if (skipped.length > 0) {
+    parts.push(`Already on ${list.slug}, left alone: ${skipped.map((t) => `"${t}"`).join(", ")}.`);
+  }
+  if (failed.length > 0) {
+    const detail = failed.map((f) => `"${f.title}" (${f.error})`).join(", ");
+    parts.push(`Could not save ${failed.length} to ${list.slug}: ${detail}.`);
+  }
+  return parts.join(" ");
 }
 
 export async function updateListItemById(input: {

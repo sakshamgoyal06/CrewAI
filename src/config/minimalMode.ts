@@ -70,6 +70,7 @@ export const MINIMAL_MAGNUS_TOOL_NAMES = new Set([
   "list_items",
   "lookup_list_item",
   "add_list_item",
+  "add_list_items",
   "update_list_item",
   "create_list",
   "recommend_list_items",
