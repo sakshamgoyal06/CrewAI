@@ -7,7 +7,7 @@ import {
   updateHevyRoutine,
 } from "../hevy/hevyClient.js";
 import { hevyApiKeyForUser } from "../hevy/hevyEnv.js";
-import { parseHevyWriteCommand } from "../hevy/parseHevyWriteCommand.js";
+import { inferHevyWriteIntent, parseHevyWriteCommand } from "../hevy/parseHevyWriteCommand.js";
 import type {
   HevyExerciseTemplateBrief,
   HevyPostRoutineBody,
@@ -29,7 +29,9 @@ Rules:
 - Match the user's exercises to the closest catalog titles (e.g. "bench" -> "Bench Press (Barbell)" if present).
 - type per set: one of warmup, normal, failure, dropset.
 - Include at least 1 set per exercise. Use integer reps unless the user gives a range; then use rep_range {"start":8,"end":12} instead of reps.
-- Keep titles concise.`;
+- Keep titles concise.
+- When the user's own programme is provided, build from it — their split, their movements, their
+  rep ranges. Do not substitute a generic textbook routine for the programme they already run.`;
 
 const ROUTINE_UPDATE_JSON_SYSTEM = `You convert workout plans into JSON for the Hevy app's REST API (update an existing routine via PUT).
 
@@ -151,12 +153,17 @@ async function llmHevyRoutineJson(
   client: typeof anthropic,
   mode: "create" | "update",
   routineId?: string,
+  programContext?: string,
 ): Promise<unknown | null> {
   const system = mode === "update" ? ROUTINE_UPDATE_JSON_SYSTEM : ROUTINE_JSON_SYSTEM;
+  // The user's locked programme, so "make me a routine" builds their split, not a textbook one.
+  const programBlock = programContext?.trim()
+    ? `\n\nThe user's own programme (build from this):\n${programContext.trim().slice(0, 4000)}`
+    : "";
   const userBlock =
     mode === "update" && routineId
-      ? `Exercise catalog (JSON array of {id,title}):\n${catalogJson}\n\nRoutine id to replace (PUT): ${routineId}\n\nNew program:\n${userPlan}`
-      : `Exercise catalog (JSON array of {id,title}):\n${catalogJson}\n\nUser plan:\n${userPlan}`;
+      ? `Exercise catalog (JSON array of {id,title}):\n${catalogJson}${programBlock}\n\nRoutine id to replace (PUT): ${routineId}\n\nNew program:\n${userPlan}`
+      : `Exercise catalog (JSON array of {id,title}):\n${catalogJson}${programBlock}\n\nUser plan:\n${userPlan}`;
   const msg = await client.messages.create({
     model: HEALTH_SPECIALIST_MODEL,
     max_tokens: 4096,
@@ -187,13 +194,18 @@ async function llmHevyWorkoutJson(
 }
 
 /**
- * Creates a Hevy routine or logs a workout when the user uses `hevy routine:` / `hevy workout:` or `/hevy routine:`.
+ * Creates a Hevy routine or logs a workout. Accepts the `hevy routine:` / `hevy workout:`
+ * prefixes, and — when the router has already classified the turn as a Hevy write — plain
+ * language like "create a 3-2-2 split and add it to Hevy".
  */
 export async function tryHevyWriteAgent(
   ctx: AgentContext,
   client: typeof anthropic = anthropic,
+  options: { allowNaturalLanguage?: boolean } = {},
 ): Promise<AgentResult | null> {
-  const parsed = parseHevyWriteCommand(ctx.rawMessage, ctx.slashCommandKey);
+  const parsed = options.allowNaturalLanguage
+    ? inferHevyWriteIntent(ctx.rawMessage, ctx.slashCommandKey)
+    : parseHevyWriteCommand(ctx.rawMessage, ctx.slashCommandKey);
   if (parsed.kind === "none") {
     return null;
   }
@@ -237,6 +249,7 @@ export async function tryHevyWriteAgent(
       client,
       "update",
       parsed.routineId,
+      ctx.healthReferenceBlock,
     );
     if (!raw || !isValidRoutineBody(raw, allowedIds)) {
       return {
@@ -287,7 +300,14 @@ export async function tryHevyWriteAgent(
   }
 
   if (parsed.kind === "routine") {
-    const raw = await llmHevyRoutineJson(parsed.text, catalogJson, client, "create");
+    const raw = await llmHevyRoutineJson(
+      parsed.text,
+      catalogJson,
+      client,
+      "create",
+      undefined,
+      ctx.healthReferenceBlock,
+    );
     if (!raw || !isValidRoutineBody(raw, allowedIds)) {
       return {
         text:

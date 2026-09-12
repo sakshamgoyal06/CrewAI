@@ -107,8 +107,9 @@ export const HEALTH_CAPABILITY_CATALOG: CapabilityCatalog = {
     },
     {
       id: "hevy_write",
-      summary: "Create Hevy routine or log workout via API",
-      disambiguation: 'Explicit "hevy routine:" or "hevy workout:" prefix only.',
+      summary: "Create or update a Hevy routine, or log a completed workout, via the Hevy API",
+      disambiguation:
+        'Any request to CREATE, BUILD, CHANGE or SAVE a routine/programme/split, or to LOG a completed workout — in plain words ("create a 3-2-2 split and add it to Hevy", "log my legs session") or with the "hevy routine:" / "hevy workout:" prefix. Asking what to train, or reviewing a past session, is fitness instead.',
     },
     {
       id: "fitness",

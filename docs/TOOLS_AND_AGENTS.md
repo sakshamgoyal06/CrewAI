@@ -119,7 +119,7 @@ Capability → tool filter: `generalCatalog.ts` (`GENERAL_CAPABILITY_TOOLS`).
 | `meal_targets_*` | `mealTargetAgent` | Show/set macro targets |
 | `meal_plan_*` | `mealPlanningAgent`, templates, shopping | Multi-turn plan journey |
 | `journal` | `healthJournalAgent` | EOD health journal |
-| `hevy_write` | `hevyWriteAgent` | `hevy routine:` / `hevy workout:` |
+| `hevy_write` | `hevyWriteAgent` | Plain-language routine/workout writes, or `hevy routine:` / `hevy workout:` |
 | `fitness` | `fitnessAgent` + Hevy context | Training coaching |
 | `alternates` | `alternatesRecommenderAgent` | Food swaps |
 | `nutrition_advice` | `nutritionAgent` | Q&A without logging |

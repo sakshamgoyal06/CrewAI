@@ -304,6 +304,13 @@ export const USER_QUERY_CATALOG: UserQueryExpectation[] = [
     hints: { looks_like_health_fitness_read: true },
   },
   {
+    category: "health_hevy_write",
+    query: "create a new routine with a 3-2-2 split and add it to hevy",
+    idealIntent: "HEALTH",
+    idealCapability: "hevy_write",
+    hints: { looks_like_health_fitness_read: true },
+  },
+  {
     category: "health_nutrition",
     query: "how much protein should I aim for?",
     idealIntent: "HEALTH",
