@@ -39,6 +39,36 @@ import {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+const DEFAULT_REMINDER_LEAD_MINUTES = 30;
+
+function reminderLeadMinutes(): number {
+  const raw = Number(process.env.MAGNUS_DEFAULT_EVENT_REMINDER_LEAD_MINUTES);
+  return Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_REMINDER_LEAD_MINUTES;
+}
+
+/**
+ * A commitment nobody is reminded about is a note, not a commitment. `remind_at` was almost
+ * never set, so the event-reminder job had nothing to send — three sends in six weeks.
+ * Set to 0 lead minutes to opt out of the default.
+ */
+function defaultRemindAt(input: {
+  status: EventStatus;
+  plannedStartAt: Date | null;
+  allDay: boolean;
+  now: Date;
+}): Date | null {
+  if (input.status !== "planned" || !input.plannedStartAt || input.allDay) {
+    return null;
+  }
+  const lead = reminderLeadMinutes();
+  if (lead === 0) {
+    return null;
+  }
+  const at = new Date(input.plannedStartAt.getTime() - lead * 60 * 1000);
+  // A reminder in the past would either fire immediately or be swept as stale.
+  return at.getTime() > input.now.getTime() ? at : null;
+}
+
 type TimeParse = { ok: true; at: Date | null; dateOnly: boolean } | { ok: false; message: string };
 
 function parseTime(value: string | undefined, timeZone: string, label: string): TimeParse {
@@ -139,6 +169,15 @@ export async function logEvent(input: LogEventInput): Promise<string> {
     return "The finish time is before the start time — check them.";
   }
 
+  const effectiveRemindAt =
+    remindAt.at ??
+    defaultRemindAt({
+      status,
+      plannedStartAt: start.at,
+      allDay: start.dateOnly,
+      now: new Date(),
+    });
+
   const saved = await createEvent({
     userProfileId: input.userProfileId,
     title,
@@ -157,7 +196,7 @@ export async function logEvent(input: LogEventInput): Promise<string> {
     endedAt: actualEnd.at,
     outcomeNote: input.note,
     reason: input.reason,
-    remindAt: remindAt.at,
+    remindAt: effectiveRemindAt,
     googleEventId: input.calendarEventId,
     createdBy: "magnus",
   });
@@ -183,7 +222,12 @@ export async function logEvent(input: LogEventInput): Promise<string> {
     return `Already logged: ${describeEvent(saved.data.event, timeZone)}. Nothing new written.`;
   }
   const unscheduled = !start.at ? " No time on it yet." : "";
-  return `Logged: ${describeEvent(saved.data.event, timeZone)}.${unscheduled}`;
+  // Say when the nudge lands, so a reminder the user did not ask for is never a surprise.
+  const autoReminder =
+    !remindAt.at && effectiveRemindAt
+      ? ` I'll nudge you at ${formatInstant(effectiveRemindAt, timeZone)}.`
+      : "";
+  return `Logged: ${describeEvent(saved.data.event, timeZone)}.${unscheduled}${autoReminder}`;
 }
 
 export type UpdateEventStatusInput = {

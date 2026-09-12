@@ -55,6 +55,11 @@ export function scheduleProactiveCron(): void {
     { intervalMinutes: intervalMin, jobs: enabledJobs },
     "proactive cron scheduled (UTC; per-user timezone inside jobs)",
   );
+
+  // Reconcile rhythm subscriptions immediately — do not wait up to 5 minutes after deploy.
+  void runProactiveCronTick(new Date()).catch((err) => {
+    logger.error({ err: String(err) }, "proactive cron boot tick failed");
+  });
 }
 
 /** Manual / test entry point. */

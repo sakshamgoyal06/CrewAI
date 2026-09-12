@@ -5,6 +5,7 @@
  * demands it). Nothing here tells the user which specialist ran; that is internal detail recorded
  * in chat metadata.
  */
+import { isMinimalMode } from "./config/minimalMode.js";
 import { runOrchestratorReply } from "./agents/magnusOrchestrator.js";
 import { runPostTurnMemoryMaintenance } from "./agents/memory/memoryAgent.js";
 import { tryHandleMemoryTopicCommand } from "./agents/memory/memoryTopicCommands.js";
@@ -43,7 +44,8 @@ function turnTimeoutMs(): number {
   const raw = process.env.MAGNUS_TURN_TIMEOUT_MS;
   const n = raw ? Number.parseInt(raw, 10) : NaN;
   if (Number.isNaN(n) || n < 30_000) {
-    return 240_000;
+    // Tool-light turns (cancel a reminder, add a list item) should not wait four minutes.
+    return 90_000;
   }
   return n;
 }
@@ -177,7 +179,10 @@ export async function handleMessage(
       mealPhoto: options?.mealPhoto,
     });
 
-    const { replyText, intent } = orchestrated;
+    const replyText =
+      orchestrated.replyText?.trim() ||
+      "I drew a blank on that turn — say it again in one message and I'll run the same save.";
+    const { intent } = orchestrated;
     const intentForLog =
       orchestrated.agentMetadata?.meal_log === true ? "meal_log" : intent;
 
@@ -223,8 +228,12 @@ export async function handleMessage(
       err instanceof Error &&
       (err.message.includes("turn_timeout") || err.name === "AbortError");
     const fallback = timedOut
-      ? "That took too long. Try again, or say **cancel planning** if you were mid meal-plan."
-      : "Something went wrong. Check server logs.";
+      ? isMinimalMode()
+        ? "That took too long. Try again in one short message — I'll run the same save."
+        : "That took too long. Try again, or say **cancel planning** if you were mid meal-plan."
+      : isMinimalMode()
+        ? "Something went wrong on my end. Try once more — I'll run the same save."
+        : "Something went wrong. Check server logs.";
     const errLog = await recordMagnusChatMessage({
       user_profile_id: user.profileId,
       telegram_user_id: user.telegramUserId,

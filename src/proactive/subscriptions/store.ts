@@ -11,6 +11,7 @@ import {
   isCatalogKind,
   RHYTHM_DEFAULT_ENABLED_KINDS,
   rowToSubscription,
+  scheduleUntilDate,
   type ProactiveCapBucket,
   type ProactiveSchedule,
   type ProactiveSubscription,
@@ -179,6 +180,7 @@ export async function createRecurringCustomReminder(input: {
   localHour: number;
   localMinute?: number;
   windowMinutes?: number;
+  until?: string;
   deps?: { client?: SupabaseClient };
 }): Promise<StoreResult<ProactiveSubscription>> {
   const hour = Math.min(23, Math.max(0, Math.floor(input.localHour)));
@@ -193,6 +195,7 @@ export async function createRecurringCustomReminder(input: {
       localHour: hour,
       localMinute: minute,
       windowMinutes: input.windowMinutes ?? 14,
+      ...(input.until ? { until: input.until } : {}),
     } satisfies ProactiveSchedule,
     config: { message: input.message.trim(), recurring: true },
     user_instruction: input.message.trim(),
@@ -208,6 +211,123 @@ export async function createRecurringCustomReminder(input: {
   return { ok: true, data: rowToSubscription(data as ProactiveSubscriptionRow) };
 }
 
+/** Every N local days from `anchorDate`, optionally stopping after `until`. */
+export async function createIntervalCustomReminder(input: {
+  userProfileId: string;
+  message: string;
+  intervalDays: number;
+  anchorDate: string;
+  localHour: number;
+  localMinute?: number;
+  windowMinutes?: number;
+  until?: string;
+  deps?: { client?: SupabaseClient };
+}): Promise<StoreResult<ProactiveSubscription>> {
+  const intervalDays = Math.max(1, Math.floor(input.intervalDays));
+  const hour = Math.min(23, Math.max(0, Math.floor(input.localHour)));
+  const minute = Math.min(59, Math.max(0, Math.floor(input.localMinute ?? 0)));
+  const row = {
+    user_profile_id: input.userProfileId,
+    kind: "custom_reminder",
+    enabled: true,
+    trigger_type: "recurring" as ProactiveTriggerType,
+    schedule: {
+      type: "interval_local",
+      intervalDays,
+      anchorDate: input.anchorDate,
+      localHour: hour,
+      localMinute: minute,
+      windowMinutes: input.windowMinutes ?? 14,
+      ...(input.until ? { until: input.until } : {}),
+    } satisfies ProactiveSchedule,
+    config: { message: input.message.trim(), recurring: true, intervalDays },
+    user_instruction: input.message.trim(),
+    source: "user_chat" as const,
+    cap_bucket: "user_asked" as ProactiveCapBucket,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await client(input.deps).from(TABLE).insert(row).select("*").single();
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "insert failed" };
+  }
+  return { ok: true, data: rowToSubscription(data as ProactiveSubscriptionRow) };
+}
+
+/**
+ * Point an existing reminder at a new schedule and/or message.
+ *
+ * A correction ("make it every 2 days, not daily") must land on the row the user already has.
+ * Creating a second row is what produced the duplicate morning sends.
+ */
+export async function replaceCustomReminderSchedule(input: {
+  userProfileId: string;
+  subscriptionId: string;
+  message?: string;
+  schedule: ProactiveSchedule;
+  triggerType: ProactiveTriggerType;
+  nextFireAt?: Date | null;
+  deps?: { client?: SupabaseClient };
+}): Promise<StoreResult<ProactiveSubscription>> {
+  const existing = await client(input.deps)
+    .from(TABLE)
+    .select("*")
+    .eq("user_profile_id", input.userProfileId)
+    .eq("id", input.subscriptionId)
+    .eq("kind", "custom_reminder")
+    .maybeSingle();
+
+  if (existing.error || !existing.data) {
+    return { ok: false, error: existing.error?.message ?? "reminder not found" };
+  }
+
+  const sub = rowToSubscription(existing.data as ProactiveSubscriptionRow);
+  const message = input.message?.trim() || (sub.config.message as string | undefined) || "";
+  const config = { ...sub.config, message };
+  delete (config as Record<string, unknown>).status;
+  delete (config as Record<string, unknown>).missed_at;
+
+  const { data, error } = await client(input.deps)
+    .from(TABLE)
+    .update({
+      enabled: true,
+      trigger_type: input.triggerType,
+      schedule: input.schedule,
+      config,
+      user_instruction: message,
+      next_fire_at: input.nextFireAt ? input.nextFireAt.toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.subscriptionId)
+    .eq("user_profile_id", input.userProfileId)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "update failed" };
+  }
+  return { ok: true, data: rowToSubscription(data as ProactiveSubscriptionRow) };
+}
+
+/** Enabled custom reminders, used to spot a duplicate before inserting a new one. */
+export async function listEnabledCustomReminders(
+  userProfileId: string,
+  deps?: { client?: SupabaseClient },
+): Promise<ProactiveSubscription[]> {
+  const { data, error } = await client(deps)
+    .from(TABLE)
+    .select("*")
+    .eq("user_profile_id", userProfileId)
+    .eq("kind", "custom_reminder")
+    .eq("enabled", true)
+    .order("created_at", { ascending: true });
+
+  if (error || !data) {
+    return [];
+  }
+  return (data as ProactiveSubscriptionRow[]).map(rowToSubscription);
+}
+
 export async function createWeeklyCustomReminder(input: {
   userProfileId: string;
   message: string;
@@ -215,6 +335,7 @@ export async function createWeeklyCustomReminder(input: {
   localHour: number;
   localMinute?: number;
   windowMinutes?: number;
+  until?: string;
   deps?: { client?: SupabaseClient };
 }): Promise<StoreResult<ProactiveSubscription>> {
   const days = [...new Set(input.daysOfWeek.filter((d) => d >= 0 && d <= 6))].sort(
@@ -236,6 +357,7 @@ export async function createWeeklyCustomReminder(input: {
       localHour: hour,
       localMinute: minute,
       windowMinutes: input.windowMinutes ?? 14,
+      ...(input.until ? { until: input.until } : {}),
     } satisfies WeeklyLocalSchedule,
     config: { message: input.message.trim(), recurring: true, weekly: true },
     user_instruction: input.message.trim(),
@@ -485,6 +607,57 @@ export async function expireStaleOneShotReminders(
     );
   }
   return data.length;
+}
+
+/**
+ * Retire recurring reminders whose `until` day has passed.
+ *
+ * Without this a bounded request ("every 2 days until the 30th") keeps firing forever, which is
+ * exactly what happened to the coriander reminder.
+ */
+export async function retireFinishedRecurringReminders(
+  localDateKeyByUser: Map<string, string>,
+  deps?: { client?: SupabaseClient },
+): Promise<number> {
+  const { data, error } = await client(deps)
+    .from(TABLE)
+    .select("id, user_profile_id, schedule, config")
+    .eq("enabled", true)
+    .eq("kind", "custom_reminder")
+    .eq("trigger_type", "recurring")
+    .limit(200);
+
+  if (error || !data?.length) {
+    return 0;
+  }
+
+  let retired = 0;
+  for (const row of data) {
+    const until = scheduleUntilDate((row.schedule ?? {}) as ProactiveSchedule);
+    if (!until) {
+      continue;
+    }
+    const today = localDateKeyByUser.get(row.user_profile_id as string);
+    if (!today || today <= until) {
+      continue;
+    }
+    const config = {
+      ...((row.config as Record<string, unknown>) ?? {}),
+      status: "completed",
+      completed_at: new Date().toISOString(),
+    };
+    await client(deps)
+      .from(TABLE)
+      .update({
+        enabled: false,
+        next_fire_at: null,
+        config,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", row.id as string);
+    retired += 1;
+  }
+  return retired;
 }
 
 export async function listDueCustomReminders(

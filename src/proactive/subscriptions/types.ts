@@ -13,6 +13,8 @@ export type RecurringLocalSchedule = {
   localHour: number;
   localMinute?: number;
   windowMinutes?: number;
+  /** Inclusive last local day (YYYY-MM-DD). Past it the reminder retires itself. */
+  until?: string;
 };
 
 /** Fire on specific weekdays at a local hour (0=Sun … 6=Sat). */
@@ -22,6 +24,25 @@ export type WeeklyLocalSchedule = {
   localHour: number;
   localMinute?: number;
   windowMinutes?: number;
+  until?: string;
+};
+
+/**
+ * Fire every N local days from `anchorDate`.
+ *
+ * "Every 2 days until the 30th" used to be unrepresentable, so it was stored as a daily reminder
+ * that never stopped. This is the schedule that actually expresses it.
+ */
+export type IntervalLocalSchedule = {
+  type: "interval_local";
+  /** Days between fires; 1 is equivalent to `recurring_local`. */
+  intervalDays: number;
+  /** First local day that fires (YYYY-MM-DD). */
+  anchorDate: string;
+  localHour: number;
+  localMinute?: number;
+  windowMinutes?: number;
+  until?: string;
 };
 
 export type OneShotSchedule = {
@@ -36,9 +57,16 @@ export type ConditionalSchedule = {
 export type ProactiveSchedule =
   | RecurringLocalSchedule
   | WeeklyLocalSchedule
+  | IntervalLocalSchedule
   | OneShotSchedule
   | ConditionalSchedule
   | Record<string, unknown>;
+
+/** Local day (YYYY-MM-DD) after which a recurring reminder stops, if the schedule sets one. */
+export function scheduleUntilDate(schedule: ProactiveSchedule): string | null {
+  const until = (schedule as { until?: unknown })?.until;
+  return typeof until === "string" && /^\d{4}-\d{2}-\d{2}$/.test(until) ? until : null;
+}
 
 export type ProactiveSubscriptionRow = {
   id: string;
@@ -113,12 +141,21 @@ export const CATALOG_KINDS = [
   "weekly_nutrition_review",
 ] as const;
 
-/** Rhythm kinds enabled by default when provisioning the owner user. */
+/**
+ * Rhythm kinds every allowlisted user gets unless they turn them off.
+ *
+ * `ensureDefaultRhythmSubscriptions` reconciles these on every dispatcher tick (once per local
+ * day per user), so a profile provisioned before a kind existed still receives it. A row the user
+ * disabled is never re-enabled — only missing rows are inserted.
+ */
 export const RHYTHM_DEFAULT_ENABLED_KINDS: CatalogProactiveKind[] = [
   "evening_journal",
   "week_planning",
   "weekly_wrap",
   "monthly_goal_review",
+  "drift_guard",
+  "chat_inactivity",
+  "stale_list_nudge",
 ];
 
 export type CatalogProactiveKind = (typeof CATALOG_KINDS)[number];

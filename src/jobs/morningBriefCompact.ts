@@ -27,6 +27,7 @@ export type CompactMorningBriefPayload = {
   northStar: string | null;
   weekPriorities: string | null;
   hasMorningIntentionToday: boolean;
+  unansweredIntentionDays: number;
   weeklyGoals: string[];
   todayCommitments: CompactCommitment[];
   todayMeals: Array<{ slot: string; title: string }>;
@@ -35,6 +36,10 @@ export type CompactMorningBriefPayload = {
   calendarToday: CompactCalendarLine[];
   /** Proactive reminders scheduled for today. */
   todayReminders: CompactReminder[];
+  /** Open todos from the tasks list, highest priority first. */
+  openTodos: Array<{ title: string; priority: string | null }>;
+  /** Overlapping or duplicated entries in today's calendar. */
+  conflicts: string[];
 };
 
 function eventLocalDateKey(
@@ -174,11 +179,23 @@ export function buildCompactMorningBriefPayload(
     northStar: bundle.northStarGoal ?? null,
     weekPriorities: bundle.weekPriorities ?? null,
     hasMorningIntentionToday: bundle.hasMorningIntentionToday ?? false,
+    unansweredIntentionDays: bundle.unansweredIntentionDays ?? 0,
     weeklyGoals,
     todayCommitments: todayCommitments.slice(0, 8),
     todayMeals,
     headsUp: limitedHeadsUp,
     calendarToday,
     todayReminders,
+    openTodos:
+      bundle.dayContext?.todos.slice(0, 5).map((t) => ({
+        title: t.title,
+        priority: t.priority ?? null,
+      })) ?? [],
+    conflicts:
+      bundle.dayContext?.conflicts.slice(0, 3).map((c) =>
+        c.kind === "duplicate"
+          ? `"${c.titles[0]}" and "${c.titles[1]}" (${c.when}) look like the same session twice`
+          : `"${c.titles[0]}" and "${c.titles[1]}" overlap (${c.when})`,
+      ) ?? [],
   };
 }

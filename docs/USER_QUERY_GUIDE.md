@@ -48,7 +48,7 @@ Everything else is plain language.
 | `what am I eating tomorrow?` | `meal_plan_read` | `mealPlanReadAgent` | Locked plan slots (not holistic day) |
 | `shopping list for this week` | `meal_plan_shopping_list` | Plan store | Grocery list from plan |
 | `journal / wrap up my day` | `journal` | `healthJournalAgent` | EOD health journal prompt + save |
-| `hevy routine: …` | `hevy_write` | `hevyWriteAgent` | Hevy API write result |
+| `create a 3-2-2 split and add it to hevy` / `hevy routine: …` | `hevy_write` | `hevyWriteAgent` | Hevy API write result (plain language or prefix) |
 | `should I train legs today?` | `fitness` | `fitnessAgent` + program memory | Coaching with weekly schedule context |
 | `review my last Hevy workout` | `fitness` | Fitness + Hevy read | Set-by-set session detail |
 | `instead of butter what can I use?` | `alternates` | `alternatesRecommenderAgent` | Swap suggestions |

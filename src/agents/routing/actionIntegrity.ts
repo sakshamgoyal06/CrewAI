@@ -290,7 +290,23 @@ export function stripMisleadingClaimLines(text: string): string {
         return false;
       }
       return true;
-    });
+    })
+    // A line can carry the claim mid-sentence — "That's awesome! I've logged that for you."
+    // Leaving it in produced replies that said both "I didn't save it" and "I logged it".
+    .map((line) => {
+      if (!FIRST_PERSON_WRITE_RE.test(line)) {
+        return line;
+      }
+      const sentences = line.match(/[^.!?]+[.!?]*/g);
+      if (!sentences) {
+        return "";
+      }
+      return sentences
+        .filter((sentence) => !FIRST_PERSON_WRITE_RE.test(sentence))
+        .join("")
+        .trim();
+    })
+    .filter((line, index, all) => line.trim() !== "" || (index > 0 && all[index - 1]!.trim() !== ""));
   return kept.join("\n").trim();
 }
 
@@ -301,6 +317,49 @@ function buildHonestReply(input: {
 }): string {
   const core = input.body.trim() || "I can help with that, but nothing was saved yet.";
   return `${input.prefix}${core}${input.suffix}`;
+}
+
+/**
+ * Invented excuses for a tool failure. "There's a backend hiccup" is not a thing the
+ * codebase can produce, so when the model says it, it is guessing — and the user is left
+ * unable to tell what broke or how to retry.
+ */
+const VAGUE_FAILURE_RE =
+  /\b(?:hiccup|hiccups|glitch|acting up|on my end|something went wrong|went wrong|technical (?:issue|difficulties|problem)|(?:backend|back-end|server|system|internal)\s+(?:issue|problem|error|trouble)|having trouble (?:saving|adding|logging|reaching|connecting)|(?:can'?t|cannot|couldn'?t|unable to) (?:save|add|log|reach|connect)[^.\n]{0,60}\b(?:right now|at the moment|currently))\b/i;
+
+export function mentionsVagueFailure(text: string): boolean {
+  return VAGUE_FAILURE_RE.test(text);
+}
+
+/** Drop the sentences carrying the invented excuse; keep the content the user asked for. */
+function stripVagueFailureSentences(text: string): string {
+  const kept = text
+    .split("\n")
+    .map((line) => {
+      if (!VAGUE_FAILURE_RE.test(line)) {
+        return line;
+      }
+      const sentences = line.match(/[^.!?]+[.!?]*/g);
+      if (!sentences) {
+        return "";
+      }
+      const survivors = sentences.filter((sentence) => !VAGUE_FAILURE_RE.test(sentence));
+      return survivors.join("").trim();
+    })
+    .filter((line, index, all) => line.trim() !== "" || (index > 0 && all[index - 1]!.trim() !== ""));
+  return kept.join("\n").trim();
+}
+
+function describeWriteFailure(meta: Record<string, unknown>): string | null {
+  const failures = toolOutcomes(meta).filter((o) => !o.ok && !isReadOnlyTool(o.name));
+  if (failures.length === 0) {
+    return null;
+  }
+  const first = failures[0]!;
+  const detail = (first.preview ?? "").trim().replace(/\s+/g, " ").slice(0, 220);
+  const reason = detail ? `: ${detail}` : ".";
+  const more = failures.length > 1 ? ` ${failures.length - 1} other step(s) failed too.` : "";
+  return `**Nothing was saved.** \`${first.name}\` failed${reason}${more} Ask me to try again and I will run the same save.`;
 }
 
 /**
@@ -338,6 +397,24 @@ export function enforceActionIntegrity(input: ActionIntegrityInput): ActionInteg
       },
       corrected: true,
       reason: "tool_limit_partial",
+    };
+  }
+
+  const writeFailure = describeWriteFailure(meta);
+  const everyWriteFailed = writeFailure !== null && !hasSuccessfulWriteTool(meta);
+
+  // An invented excuse tells the user nothing and hides a real error. Replace it with the real one.
+  if (everyWriteFailed && mentionsVagueFailure(text)) {
+    const body = stripVagueFailureSentences(text);
+    return {
+      text: body ? `${body}\n\n${writeFailure}` : writeFailure!,
+      metadata: {
+        ...meta,
+        action_integrity: "euphemised_tool_failure",
+        action_integrity_original_claim: true,
+      },
+      corrected: true,
+      reason: "euphemised_tool_failure",
     };
   }
 
@@ -404,7 +481,10 @@ export function enforceActionIntegrity(input: ActionIntegrityInput): ActionInteg
   const prefix = promptOnly
     ? "I haven't saved anything — I can only advise from here. "
     : "I haven't actually saved that yet. ";
-  const suffix = " Tell me again in one message what to log or add and I'll handle it.";
+  // When a tool actually returned an error, say what it was instead of asking the user to retype.
+  const suffix = everyWriteFailed
+    ? `\n\n${writeFailure}`
+    : " Tell me again in one message what to log or add and I'll handle it.";
 
   return {
     text: buildHonestReply({

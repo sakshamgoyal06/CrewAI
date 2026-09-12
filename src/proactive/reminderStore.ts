@@ -6,8 +6,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatInstant } from "../events/eventTime.js";
 import { EVENT_COLUMNS, type EventRow } from "../events/eventTypes.js";
 import { supabase as defaultClient } from "../tools/clients.js";
+import { REMINDER_QUERY_THRESHOLD, reminderQueryScore } from "./reminderMatch.js";
 import {
   rowToSubscription,
+  scheduleUntilDate,
+  type IntervalLocalSchedule,
   type ProactiveSubscription,
   type ProactiveSubscriptionRow,
   type RecurringLocalSchedule,
@@ -55,23 +58,36 @@ function subscriptionFireAt(sub: ProactiveSubscription): Date | null {
   return null;
 }
 
+function localTimeLabel(localHour: number, localMinute?: number): string {
+  return `${String(localHour).padStart(2, "0")}:${String(localMinute ?? 0).padStart(2, "0")}`;
+}
+
 function subscriptionScheduleLabel(sub: ProactiveSubscription): string | null {
   const sched = sub.schedule;
   if (!sched || typeof sched !== "object") {
     return null;
   }
+  const until = scheduleUntilDate(sched);
+  const untilSuffix = until ? ` until ${until}` : "";
+
   if ((sched as RecurringLocalSchedule).type === "recurring_local") {
     const s = sched as RecurringLocalSchedule;
-    const minute = s.localMinute ?? 0;
-    const time = `${String(s.localHour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-    return `Daily at ${time} local`;
+    return `Daily at ${localTimeLabel(s.localHour, s.localMinute)} local${untilSuffix}`;
+  }
+  if ((sched as IntervalLocalSchedule).type === "interval_local") {
+    const s = sched as IntervalLocalSchedule;
+    const cadence =
+      s.intervalDays === 1
+        ? "Daily"
+        : s.intervalDays === 2
+          ? "Every other day"
+          : `Every ${s.intervalDays} days`;
+    return `${cadence} at ${localTimeLabel(s.localHour, s.localMinute)} local${untilSuffix}`;
   }
   if ((sched as WeeklyLocalSchedule).type === "weekly_local") {
     const s = sched as WeeklyLocalSchedule;
-    const minute = s.localMinute ?? 0;
-    const time = `${String(s.localHour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
     const days = s.daysOfWeek.map((d) => DAY_LABELS[d] ?? String(d)).join(", ");
-    return `${days} at ${time} local`;
+    return `${days} at ${localTimeLabel(s.localHour, s.localMinute)} local${untilSuffix}`;
   }
   return null;
 }
@@ -167,19 +183,32 @@ export async function listUpcomingReminders(
   return rows;
 }
 
+/**
+ * Reminders the query plausibly names, best match first.
+ *
+ * Exact substring matches win outright; otherwise content-token overlap decides, so filler words
+ * ("cancel the reminder for …") and emoji in the stored body do not break the match.
+ */
 export function matchRemindersByQuery(
   rows: ReminderRow[],
   query: string,
 ): ReminderRow[] {
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
   if (!q) {
     return rows;
   }
-  const tokens = q.split(/\s+/).filter(Boolean);
-  return rows.filter((row) => {
-    const hay = row.title.toLowerCase();
-    return tokens.every((t) => hay.includes(t));
-  });
+
+  const substring = rows.filter((row) => row.title.toLowerCase().includes(q.toLowerCase()));
+  if (substring.length > 0) {
+    return substring;
+  }
+
+  const scored = rows
+    .map((row) => ({ row, score: reminderQueryScore(q, row.title) }))
+    .filter((entry) => entry.score >= REMINDER_QUERY_THRESHOLD)
+    .sort((a, b) => b.score - a.score);
+
+  return scored.map((entry) => entry.row);
 }
 
 export function formatReminderLine(

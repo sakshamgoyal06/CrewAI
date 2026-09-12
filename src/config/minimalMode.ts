@@ -31,7 +31,7 @@ export const MINIMAL_FOCUS_AREAS = [
 
 export type MinimalFocusArea = (typeof MINIMAL_FOCUS_AREAS)[number];
 
-const MINIMAL_GENERAL_CAPABILITIES = new Set([
+export const MINIMAL_GENERAL_CAPABILITIES = new Set([
   "calendar",
   "event_log",
   "reminders",
@@ -39,11 +39,22 @@ const MINIMAL_GENERAL_CAPABILITIES = new Set([
   "youtube",
   "lists",
   "journal_note",
+  "daily_checkin",
+  "proactive",
   "conversation",
   "pillar_consultation",
 ]);
 
-const MINIMAL_HEALTH_CAPABILITIES = new Set(["fitness", "hevy_write", "generic_ack"]);
+/**
+ * `journal` is here because logging is a Phase 1 focus area: when a "note this down" ask
+ * lands on HEALTH anyway, the entry has to be savable rather than lost in a prompt-only agent.
+ */
+export const MINIMAL_HEALTH_CAPABILITIES = new Set([
+  "fitness",
+  "hevy_write",
+  "journal",
+  "generic_ack",
+]);
 
 /** Magnus tools that remain callable in minimal mode. */
 export const MINIMAL_MAGNUS_TOOL_NAMES = new Set([
@@ -68,6 +79,7 @@ export const MINIMAL_MAGNUS_TOOL_NAMES = new Set([
   "list_items",
   "lookup_list_item",
   "add_list_item",
+  "add_list_items",
   "update_list_item",
   "create_list",
   "recommend_list_items",
@@ -75,6 +87,7 @@ export const MINIMAL_MAGNUS_TOOL_NAMES = new Set([
   "log_note",
   "get_daily_checkin",
   "log_daily_checkin",
+  "manage_proactive_messages",
 ]);
 
 const MINIMAL_PROACTIVE_JOBS = new Set([
@@ -85,24 +98,44 @@ const MINIMAL_PROACTIVE_JOBS = new Set([
   "proactive_subscriptions",
 ]);
 
-/** Catalog proactive kinds allowed in minimal mode (meals and rhythm planning excluded). */
+/**
+ * Catalog proactive kinds allowed in minimal mode — everything except meal and project kinds.
+ *
+ * Phase 1 is about staying on track, which needs the full rhythm (day, week, month) plus the
+ * nudges that notice drift and silence. Only nutrition and project kinds stay parked.
+ */
 const MINIMAL_PROACTIVE_KINDS = new Set([
   "evening_journal",
   "evening_log_followup",
   "drift_guard",
   "custom_reminder",
+  "week_planning",
+  "weekly_wrap",
+  "monthly_goal_review",
+  "midday_encouragement",
+  "stale_list_nudge",
+  "chat_inactivity",
 ]);
 
 const PARKED_GENERAL_CAPABILITY_LABELS: Record<string, string> = {
-  lifeos: "LifeOS logging",
+  lifeos: "Joy tank and pillar status",
   notion: "Notion",
-  proactive: "Proactive rhythm nudges",
-  journal_note: "Journal notes",
   zerodha_connect: "Zerodha",
   project_setup: "Project planning",
   project_manage: "Project management",
   project_status: "Project status",
   goal_manage: "Goals",
+};
+
+/**
+ * Health capabilities outside Phase 1 are not all meals. Naming the wrong feature back at the
+ * user reads as a bot that did not understand the question, so each parked area says its own name.
+ */
+const PARKED_HEALTH_CAPABILITY_LABELS: Record<string, string> = {
+  energy: "Sleep, energy and recovery coaching",
+  long_term_planning: "Multi-month training programming",
+  alternates: "Food substitutions",
+  nutrition_advice: "Nutrition advice",
 };
 
 const PARKED_INTENT_LABELS: Record<Intent, string> = {
@@ -207,10 +240,10 @@ export function magnusDefaultToolAllowlist(): string[] | undefined {
 
 export function parkedFeatureReply(feature: string): string {
   return (
-    `**${feature}** is temporarily parked while Magnus runs in minimal mode. ` +
-    "Right now I'm focused on **workouts**, **calendar**, **lists**, **reminders**, and **logging** " +
-    "(plus YouTube and morning brief). **Meal logging** comes next after these are solid. " +
-    "Set `MAGNUS_MINIMAL_MODE=false` on the host to restore full Magnus."
+    `I'm not handling **${feature}** yet. ` +
+    "What I do properly right now: your **calendar**, **lists and todos**, **reminders**, " +
+    "**workouts**, and **logging your day** — plus YouTube and the morning brief. " +
+    "**Meals and nutrition** are next."
   );
 }
 
@@ -220,6 +253,13 @@ export function parkedIntentReply(intent: Intent): string {
 
 export function parkedGeneralCapabilityReply(capability: string): string {
   const label = PARKED_GENERAL_CAPABILITY_LABELS[capability] ?? capability.replace(/_/g, " ");
+  return parkedFeatureReply(label);
+}
+
+export function parkedHealthCapabilityReply(capability: string): string {
+  const label =
+    PARKED_HEALTH_CAPABILITY_LABELS[capability] ??
+    (capability.startsWith("meal_") ? "Meals & nutrition" : capability.replace(/_/g, " "));
   return parkedFeatureReply(label);
 }
 

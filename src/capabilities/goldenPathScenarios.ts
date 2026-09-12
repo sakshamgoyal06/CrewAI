@@ -51,12 +51,14 @@ export function primaryToolForGeneralCapability(
       if (/reschedule/i.test(q)) return "reschedule_event";
       if (/update_event/i.test(q)) return "update_event";
       return "list_events";
+    case "daily_checkin":
+      if (/get_daily_checkin|what did i log/i.test(q)) return "get_daily_checkin";
+      return "log_daily_checkin";
     case "lifeos":
-      if (/check[\s-]?in/i.test(q)) return "log_daily_checkin";
       if (/joy/i.test(q)) return "log_joy_tank";
       if (/pillar/i.test(q)) return "update_pillar_status";
       if (/goal/i.test(q)) return "add_goal";
-      return "get_daily_checkin";
+      return "list_lifeos_goals";
     case "notion":
       if (/sync/i.test(q)) return "sync_notion";
       if (/setup/i.test(q)) return "setup_notion";

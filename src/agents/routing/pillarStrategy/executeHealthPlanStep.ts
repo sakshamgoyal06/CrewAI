@@ -4,7 +4,7 @@
 import {
   isMinimalHealthCapability,
   isMinimalMode,
-  parkedFeatureReply,
+  parkedHealthCapabilityReply,
 } from "../../../config/minimalMode.js";
 import type { AgentContext, AgentResult } from "../../types.js";
 import { softDeleteMostRecentSession, getSessionsForLocalDate, updateMealSessionSlot } from "../../../nutrition/store/mealHistoryStore.js";
@@ -51,7 +51,7 @@ export async function executeHealthPlanStep(
 
   if (isMinimalMode() && !isMinimalHealthCapability(cap)) {
     return {
-      text: parkedFeatureReply("Meals & nutrition"),
+      text: parkedHealthCapabilityReply(cap),
       metadata: {
         specialist: "HealthComposite",
         parked_capability: cap,
@@ -286,13 +286,10 @@ export async function executeHealthPlanStep(
       return runHealthJournalAgent(stepCtx);
 
     case "hevy_write": {
-      const r = await tryHevyWriteAgent(stepCtx);
-      return (
-        r ?? {
-          text: "Use **hevy routine:** or **hevy workout:** with details.",
-          metadata: { specialist: "HevyWrite", hevy_write: false },
-        }
-      );
+      // Plain language reaches the write path; a mis-route degrades to coaching, not a
+      // syntax lecture, and never to "I don't have access to your Hevy account".
+      const r = await tryHevyWriteAgent(stepCtx, undefined, { allowNaturalLanguage: true });
+      return r ?? runFitnessCapability(stepCtx);
     }
 
     case "fitness":

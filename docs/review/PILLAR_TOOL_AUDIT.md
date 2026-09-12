@@ -106,7 +106,7 @@
 | `meal_plan_templates_list` | Health | Operations | template store | pending | | |
 | `meal_plan_shopping_list` | Health | Operations | shoppingList | pending | | |
 | `journal` | Health | Operations | healthJournalAgent | pending | | ≠ log_note |
-| `hevy_write` | Health | Operations | hevyWriteAgent | pending | | Explicit prefix |
+| `hevy_write` | Health | Operations | hevyWriteAgent | pending | | Prefix or plain language |
 | `fitness` | Health | Operations | fitnessAgent + Hevy | pending | | |
 | `alternates` | Health | Operations | alternatesAgent | pending | | |
 | `nutrition_advice` | Health | Operations | nutritionAgent | pending | | No log |

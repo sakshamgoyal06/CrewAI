@@ -4,6 +4,7 @@
 import {
   addGoal,
   addListItem,
+  addListItems,
   createCustomList,
   getDailyCheckin,
   linkNotionList,
@@ -45,6 +46,17 @@ export async function magnusAddListItem(input: {
   pillar?: string;
 }): Promise<string> {
   return addListItem(input);
+}
+
+export async function magnusAddListItems(input: {
+  userProfileId: string;
+  list: string;
+  items: { title: string; notes?: string; url?: string; priority?: string; status?: string }[];
+  status?: string;
+  priority?: string;
+  pillar?: string;
+}): Promise<string> {
+  return addListItems(input);
 }
 
 export async function magnusUpdateListItem(input: {

@@ -4,6 +4,10 @@
  */
 import type { Intent } from "../intent.js";
 import {
+  MINIMAL_GENERAL_CAPABILITIES,
+  MINIMAL_HEALTH_CAPABILITIES,
+} from "../config/minimalMode.js";
+import {
   primaryToolForGeneralCapability,
   type GoldenPathScenario,
 } from "./goldenPathScenarios.js";
@@ -12,21 +16,6 @@ import type {
   MagnusAccuracyOrchestratorCase,
   MagnusMetamorphicGroup,
 } from "./magnusAccuracySuite.types.js";
-
-/** Minimal-mode live GENERAL capabilities */
-export const MINIMAL_GENERAL_CAPABILITIES = new Set([
-  "calendar",
-  "event_log",
-  "reminders",
-  "day_overview",
-  "youtube",
-  "lists",
-  "conversation",
-  "pillar_consultation",
-]);
-
-/** Minimal-mode HEALTH capabilities */
-export const MINIMAL_HEALTH_CAPABILITIES = new Set(["fitness", "hevy_write", "generic_ack"]);
 
 function orchestratorCase(input: {
   id: string;
@@ -141,7 +130,7 @@ export const MINIMAL_ACCURACY_ORCHESTRATOR_CASES: MagnusAccuracyOrchestratorCase
     category: "parked_meals",
     idealIntent: "GENERAL",
     idealCapability: "conversation",
-    replyContains: "temporarily parked",
+    replyContains: "not handling",
     replyExcludes: "logged",
   }),
   orchestratorCase({
@@ -151,7 +140,7 @@ export const MINIMAL_ACCURACY_ORCHESTRATOR_CASES: MagnusAccuracyOrchestratorCase
     category: "parked_wealth",
     idealIntent: "GENERAL",
     idealCapability: "conversation",
-    replyContains: "temporarily parked",
+    replyContains: "not handling",
   }),
   orchestratorCase({
     id: "min-park-notion-1",
@@ -160,7 +149,7 @@ export const MINIMAL_ACCURACY_ORCHESTRATOR_CASES: MagnusAccuracyOrchestratorCase
     category: "parked_notion",
     idealIntent: "GENERAL",
     idealCapability: "conversation",
-    replyContains: "temporarily parked",
+    replyContains: "not handling",
   }),
   orchestratorCase({
     id: "min-park-happiness-1",
@@ -169,7 +158,7 @@ export const MINIMAL_ACCURACY_ORCHESTRATOR_CASES: MagnusAccuracyOrchestratorCase
     category: "parked_happiness",
     idealIntent: "GENERAL",
     idealCapability: "conversation",
-    replyContains: "temporarily parked",
+    replyContains: "not handling",
   }),
 ];
 

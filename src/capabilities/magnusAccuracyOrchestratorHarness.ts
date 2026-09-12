@@ -55,7 +55,7 @@ export function parserSignalsForAccuracyCase(
   const capabilityToMagnusRouting: Partial<Record<string, MagnusRoutingCapability>> = {
     calendar: "calendar",
     event_log: "event_log",
-    reminders: "proactive",
+    reminders: "reminders",
     lists: "lists",
     youtube: "youtube",
   };

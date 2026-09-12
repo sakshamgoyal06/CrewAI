@@ -11,9 +11,9 @@ export const GENERAL_CAPABILITY_CATALOG: CapabilityCatalog = {
     },
     {
       id: "day_overview",
-      summary: "Holistic day snapshot: Google Calendar + event log commitments + planned meals",
+      summary: "Holistic day snapshot: Google Calendar + event log commitments + open todos",
       disambiguation:
-        'User wants the **whole day** or schedule — "what does my day/tomorrow look like", "entire day", "what\'s on tomorrow", calendar AND meals AND commitments together. Prefer over calendar alone when they ask about the full day, not food-only.',
+        'User wants the **whole day** or schedule — "what does my day/tomorrow look like", "entire day", "what\'s on tomorrow", calendar AND commitments AND todos together. Prefer over calendar alone when they ask about the full day.',
     },
     {
       id: "calendar",
@@ -36,9 +36,15 @@ export const GENERAL_CAPABILITY_CATALOG: CapabilityCatalog = {
       disambiguation: "add to watchlist, show my tasks, recommend from food list.",
     },
     {
+      id: "daily_checkin",
+      summary: "Read or write today's daily check-in (morning intention, wins, day rating)",
+      disambiguation:
+        'Daily check-in / morning intention / "my win today is…" / "what did I log today". Not a free-form journal note (use journal_note).',
+    },
+    {
       id: "lifeos",
-      summary: "Joy tank, pillar status, LifeOS goals, daily check-in",
-      disambiguation: "log joy tank, pillar status, daily check-in.",
+      summary: "Joy tank, pillar status, LifeOS goals",
+      disambiguation: "log joy tank, pillar status.",
     },
     {
       id: "notion",
@@ -123,7 +129,9 @@ export const GENERAL_CAPABILITY_TOOLS: Record<string, string[]> = {
     "list_catalog",
     "list_items",
     "list_notion_items",
+    "lookup_list_item",
     "add_list_item",
+    "add_list_items",
     "add_notion_item",
     "update_list_item",
     "update_notion_item",
@@ -133,13 +141,8 @@ export const GENERAL_CAPABILITY_TOOLS: Record<string, string[]> = {
     "add_goal",
     "add_notion_goal",
   ],
-  lifeos: [
-    "update_pillar_status",
-    "log_joy_tank",
-    "list_lifeos_goals",
-    "get_daily_checkin",
-    "log_daily_checkin",
-  ],
+  daily_checkin: ["get_daily_checkin", "log_daily_checkin", "log_note"],
+  lifeos: ["update_pillar_status", "log_joy_tank", "list_lifeos_goals"],
   notion: ["connect_notion", "sync_notion", "setup_notion"],
   reminders: ["manage_reminders", "log_event", "list_events", "update_event"],
   proactive: ["manage_proactive_messages"],

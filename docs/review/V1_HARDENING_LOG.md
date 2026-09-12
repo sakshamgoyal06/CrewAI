@@ -14,6 +14,7 @@
 | 2026-09-05 | — | agent | routing spine | — | LLM `routingContextParser` replaces regex routing (conversationSignals, magnusActionDetect, deterministic plan bypasses) |
 | 2026-08-18 | #92 | agent | 3.1 (partial) | A pass (scoped) | Generic growth snapshot: day frame, commitments, errands, projects, slipping routines by activity_key |
 | 2026-08-17 | #91 / GitHub #92 | owner | 0.1–2.1 | A pass | Merged foundation PR |
+| 2026-09-12 | [#108](https://github.com/sakshamgoyal06/CrewAI/pull/108) | agent | minimal mode Phase 1 lifecycle | B partial, C partial | Rhythm backfill + `manage_proactive_messages`; reminder interval/until/replace/cancel; lists batch + slug aliases + honest failures; Hevy NL writes; logging route + intention silence; day todos + calendar conflicts; planned-event default reminders; non-meal photos in minimal mode; turn timeout 90s |
 
 ---
 
