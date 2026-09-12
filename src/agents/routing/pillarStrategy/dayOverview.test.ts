@@ -5,7 +5,7 @@ const listEventsMock = vi.fn();
 const getPlanEntriesMock = vi.fn();
 
 vi.mock("../../tools/calendarTool.js", () => ({
-  readCalendarEvents: (...args: unknown[]) => readCalendarMock(...args),
+  readCalendarEventsDetailed: (...args: unknown[]) => readCalendarMock(...args),
 }));
 
 vi.mock("../../tools/eventLogTool.js", () => ({
@@ -64,7 +64,10 @@ describe("executeDayOverviewCapability", () => {
     sumMealLogsMock.mockReset();
     listRemindersMock.mockReset();
     listRemindersMock.mockResolvedValue([]);
-    readCalendarMock.mockResolvedValue("- 09:00 Standup\n- 13:00 Lunch with Alex");
+    readCalendarMock.mockResolvedValue({
+      text: "- 09:00 Standup\n- 13:00 Lunch with Alex",
+      events: [],
+    });
     listEventsMock.mockResolvedValue("- Gym (planned)");
     getPlanEntriesMock.mockResolvedValue([
       { local_date: "2026-08-10", meal_slot: "breakfast", title: "Oats" },

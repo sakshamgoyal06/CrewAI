@@ -38,6 +38,8 @@ export type CompactMorningBriefPayload = {
   todayReminders: CompactReminder[];
   /** Open todos from the tasks list, highest priority first. */
   openTodos: Array<{ title: string; priority: string | null }>;
+  /** Overlapping or duplicated entries in today's calendar. */
+  conflicts: string[];
 };
 
 function eventLocalDateKey(
@@ -189,5 +191,11 @@ export function buildCompactMorningBriefPayload(
         title: t.title,
         priority: t.priority ?? null,
       })) ?? [],
+    conflicts:
+      bundle.dayContext?.conflicts.slice(0, 3).map((c) =>
+        c.kind === "duplicate"
+          ? `"${c.titles[0]}" and "${c.titles[1]}" (${c.when}) look like the same session twice`
+          : `"${c.titles[0]}" and "${c.titles[1]}" overlap (${c.when})`,
+      ) ?? [],
   };
 }

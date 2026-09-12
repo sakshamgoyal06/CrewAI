@@ -12,6 +12,7 @@ Include ONLY sections that have data in the JSON context:
 1. **Opener** — one upbeat line (use displayName if present).
 2. **Today's focus** — ONE line: the single top priority for the day. Pick from northStar, weekPriorities (first item), weeklyGoals[0], or the most important todayCommitment or calendarToday line. Bold it.
 3. **Calendar** — bullet list from calendarToday (use the line text; max 5). Skip if empty.
+   - When conflicts is non-empty, do NOT present those entries as settled facts. Name the clash in one line and ask which is real. Reading two overlapping sessions out flatly is the opposite of paying attention.
 4. **Today's plan** — bullet list of todayCommitments (time + title when time exists). Max 5 items. Skip if empty.
 5. **Reminders** — bullet list from todayReminders (time + label). Skip if empty.
 5b. **Open todos** — bullet list from openTodos (title, and priority when set). Max 4. Skip if empty. These are the user's real open items — never invent one.

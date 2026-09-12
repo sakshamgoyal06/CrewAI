@@ -11,8 +11,14 @@ import { formatPlanDay, getPlanEntriesForDate } from "../nutrition/store/mealPla
 import { getSessionsForLocalDate } from "../nutrition/store/mealHistoryStore.js";
 import { fetchListBySlug, queryListItems } from "../lists/listStore.js";
 import { formatReminderList, listUpcomingReminders } from "../proactive/reminderStore.js";
-import { readCalendarEvents } from "../agents/tools/calendarTool.js";
+import { readCalendarEventsDetailed } from "../agents/tools/calendarTool.js";
 import { listEventsTool } from "../agents/tools/eventLogTool.js";
+import {
+  detectDayConflicts,
+  formatDayConflicts,
+  type DayConflict,
+  type DayEvent,
+} from "./detectDayConflicts.js";
 
 export type DayContextReminder = {
   at: string;
@@ -37,6 +43,9 @@ export type DayContext = {
   /** Open items on the tasks list — the user's todos, highest priority first. */
   todos: DayContextTodo[];
   todosText: string;
+  /** Overlaps and likely duplicates in the day, so they are raised rather than read out. */
+  conflicts: DayConflict[];
+  conflictsText: string;
   plannedMealsText: string;
   loggedMealsText: string;
 };
@@ -123,7 +132,7 @@ export async function buildDayContext(input: BuildDayContextInput): Promise<DayC
   const includeTodos = offsetDays >= 0;
 
   const [
-    calendarText,
+    calendar,
     eventLogText,
     mealEntries,
     loggedSessions,
@@ -131,7 +140,7 @@ export async function buildDayContext(input: BuildDayContextInput): Promise<DayC
     reminderRows,
     todos,
   ] = await Promise.all([
-      readCalendarEvents({
+      readCalendarEventsDetailed({
         startIso: rangeStart.toISOString(),
         endIso: rangeEnd.toISOString(),
         timeZone: tz,
@@ -179,6 +188,15 @@ export async function buildDayContext(input: BuildDayContextInput): Promise<DayC
         ? "Nothing open on your tasks list."
         : "";
 
+  const calendarDayEvents: DayEvent[] = calendar.events.map((e) => ({
+    id: e.id,
+    title: e.summary,
+    start: e.start,
+    end: e.end,
+  }));
+  const conflicts = detectDayConflicts(calendarDayEvents, tz);
+  const conflictsText = formatDayConflicts(conflicts);
+
   const plannedMealsText = includeMeals
     ? formatPlanDay(mealEntries, input.label, input.localDate)
     : "";
@@ -191,12 +209,14 @@ export async function buildDayContext(input: BuildDayContextInput): Promise<DayC
     label: input.label,
     timezone: tz,
     tzAbbrev,
-    calendarText: calendarText.trim() || "Nothing on Google Calendar.",
+    calendarText: calendar.text.trim() || "Nothing on Google Calendar.",
     eventLogText: eventLogText.trim() || "No logged commitments for this day.",
     remindersText,
     reminders,
     todos,
     todosText,
+    conflicts,
+    conflictsText,
     plannedMealsText,
     loggedMealsText,
   };
@@ -219,6 +239,10 @@ export function formatDayContextSections(
     "**Reminders**",
     ctx.remindersText,
   ];
+
+  if (ctx.conflictsText) {
+    sections.push("", "**Needs a decision** (do not read these out as settled)", ctx.conflictsText);
+  }
 
   if (ctx.todosText) {
     sections.push("", "**Open todos** (tasks list, highest priority first)", ctx.todosText);

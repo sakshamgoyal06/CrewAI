@@ -84,26 +84,34 @@ function formatEventDetails(event: CalendarEventBrief): string {
   return parts.length > 0 ? `\n  ${parts.join("\n  ")}` : "";
 }
 
-export async function readCalendarEvents(input: {
+export type ReadCalendarInput = {
   startIso?: string;
   endIso?: string;
   query?: string;
   timeZone: string;
   userProfileId?: string;
-}): Promise<string> {
+};
+
+/**
+ * Same read as `readCalendarEvents`, but keeps the structured events alongside the text so
+ * callers can reason about them (overlap and duplicate detection) without a second API call.
+ */
+export async function readCalendarEventsDetailed(
+  input: ReadCalendarInput,
+): Promise<{ text: string; events: CalendarEventBrief[] }> {
   if (!(await calendarReady(input.userProfileId))) {
-    return NOT_CONFIGURED;
+    return { text: NOT_CONFIGURED, events: [] };
   }
 
   const start = input.startIso ? new Date(input.startIso) : new Date();
   if (Number.isNaN(start.getTime())) {
-    return `Could not read a date from "${input.startIso}".`;
+    return { text: `Could not read a date from "${input.startIso}".`, events: [] };
   }
   const end = input.endIso
     ? new Date(input.endIso)
     : new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
   if (Number.isNaN(end.getTime())) {
-    return `Could not read a date from "${input.endIso}".`;
+    return { text: `Could not read a date from "${input.endIso}".`, events: [] };
   }
 
   const events = await listEvents({
@@ -115,17 +123,25 @@ export async function readCalendarEvents(input: {
   });
 
   if (events.length === 0) {
-    return input.query
-      ? `No events matching "${input.query}" in that range.`
-      : "No events in that range.";
+    return {
+      text: input.query
+        ? `No events matching "${input.query}" in that range.`
+        : "No events in that range.",
+      events: [],
+    };
   }
 
-  return events
+  const text = events
     .map((e) => {
       const where = e.location ? ` @ ${e.location}` : "";
       return `- ${formatWhen(e, input.timeZone)} — ${e.summary}${where}${formatEventDetails(e)} [id: ${e.id}]`;
     })
     .join("\n");
+  return { text, events };
+}
+
+export async function readCalendarEvents(input: ReadCalendarInput): Promise<string> {
+  return (await readCalendarEventsDetailed(input)).text;
 }
 
 export async function createCalendarEvent(input: {

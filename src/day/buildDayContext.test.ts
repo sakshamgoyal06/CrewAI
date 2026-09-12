@@ -12,7 +12,7 @@ vi.mock("../lists/listStore.js", () => ({
 }));
 
 vi.mock("../agents/tools/calendarTool.js", () => ({
-  readCalendarEvents: (...args: unknown[]) => readCalendarMock(...args),
+  readCalendarEventsDetailed: (...args: unknown[]) => readCalendarMock(...args),
 }));
 
 vi.mock("../agents/tools/eventLogTool.js", () => ({
@@ -64,7 +64,17 @@ describe("buildDayContext", () => {
         { title: "Reply to Ananya", priority: null, status: "Queued" },
       ],
     });
-    readCalendarMock.mockResolvedValue("- 10:00 Morning swim");
+    readCalendarMock.mockResolvedValue({
+      text: "- 10:00 Morning swim",
+      events: [
+        {
+          id: "cal-1",
+          summary: "Morning swim",
+          start: "2026-08-12T10:00:00.000Z",
+          end: "2026-08-12T10:50:00.000Z",
+        },
+      ],
+    });
     listEventsMock.mockResolvedValue("- Gym (planned)");
     listRemindersMock.mockResolvedValue([
       {
@@ -137,6 +147,43 @@ describe("buildDayContext", () => {
     expect(formatDayContextSections(ctx, { includeMeals: false })).toContain(
       "Nothing open on your tasks list.",
     );
+  });
+
+  // Reading two overlapping swims out as fact, every morning, is how the assistant
+  // proved it was not looking at its own output.
+  it("raises a duplicated session instead of listing it twice", async () => {
+    readCalendarMock.mockResolvedValue({
+      text: "- 09:00–09:50 Swimming @ Cult HSR\n- 10:00–10:50 Morning Swimming",
+      events: [
+        {
+          id: "cal-1",
+          summary: "Swimming",
+          start: "2026-08-12T09:00:00.000Z",
+          end: "2026-08-12T09:50:00.000Z",
+        },
+        {
+          id: "cal-2",
+          summary: "Morning Swimming",
+          start: "2026-08-12T10:00:00.000Z",
+          end: "2026-08-12T10:50:00.000Z",
+        },
+      ],
+    });
+
+    const ctx = await buildDayContext({
+      userProfileId: "u1",
+      timezone: "UTC",
+      localDate: "2026-08-12",
+      label: "Today",
+      offsetDays: 0,
+      includeMeals: false,
+    });
+
+    expect(ctx.conflicts).toHaveLength(1);
+    expect(ctx.conflicts[0]?.kind).toBe("duplicate");
+    const text = formatDayContextSections(ctx, { includeMeals: false });
+    expect(text).toContain("Needs a decision");
+    expect(text).toContain("same session entered twice");
   });
 
   it("leaves undated todos off a retrospective day", async () => {

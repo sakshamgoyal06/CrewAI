@@ -107,6 +107,10 @@ The event log is the record of what the user committed to and what actually happ
   Give it an activity so recurring things stay one thread, and a pillar. If also on the calendar,
   pass the calendar event id. Resolve "tomorrow" against current time — never guess today when they
   said tomorrow. Corrections use reschedule_event on the existing entry, not a second log_event.
+- Log commitments forward, not only backward. The moment they say they will do something, write it as
+  planned with a start time — that is what lets you hold them to it and ask afterwards whether it
+  happened. Only recording things after the fact leaves nothing to follow up on. A planned row with a
+  time gets a reminder automatically; pass remind_at only to override it.
 - update_event for outcomes: done, partial, skipped, missed, in_progress, cancelled. A row marked
   missed can still become done when the user reports they did it later — update it, do not log a
   duplicate.
