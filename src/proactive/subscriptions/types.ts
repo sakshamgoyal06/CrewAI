@@ -13,6 +13,8 @@ export type RecurringLocalSchedule = {
   localHour: number;
   localMinute?: number;
   windowMinutes?: number;
+  /** Inclusive last local day (YYYY-MM-DD). Past it the reminder retires itself. */
+  until?: string;
 };
 
 /** Fire on specific weekdays at a local hour (0=Sun … 6=Sat). */
@@ -22,6 +24,25 @@ export type WeeklyLocalSchedule = {
   localHour: number;
   localMinute?: number;
   windowMinutes?: number;
+  until?: string;
+};
+
+/**
+ * Fire every N local days from `anchorDate`.
+ *
+ * "Every 2 days until the 30th" used to be unrepresentable, so it was stored as a daily reminder
+ * that never stopped. This is the schedule that actually expresses it.
+ */
+export type IntervalLocalSchedule = {
+  type: "interval_local";
+  /** Days between fires; 1 is equivalent to `recurring_local`. */
+  intervalDays: number;
+  /** First local day that fires (YYYY-MM-DD). */
+  anchorDate: string;
+  localHour: number;
+  localMinute?: number;
+  windowMinutes?: number;
+  until?: string;
 };
 
 export type OneShotSchedule = {
@@ -36,9 +57,16 @@ export type ConditionalSchedule = {
 export type ProactiveSchedule =
   | RecurringLocalSchedule
   | WeeklyLocalSchedule
+  | IntervalLocalSchedule
   | OneShotSchedule
   | ConditionalSchedule
   | Record<string, unknown>;
+
+/** Local day (YYYY-MM-DD) after which a recurring reminder stops, if the schedule sets one. */
+export function scheduleUntilDate(schedule: ProactiveSchedule): string | null {
+  const until = (schedule as { until?: unknown })?.until;
+  return typeof until === "string" && /^\d{4}-\d{2}-\d{2}$/.test(until) ? until : null;
+}
 
 export type ProactiveSubscriptionRow = {
   id: string;

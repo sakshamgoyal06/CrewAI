@@ -1,10 +1,12 @@
 import { isMinimalProactiveKindEnabled } from "../config/minimalMode.js";
+import { getLocalTimeParts } from "../jobs/morningBriefTime.js";
 import { logger } from "../logger.js";
 import { armEveningJournalPendingAfterNudge } from "../logging/handleEveningJournalPending.js";
 import { getProactiveKind } from "./kinds/registry.js";
 import type { ProactiveKindContext } from "./kinds/types.js";
 import { incrementAdaptiveCap, runProactiveGuards } from "./guards.js";
 import { sendProactiveTelegram } from "./outbound.js";
+import { reminderContentKey } from "./reminderMatch.js";
 import { buildProactiveSignals } from "./signals.js";
 import { ensureDefaultRhythmSubscriptionsOncePerDay } from "./subscriptions/ensureDefaults.js";
 import {
@@ -12,6 +14,7 @@ import {
   listDueCustomReminders,
   listEnabledSubscriptions,
   markSubscriptionSent,
+  retireFinishedRecurringReminders,
 } from "./subscriptions/store.js";
 import type { ProactiveSubscription } from "./subscriptions/types.js";
 import {
@@ -23,12 +26,19 @@ import {
 import { listAllowlistedTelegramTargets } from "./targets.js";
 import type { ProactiveMessageKind } from "./types.js";
 
+/**
+ * Custom reminders dedupe on message content, not row id.
+ *
+ * Duplicate rows carrying the same body used to deliver twice a second apart. Keying on the
+ * normalized message plus the local day means only the first one through wins.
+ */
 function dedupeKeyFor(sub: ProactiveSubscription, dateKey: string): string {
   if (sub.kind === "custom_reminder") {
-    if (sub.triggerType === "recurring") {
-      return `custom_reminder:recurring:${sub.id}:${dateKey}`;
-    }
-    return `custom_reminder:${sub.id}`;
+    const body =
+      (typeof sub.config.message === "string" && sub.config.message) ||
+      sub.userInstruction ||
+      sub.id;
+    return `custom_reminder:${sub.userProfileId}:${reminderContentKey(body)}:${dateKey}`;
   }
   return `${sub.kind}:${sub.userProfileId}:${dateKey}`;
 }
@@ -136,6 +146,13 @@ export async function runProactiveDispatcher(now: Date): Promise<void> {
   await expireStaleOneShotReminders(now);
 
   const targets = await listAllowlistedTelegramTargets();
+
+  const localDayByUser = new Map<string, string>();
+  for (const target of targets) {
+    localDayByUser.set(target.userProfileId, getLocalTimeParts(now, target.timezone).dateKey);
+  }
+  await retireFinishedRecurringReminders(localDayByUser);
+
   const dueCustom = await listDueCustomReminders(now);
   const dueCustomByUser = new Map<string, ProactiveSubscription[]>();
   for (const sub of dueCustom) {

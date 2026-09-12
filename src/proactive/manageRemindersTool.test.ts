@@ -4,9 +4,12 @@ vi.mock("./subscriptions/store.js", () => ({
   createCustomReminder: vi.fn(),
   createRecurringCustomReminder: vi.fn(),
   createWeeklyCustomReminder: vi.fn(),
+  createIntervalCustomReminder: vi.fn(),
   updateCustomReminder: vi.fn(),
   snoozeCustomReminder: vi.fn(),
   deleteSubscription: vi.fn(),
+  listEnabledCustomReminders: vi.fn(),
+  replaceCustomReminderSchedule: vi.fn(),
 }));
 
 vi.mock("./reminderStore.js", async (importOriginal) => {
@@ -26,14 +29,19 @@ import { manageReminders } from "./manageRemindersTool.js";
 import { listUpcomingReminders } from "./reminderStore.js";
 import {
   createCustomReminder,
+  createIntervalCustomReminder,
+  createRecurringCustomReminder,
   createWeeklyCustomReminder,
   deleteSubscription,
+  listEnabledCustomReminders,
+  replaceCustomReminderSchedule,
   snoozeCustomReminder,
 } from "./subscriptions/store.js";
 
 describe("manageReminders", () => {
   beforeEach(() => {
     vi.mocked(listUpcomingReminders).mockResolvedValue([]);
+    vi.mocked(listEnabledCustomReminders).mockResolvedValue([]);
   });
 
   it("lists reminders", async () => {
@@ -220,5 +228,241 @@ describe("manageReminders", () => {
       query: "mom",
     });
     expect(out).toContain('Cancelled reminder "Call mom"');
+  });
+});
+
+const CORIANDER = "💧 Change the water in your coriander plant!";
+
+function standaloneRow(id: string, title: string, recurring = true) {
+  return {
+    kind: "standalone" as const,
+    id,
+    title,
+    at: null,
+    scheduleLabel: "Daily at 09:00 local",
+    recurring,
+  };
+}
+
+function enabledReminder(id: string, message: string) {
+  return {
+    id,
+    userProfileId: "u1",
+    kind: "custom_reminder",
+    enabled: true,
+    triggerType: "recurring" as const,
+    schedule: { type: "recurring_local", localHour: 9 },
+    config: { message },
+    userInstruction: message,
+    source: "user_chat" as const,
+    capBucket: "user_asked" as const,
+    cooldownHours: null,
+    lastSentAt: null,
+    nextFireAt: null,
+    createdAt: "",
+    updatedAt: "",
+  };
+}
+
+describe("manageReminders — interval cadence (B-001)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(listUpcomingReminders).mockResolvedValue([]);
+    vi.mocked(listEnabledCustomReminders).mockResolvedValue([]);
+  });
+
+  it("stores 'every 2 days' as one interval reminder, not a daily one", async () => {
+    vi.mocked(createIntervalCustomReminder).mockResolvedValue({ ok: true, data: {} as never });
+
+    const out = await manageReminders({
+      userProfileId: "u1",
+      timezone: "Asia/Kolkata",
+      action: "create_recurring",
+      message: CORIANDER,
+      local_hour: 9,
+      interval_days: 2,
+    });
+
+    expect(createIntervalCustomReminder).toHaveBeenCalledWith(
+      expect.objectContaining({ intervalDays: 2, localHour: 9 }),
+    );
+    expect(createRecurringCustomReminder).not.toHaveBeenCalled();
+    expect(out).toContain("every other day");
+  });
+
+  it("carries an until date onto the schedule so the run is bounded", async () => {
+    vi.mocked(createIntervalCustomReminder).mockResolvedValue({ ok: true, data: {} as never });
+
+    const out = await manageReminders({
+      userProfileId: "u1",
+      timezone: "Asia/Kolkata",
+      action: "create_recurring",
+      message: CORIANDER,
+      local_hour: 9,
+      interval_days: 2,
+      until: "2026-08-30",
+    });
+
+    expect(createIntervalCustomReminder).toHaveBeenCalledWith(
+      expect.objectContaining({ until: "2026-08-30" }),
+    );
+    expect(out).toContain("until 2026-08-30");
+  });
+
+  it("sets until on a plain daily reminder too", async () => {
+    vi.mocked(createRecurringCustomReminder).mockResolvedValue({ ok: true, data: {} as never });
+
+    await manageReminders({
+      userProfileId: "u1",
+      timezone: "Asia/Kolkata",
+      action: "create_recurring",
+      message: "Take duphalac",
+      local_hour: 21,
+      until: "2026-09-20",
+    });
+
+    expect(createRecurringCustomReminder).toHaveBeenCalledWith(
+      expect.objectContaining({ until: "2026-09-20" }),
+    );
+  });
+
+  it("rejects an unparseable until date instead of silently ignoring it", async () => {
+    const out = await manageReminders({
+      userProfileId: "u1",
+      timezone: "Asia/Kolkata",
+      action: "create_recurring",
+      message: "Water plants",
+      local_hour: 9,
+      until: "whenever",
+    });
+
+    expect(out).toContain("Could not parse until date");
+    expect(createRecurringCustomReminder).not.toHaveBeenCalled();
+  });
+});
+
+describe("manageReminders — replace on correct (B-001)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(listUpcomingReminders).mockResolvedValue([]);
+  });
+
+  it("updates the existing reminder rather than stacking a duplicate", async () => {
+    vi.mocked(listEnabledCustomReminders).mockResolvedValue([
+      enabledReminder("sub-1", CORIANDER) as never,
+    ]);
+    vi.mocked(replaceCustomReminderSchedule).mockResolvedValue({ ok: true, data: {} as never });
+
+    const out = await manageReminders({
+      userProfileId: "u1",
+      timezone: "Asia/Kolkata",
+      action: "create_recurring",
+      message: "Change the water in your coriander plant",
+      local_hour: 9,
+      interval_days: 2,
+    });
+
+    expect(replaceCustomReminderSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({ subscriptionId: "sub-1" }),
+    );
+    expect(createIntervalCustomReminder).not.toHaveBeenCalled();
+    expect(out).toContain("no duplicate created");
+  });
+
+  it("still creates a new reminder when nothing similar exists", async () => {
+    vi.mocked(listEnabledCustomReminders).mockResolvedValue([
+      enabledReminder("sub-1", "Call mom 📞") as never,
+    ]);
+    vi.mocked(createIntervalCustomReminder).mockResolvedValue({ ok: true, data: {} as never });
+
+    await manageReminders({
+      userProfileId: "u1",
+      timezone: "Asia/Kolkata",
+      action: "create_recurring",
+      message: CORIANDER,
+      local_hour: 9,
+      interval_days: 2,
+    });
+
+    expect(createIntervalCustomReminder).toHaveBeenCalled();
+    expect(replaceCustomReminderSchedule).not.toHaveBeenCalled();
+  });
+
+  it("retimes an existing one-shot instead of adding a second copy", async () => {
+    vi.mocked(listEnabledCustomReminders).mockResolvedValue([
+      enabledReminder("sub-7", "Call mom 📞") as never,
+    ]);
+    vi.mocked(replaceCustomReminderSchedule).mockResolvedValue({ ok: true, data: {} as never });
+
+    const out = await manageReminders({
+      userProfileId: "u1",
+      timezone: "Asia/Kolkata",
+      action: "create",
+      message: "Call mom",
+      at: "tomorrow 8pm",
+    });
+
+    expect(replaceCustomReminderSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({ subscriptionId: "sub-7" }),
+    );
+    expect(createCustomReminder).not.toHaveBeenCalled();
+    expect(out).toContain("no duplicate created");
+  });
+});
+
+describe("manageReminders — cancel actually cancels (B-005)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(listEnabledCustomReminders).mockResolvedValue([]);
+  });
+
+  it("cancels every duplicate copy of one reminder", async () => {
+    vi.mocked(listUpcomingReminders).mockResolvedValue([
+      standaloneRow("sub-a", CORIANDER),
+      standaloneRow("sub-b", CORIANDER),
+    ]);
+    vi.mocked(deleteSubscription).mockResolvedValue({ ok: true, data: { deleted: true } });
+
+    const out = await manageReminders({
+      userProfileId: "u1",
+      timezone: "Asia/Kolkata",
+      action: "cancel",
+      query: "Cancel reminders for coriander water change",
+    });
+
+    expect(deleteSubscription).toHaveBeenCalledTimes(2);
+    expect(out).toContain("will not fire again");
+    expect(out).toContain("2 duplicate copies");
+  });
+
+  it("matches the second production phrasing", async () => {
+    vi.mocked(listUpcomingReminders).mockResolvedValue([standaloneRow("sub-a", CORIANDER)]);
+    vi.mocked(deleteSubscription).mockResolvedValue({ ok: true, data: { deleted: true } });
+
+    const out = await manageReminders({
+      userProfileId: "u1",
+      timezone: "Asia/Kolkata",
+      action: "cancel",
+      query: "water coriander",
+    });
+
+    expect(out).toContain("will not fire again");
+  });
+
+  it("asks which one only when the matches are genuinely different reminders", async () => {
+    vi.mocked(listUpcomingReminders).mockResolvedValue([
+      standaloneRow("sub-a", "Water the coriander plant"),
+      standaloneRow("sub-b", "Water the tulsi plant"),
+    ]);
+
+    const out = await manageReminders({
+      userProfileId: "u1",
+      timezone: "Asia/Kolkata",
+      action: "cancel",
+      query: "water plant",
+    });
+
+    expect(out).toContain("say which one");
+    expect(deleteSubscription).not.toHaveBeenCalled();
   });
 });

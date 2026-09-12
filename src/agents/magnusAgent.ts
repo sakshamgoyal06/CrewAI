@@ -408,7 +408,7 @@ const TOOLS: Tool[] = [
   {
     name: "manage_reminders",
     description:
-      "Task reminders Magnus sends on Telegram: list, create one-shot, create daily/weekly recurring, update, snooze, cancel. For commitment-linked reminders use log_event with remind_at. For evening journal / rhythm nudges use manage_proactive_messages instead.",
+      "Task reminders Magnus sends on Telegram: list, create one-shot, create recurring (daily, every N days, or specific weekdays, optionally ending on a date), update, snooze, cancel. Creating a reminder that matches one the user already has updates that one instead of adding a duplicate. Cancel removes every duplicate copy. For commitment-linked reminders use log_event with remind_at. For evening journal / rhythm nudges use manage_proactive_messages instead.",
     input_schema: {
       type: "object",
       properties: {
@@ -438,9 +438,20 @@ const TOOLS: Tool[] = [
           description:
             "For weekly recurrence: comma-separated weekdays (mon,wed,fri) or numbers 0=Sun … 6=Sat.",
         },
+        interval_days: {
+          type: "number",
+          description:
+            "For create_recurring: fire every N days instead of daily. 2 = every other day, 3 = every third day. Omit or 1 for daily. Use this for 'every 2 days' — never emulate it with several one-shot reminders.",
+        },
+        until: {
+          type: "string",
+          description:
+            "For create_recurring: last day the reminder fires (YYYY-MM-DD, or a phrase like 'Aug 30'). After it, the reminder retires itself. Always set this when the user gives an end date or a bounded run.",
+        },
         query: {
           type: "string",
-          description: "Match reminder by title text (list, cancel, snooze, update).",
+          description:
+            "Describe the reminder in the user's own words (list, cancel, snooze, update) — e.g. 'coriander water'. Filler words are ignored.",
         },
         reminder_id: {
           type: "string",
@@ -1166,6 +1177,8 @@ async function runTool(
           local_hour: num(input.local_hour),
           local_minute: num(input.local_minute),
           days_of_week: str(input.days_of_week),
+          interval_days: num(input.interval_days),
+          until: str(input.until),
           query: str(input.query),
           reminder_id: str(input.reminder_id),
           reminder_kind: str(input.reminder_kind),

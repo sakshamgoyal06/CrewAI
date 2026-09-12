@@ -2,9 +2,10 @@
  * Magnus tool: task reminders — list, create, update, snooze, cancel.
  * Standalone reminders live in custom_reminder subscriptions; commitment reminders use magnus_events.remind_at.
  */
-import { zonedTimeToInstant } from "../events/eventTime.js";
+import { localDateKey, zonedTimeToInstant } from "../events/eventTime.js";
 import { updateEvent } from "../events/eventStore.js";
 import { parseDaysOfWeek, parseReminderTime } from "./parseReminderTime.js";
+import { isSameReminder } from "./reminderMatch.js";
 import {
   formatReminderList,
   listUpcomingReminders,
@@ -13,22 +14,26 @@ import {
 } from "./reminderStore.js";
 import {
   createCustomReminder,
+  createIntervalCustomReminder,
   createRecurringCustomReminder,
   createWeeklyCustomReminder,
   deleteSubscription,
+  listEnabledCustomReminders,
+  replaceCustomReminderSchedule,
   snoozeCustomReminder,
   updateCustomReminder,
 } from "./subscriptions/store.js";
+import type { ProactiveSchedule, ProactiveTriggerType } from "./subscriptions/types.js";
 
-function resolveTarget(
+function candidateRows(
   rows: ReminderRow[],
   input: { reminder_id?: string; reminder_kind?: string; query?: string },
-): ReminderRow | { error: string } {
+): ReminderRow[] | { error: string } {
   if (input.reminder_id?.trim()) {
     const id = input.reminder_id.trim();
     const byId = rows.find((r) => r.id === id || r.id.startsWith(id));
     if (byId) {
-      return byId;
+      return [byId];
     }
     return { error: `No reminder with id starting "${id}".` };
   }
@@ -41,16 +46,41 @@ function resolveTarget(
     pool = rows.filter((r) => r.kind === "event");
   }
 
-  const matched = input.query?.trim()
-    ? matchRemindersByQuery(pool, input.query)
-    : pool;
+  const matched = input.query?.trim() ? matchRemindersByQuery(pool, input.query) : pool;
 
   if (matched.length === 0) {
     return { error: "No matching reminder found." };
   }
-  if (matched.length > 1) {
+  return matched;
+}
+
+/**
+ * Matches that are really the same reminder duplicated.
+ *
+ * The user asked to cancel one reminder; duplicate rows are an internal artefact, so acting on all
+ * of them is the only answer that makes sense. Asking which of two identical rows they meant is how
+ * the coriander reminder survived a cancel request for three weeks.
+ */
+function allSameReminder(rows: ReminderRow[]): boolean {
+  if (rows.length < 2) {
+    return true;
+  }
+  const [first, ...rest] = rows;
+  return rest.every((row) => isSameReminder(first!.title, row.title));
+}
+
+function resolveTarget(
+  rows: ReminderRow[],
+  input: { reminder_id?: string; reminder_kind?: string; query?: string },
+  timezone: string,
+): ReminderRow | { error: string } {
+  const matched = candidateRows(rows, input);
+  if ("error" in matched) {
+    return matched;
+  }
+  if (matched.length > 1 && !allSameReminder(matched)) {
     return {
-      error: `Multiple reminders match — be more specific:\n${formatReminderList(matched, "UTC")}`,
+      error: `Multiple reminders match — say which one:\n${formatReminderList(matched, timezone)}`,
     };
   }
   return matched[0]!;
@@ -63,6 +93,69 @@ function parseAt(raw: string | undefined, timezone: string): Date | null {
   return parseReminderTime(raw.trim(), timezone) ?? zonedTimeToInstant(raw.trim(), timezone);
 }
 
+/** `until` accepts a plain local date or any phrase `parseReminderTime` understands. */
+function parseUntilDate(
+  raw: string | undefined,
+  timezone: string,
+): { date: string } | { error: string } | null {
+  const trimmed = raw?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return { date: trimmed };
+  }
+  const parsed = parseAt(trimmed, timezone);
+  if (!parsed) {
+    return { error: `Could not parse until date "${trimmed}".` };
+  }
+  return { date: localDateKey(parsed, timezone) };
+}
+
+/**
+ * An existing enabled reminder the new request is really a correction of.
+ *
+ * Without this, "make that every 2 days" inserted a second row alongside the daily one and the user
+ * received both every morning.
+ */
+async function findExistingReminder(
+  userProfileId: string,
+  message: string,
+): Promise<{ id: string } | null> {
+  const existing = await listEnabledCustomReminders(userProfileId);
+  for (const sub of existing) {
+    const body =
+      (typeof sub.config.message === "string" && sub.config.message) || sub.userInstruction || "";
+    if (body && isSameReminder(body, message)) {
+      return { id: sub.id };
+    }
+  }
+  return null;
+}
+
+/** Update the row the user already has instead of stacking a duplicate. */
+async function replaceIfDuplicate(input: {
+  userProfileId: string;
+  message: string;
+  schedule: ProactiveSchedule;
+  triggerType: ProactiveTriggerType;
+  nextFireAt?: Date | null;
+}): Promise<{ replaced: true; error?: string } | { replaced: false }> {
+  const existing = await findExistingReminder(input.userProfileId, input.message);
+  if (!existing) {
+    return { replaced: false };
+  }
+  const res = await replaceCustomReminderSchedule({
+    userProfileId: input.userProfileId,
+    subscriptionId: existing.id,
+    message: input.message,
+    schedule: input.schedule,
+    triggerType: input.triggerType,
+    nextFireAt: input.nextFireAt ?? null,
+  });
+  return res.ok ? { replaced: true } : { replaced: true, error: res.error };
+}
+
 export async function manageReminders(input: {
   userProfileId: string;
   timezone: string;
@@ -72,6 +165,8 @@ export async function manageReminders(input: {
   local_hour?: number;
   local_minute?: number;
   days_of_week?: string;
+  interval_days?: number;
+  until?: string;
   query?: string;
   reminder_id?: string;
   reminder_kind?: string;
@@ -109,6 +204,20 @@ export async function manageReminders(input: {
     if (at.getTime() <= now.getTime()) {
       return "Reminder time must be in the future.";
     }
+
+    const replaced = await replaceIfDuplicate({
+      userProfileId: input.userProfileId,
+      message,
+      schedule: { type: "one_shot", at: at.toISOString() },
+      triggerType: "one_shot",
+      nextFireAt: at,
+    });
+    if (replaced.replaced) {
+      return replaced.error
+        ? `Could not update the existing reminder: ${replaced.error}`
+        : `Moved your existing "${message}" reminder to ${at.toISOString()} (${input.timezone}) — no duplicate created.`;
+    }
+
     const res = await createCustomReminder({
       userProfileId: input.userProfileId,
       message,
@@ -129,21 +238,113 @@ export async function manageReminders(input: {
       return "local_hour is required (0-23) for create_recurring.";
     }
 
+    const parsedUntil = parseUntilDate(input.until, input.timezone);
+    if (parsedUntil && "error" in parsedUntil) {
+      return parsedUntil.error;
+    }
+    const until = parsedUntil?.date;
+    const untilSuffix = until ? `, until ${until}` : "";
+    const timeLabel = `${String(input.local_hour).padStart(2, "0")}:${String(
+      input.local_minute ?? 0,
+    ).padStart(2, "0")}`;
+
     const days = parseDaysOfWeek(input.days_of_week);
     if (days && days.length > 0) {
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const label = days.map((d) => dayNames[d]).join(", ");
+      const schedule: ProactiveSchedule = {
+        type: "weekly_local",
+        daysOfWeek: days,
+        localHour: input.local_hour,
+        localMinute: input.local_minute ?? 0,
+        windowMinutes: 14,
+        ...(until ? { until } : {}),
+      };
+      const replaced = await replaceIfDuplicate({
+        userProfileId: input.userProfileId,
+        message,
+        schedule,
+        triggerType: "recurring",
+      });
+      if (replaced.replaced) {
+        return replaced.error
+          ? `Could not update the existing reminder: ${replaced.error}`
+          : `Updated your existing "${message}" reminder to ${label} at ${timeLabel} your time${untilSuffix} — no duplicate created.`;
+      }
       const res = await createWeeklyCustomReminder({
         userProfileId: input.userProfileId,
         message,
         daysOfWeek: days,
         localHour: input.local_hour,
         localMinute: input.local_minute,
+        until,
       });
       if (!res.ok) {
         return `Could not create weekly reminder: ${res.error}`;
       }
-      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      const label = days.map((d) => dayNames[d]).join(", ");
-      return `Weekly reminder on ${label} at ~${input.local_hour}:00 your time: "${message}"`;
+      return `Weekly reminder on ${label} at ${timeLabel} your time${untilSuffix}: "${message}"`;
+    }
+
+    const intervalDays =
+      input.interval_days != null && Number.isFinite(input.interval_days)
+        ? Math.max(1, Math.floor(input.interval_days))
+        : 1;
+
+    if (intervalDays > 1) {
+      const anchorDate = localDateKey(now, input.timezone);
+      const schedule: ProactiveSchedule = {
+        type: "interval_local",
+        intervalDays,
+        anchorDate,
+        localHour: input.local_hour,
+        localMinute: input.local_minute ?? 0,
+        windowMinutes: 14,
+        ...(until ? { until } : {}),
+      };
+      const cadence = intervalDays === 2 ? "every other day" : `every ${intervalDays} days`;
+      const replaced = await replaceIfDuplicate({
+        userProfileId: input.userProfileId,
+        message,
+        schedule,
+        triggerType: "recurring",
+      });
+      if (replaced.replaced) {
+        return replaced.error
+          ? `Could not update the existing reminder: ${replaced.error}`
+          : `Updated your existing "${message}" reminder to ${cadence} at ${timeLabel} your time${untilSuffix} — no duplicate created.`;
+      }
+      const res = await createIntervalCustomReminder({
+        userProfileId: input.userProfileId,
+        message,
+        intervalDays,
+        anchorDate,
+        localHour: input.local_hour,
+        localMinute: input.local_minute,
+        until,
+      });
+      if (!res.ok) {
+        return `Could not create interval reminder: ${res.error}`;
+      }
+      return `Reminder ${cadence} at ${timeLabel} your time${untilSuffix}, starting ${anchorDate}: "${message}"`;
+    }
+
+    const schedule: ProactiveSchedule = {
+      type: "recurring_local",
+      localHour: input.local_hour,
+      localMinute: input.local_minute ?? 0,
+      windowMinutes: 14,
+      ...(until ? { until } : {}),
+    };
+    const replaced = await replaceIfDuplicate({
+      userProfileId: input.userProfileId,
+      message,
+      schedule,
+      triggerType: "recurring",
+    });
+    if (replaced.replaced) {
+      return replaced.error
+        ? `Could not update the existing reminder: ${replaced.error}`
+        : `Updated your existing "${message}" reminder to daily at ${timeLabel} your time${untilSuffix} — no duplicate created.`;
     }
 
     const res = await createRecurringCustomReminder({
@@ -151,11 +352,12 @@ export async function manageReminders(input: {
       message,
       localHour: input.local_hour,
       localMinute: input.local_minute,
+      until,
     });
     if (!res.ok) {
       return `Could not create recurring reminder: ${res.error}`;
     }
-    return `Daily reminder at ~${input.local_hour}:00 your time: "${message}"`;
+    return `Daily reminder at ${timeLabel} your time${untilSuffix}: "${message}"`;
   }
 
   if (action === "update") {
@@ -164,7 +366,7 @@ export async function manageReminders(input: {
       timezone: input.timezone,
       now,
     });
-    const target = resolveTarget(rows, input);
+    const target = resolveTarget(rows, input, input.timezone);
     if ("error" in target) {
       return target.error;
     }
@@ -231,7 +433,7 @@ export async function manageReminders(input: {
       timezone: input.timezone,
       now,
     });
-    const target = resolveTarget(rows, input);
+    const target = resolveTarget(rows, input, input.timezone);
     if ("error" in target) {
       return target.error;
     }
@@ -265,28 +467,56 @@ export async function manageReminders(input: {
       timezone: input.timezone,
       now,
     });
-    const target = resolveTarget(rows, input);
-    if ("error" in target) {
-      return target.error;
+    const matched = candidateRows(rows, input);
+    if ("error" in matched) {
+      return matched.error;
+    }
+    if (matched.length > 1 && !allSameReminder(matched)) {
+      return `Multiple reminders match — say which one:\n${formatReminderList(matched, input.timezone)}`;
     }
 
-    if (target.kind === "event") {
-      const res = await updateEvent({
-        userProfileId: input.userProfileId,
-        eventId: target.id,
-        remindAt: null,
-      });
-      if (!res.ok) {
-        return `Could not cancel reminder: ${res.error}`;
+    // Duplicate rows for one reminder all go, so "stop that reminder" actually stops it.
+    const cancelled: string[] = [];
+    const failures: string[] = [];
+    let clearedEventReminder = false;
+    for (const target of matched) {
+      if (target.kind === "event") {
+        const res = await updateEvent({
+          userProfileId: input.userProfileId,
+          eventId: target.id,
+          remindAt: null,
+        });
+        if (res.ok) {
+          cancelled.push(target.title);
+          clearedEventReminder = true;
+        } else {
+          failures.push(res.error);
+        }
+        continue;
       }
-      return `Cancelled commitment reminder for "${target.title}".`;
+      const res = await deleteSubscription(input.userProfileId, target.id);
+      if (res.ok && res.data.deleted) {
+        cancelled.push(target.title);
+      } else if (!res.ok) {
+        failures.push(res.error);
+      }
     }
 
-    const res = await deleteSubscription(input.userProfileId, target.id);
-    if (!res.ok) {
-      return res.error;
+    if (cancelled.length === 0) {
+      return failures.length > 0
+        ? `Could not cancel reminder: ${failures[0]}`
+        : "Reminder not found.";
     }
-    return res.data.deleted ? `Cancelled reminder "${target.title}".` : "Reminder not found.";
+    const title = cancelled[0]!;
+    const dupeNote =
+      cancelled.length > 1 ? ` (removed ${cancelled.length} duplicate copies)` : "";
+    const failNote = failures.length > 0 ? ` One copy failed: ${failures[0]}` : "";
+    // Clearing a commitment's reminder must not read as deleting the commitment.
+    const eventNote = clearedEventReminder
+      ? " The event stays on your calendar — only the reminder is off."
+      : "";
+    const label = clearedEventReminder ? "Cancelled commitment reminder for" : "Cancelled reminder";
+    return `${label} "${title}"${dupeNote}. It will not fire again.${eventNote}${failNote}`;
   }
 
   return [
