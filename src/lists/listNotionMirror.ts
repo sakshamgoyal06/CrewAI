@@ -133,6 +133,33 @@ export async function mirrorCreateItem(
   }
 }
 
+export async function mirrorArchiveItem(
+  userProfileId: string,
+  notionPageId: string,
+): Promise<boolean> {
+  if (!notionPageId.trim()) {
+    return false;
+  }
+
+  const notion = await createNotionClientForUser(userProfileId);
+  if (!notion?.client) {
+    return false;
+  }
+
+  try {
+    await withNotionRetry("pages.update.archive", () =>
+      notion.client!.pages.update({
+        page_id: notionPageId,
+        archived: true,
+      }),
+    );
+    return true;
+  } catch (e) {
+    logger.warn({ err: loggableError(e) }, "notion list mirror archive failed");
+    return false;
+  }
+}
+
 export async function mirrorUpdateItem(
   userProfileId: string,
   list: ListRow,

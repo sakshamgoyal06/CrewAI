@@ -158,8 +158,22 @@ vi.mock("../agents/tools/calendarTool.js", () => ({
   deleteCalendarEvent: vi.fn().mockResolvedValue("Deleted event."),
 }));
 
+const connectNotionMock = vi.hoisted(() => vi.fn());
+const syncNotionMock = vi.hoisted(() => vi.fn());
+const setupNotionMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../agents/tools/notionConnectTool.js", () => ({
+  connectNotionTool: connectNotionMock,
+  setupNotionTool: setupNotionMock,
+  syncNotionTool: syncNotionMock,
+}));
+
 vi.mock("../agents/tools/logNoteTool.js", () => ({
   logNote: vi.fn().mockResolvedValue("Note logged."),
+}));
+
+vi.mock("../agents/tools/dailyLogReadTool.js", () => ({
+  getDailyLog: vi.fn().mockResolvedValue("Daily log for today."),
 }));
 
 vi.mock("../agents/tools/eventLogTool.js", () => ({
@@ -261,6 +275,9 @@ describe("magnus accuracy suite", () => {
     assembleRoutingContextMock.mockImplementation(async () =>
       defaultAssembledRoutingContext(parserSignalsForAccuracyCase(accuracyState.scenario)),
     );
+    connectNotionMock.mockResolvedValue("Notion connect link.");
+    syncNotionMock.mockResolvedValue("Notion synced.");
+    setupNotionMock.mockResolvedValue("Notion setup done.");
   });
 
   afterEach(() => {

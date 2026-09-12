@@ -37,6 +37,8 @@ const MAGNUS_TOOL_NAMES = [
   "add_list_item",
   "add_list_items",
   "update_list_item",
+  "delete_list_item",
+  "get_daily_log",
   "create_list",
   "link_notion_list",
   "recommend_list_items",

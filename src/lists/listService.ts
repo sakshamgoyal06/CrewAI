@@ -13,6 +13,7 @@ import {
   fetchCheckinFromNotion,
   formatCheckinReply,
   formatItemLine,
+  mirrorArchiveItem,
   mirrorCreateItem,
   mirrorUpdateItem,
 } from "./listNotionMirror.js";
@@ -517,6 +518,36 @@ export async function addListItems(input: {
     parts.push(`Could not save ${failed.length} to ${list.slug}: ${detail}.`);
   }
   return parts.join(" ");
+}
+
+export async function deleteListItem(input: {
+  userProfileId: string;
+  list: string;
+  itemId: string;
+}): Promise<string> {
+  const list = await resolveList(input.userProfileId, input.list);
+  if (!list) {
+    return describeUnknownList(input.list);
+  }
+
+  const existing = await fetchListItemById(input.userProfileId, input.itemId.trim());
+  if (!existing.ok) {
+    return existing.error;
+  }
+  if (!existing.data || existing.data.list_id !== list.id) {
+    return `Item ${input.itemId} not found in ${list.slug}.`;
+  }
+
+  if (existing.data.notion_page_id) {
+    await mirrorArchiveItem(input.userProfileId, existing.data.notion_page_id);
+  }
+
+  const removed = await updateListItem(input.itemId.trim(), { isDeleted: true });
+  if (!removed.ok) {
+    return removed.error;
+  }
+
+  return `Removed "${existing.data.title}" from ${list.slug}.`;
 }
 
 export async function updateListItemById(input: {

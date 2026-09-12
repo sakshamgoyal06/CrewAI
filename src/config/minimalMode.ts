@@ -6,7 +6,7 @@
  * evening journal). **Meals come in Phase 2** after these paths are solid.
  *
  * Supporting (live but not a focus pillar): YouTube, morning brief, conversation.
- * Parks: meals, Notion, LifeOS, projects, wealth/happiness/wisdom depth, vision/photos,
+ * Parks: meals, LifeOS, projects, wealth/happiness/wisdom depth, vision/photos,
  * nutrition nightly, and non-core proactive rhythm kinds.
  *
  * Set MAGNUS_MINIMAL_MODE=false on the host to restore full Magnus.
@@ -38,6 +38,7 @@ export const MINIMAL_GENERAL_CAPABILITIES = new Set([
   "day_overview",
   "youtube",
   "lists",
+  "notion",
   "journal_note",
   "daily_checkin",
   "proactive",
@@ -81,10 +82,17 @@ export const MINIMAL_MAGNUS_TOOL_NAMES = new Set([
   "add_list_item",
   "add_list_items",
   "update_list_item",
+  "delete_list_item",
   "create_list",
   "recommend_list_items",
+  "link_notion_list",
+  "connect_notion",
+  "sync_notion",
+  "setup_notion",
+  "add_goal",
   "recall_context",
   "log_note",
+  "get_daily_log",
   "get_daily_checkin",
   "log_daily_checkin",
   "manage_proactive_messages",
@@ -96,6 +104,7 @@ const MINIMAL_PROACTIVE_JOBS = new Set([
   "gym_hevy_reconcile",
   "morning_brief",
   "proactive_subscriptions",
+  "notion_list_sync",
 ]);
 
 /**
@@ -241,7 +250,7 @@ export function magnusDefaultToolAllowlist(): string[] | undefined {
 export function parkedFeatureReply(feature: string): string {
   return (
     `I'm not handling **${feature}** yet. ` +
-    "What I do properly right now: your **calendar**, **lists and todos**, **reminders**, " +
+    "What I do properly right now: your **calendar**, **lists and todos** (with optional Notion mirror), **reminders**, " +
     "**workouts**, and **logging your day** — plus YouTube and the morning brief. " +
     "**Meals and nutrition** are next."
   );
@@ -282,8 +291,6 @@ export function parkedFeatureReplyForTopic(topic: ParkedFeatureTopic): string | 
   switch (topic) {
     case "meals":
       return parkedFeatureReply("Meals & nutrition");
-    case "notion":
-      return parkedGeneralCapabilityReply("notion");
     case "wealth":
       return parkedIntentReply("WEALTH");
     case "happiness":

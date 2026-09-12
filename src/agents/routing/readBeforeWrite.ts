@@ -16,7 +16,11 @@ const LIST_READ_TOOLS = new Set([
   "recommend_list_items",
 ]);
 
-const LIST_ID_WRITE_TOOLS = new Set(["update_list_item", "update_notion_item"]);
+const LIST_ID_WRITE_TOOLS = new Set([
+  "update_list_item",
+  "update_notion_item",
+  "delete_list_item",
+]);
 
 export function checkReadBeforeWrite(
   toolName: string,

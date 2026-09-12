@@ -143,13 +143,13 @@ export const MINIMAL_ACCURACY_ORCHESTRATOR_CASES: MagnusAccuracyOrchestratorCase
     replyContains: "not handling",
   }),
   orchestratorCase({
-    id: "min-park-notion-1",
-    dimension: "minimal_gate",
+    id: "min-notion-connect-1",
+    dimension: "tool_selection",
     message: "connect notion",
-    category: "parked_notion",
+    category: "general_notion",
     idealIntent: "GENERAL",
-    idealCapability: "conversation",
-    replyContains: "not handling",
+    idealCapability: "notion",
+    expectedPrimaryTool: "connect_notion",
   }),
   orchestratorCase({
     id: "min-park-happiness-1",

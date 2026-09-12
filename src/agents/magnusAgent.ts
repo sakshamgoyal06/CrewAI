@@ -31,6 +31,7 @@ import {
   rescheduleEventTool,
   updateEventStatus,
 } from "./tools/eventLogTool.js";
+import { getDailyLog } from "./tools/dailyLogReadTool.js";
 import { logNote } from "./tools/logNoteTool.js";
 import {
   youtubeBookmarkTool,
@@ -54,6 +55,7 @@ import {
   magnusListItems,
   magnusLookupListItem,
   magnusRecommendListItems,
+  magnusDeleteListItem,
   magnusUpdateListItem,
   notionAddItem,
   notionListItems,
@@ -166,6 +168,17 @@ const TOOLS: Tool[] = [
         event_id: { type: "string", description: "From read_calendar." },
       },
       required: ["event_id"],
+    },
+  },
+  {
+    name: "get_daily_log",
+    description:
+      "Read everything logged for one calendar day: free-form notes, daily check-in, and event-log commitments. Use when they ask what they logged today or on a specific date.",
+    input_schema: {
+      type: "object",
+      properties: {
+        date: { type: "string", description: "YYYY-MM-DD. Defaults to today." },
+      },
     },
   },
   {
@@ -701,6 +714,19 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "delete_list_item",
+    description:
+      "Remove an item from a list by id (from list_items or lookup_list_item). Archives the Notion page when mirrored.",
+    input_schema: {
+      type: "object",
+      properties: {
+        list: { type: "string" },
+        item_id: { type: "string" },
+      },
+      required: ["list", "item_id"],
+    },
+  },
+  {
     name: "create_list",
     description:
       "Create a custom list slug for this user (e.g. shopping, gift-ideas). Standard lists are auto-provisioned.",
@@ -1151,6 +1177,12 @@ async function runTool(
           timeZone,
           userProfileId: ctx.userProfileId,
         });
+      case "get_daily_log":
+        return await getDailyLog({
+          userProfileId: ctx.userProfileId,
+          date: str(input.date),
+          timeZone,
+        });
       case "log_note":
         return await logNote({
           userProfileId: ctx.userProfileId,
@@ -1371,6 +1403,12 @@ async function runTool(
           status: str(input.status),
           notes: str(input.notes),
           title: str(input.title),
+        });
+      case "delete_list_item":
+        return await magnusDeleteListItem({
+          userProfileId: ctx.userProfileId,
+          list: String(input.list ?? ""),
+          itemId: String(input.item_id ?? ""),
         });
       case "create_list":
         return await magnusCreateList({

@@ -1,7 +1,7 @@
 # Minimal mode — focus areas and sequencing
 
 **Version:** 1.0  
-**Last updated:** 2026-09-10  
+**Last updated:** 2026-09-12  
 **Status:** Active — product direction while `MAGNUS_MINIMAL_MODE=true` (default in production)
 
 ---
@@ -24,11 +24,11 @@ That requires reliable **capture** (calendar, event log, reminders), **closure**
 |---|------|----------------------|--------------|
 | 1 | **Workouts** | Hevy read/write, gym event log, gym ↔ Hevy reconcile, drift guard | `pillars/health/workouts/`, `gymHevyReconcile`, `drift_guard` |
 | 2 | **Calendar** | Read/create/update/delete, linked `magnus_events`, read-before-write | `calendarTool`, `eventStore` |
-| 3 | **Lists** | Catalog, items, add/update, recommend from saved lists | `listTool`, `lists/` |
+| 3 | **Lists** | Catalog, items, add/update/delete, recommend; optional Notion mirror + scheduled sync | `listTool`, `lists/`, `notionListSync`, `notion_list_sync` job |
 | 4 | **Reminders** | `manage_reminders`, event `remind_at`, event-reminder cron, custom reminders | `manageRemindersTool`, `eventReminderJob` |
-| 5 | **Logging** | Morning win intention, evening journal FSM, activity completion, daily log status | `src/logging/`, `winConditionPending`, proactive `evening_journal` |
+| 5 | **Logging** | Morning win intention, evening journal FSM, activity completion, `get_daily_log` read | `src/logging/`, `dailyLogReadTool`, proactive `evening_journal` |
 
-Supporting (live, not a focus pillar): **YouTube**, **morning brief**, general conversation.
+Supporting (live, not a focus pillar): **YouTube**, **morning brief**, **Notion list connect/sync**, general conversation.
 
 ---
 
@@ -37,7 +37,7 @@ Supporting (live, not a focus pillar): **YouTube**, **morning brief**, general c
 | Area | Gate |
 |------|------|
 | **Meal logging & nutrition** | Meal plan vs log, intake parser, adherence nudges, nutrition nightly |
-| **Notion / LifeOS** | Journal mirror, goals, pillar status |
+| **LifeOS depth** | Joy tank, pillar status, journal hub (list mirror is Phase 1) |
 | **Projects** | Setup FSM, conflict review, milestone tracking |
 | **Wealth / Happiness / Wisdom depth** | Full pillar specialists and integrations |
 

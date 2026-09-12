@@ -5,6 +5,7 @@ import {
   addGoal,
   addListItem,
   addListItems,
+  deleteListItem,
   createCustomList,
   getDailyCheckin,
   linkNotionList,
@@ -57,6 +58,18 @@ export async function magnusAddListItems(input: {
   pillar?: string;
 }): Promise<string> {
   return addListItems(input);
+}
+
+export async function magnusDeleteListItem(input: {
+  userProfileId: string;
+  list: string;
+  itemId: string;
+}): Promise<string> {
+  return deleteListItem({
+    userProfileId: input.userProfileId,
+    list: input.list,
+    itemId: input.itemId,
+  });
 }
 
 export async function magnusUpdateListItem(input: {
