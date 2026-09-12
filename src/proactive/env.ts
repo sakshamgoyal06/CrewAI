@@ -149,14 +149,17 @@ export function notionListSyncJobEnabled(): boolean {
   return proactiveCronEnabled();
 }
 
+/** Default once per local day — Telegram writes mirror immediately; this job catches Notion-side edits. */
+const NOTION_LIST_SYNC_DEFAULT_INTERVAL_MINUTES = 24 * 60;
+
 export function notionListSyncIntervalMinutes(): number {
   const raw = process.env.MAGNUS_NOTION_LIST_SYNC_INTERVAL_MINUTES?.trim();
   if (raw === undefined || raw === "") {
-    return 60;
+    return NOTION_LIST_SYNC_DEFAULT_INTERVAL_MINUTES;
   }
   const n = Number.parseInt(raw, 10);
   if (Number.isNaN(n) || n < 0 || n > 24 * 60) {
-    return 60;
+    return NOTION_LIST_SYNC_DEFAULT_INTERVAL_MINUTES;
   }
   return n;
 }

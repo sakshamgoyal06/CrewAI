@@ -32,7 +32,10 @@ async function listNotionConnectedUserIds(): Promise<string[]> {
   return ids;
 }
 
-/** Pull Notion list edits on a schedule so the human-readable surface stays current. */
+/**
+ * Daily Supabase ↔ Notion reconciliation for connected users.
+ * Supabase is canonical — conflicts push Supabase → Notion. Chat `sync notion` runs immediately.
+ */
 export const notionListSyncScheduledJob: ScheduledProactiveJob = {
   id: "notion_list_sync",
   enabled: notionListSyncJobEnabled,

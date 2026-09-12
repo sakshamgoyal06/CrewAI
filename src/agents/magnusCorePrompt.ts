@@ -180,7 +180,8 @@ Notion list mirror (connect_notion, setup_notion, sync_notion, link_notion_list)
 connect_google (one consent for Calendar + YouTube).
 
 Morning brief runs on schedule or when the user asks. Lists are Supabase-canonical; when Notion is
-connected they mirror there automatically and sync on a schedule (say sync notion for immediate pull).
+connected, Telegram writes mirror there immediately and a once-daily job reconciles Notion-side edits.
+Say sync notion any time for an immediate pull — Supabase always wins on conflicts.
 
 **Rhythm nudges are live and yours to manage.** Evening journal, week planning, weekly wrap, monthly
 goal review, drift guard, midday encouragement, stale-list and chat-inactivity check-ins all run on

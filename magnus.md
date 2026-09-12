@@ -309,7 +309,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **`MAGNUS_MAX_TOOL_ROUNDS`** — Magnus agent tool loop cap (default 12).
 - **`MAGNUS_TURN_TIMEOUT_MS`** — Orchestrator turn budget before user-facing timeout reply (default 90000).
 - **`MAGNUS_DEFAULT_EVENT_REMINDER_LEAD_MINUTES`** — Auto `remind_at` on new **planned** timed commitments (default 30; `0` disables).
-- **`MAGNUS_NOTION_LIST_SYNC_INTERVAL_MINUTES`** — Scheduled Supabase ↔ Notion list pull for connected users (default 60; `0` disables).
+- **`MAGNUS_NOTION_LIST_SYNC_INTERVAL_MINUTES`** — Scheduled Supabase ↔ Notion list reconciliation for connected users (default **1440** = once per day; `0` disables). Chat `sync notion` runs immediately anytime. Supabase is canonical.
 - **`MAGNUS_NOTION_LIST_SYNC_ENABLED`** — Master switch for the `notion_list_sync` proactive job (default on when proactive cron is on).
 - **`MAGNUS_NOTION_LIST_SYNC_MAX_USERS_PER_TICK`** — Rate cap per cron tick (default 5).
 
@@ -376,7 +376,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Activity/inactivity proactive** — `stale_list_nudge` (queued joy/media items idle 14+ days) and
   `chat_inactivity` (no Telegram messages for 3+ days) are opt-in catalog kinds with LLM gate+compose.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube (turn-handler smoke in `src/magnus.smoke.test.ts` only).
-- **Notion list mirror** — Supabase canonical; Telegram writes mirror immediately; scheduled `notion_list_sync` pulls Notion edits (default every 60 min). OAuth reconnect provisions a fresh **Magnus** page. Say connect Notion again after deploy if relink stuck on old LifeOS.
+- **Notion list mirror** — Supabase canonical; Telegram writes mirror immediately; scheduled `notion_list_sync` reconciles once per day (default). Say **sync notion** for immediate pull. OAuth reconnect provisions a fresh **Magnus** page.
 - **Hevy in Telegram** — Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries. **Session volume** (working-set tonnage) is computed deterministically from Hevy set data (`workoutVolume.ts`); agents must not guess volume. **Pillar consultation** (`pillar_consultation`): Magnus tools + pillar specialists run in parallel; `consultationOutcome.ts` builds a structured fulfillment summary, strips stale capability denials (e.g. Magnus saying it cannot pull Hevy when Health loaded it), and `composePillarPlanReply` composes one voice from user intent + delegation map.
 
 ---
@@ -430,4 +430,4 @@ reconciliation: `src/proactive/subscriptions/ensureDefaults.ts`.
 
 ---
 
-**Last updated:** 2026-09-12 (Notion lists in minimal mode, delete_list_item, get_daily_log, scheduled Notion sync)
+**Last updated:** 2026-09-12 (Notion daily sync default; lists CRUD + minimal mode Notion mirror)
