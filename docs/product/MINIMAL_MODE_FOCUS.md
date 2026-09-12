@@ -58,6 +58,12 @@ Minimal mode does **not** ship a single `on_track` score. It ships the **inputs*
 
 A future **`PlanAdherenceSnapshot`** (cross-pillar composite) is explicitly **post–Phase 1** unless scoped as a minimal-mode-only module.
 
+> **Reality check (2026-09-12).** None of these signals are populated in production. `evening_journal`
+> has fired **0 times** in 42 days (no subscription row exists), `magnus_daily_logs` has been empty
+> since 2026-08-18, and `magnus_events` holds one forward `planned` row — so `activity_completion`,
+> `event_reminder` and `slippingRoutines` all compute over an empty set. Full evidence and fix order:
+> [`../review/MINIMAL_MODE_EXPERIENCE_AUDIT.md`](../review/MINIMAL_MODE_EXPERIENCE_AUDIT.md).
+
 ---
 
 ## Implementation

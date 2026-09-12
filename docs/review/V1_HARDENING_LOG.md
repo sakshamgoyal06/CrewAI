@@ -12,6 +12,7 @@
 | 2026-08-16 | docs | — | Plan created | — | Initial review artifact suite pushed to `main` |
 | 2026-08-17 | docs | — | PR #99 scope | — | Added segment **10.3 Reminder frequencies** (coriander incident); interval/until/replace-on-correct |
 | 2026-09-05 | — | agent | routing spine | — | LLM `routingContextParser` replaces regex routing (conversationSignals, magnusActionDetect, deterministic plan bypasses) |
+| 2026-09-12 | docs | agent | 10.1–10.3 audit | — | Minimal mode experience audit from 42 days of production data → [`MINIMAL_MODE_EXPERIENCE_AUDIT.md`](./MINIMAL_MODE_EXPERIENCE_AUDIT.md); bugs B-003…B-009 logged |
 | 2026-08-18 | #92 | agent | 3.1 (partial) | A pass (scoped) | Generic growth snapshot: day frame, commitments, errands, projects, slipping routines by activity_key |
 | 2026-08-17 | #91 / GitHub #92 | owner | 0.1–2.1 | A pass | Merged foundation PR |
 
@@ -83,6 +84,13 @@ Mark `pass` / `fail` / `skip` as each PR closes segments.
 |----|-----|----------|-------------|-----|----------|
 | B-001 | #99 | high | “Every 2 days” coriander water reminder stored as daily `recurring_local`; correction stacked duplicate dailies → double fire same morning | Segment 10.3: `recurring_interval`, `until`, replace-on-correct | |
 | B-002 | #95 | medium | Coriander plant photo mis-routed to meal log (~11 kcal) | Segment 7.6: photo purpose ≠ meal when not food | |
+| B-003 | #99 | critical | Owner profile has **no rhythm subscription rows** — `evening_journal` / `evening_log_followup` have fired **0 times** in 42 days; `magnus_daily_logs` empty since 2026-08-18. `seedDefaultRhythmSubscriptions` runs only in `provision-owner-user.mts`, no backfill | Backfill migration + boot-time reconciliation for allowlisted profiles | |
+| B-004 | #99 | high | `manage_proactive_messages` excluded from `MINIMAL_MAGNUS_TOOL_NAMES` and `proactive` capability parked → user cannot enable the evening journal from chat (deadlocks B-003) | Allowlist the tool + capability in minimal mode | |
+| B-005 | #99 | high | "Cancel reminders for coriander water change" failed twice (2026-08-20, 2026-09-12); `matchRemindersByQuery` matches `config.message` body, not a label. Second attempt got **no reply at all** | Store a reminder label; disambiguate on partial match; guarantee an assistant row per turn | |
+| B-006 | #97 | high | 13-item todo list lost. `"todo list"` → unknown slug `todo-list`; `add_list_item` is one-per-call against `MAGNUS_MAX_TOOL_ROUNDS=12`; model reported an invented "backend hiccup" | Slug alias, batch `add_list_items`, deterministic tool-failure text | |
+| B-007 | #96 | high | Journal note routed to HEALTH is unrecoverable — minimal mode filters the `journal` capability and no health executor can reach `log_note`. Reply contained both "I haven't actually saved that yet" and "I've logged that" | Route logging verbs to GENERAL; strip persistence claims when action integrity fires | |
+| B-008 | #96 | medium | Natural-language Hevy routine creation refused (*"I don't have direct access to your Hevy account"*) though `createHevyRoutine` is implemented and `hevy_write` is allowlisted — `parseHevyWriteCommand` requires the literal `hevy routine:` prefix. Ignored locked `weekly_schedule` | Drop prefix requirement; forbid capability denials in the fitness prompt | |
+| B-009 | #94 | medium | Morning brief read out two overlapping swim sessions (09:00 and 10:00 on 2026-09-12) as fact — `buildDayContext` has no conflict/duplicate detection | Flag overlaps and ask instead of listing both | |
 
 ---
 
@@ -141,4 +149,4 @@ PR #91 segment 0.1 CI (2026-08-16):
 
 ---
 
-**Last updated:** 2026-09-05
+**Last updated:** 2026-09-12
