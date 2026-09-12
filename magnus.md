@@ -23,6 +23,7 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/review/REGRADE_2026-08-04.md`** | Post-security cleanup re-grade (B+ 84/100) |
 | **`docs/review/GOLDEN_PATH_TEST_RESULTS.md`** | 100 golden-path integration tests — routing, tools, one voice |
 | **`docs/review/AUDIT_2026-08-09.md`** | Full-repo audit: security, coherence, test results |
+| **`docs/review/MINIMAL_MODE_EXPERIENCE_AUDIT.md`** | **Why minimal mode feels useless** — production data + code root causes, prioritised fix plan (2026-09-12) |
 | **`docs/review/V1_HARDENING_PLAN.md`** | **v1 close-out master plan** — PR #91–#100, milestones, agent instructions |
 | **`docs/review/V1_HARDENING_LOG.md`** | Per-PR hardening progress log (update every PR) |
 | **`docs/review/PILLAR_TOOL_AUDIT.md`** | Every tool/capability → pillar + activity layer audit |
@@ -414,6 +415,17 @@ Implementation: `src/config/minimalMode.ts` — `MINIMAL_FOCUS_AREAS`, capabilit
 tool allowlist, proactive jobs/kinds filter, intent classification. Parked features return a clear
 user-facing message (meals deferred to Phase 2).
 
+**Known Phase 1 gaps (2026-09-12)** — see [`docs/review/MINIMAL_MODE_EXPERIENCE_AUDIT.md`](docs/review/MINIMAL_MODE_EXPERIENCE_AUDIT.md).
+The owner profile has **no rhythm subscription rows**, so `evening_journal` /
+`evening_log_followup` have never fired in production and `magnus_daily_logs` has been empty since
+2026-08-18; `seedDefaultRhythmSubscriptions` runs only in `scripts/provision-owner-user.mts` with no
+backfill. `manage_proactive_messages` is excluded from the minimal tool allowlist, so the user cannot
+enable rhythms from chat. Reminder bug **B-001** (no interval/until schedule, corrections stack
+instead of replace, cancel-by-description fails) is still live. Lists drop the phrasing "create a todo
+list" (`todo list` → unknown slug `todo-list`) and have no batch add against
+`MAGNUS_MAX_TOOL_ROUNDS=12`. Health has no path to `log_note`, so journal notes routed to HEALTH are
+lost. Photos are blocked before vision runs, which also blocks list-from-photo.
+
 ---
 
-**Last updated:** 2026-09-10 (one-shot reminder 24h late window + auto-miss; minimal mode Phase 1 focus)
+**Last updated:** 2026-09-12 (minimal mode experience audit — Phase 1 gaps recorded; docs only, no behaviour change)
