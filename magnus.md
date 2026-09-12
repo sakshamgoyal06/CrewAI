@@ -183,8 +183,10 @@ shell or `.env`.
    commitments/errands, project consistency, slipping routines by `activity_key`, issues,
    joy/pillar KPIs). **`routingContextParser`** (Haiku) then produces structural hints and Magnus
    capability lists from the message + recent turns. Five-way intent classifier (Sonnet) receives
-   hints + assembled context; per-pillar **plan parser** (Haiku) runs step executors. No regex routing
-   bypasses. Calendar management (read/delete/create) routes through the **`calendar`** capability and
+   hints + assembled context; per-pillar **plan parser** (Haiku) runs step executors. Primary routing is
+   LLM-based (`routingContextParser` + Sonnet classifier); documented exceptions include photo intent,
+   Haiku-hint shortcuts, FSM preludes, and local `/start`/`/help`/memory commands. Calendar management
+   (read/delete/create) routes through the **`calendar`** capability and
    Magnus tool loop, not `day_overview`. On `GENERAL`, the plan parser may choose `pillar_consultation`,
    `day_overview`, `calendar`, etc. Pillar specialists are prompt-only except Health (capability
    executors) and Wealth (Kite read in executor).
@@ -307,6 +309,9 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **`MAGNUS_MAX_TOOL_ROUNDS`** — Magnus agent tool loop cap (default 12).
 - **`MAGNUS_TURN_TIMEOUT_MS`** — Orchestrator turn budget before user-facing timeout reply (default 90000).
 - **`MAGNUS_DEFAULT_EVENT_REMINDER_LEAD_MINUTES`** — Auto `remind_at` on new **planned** timed commitments (default 30; `0` disables).
+- **`MAGNUS_NOTION_LIST_SYNC_INTERVAL_MINUTES`** — Scheduled Supabase ↔ Notion list pull for connected users (default 60; `0` disables).
+- **`MAGNUS_NOTION_LIST_SYNC_ENABLED`** — Master switch for the `notion_list_sync` proactive job (default on when proactive cron is on).
+- **`MAGNUS_NOTION_LIST_SYNC_MAX_USERS_PER_TICK`** — Rate cap per cron tick (default 5).
 
 ---
 
@@ -371,7 +376,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **Activity/inactivity proactive** — `stale_list_nudge` (queued joy/media items idle 14+ days) and
   `chat_inactivity` (no Telegram messages for 3+ days) are opt-in catalog kinds with LLM gate+compose.
 - **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube (turn-handler smoke in `src/magnus.smoke.test.ts` only).
-- **Notion list mirror** — Supabase canonical; OAuth reconnect now wipes legacy LifeOS hub/registry and provisions a fresh **Magnus** page (no discover fallback to old DBs). Say connect Notion again after deploy if relink stuck on old LifeOS.
+- **Notion list mirror** — Supabase canonical; Telegram writes mirror immediately; scheduled `notion_list_sync` pulls Notion edits (default every 60 min). OAuth reconnect provisions a fresh **Magnus** page. Say connect Notion again after deploy if relink stuck on old LifeOS.
 - **Hevy in Telegram** — Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries. **Session volume** (working-set tonnage) is computed deterministically from Hevy set data (`workoutVolume.ts`); agents must not guess volume. **Pillar consultation** (`pillar_consultation`): Magnus tools + pillar specialists run in parallel; `consultationOutcome.ts` builds a structured fulfillment summary, strips stale capability denials (e.g. Magnus saying it cannot pull Hevy when Health loaded it), and `composePillarPlanReply` composes one voice from user intent + delegation map.
 
 ---
@@ -397,9 +402,9 @@ logging ritual — not a single cross-pillar adherence score yet.
 |-------|-------------------|
 | **Workouts** | Hevy / fitness, gym ↔ Hevy reconcile, drift guard |
 | **Calendar** | Google Calendar + `magnus_events` event log |
-| **Lists** | Supabase lists (watchlist, readlist, tasks, …) |
+| **Lists** | Supabase lists + optional Notion mirror (`connect_notion`, scheduled sync) |
 | **Reminders** | `manage_reminders`, event `remind_at`, event-reminder cron, custom reminders |
-| **Logging** | Morning win intention, evening journal FSM, activity completion, `log_note` / check-in tools |
+| **Logging** | Morning win intention, evening journal FSM, activity completion, `log_note` / `get_daily_log` / check-in tools |
 
 **Supporting (live):** YouTube / YT Music, morning brief, conversation.  
 **Phase 2 (after Phase 1 is solid):** meal logging & nutrition — explicitly parked until then.
@@ -409,9 +414,10 @@ logging ritual — not a single cross-pillar adherence score yet.
 | Phase 1 focus areas above | **Meals**, nutrition, **meal photos** |
 | Sub-agent **parse → execute → compose**, one Magnus voice | Wealth / Happiness / Wisdom pillars |
 | Proactive: full day/week/month rhythm (evening journal, week planning, weekly wrap, monthly goal review, drift guard, midday encouragement, stale-list + chat-inactivity nudges), activity completion, gym reconcile, custom reminders | Meal proactive kinds, nutrition nightly, project kinds |
-| **Non-meal photos** (lists, schedule, documents via vision) | Notion, LifeOS joy tank, projects, Zerodha |
+| **Non-meal photos** (lists, schedule, documents via vision) | LifeOS joy tank, projects, Zerodha |
+| **Notion list mirror** — connect, setup, `sync_notion`, scheduled `notion_list_sync` job | LifeOS journal hub, morning brief Notion page |
 | `manage_proactive_messages` in chat — turn rhythms on/off | |
-| Lists: `add_list_items` batch add, human list-name resolution (`todo list` → tasks) | |
+| Lists: `add_list_items`, `delete_list_item`, human list-name resolution (`todo list` → tasks), `add_goal` | |
 | Reminders: every-N-days + until-date, replace-on-correct, cancel by label | |
 | Hevy routine/workout writes from plain language | |
 | Day overview + morning brief: open todos, calendar conflict detection | |
@@ -424,4 +430,4 @@ reconciliation: `src/proactive/subscriptions/ensureDefaults.ts`.
 
 ---
 
-**Last updated:** 2026-09-12 (minimal mode Phase 1 lifecycle: lists, reminders, workouts, logging, day todos, on-track closure)
+**Last updated:** 2026-09-12 (Notion lists in minimal mode, delete_list_item, get_daily_log, scheduled Notion sync)

@@ -137,6 +137,42 @@ export function nutritionNightlyJobEnabled(): boolean {
   return proactiveCronEnabled();
 }
 
+/** Scheduled Supabase ↔ Notion list mirror for connected users. */
+export function notionListSyncJobEnabled(): boolean {
+  const raw = process.env.MAGNUS_NOTION_LIST_SYNC_ENABLED?.trim().toLowerCase();
+  if (envTruthy(raw)) {
+    return true;
+  }
+  if (envFalsy(raw)) {
+    return false;
+  }
+  return proactiveCronEnabled();
+}
+
+export function notionListSyncIntervalMinutes(): number {
+  const raw = process.env.MAGNUS_NOTION_LIST_SYNC_INTERVAL_MINUTES?.trim();
+  if (raw === undefined || raw === "") {
+    return 60;
+  }
+  const n = Number.parseInt(raw, 10);
+  if (Number.isNaN(n) || n < 0 || n > 24 * 60) {
+    return 60;
+  }
+  return n;
+}
+
+export function notionListSyncMaxUsersPerTick(): number {
+  const raw = process.env.MAGNUS_NOTION_LIST_SYNC_MAX_USERS_PER_TICK?.trim();
+  if (raw === undefined || raw === "") {
+    return 5;
+  }
+  const n = Number.parseInt(raw, 10);
+  if (Number.isNaN(n) || n < 1 || n > 50) {
+    return 5;
+  }
+  return n;
+}
+
 /** Subscription-based proactive messages (evening journal, drift guard, custom reminders). */
 export function proactiveSubscriptionsJobEnabled(): boolean {
   const raw = process.env.MAGNUS_PROACTIVE_SUBSCRIPTIONS_ENABLED?.trim().toLowerCase();

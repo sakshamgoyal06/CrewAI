@@ -9,8 +9,8 @@ describe("parkedFeatureReplyForTopic", () => {
     expect(reply).toContain("calendar");
   });
 
-  it("parks notion connect", () => {
-    expect(parkedFeatureReplyForTopic("notion")).toContain("Notion");
+  it("does not park notion in minimal mode", () => {
+    expect(parkedFeatureReplyForTopic("notion")).toBeNull();
   });
 
   it("parks happiness movie recommend", () => {
@@ -22,7 +22,7 @@ describe("parkedFeatureReplyForTopic", () => {
   });
 
   it("never leaks host configuration to the user", () => {
-    for (const topic of ["meals", "notion", "wealth", "happiness", "wisdom"] as const) {
+    for (const topic of ["meals", "wealth", "happiness", "wisdom"] as const) {
       const reply = parkedFeatureReplyForTopic(topic) ?? "";
       expect(reply, topic).not.toMatch(/MAGNUS_MINIMAL_MODE|on the host|minimal mode/i);
     }

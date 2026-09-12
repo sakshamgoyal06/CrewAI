@@ -2,7 +2,6 @@
  * Execute a parsed HEALTH pillar plan — sequential steps + composer.
  */
 export { executeHealthPlanStep } from "./executeHealthPlanStep.js";
-export { healthDeterministicCapability } from "./healthDeterministicGates.js";
 
 import type { AgentContext, AgentResult } from "../../types.js";
 import { executePillarPlan } from "./executePillarPlan.js";

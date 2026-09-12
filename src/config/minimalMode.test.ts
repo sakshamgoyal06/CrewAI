@@ -46,13 +46,14 @@ describe("minimalMode", () => {
       "youtube",
       "lists",
       "daily_checkin",
+      "notion",
       "reminders",
       "proactive",
       "journal_note",
       "conversation",
     ]);
     expect(isParkedGeneralCapability("youtube")).toBe(false);
-    expect(isParkedGeneralCapability("notion")).toBe(true);
+    expect(isParkedGeneralCapability("notion")).toBe(false);
     expect(isParkedGeneralCapability("daily_checkin")).toBe(false);
     expect(isParkedGeneralCapability("proactive")).toBe(false);
     expect(isParkedGeneralCapability("journal_note")).toBe(false);
@@ -92,6 +93,7 @@ describe("minimalMode", () => {
     expect(isMinimalProactiveJobEnabled("gym_hevy_reconcile")).toBe(true);
     expect(isMinimalProactiveJobEnabled("morning_brief")).toBe(true);
     expect(isMinimalProactiveJobEnabled("proactive_subscriptions")).toBe(true);
+    expect(isMinimalProactiveJobEnabled("notion_list_sync")).toBe(true);
     expect(isMinimalProactiveJobEnabled("nutrition_nightly")).toBe(false);
   });
 
@@ -133,7 +135,9 @@ describe("minimalMode", () => {
     expect(allowlist).toContain("log_note");
     expect(allowlist).toContain("log_daily_checkin");
     expect(allowlist).toContain("manage_proactive_messages");
-    expect(allowlist).not.toContain("connect_notion");
+    expect(allowlist).toContain("connect_notion");
+    expect(allowlist).toContain("delete_list_item");
+    expect(allowlist).toContain("get_daily_log");
     expect(MINIMAL_MAGNUS_TOOL_NAMES.has("read_calendar")).toBe(true);
   });
 
