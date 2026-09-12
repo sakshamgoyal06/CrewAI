@@ -1,8 +1,19 @@
 # Magnus minimal mode — modular architecture map
 
 **Purpose:** Module-by-module review guide for tightening minimal mode (`MAGNUS_MINIMAL_MODE=true`).  
-**Companion:** `MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md` (user-journey review order), `docs/product/MINIMAL_MODE_FOCUS.md`, `src/config/minimalMode.ts`, `magnus.md` § Minimal mode  
+**Companion:** `MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md` (two-phase review: **Phase A** minimal MVP → **Phase B** parked in production), `docs/product/MINIMAL_MODE_FOCUS.md`, `src/config/minimalMode.ts`, `magnus.md` § Minimal mode  
 **Last updated:** 2026-09-12
+
+---
+
+## Review phases
+
+| Phase | When | Focus |
+|-------|------|-------|
+| **A — Minimal MVP** | Now | Live user journeys only (stages 0–12, branches B1–B6, proactive live, MVP gate) |
+| **B — Parked in production** | After MVP gate | Meals, nutrition, pillars, projects — code in the image but runtime-gated |
+
+See journey plan for session schedules **A1–A15** and **B0–B8**.
 
 ---
 
@@ -374,23 +385,15 @@ flowchart LR
 
 ## 5. Suggested review order
 
-Review **fence → spine → Phase 1 domains → proactive → supporting → leak audit on parked**.
+Use **`MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`** for the authoritative schedule. Summary:
 
-| # | Module | Rationale | Est. files |
-|---|--------|-----------|------------|
-| 1 | `config/minimalMode.ts` | All allowlists; fix here first | 3 |
-| 2 | `magnusOrchestrator.ts` + preludes | Central gate; FSM hijacks | ~10 |
-| 3 | `orchestratorIntent.ts` + `routingContextParser.ts` | Classification + parked topics | ~5 |
-| 4 | `pillarStrategy/` executors + catalogs | Capability dispatch | ~25 |
-| 5 | **Calendar** — `calendarTool`, `eventLogTool`, `events/*` | Commitment truth | ~15 |
-| 6 | **Logging** — `logging/*`, checkin tools | Adherence closure | ~12 |
-| 7 | **Reminders** — `manageRemindersTool`, event reminder job | Reliable nudges | ~8 |
-| 8 | **Workouts** — Hevy, gym reconcile, fitness agent | Plan vs actual | ~18 |
-| 9 | **Lists** — `lists/*`, Notion mirror | Capture + mirror | ~15 |
-| 10 | `proactive/*` (live jobs/kinds only) | Outbound quality | ~20 |
-| 11 | `magnusAgent.ts` + tools allowlist | Tool loop correctness | ~15 |
-| 12 | `agents/memory/*` | Context bloat, privacy | ~25 |
-| 13 | Parked leak audit | Grep + accuracy suite | — |
+**Phase A (minimal MVP):** fence → spine → Phase 1 domains → proactive → supporting → MVP gate.  
+**Phase B (parked in production):** B0 fence integrity → meals → meal proactive → health depth → projects → pillars → LifeOS → full-mode staging.
+
+| Phase | Sessions | Parked code |
+|-------|----------|-------------|
+| A | A1–A15 | Fence smoke only (A15) — no deep domain review |
+| B | B0–B8 | Full line review of gated domains (~90+ files) |
 
 ---
 
@@ -458,4 +461,7 @@ npm run telegram:check
 
 ## 8. Next step
 
-Pick **module #1** (`config/minimalMode.ts`) or tell me which Phase 1 domain to start with (workouts, calendar, lists, reminders, logging). I will walk file-by-file with the checklist and propose concrete tightening diffs.
+**Phase A:** Session **A1** (`config/minimalMode.ts` + stages 0–2) or a Phase 1 branch (A6–A10).  
+**Phase B:** Only after MVP gate — start **B0** (fence integrity).
+
+See `MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md` for MVP gate criteria and Phase B domain catalog.

@@ -1,29 +1,85 @@
 # Minimal mode — user-journey review plan
 
-**Purpose:** Review Magnus minimal mode by **following the user's path** through the backend — stage by stage, like navigating a maze and optimizing each corridor before moving on.  
+**Purpose:** Review Magnus in **two phases** — first perfect **minimal MVP** (live paths only), then review **parked code still in production** once MVP is proven.  
 **Companion:** `MINIMAL_MODE_MODULE_MAP.md` (module inventory), `docs/product/MINIMAL_MODE_FOCUS.md` (product scope)  
 **Last updated:** 2026-09-12
 
 ---
 
-## How to use this plan
+## Two-phase strategy
 
-There are **two journeys**:
+```mermaid
+flowchart LR
+    subgraph phaseA["Phase A — Minimal MVP"]
+        A1[Follow user journey]
+        A2[Phase 1 branches]
+        A3[Supporting live features]
+        A4[MVP gate]
+    end
+    subgraph phaseB["Phase B — Parked in production"]
+        B1[Fence integrity audit]
+        B2[Domain-by-domain code review]
+        B3[Re-enable readiness]
+    end
+    A1 --> A2 --> A3 --> A4
+    A4 -->|MVP proven| B1 --> B2 --> B3
+```
+
+| Phase | Goal | What we review | What we skip |
+|-------|------|----------------|--------------|
+| **A — Minimal MVP** | Minimal mode works great end-to-end | Every code path a user can hit in production today | Deep line review of gated-off domains |
+| **B — Parked in production** | Code in the deployed binary is correct, fenced, and ready when we flip flags | Meals, nutrition, pillars, projects, meal proactive, etc. | Re-architecting minimal paths (frozen after Phase A) |
+
+**Rule:** Do not start Phase B until **MVP gate** (below) passes. Phase A fixes the maze the user actually walks; Phase B inventories and tightens corridors that exist but are roped off.
+
+### Logs
+
+| Log file | Phase | Contents |
+|----------|-------|----------|
+| `docs/review/MINIMAL_MODE_JOURNEY_LOG.md` | A | Per-session traces, issues, optimizations |
+| `docs/review/MINIMAL_MODE_PARKED_LOG.md` | B | Per-domain fence checks, re-enable blockers |
+
+---
+
+## How to use this plan (both phases)
+
+There are **two runtime journeys** (Phase A):
 
 | Journey | Trigger | Entry point |
 |---------|---------|-------------|
-| **A — Reactive** | User sends Telegram message/photo | `tools/telegram.ts` |
-| **B — Proactive** | Cron or scheduled subscription fires | `proactive/cron.ts` |
+| **Reactive** | User sends Telegram message/photo | `tools/telegram.ts` |
+| **Proactive** | Cron or scheduled subscription fires | `proactive/cron.ts` |
 
-For each **stage**, we:
+For each **stage** or **session**, we:
 
 1. **Trace** — what code runs, in what order, what data passes between modules  
 2. **Diagram** — one small sequence or flowchart for that stage  
-3. **Review** — read every file in the stage's file list line by line  
-4. **Optimize** — note redundancies, wrong order, leaks, missing gates, slow paths  
-5. **Exit criteria** — what must be true before advancing to the next stage  
+3. **Review** — read every file in the file list line by line  
+4. **Optimize** — redundancies, wrong order, leaks, missing gates, slow paths  
+5. **Exit criteria** — what must be true before advancing  
 
-Record findings in a running log (suggested: `docs/review/MINIMAL_MODE_JOURNEY_LOG.md` — create when session 1 starts).
+---
+
+# Phase A — Minimal MVP (live functioning only)
+
+**Scope:** Everything reachable when `MAGNUS_MINIMAL_MODE=true` (default in production).
+
+### Phase A — in scope
+
+| Bucket | Includes |
+|--------|----------|
+| **Ingress + spine** | Stages 0–12 (boot → Telegram → orchestrator → reply) |
+| **Phase 1 domains** | Workouts, calendar, lists, reminders, logging (branches B1–B5) |
+| **Supporting live** | YouTube, morning brief, day overview, pillar consultation (Health only), conversation, memory commands |
+| **Proactive (live)** | 6 jobs + 10 subscription kinds in `MINIMAL_PROACTIVE_*` |
+| **Fence (shallow)** | Confirm parked paths return `parkedFeatureReply` — **no execution** (one session, not deep domain review) |
+
+### Phase A — explicitly out of scope
+
+- Line-by-line review of `meals/`, `nutrition/`, wealth/happiness/wisdom agents, `projects/` executors
+- Meal proactive kinds, `nutrition_nightly` job, health onboarding flow
+- Schema/migration design for Phase 2 tables (unless a live path is broken)
+- Deploy/ops (`Dockerfile`, Railway) except boot reliability (stage 0)
 
 ---
 
@@ -631,6 +687,65 @@ gym event ↔ Hevy: gymHevyMatch → gymHevyReconcile (proactive job)
 
 ---
 
+### Branch B6 — YouTube (user: "Add this to my wisdom playlist") — Session A12
+
+```
+magnusAgent → youtubeTool / youtubeConnectTool
+           → integrations/youtube/* + youtube/youtubeStore.ts + playlistResolve.ts
+```
+
+**Review order:**
+
+1. `agents/tools/youtubeTool.ts`, `youtubeConnectTool.ts`
+2. `integrations/youtube/operations.ts`, `auth.ts`, `oauthFlow.ts`
+3. `youtube/youtubeStore.ts`, `playlistResolve.ts`
+4. `integrations/google/oauthFlow.ts` (shared Calendar + YouTube token)
+
+---
+
+### Morning brief E2E — Session A13
+
+Three entry points must produce consistent output:
+
+| Entry | Path |
+|-------|------|
+| Cron | `proactive/jobs/morningBriefJob.ts` → `jobs/morningBrief.ts` |
+| Manual | `telegram.ts` → `proactive/morningBriefManual.ts` |
+| Post-brief win | `jobs/handleWinConditionPending.ts` → check-in write |
+
+**Shared builder:** `jobs/morningBriefContext.ts` → `day/buildDayContext.ts` (`includeMeals: false` in minimal).
+
+---
+
+### Pillar consultation — Session A14
+
+**User:** "Pull my calendar and review today's workout."
+
+```
+executeGeneralPlanStep → executePillarConsultationStep
+  → consultationMagnusTools (minimal tool subset)
+  → dispatch Health + Magnus in parallel
+  → consultationOutcome → composePillarPlanReply
+```
+
+**Files:** `executePillarConsultation.ts`, `consultationMagnusTools.ts`, `consultationOutcome.ts`, `agentConsultation.ts`
+
+**Minimal constraint:** `filterConsultablePillars` → **HEALTH only**.
+
+---
+
+### Fence smoke — Session A15 (last Phase A session)
+
+**Not a domain review** — confirm parked domains cannot execute:
+
+- Sample utterances for meals, wealth, happiness, wisdom, projects, meal photos
+- Assert: `parkedFeatureReply` / `parkedIntentReply`, no tool calls, no writes
+- Run: `npm test -- src/config/minimalMode`, `npm run test:accuracy` (minimal cases)
+
+Then run **MVP gate** checklist.
+
+---
+
 ## Stage 11 — Accountability + Magnus voice (terminal)
 
 **User experience:** One coherent reply; no false "saved" claims.
@@ -733,22 +848,283 @@ stale_list_nudge, chat_inactivity
 
 ---
 
-# Recommended session schedule
+# Phase A — session schedule (minimal MVP)
 
-| Session | Stages | Goal |
+| Session | Stages / branch | Goal |
+|---------|-----------------|------|
+| **A1** | 0–2 | Ingress trustworthy: dedupe, gates, persist |
+| **A2** | 3–4 | Short-circuit paths: memory cmds, FSM preludes |
+| **A3** | 5–8 | Routing spine: context → classify → minimal gates |
+| **A4** | 9–11 | Memory + plan pipeline + accountability |
+| **A5** | 12 | Outbound formatting + post-turn |
+| **A6** | Branch B1 | Calendar + event log + day overview |
+| **A7** | Branch B4 | Logging + closure FSMs |
+| **A8** | Branch B3 | Reminders end-to-end |
+| **A9** | Branch B5 | Workouts + gym ↔ Hevy |
+| **A10** | Branch B2 | Lists + Notion mirror |
+| **A11** | Journey B (proactive) | Live jobs + live subscription kinds |
+| **A12** | Branch B6 | YouTube / YT Music |
+| **A13** | Morning brief E2E | Manual trigger + cron + win loop + `buildDayContext` |
+| **A14** | Pillar consultation | Health-only consultation path |
+| **A15** | Fence smoke | Parked intents/topics return reply only — **no deep parked review** |
+
+---
+
+## MVP gate (end of Phase A)
+
+**Do not open Phase B until every item is checked.**
+
+### Product — Phase 1 adherence question
+
+> Is the user sticking to their plan, or are commitments failing?
+
+| Signal | Verified how |
+|--------|----------------|
+| Commitments captured | Calendar + `magnus_events` create/update/reschedule |
+| Commitments closed | Activity completion FSM, gym ↔ Hevy, missed sweep |
+| Daily ritual | Morning win, evening journal, `dailyLogStatus` |
+| Nudges reliable | Event reminders, custom reminders, proactive kinds fire in timezone |
+| Lists + mirror | CRUD works; Notion sync when connected |
+
+### Technical gates
+
+```bash
+npm test                                    # full unit suite
+npm run test:accuracy                       # minimal-mode scenarios green
+npx tsx scripts/dev/import-graph.mts        # no new production orphans
+npm run telegram:check                      # minimal capabilities reported
+```
+
+| Gate | Criterion |
+|------|-----------|
+| **Accuracy** | `npm run test:accuracy` passes; no failing `minimalModeOnly` cases |
+| **Fence smoke** | WEALTH/HAPPINESS/WISDOM/meals/meal photos → parked reply, zero DB writes |
+| **No regressions** | Phase A journey log: all critical issues resolved or explicitly deferred |
+| **Manual smoke** | Golden paths from `docs/review/GOLDEN_PATH_TEST_RESULTS.md` for live features (or re-run subset) |
+| **Owner sign-off** | You confirm MVP “feels great” in real Telegram use |
+
+Record gate result in `MINIMAL_MODE_JOURNEY_LOG.md` → section **MVP GATE PASSED** with date.
+
+---
+
+# Phase B — Parked code in production
+
+**Start only after MVP gate passes.**
+
+### What “parked in production” means
+
+Code is **compiled and deployed** in the same Docker image as minimal mode, but **runtime-gated** by `minimalMode.ts`, orchestrator early exits, or `isMinimalProactiveJobEnabled` / `isMinimalProactiveKindEnabled`. Phase B asks:
+
+1. **Fence** — Can this code still execute when minimal mode is on? (must be **no**)
+2. **Quality** — When we set `MAGNUS_MINIMAL_MODE=false`, is the code worth keeping?
+3. **Readiness** — What must ship before re-enabling this domain?
+
+### Phase B — review order (by re-enable sequence from product doc)
+
+Aligns with `docs/product/MINIMAL_MODE_FOCUS.md` Phase 2 ordering.
+
+```mermaid
+flowchart TD
+    G[MVP gate passed] --> B0[B0 Fence integrity]
+    B0 --> B1[B1 Meals + nutrition]
+    B1 --> B2[B2 Meal proactive + nightly]
+    B2 --> B3[B3 Health depth]
+    B3 --> B4[B4 Projects]
+    B4 --> B5[B5 Wealth / Zerodha]
+    B5 --> B6[B6 Happiness + Wisdom]
+    B6 --> B7[B7 LifeOS depth]
+    B7 --> B8[B8 Full-mode integration]
+```
+
+---
+
+## B0 — Fence integrity (whole codebase)
+
+**Goal:** Prove minimal mode cannot accidentally execute parked domains.
+
+| Check | How |
+|-------|-----|
+| Allowlists complete | `minimalMode.ts` vs all tools in `magnusAgent`, all catalog capabilities, all cron jobs/kinds |
+| No bypass paths | Grep: `isMinimalMode()` guards on meal gates, project prelude, health onboarding, pillar dispatch |
+| Classifier | Meal/wealth/happiness/wisdom utterances → parked reply or GENERAL fence |
+| Proactive | `nutritionNightlyJob`, `meal_*` kinds, `projectConflictReview` never run when minimal |
+| Accuracy suite | `minimalModeOnly` + parked-topic tests in `minimalMode.parkedTopic.test.ts` |
+
+**Files (fence layer only — not domain depth yet):**
+
+```
+src/config/minimalMode.ts
+src/agents/magnusOrchestrator.ts
+src/agents/orchestratorIntent.ts
+src/agents/routing/pillarStrategy/executeHealthPlanStep.ts
+src/agents/routing/pillarStrategy/executeGeneralPlanStep.ts
+src/agents/routing/pillarStrategy/healthDeterministicGates.ts
+src/proactive/registry.ts
+src/proactive/dispatcher.ts
+src/proactive/manageProactiveTool.ts
+src/capabilities/magnusAccuracyScenarios.ts
+```
+
+**Exit:** Document any **fence bugs** as P0 — fix in Phase A hotfix branch before continuing B1+.
+
+---
+
+## B1 — Meals + nutrition (~56 files)
+
+**User journey when re-enabled:** “I ate …” → intake parser → `meal_logs` → rollups → plan vs log routing.
+
+| Submodule | Path | ~Files |
+|-----------|------|--------|
+| Meal logging pipeline | `src/meals/*` | 31 |
+| Nutrition stores + planning | `src/nutrition/*` | 25 |
+| Health meal agents | `agents/health/meal*.ts`, `mealIntakeParserAgent.ts`, `mealPlanner*.ts`, … | ~15 |
+| Meal gates | `healthDeterministicGates.ts`, `mealLogPending.ts` | 3 |
+| Vision meal path | `vision/*` when `purpose=meal_log` | shared |
+
+**Trace journey:** photo/text → `healthDeterministicGates` → `mealIntakeParserAgent` → `mealLogPipeline` → `recordMealLog` → `meal_daily_rollups`.
+
+**Review questions:** plan vs log rules (`mealPlanVsLog.ts`), undo, slot correction, duplicate guard, compose arithmetic.
+
+---
+
+## B2 — Meal proactive + nutrition nightly
+
+| Item | Path |
+|------|------|
+| Nightly cron | `proactive/jobs/nutritionNightlyJob.ts` |
+| Meal kinds | `proactive/kinds/mealLogReminder.ts`, `mealAdherenceNudge.ts`, `mealGapNudge.ts`, `mealEodReconciliation.ts`, `weeklyNutritionReview.ts` |
+| Signals | `nutrition/mealProactiveSignals.ts`, `mealReminderSchedule.ts` |
+
+**Exit:** Re-enable checklist: env keys (USDA, CalorieNinjas), `MINIMAL_PROACTIVE_KINDS` update, morning brief meals slice.
+
+---
+
+## B3 — Health depth (beyond workouts)
+
+| Item | Path |
+|------|------|
+| Onboarding gate | `agents/health/healthOnboarding.ts` |
+| Energy / sleep | `agents/health/energyAgent.ts` |
+| Long-term planning | `agents/health/longTermHealthPlanningAgent.ts` |
+| Nutrition advice | `agents/health/nutritionAgent.ts`, `nutritionOrchestrated.ts` |
+| Alternates | `agents/health/alternatesRecommenderAgent.ts` |
+| Meal planning journey | `nutrition/planning/*`, `mealPlanningSessionStore.ts` |
+
+**Note:** Workouts already reviewed in **A9**; B3 is everything else in `HEALTH_CAPABILITY_CATALOG`.
+
+---
+
+## B4 — Projects
+
+| Item | Path |
+|------|------|
+| Setup FSM | `projects/projectSetupFlow.ts`, `projectSessionStore.ts` |
+| Prelude hijack | `projects/projectSessionPrelude.ts` |
+| Executor | `projects/projectExecutor.ts`, `projectConflictService.ts` |
+| Parser | `projects/parseProjectSetupTurn.ts` |
+| GENERAL capabilities | `project_setup`, `project_manage`, `project_status`, `goal_manage` |
+| Proactive | `proactive/kinds/projectConflictReview.ts` |
+
+---
+
+## B5 — Wealth + Zerodha
+
+| Item | Path |
+|------|------|
+| Wealth agent | `agents/wealth/wealthAgent.ts` |
+| Kite client | `pillars/wealth/zerodha/*` |
+| Connect tool | `agents/tools/kiteConnectTool.ts` |
+| Execute path | `executeWealthPlanStep.ts`, `executeWealthStrategy.ts` |
+| Catalog | `catalogs/wealthCatalog.ts` |
+
+---
+
+## B6 — Happiness + Wisdom
+
+| Item | Path |
+|------|------|
+| Agents | `agents/happiness/happinessAgent.ts`, `agents/wisdom/wisdomAgent.ts` |
+| Pillar specialist runner | `agents/pillarSpecialist.ts` |
+| Executors | `executeHappinessPlanStep.ts`, `executeWisdomPlanStep.ts` |
+| Catalogs | `happinessCatalog.ts`, `wisdomCatalog.ts` |
+| Consultation | Re-enable multi-pillar `filterConsultablePillars` |
+
+---
+
+## B7 — LifeOS depth
+
+| Item | Path |
+|------|------|
+| Joy tank, pillar status | `lifeos/lifeosStore.ts`, `lifeosTool.ts` |
+| GENERAL `lifeos` capability | Parked in minimal; full reads when `MAGNUS_LIFEOS_CONTEXT_ENABLED` |
+| Notion journal hub | `tools/notion.ts`, `notionMorningBrief.ts` (brief page — not list mirror) |
+
+---
+
+## B8 — Full-mode integration pass
+
+**Goal:** Flip `MAGNUS_MINIMAL_MODE=false` in staging; run full journeys.
+
+| Check | Command / doc |
+|-------|----------------|
+| Full accuracy | `npm run test:accuracy` (all scenarios, not only minimal) |
+| Golden path | `docs/review/GOLDEN_PATH_TEST_RESULTS.md` |
+| Pillar tool audit | `docs/review/PILLAR_TOOL_AUDIT.md` |
+| Context map | `docs/review/PILLAR_CONTEXT_MAP.md` |
+| Connection smoke | `docs/review/CONNECTION_SMOKE_MATRIX.md` |
+
+---
+
+# Phase B — session schedule
+
+| Session | Domain | Goal |
 |---------|--------|------|
-| **1** | 0–2 | Ingress trustworthy: dedupe, gates, persist |
-| **2** | 3–4 | Short-circuit paths: memory cmds, FSM preludes |
-| **3** | 5–8 | Routing spine: context → classify → minimal gates |
-| **4** | 9–11 | Memory + plan pipeline + accountability |
-| **5** | 12 | Outbound formatting + post-turn |
-| **6** | Branch B1 | Calendar + event log perfect |
-| **7** | Branch B4 | Logging + closure FSMs |
-| **8** | Branch B3 | Reminders end-to-end |
-| **9** | Branch B5 | Workouts + gym ↔ Hevy |
-| **10** | Branch B2 | Lists + Notion mirror |
-| **11** | Journey B | Proactive jobs + kinds |
-| **12** | Leak audit | Parked code paths, accuracy suite |
+| **B0** | Fence integrity | No parked execution in minimal mode |
+| **B1** | Meals + nutrition | Intake → log → rollup journey sound |
+| **B2** | Meal proactive | Cron + kinds ready to re-enable |
+| **B3** | Health depth | Onboarding + non-workout health |
+| **B4** | Projects | Setup FSM + executor |
+| **B5** | Wealth | Kite read + agent |
+| **B6** | Happiness + Wisdom | Prompt specialists + catalogs |
+| **B7** | LifeOS | Joy tank, goals context, Notion hub |
+| **B8** | Full-mode staging | End-to-end with `MAGNUS_MINIMAL_MODE=false` |
+
+---
+
+# Per-stage review worksheet
+
+Copy into `MINIMAL_MODE_JOURNEY_LOG.md` (Phase A) or `MINIMAL_MODE_PARKED_LOG.md` (Phase B).
+
+```markdown
+## Session <A|B><N> — <name>
+
+### Phase
+- [ ] A — Minimal MVP  /  [ ] B — Parked in production
+
+### Trace confirmed
+- Entry:
+- Exit:
+- Data contracts:
+
+### Files reviewed
+- [ ] file.ts — notes
+
+### Issues found
+| ID | Severity | File:line | Issue | Proposed fix |
+|----|----------|-----------|-------|--------------|
+| | P0 fence | | Must fix before Phase B continues | |
+
+### Optimizations
+- Remove:
+- Reorder:
+- Merge:
+
+### Exit criteria
+- [ ] ...
+
+### Tests run
+- 
+```
 
 ---
 
@@ -787,24 +1163,43 @@ Copy into `MINIMAL_MODE_JOURNEY_LOG.md` for each session.
 
 # Verification per session
 
+### Phase A (after each session)
+
 ```bash
-# After stages touching routing
+# Routing / fence touched
 npm test -- src/agents/orchestratorIntent src/config/minimalMode
 
-# After a branch deep dive
-npm test -- src/events src/logging   # example for calendar/logging
+# Branch deep dive (examples)
+npm test -- src/events src/logging
+npm test -- src/lists src/integrations/notion
 
-# Full minimal accuracy gate (end of each major branch)
+# Before MVP gate
 npm run test:accuracy
-
-# Dead code after removals
 npx tsx scripts/dev/import-graph.mts
+```
+
+### Phase B (after each domain)
+
+```bash
+# Domain tests
+npm test -- src/meals src/nutrition          # B1
+npm test -- src/projects                     # B4
+npm test -- src/agents/wealth                # B5
+
+# Re-confirm fence after parked changes
+npm test -- src/config/minimalMode.parkedTopic.test.ts
+
+# After B8
+npm run test:accuracy
 ```
 
 ---
 
 # Next step
 
-Start **Session 1 (Stages 0–2)** unless you prefer to begin at a Phase 1 branch after skimming stages 0–8.
+**Phase A:** Start **Session A1 (Stages 0–2)** — ingress and gates.
 
-Say **"Start session 1"** or **"Start branch B1 (calendar)"** and we will walk file-by-file with the worksheet.
+**Phase B:** Wait for **MVP gate** — then **Session B0 (fence integrity)**.
+
+Say **"Start A1"** or **"Start A6 (calendar)"** for minimal MVP review.  
+Say **"Start B0"** only after MVP gate is recorded as passed.
