@@ -27,6 +27,7 @@ export type CompactMorningBriefPayload = {
   northStar: string | null;
   weekPriorities: string | null;
   hasMorningIntentionToday: boolean;
+  unansweredIntentionDays: number;
   weeklyGoals: string[];
   todayCommitments: CompactCommitment[];
   todayMeals: Array<{ slot: string; title: string }>;
@@ -174,6 +175,7 @@ export function buildCompactMorningBriefPayload(
     northStar: bundle.northStarGoal ?? null,
     weekPriorities: bundle.weekPriorities ?? null,
     hasMorningIntentionToday: bundle.hasMorningIntentionToday ?? false,
+    unansweredIntentionDays: bundle.unansweredIntentionDays ?? 0,
     weeklyGoals,
     todayCommitments: todayCommitments.slice(0, 8),
     todayMeals,

@@ -9,6 +9,7 @@ exports[`buildMorningBriefUserMessage > matches snapshot (fixed now, no wall-clo
   "northStar": "Build with intention",
   "weekPriorities": null,
   "hasMorningIntentionToday": false,
+  "unansweredIntentionDays": 0,
   "weeklyGoals": [],
   "todayCommitments": [],
   "todayMeals": [],

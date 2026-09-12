@@ -57,8 +57,15 @@ describe("minimalMode", () => {
     expect(isParkedGeneralCapability("journal_note")).toBe(false);
     expect(isParkedGeneralCapability("lifeos")).toBe(true);
 
+    // journal stays live: logging is a Phase 1 focus area, so a "note this down" ask that
+    // lands on HEALTH must still be savable.
     const health = filterCapabilityCatalog(HEALTH_CAPABILITY_CATALOG);
-    expect(health.capabilities.map((c) => c.id)).toEqual(["hevy_write", "fitness", "generic_ack"]);
+    expect(health.capabilities.map((c) => c.id)).toEqual([
+      "journal",
+      "hevy_write",
+      "fitness",
+      "generic_ack",
+    ]);
   });
 
   it("parks wealth/happiness/wisdom intents", () => {

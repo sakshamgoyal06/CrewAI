@@ -290,7 +290,23 @@ export function stripMisleadingClaimLines(text: string): string {
         return false;
       }
       return true;
-    });
+    })
+    // A line can carry the claim mid-sentence — "That's awesome! I've logged that for you."
+    // Leaving it in produced replies that said both "I didn't save it" and "I logged it".
+    .map((line) => {
+      if (!FIRST_PERSON_WRITE_RE.test(line)) {
+        return line;
+      }
+      const sentences = line.match(/[^.!?]+[.!?]*/g);
+      if (!sentences) {
+        return "";
+      }
+      return sentences
+        .filter((sentence) => !FIRST_PERSON_WRITE_RE.test(sentence))
+        .join("")
+        .trim();
+    })
+    .filter((line, index, all) => line.trim() !== "" || (index > 0 && all[index - 1]!.trim() !== ""));
   return kept.join("\n").trim();
 }
 

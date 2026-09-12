@@ -45,7 +45,16 @@ const MINIMAL_GENERAL_CAPABILITIES = new Set([
   "pillar_consultation",
 ]);
 
-const MINIMAL_HEALTH_CAPABILITIES = new Set(["fitness", "hevy_write", "generic_ack"]);
+/**
+ * `journal` is here because logging is a Phase 1 focus area: when a "note this down" ask
+ * lands on HEALTH anyway, the entry has to be savable rather than lost in a prompt-only agent.
+ */
+const MINIMAL_HEALTH_CAPABILITIES = new Set([
+  "fitness",
+  "hevy_write",
+  "journal",
+  "generic_ack",
+]);
 
 /** Magnus tools that remain callable in minimal mode. */
 export const MINIMAL_MAGNUS_TOOL_NAMES = new Set([

@@ -55,6 +55,8 @@ export type RoutingContextSignals = {
   saved_media_pick: boolean;
   schedule_accuracy_challenge: boolean;
   compound_action: boolean;
+  /** User is asking Magnus to write something down, whatever the topic. */
+  looks_like_logging_request: boolean;
   /** Orchestrator may coerce to HEALTH before top-level classifier (meal reads, slot follow-ups). */
   prefer_intent_health: boolean;
   /** User-initiated evening journal / check-in (not a pending session reply). */
@@ -77,6 +79,7 @@ export const NEUTRAL_ROUTING_CONTEXT: RoutingContextSignals = {
   saved_media_pick: false,
   schedule_accuracy_challenge: false,
   compound_action: false,
+  looks_like_logging_request: false,
   prefer_intent_health: false,
   looks_like_evening_journal: false,
   parked_feature_topic: null,
@@ -101,6 +104,7 @@ You receive the current user message and recent chat previews. Output **only** J
 - **saved_media_pick**: pick from saved playlist/watchlist for an activity (treadmill, gym) — not open-ended taste coaching.
 - **schedule_accuracy_challenge**: true ONLY when the user **disputes** schedule accuracy ("you're not looking at the calendar", "that wrong", "didn't check calendar"). **FALSE** when they ask to check, clean, delete, or manage calendar events — those are magnus_tool_action + calendar capability.
 - **compound_action**: multiple distinct asks in one message ("add to calendar AND suggest a video").
+- **looks_like_logging_request**: user wants something **written down** — note, log, journal, record, save, "add this to my day", "remember that I…". True regardless of subject, including training and swimming ("note a journal entry that I finally did backfloating"). FALSE when they only want coaching, a read, or advice with nothing to record.
 - **prefer_intent_health**: true when HEALTH should win before the five-way classifier: meal slot follow-up after meal context, meal day breakdown, explicit meal log command, meal slot correction, **or** the user is continuing an active meal_plan_session (see pending_context).
 - **looks_like_evening_journal**: user wants to start an evening check-in / end-of-day journal (not replying inside an existing session unless pending says otherwise).
 - **parked_feature_topic**: when minimal mode would park the topic — one of "meals", "notion", "wealth", "happiness", "wisdom", or null when the message is about live capabilities (calendar, lists, gym, reminders).
@@ -125,7 +129,7 @@ When **pending_context** is present, use it:
 Use **recent_turns** for follow-ups. Interpret meaning; do not keyword-match.
 
 Output shape:
-{"explicit_meal_log":false,"looks_like_meal_log_read":false,"looks_like_youtube_action":false,"looks_like_magnus_tool_action":false,"looks_like_magnus_tool_continuation":false,"looks_like_health_fitness_read":false,"looks_like_wealth_portfolio_read":false,"holistic_day_ask":false,"saved_media_pick":false,"schedule_accuracy_challenge":false,"compound_action":false,"prefer_intent_health":false,"looks_like_evening_journal":false,"parked_feature_topic":null,"consult_pillars":[],"magnus_capabilities":[]}`;
+{"explicit_meal_log":false,"looks_like_meal_log_read":false,"looks_like_youtube_action":false,"looks_like_magnus_tool_action":false,"looks_like_magnus_tool_continuation":false,"looks_like_health_fitness_read":false,"looks_like_wealth_portfolio_read":false,"holistic_day_ask":false,"saved_media_pick":false,"schedule_accuracy_challenge":false,"compound_action":false,"looks_like_logging_request":false,"prefer_intent_health":false,"looks_like_evening_journal":false,"parked_feature_topic":null,"consult_pillars":[],"magnus_capabilities":[]}`;
 
 function textFromMessage(msg: Message): string {
   for (const block of msg.content) {
@@ -215,6 +219,7 @@ function parseRoutingJson(text: string): RoutingContextSignals | null {
       saved_media_pick: asBool(raw.saved_media_pick),
       schedule_accuracy_challenge: asBool(raw.schedule_accuracy_challenge),
       compound_action: asBool(raw.compound_action),
+      looks_like_logging_request: asBool(raw.looks_like_logging_request),
       prefer_intent_health: asBool(raw.prefer_intent_health),
       looks_like_evening_journal: asBool(raw.looks_like_evening_journal),
       parked_feature_topic: parseParkedTopic(raw.parked_feature_topic),
@@ -289,5 +294,6 @@ export function routingContextToIntentHints(
     saved_media_pick: signals.saved_media_pick,
     schedule_accuracy_challenge: signals.schedule_accuracy_challenge,
     compound_action: signals.compound_action,
+    looks_like_logging_request: signals.looks_like_logging_request,
   };
 }

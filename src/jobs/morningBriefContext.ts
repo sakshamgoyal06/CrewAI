@@ -6,7 +6,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { isMinimalMode } from "../config/minimalMode.js";
 import { reconcileFromRecentJournalLogs } from "../events/eventCompletionReconcile.js";
-import { hasMorningOrientationToday } from "../proactive/rhythm/checkinRhythm.js";
+import {
+  countDaysWithoutMorningOrientation,
+  hasMorningOrientationToday,
+} from "../proactive/rhythm/checkinRhythm.js";
 import { localWeekdayIndex } from "../proactive/rhythm/localWeekday.js";
 import { fetchCheckinItem, fetchListBySlug } from "../lists/listStore.js";
 import { lifeosContextEnabled } from "../config/lifeosContext.js";
@@ -61,6 +64,8 @@ export type MorningBriefContextBundle = {
   weekPriorities?: string | null;
   /** True when today's check-in already has morning intention or energy. */
   hasMorningIntentionToday?: boolean;
+  /** Consecutive prior days where the intention question went unanswered. */
+  unansweredIntentionDays?: number;
   /** Shared day context — Google Calendar + reminders for today (Step 6). */
   dayContext?: import("../day/buildDayContext.js").DayContext;
 };
@@ -373,9 +378,10 @@ export async function fetchMorningBriefContext(
   const daysFromMonday = dayIndex === 0 ? 6 : dayIndex - 1;
   const mondayKey = offsetDateKey(localParts.dateKey, -daysFromMonday);
 
-  const [hasMorningIntentionToday, weekPriorities] = await Promise.all([
+  const [hasMorningIntentionToday, weekPriorities, unansweredIntentionDays] = await Promise.all([
     hasMorningOrientationToday(userProfileId, localParts.dateKey),
     fetchWeekPrioritiesFromCheckin(userProfileId, mondayKey),
+    countDaysWithoutMorningOrientation(userProfileId, localParts.dateKey),
   ]);
 
   return {
@@ -397,6 +403,7 @@ export async function fetchMorningBriefContext(
     dataAvailability,
     weekPriorities,
     hasMorningIntentionToday,
+    unansweredIntentionDays,
     dayContext,
   };
 }

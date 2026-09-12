@@ -17,6 +17,7 @@ Include ONLY sections that have data in the JSON context:
 6. **Meals** — bullet list of todayMeals (slot: title). Skip if empty.
 7. **Heads up** — only items in headsUp (yesterday misses, major reminders). Max 2. No guilt.
 8. **Intention** — ONLY when hasMorningIntentionToday is false: end with ONE short question — "What's the one thing that makes today a win?" Tell them you'll confirm before saving. Do not ask if they already logged morning intention today.
+   - When unansweredIntentionDays is 3 or more, do NOT repeat that question word for word. Say plainly that you have been asking for that many days without an answer, and ask a smaller, different question instead — one they can answer in three words, or offer to stop asking. Asking the identical question every morning while nobody answers is the opposite of paying attention.
 
 Do NOT include: 7-day trends, KPI deep dives, pattern analysis, pillar-by-pillar essays, joy tank lectures, or invented tasks. Omit empty sections entirely — shorter is better.`;
 

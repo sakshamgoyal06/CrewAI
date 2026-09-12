@@ -71,4 +71,27 @@ describe("parseRoutingContext", () => {
     });
     expect(hints.holistic_day_ask).toBe(true);
   });
+
+  // Only GENERAL can write a note, so the classifier has to see the logging ask.
+  it("carries the logging-request signal through to the classifier hints", async () => {
+    createMock.mockResolvedValueOnce({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            ...NEUTRAL_ROUTING_CONTEXT,
+            looks_like_logging_request: true,
+            looks_like_health_fitness_read: true,
+          }),
+        },
+      ],
+    });
+
+    const signals = await parseRoutingContext({
+      userMessage: "Also note a journal entry that yesterday was a great day, I finally did backfloating",
+    });
+
+    expect(signals.looks_like_logging_request).toBe(true);
+    expect(routingContextToIntentHints(signals).looks_like_logging_request).toBe(true);
+  });
 });

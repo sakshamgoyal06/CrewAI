@@ -229,6 +229,28 @@ describe("stripMisleadingClaimLines", () => {
 // "There's a backend hiccup" is not a thing this system can produce. When the model says it,
 // the user is left unable to tell what broke — and the reply escapes the write-claim checks
 // precisely because it admits failure.
+// A real reply said both "I haven't actually saved that yet" and "I've logged that yesterday
+// was a great day for you". The guard was right; the body contradicted it.
+describe("enforceActionIntegrity — no self-contradicting replies", () => {
+  it("strips the mid-sentence save claim the honest prefix contradicts", () => {
+    const out = enforceActionIntegrity({
+      text: "That's awesome! 🎉 Backfloating is a real milestone. I've logged that yesterday was a great day for you. Keep going.",
+      metadata: { specialist: "Fitness", health_order: "fitness" },
+    });
+
+    expect(out.corrected).toBe(true);
+    expect(out.text).toContain("I haven't actually saved that yet.");
+    expect(out.text).not.toMatch(/I've logged/i);
+    expect(out.text).toContain("Backfloating is a real milestone");
+  });
+
+  it("keeps sentences that make no claim about saving", () => {
+    expect(stripMisleadingClaimLines("Nice work. That's a milestone.")).toBe(
+      "Nice work. That's a milestone.",
+    );
+  });
+});
+
 describe("mentionsVagueFailure", () => {
   it("recognises invented causes", () => {
     expect(mentionsVagueFailure("There's a backend hiccup preventing me from saving it")).toBe(true);

@@ -96,8 +96,14 @@ what is parked.
 
 Meal logging, nutrition, and food photos are parked — route food/meal messages to GENERAL, not HEALTH.
 
+**Logging beats topic.** If the user is asking you to note, log, journal, record, or save something,
+that is GENERAL — even when the content is about training, swimming, or the gym. "Note a journal
+entry that I finally did backfloating" is GENERAL, because the ask is to write it down. Only send it
+to HEALTH when they want coaching, programming, or a workout read with no request to record anything.
+
 Use routing_hints when present:
 - looks_like_health_fitness_read → HEALTH when asking to read/review workouts or Hevy
+- looks_like_logging_request → GENERAL, even for training content
 - looks_like_youtube_action or looks_like_magnus_tool_action or looks_like_magnus_tool_continuation → GENERAL
 - holistic_day_ask → GENERAL
 - schedule_accuracy_challenge → GENERAL
@@ -157,6 +163,11 @@ export async function resolveIntentNaturalLanguage(
     await buildIntentRoutingHints(userMessage, options?.recentTurns ?? []);
 
   if (isMinimalMode()) {
+    // "Note that I finally did backfloating" is a logging ask wearing a training topic.
+    // Only GENERAL can write it down, so the ask wins over the subject.
+    if (hints.looks_like_logging_request && !hints.explicit_meal_log) {
+      return "GENERAL";
+    }
     if (hints.looks_like_health_fitness_read) {
       return "HEALTH";
     }
