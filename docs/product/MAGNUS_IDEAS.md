@@ -1,14 +1,14 @@
-# Magnus Ideas — Product Backlog (post–v1 hardening)
+# Magnus Ideas — Product Backlog (post–MVP review)
 
-**Purpose:** Ideas for Magnus **after** v1 hardening (PR #91–#100) or as explicit v2+ bets.  
-**Not in this doc:** Bug fixes, gap closure, and integration hardening — those live in [`docs/review/V1_HARDENING_PLAN.md`](../review/V1_HARDENING_PLAN.md).
+**Purpose:** Ideas for Magnus **after** minimal MVP review (Phase A gate) or as explicit v2+ bets.  
+**Not in this doc:** Bug fixes, gap closure, and code tightening — those live in [`docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`](../review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md).
 
 **How to use:**
 - Owner or agent adds ideas here with a new `IDEA-###` id.
-- Do **not** implement from this doc during v1 hardening unless the owner assigns a specific id.
+- Do **not** implement from this doc during Phase A review unless the owner assigns a specific id.
 - When shipping an idea, move status to `shipped` and note the PR in the row.
 
-**Sources:** Product review (2026-08-14–16), real Telegram chat analysis (Supabase `magnus_chat_messages`, Aug 2–16 2026), [`MAGNUS_V1_OPPORTUNITIES.md`](../review/MAGNUS_V1_OPPORTUNITIES.md).
+**Sources:** Product review (2026-08-14–16), real Telegram chat analysis (Supabase `magnus_chat_messages`, Aug 2–16 2026).
 
 | Status | Meaning |
 |--------|---------|

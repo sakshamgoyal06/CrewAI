@@ -30,7 +30,7 @@ v1.0 shipped the activity taxonomy, Accountability Agent, shared ops tools, and 
 
 **v1 north star:** One user (you) can run real projects end-to-end in Telegram with confidence Magnus knows goals, plans with you, executes writes, and nudges without noise.
 
-**Execution plan (PR #91–#100):** [`docs/review/V1_HARDENING_PLAN.md`](../review/V1_HARDENING_PLAN.md) — milestones, pillar audit, connection smoke matrix, agent instructions.
+**Code review plan:** [`docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`](../review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md) — Phase A (minimal MVP) → MVP gate → Phase B (parked in production).
 
 ---
 

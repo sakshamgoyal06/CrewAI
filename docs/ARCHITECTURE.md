@@ -117,7 +117,7 @@ to those tables or stop reading them.
 
 `supabase/migrations/` covers tables added since April 2026; core tables (`user_profile`,
 `magnus_chat_messages`) and LifeOS domain tables predate migrations — see `docs/DATABASE_SCHEMA.md`
-and `docs/review/IMPARTIAL_REVIEW_2026-08-04.md` for the full picture and cleanup plan.
+and `docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md` for the code review plan.
 
 ## 7. Deliberate omissions
 

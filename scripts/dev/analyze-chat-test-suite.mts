@@ -2,7 +2,7 @@
  * Analyze 1000-message chat test suite + production conversation pairs.
  * Usage: npx tsx scripts/dev/analyze-chat-test-suite.mts
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -171,7 +171,9 @@ npx tsx scripts/dev/analyze-chat-test-suite.mts
 \`\`\`
 `;
 
-  const outPath = join(root, "docs/review/CHAT_MESSAGE_TEST_SUITE_ANALYSIS.md");
+  const outDir = join(root, "docs/review/generated");
+  const outPath = join(outDir, "chat-test-suite-analysis.md");
+  mkdirSync(outDir, { recursive: true });
   writeFileSync(outPath, md);
   console.log(`Wrote ${outPath}`);
   console.log("Summary:", JSON.stringify(summary, null, 2));

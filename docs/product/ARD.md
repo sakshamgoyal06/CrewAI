@@ -259,5 +259,5 @@ flowchart LR
 
 - `docs/product/VISION.md`
 - `docs/product/TRD.md`
-- `docs/review/IMPARTIAL_REVIEW_2026-08-04.md`
+- `docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`
 - `docs/ARCHITECTURE.md` (runtime-focused, shorter)

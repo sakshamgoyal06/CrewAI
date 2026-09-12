@@ -251,7 +251,7 @@ Capability matrix: `npm run telegram:check` → `config/magnusCapabilities.ts`.
 | TD-5 | LifeOS table read/write alignment | P1 |
 | TD-6 | `npm audit` triage | P2 |
 
-See `docs/review/IMPARTIAL_REVIEW_2026-08-04.md` for full cleanup plan.
+See `docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md` for the code review plan.
 
 ---
 

@@ -1,7 +1,8 @@
 # Magnus minimal mode — modular architecture map
 
-**Purpose:** Module-by-module review guide for tightening minimal mode (`MAGNUS_MINIMAL_MODE=true`).  
-**Companion:** `MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md` (two-phase review: **Phase A** minimal MVP → **Phase B** parked in production), `docs/product/MINIMAL_MODE_FOCUS.md`, `src/config/minimalMode.ts`, `magnus.md` § Minimal mode  
+**Purpose:** Companion to the **only review plan** — module inventory for `MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`.  
+**Review plan:** [`README.md`](./README.md) → [`MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`](./MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md)  
+**Also:** `docs/product/MINIMAL_MODE_FOCUS.md`, `src/config/minimalMode.ts`, `magnus.md` § Minimal mode  
 **Last updated:** 2026-09-12
 
 ---

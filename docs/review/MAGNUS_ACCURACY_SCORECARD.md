@@ -2,7 +2,7 @@
 
 **Generated:** 2026-09-06 (Steps 5–7)  
 **Command:** `npm run test:accuracy`  
-**Plan:** [`MAGNUS_ACCURACY_PLAN.md`](./MAGNUS_ACCURACY_PLAN.md)
+**Review plan:** [`MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`](./MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md) (MVP gate + Phase B8)
 
 ## Headline metrics (fixture CI — minimal mode)
 

@@ -40,7 +40,7 @@ All user-owned rows include `user_profile_id UUID NOT NULL REFERENCES user_profi
 | **Hosted only** | `user_profile`, `magnus_chat_messages`, LifeOS domain tables (see §5) | **No** — applied directly to hosted project |
 | **Reference SQL** | Hardening script | `scripts/magnus_db_hardening.sql` (not a migration) |
 
-**Action required:** Baseline migration for hosted-only tables (see cleanup plan in `docs/review/IMPARTIAL_REVIEW_2026-08-04.md`).
+**Action required:** Baseline migration for hosted-only tables (track in `docs/review/MINIMAL_MODE_JOURNEY_LOG.md` during review).
 
 ---
 

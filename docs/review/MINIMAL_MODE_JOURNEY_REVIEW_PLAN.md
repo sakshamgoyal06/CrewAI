@@ -1,5 +1,6 @@
-# Minimal mode — user-journey review plan
+# Magnus review plan (minimal mode user journey)
 
+**This is the only review plan.** Index: [`README.md`](./README.md).  
 **Purpose:** Review Magnus in **two phases** — first perfect **minimal MVP** (live paths only), then review **parked code still in production** once MVP is proven.  
 **Companion:** `MINIMAL_MODE_MODULE_MAP.md` (module inventory), `docs/product/MINIMAL_MODE_FOCUS.md` (product scope)  
 **Last updated:** 2026-09-12
@@ -1069,9 +1070,8 @@ src/capabilities/magnusAccuracyScenarios.ts
 |-------|----------------|
 | Full accuracy | `npm run test:accuracy` (all scenarios, not only minimal) |
 | Golden path | `docs/review/GOLDEN_PATH_TEST_RESULTS.md` |
-| Pillar tool audit | `docs/review/PILLAR_TOOL_AUDIT.md` |
-| Context map | `docs/review/PILLAR_CONTEXT_MAP.md` |
-| Connection smoke | `docs/review/CONNECTION_SMOKE_MATRIX.md` |
+| Accuracy scorecard | `docs/review/MAGNUS_ACCURACY_SCORECARD.md` |
+| Manual owner sim | 7-day Telegram usage against Phase A exit criteria (this doc, MVP gate) |
 
 ---
 

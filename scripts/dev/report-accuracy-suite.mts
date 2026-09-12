@@ -31,7 +31,7 @@ See CI log output from \`magnusAccuracySuite.test.ts\` "accuracy gates" test for
 
 Regenerate: \`npm run test:accuracy\`
 
-Plan: \`docs/review/MAGNUS_ACCURACY_PLAN.md\`
+Review plan: \`docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md\`
 `;
 
 writeFileSync(scorecardPath, stub);

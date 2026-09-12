@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * Live LLM accuracy eval (Step 8 in MAGNUS_ACCURACY_PLAN.md).
+ * Live LLM accuracy eval (MVP gate in MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md).
  * Requires ANTHROPIC_API_KEY and Supabase test fixtures — not run in CI by default.
  *
  * Usage:

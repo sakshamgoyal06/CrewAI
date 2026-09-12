@@ -2,7 +2,7 @@
  * Magnus accuracy suite — CI scoreboard for routing, tools, integrity, minimal gates.
  *
  * Inspired by BFCL (tool selection), τ-bench (task routing), ReliabilityBench (metamorphic + fault).
- * Fixture-driven orchestrator runs — proves wiring; live eval is Step 8 in MAGNUS_ACCURACY_PLAN.md.
+ * Fixture-driven orchestrator runs — proves wiring; live eval per MVP gate in MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md.
  *
  * Run: npm run test:accuracy
  */

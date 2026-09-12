@@ -140,5 +140,5 @@ See [`docs/product/ACTIVITY_TAXONOMY.md`](ACTIVITY_TAXONOMY.md) and [`docs/produ
 | `docs/product/TRD.md` | Technical requirements |
 | `docs/product/ARD.md` | Architecture requirements |
 | `magnus.md` | Operational source of truth |
-| `docs/review/IMPARTIAL_REVIEW_2026-08-04.md` | Technical audit + cleanup plan |
+| `docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md` | Code review plan (minimal MVP → parked production) |
 | `MAGNUS_CORE_CONTEXT.md` | Historical philosophy doc (partially stale — prefer this file) |

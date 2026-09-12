@@ -19,19 +19,11 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/TOOLS_AND_AGENTS.md`** | Repo diagram: agents, tools, proactive jobs, integrations |
 | **`docs/USER_QUERY_GUIDE.md`** | What users can ask → routing path and expected output |
 | **`docs/DATABASE_SCHEMA.md`** | Full Postgres + Redis schema, ERD, migration index |
-| **`docs/review/IMPARTIAL_REVIEW_2026-08-04.md`** | Third-party code review, grades, cleanup plan |
-| **`docs/review/REGRADE_2026-08-04.md`** | Post-security cleanup re-grade (B+ 84/100) |
-| **`docs/review/GOLDEN_PATH_TEST_RESULTS.md`** | 100 golden-path integration tests — routing, tools, one voice |
-| **`docs/review/AUDIT_2026-08-09.md`** | Full-repo audit: security, coherence, test results |
-| **`docs/review/V1_HARDENING_PLAN.md`** | **v1 close-out master plan** — PR #91–#100, milestones, agent instructions |
-| **`docs/review/V1_HARDENING_LOG.md`** | Per-PR hardening progress log (update every PR) |
-| **`docs/review/PILLAR_TOOL_AUDIT.md`** | Every tool/capability → pillar + activity layer audit |
-| **`docs/review/PILLAR_CONTEXT_MAP.md`** | Required memory context per intent |
-| **`docs/review/CONNECTION_SMOKE_MATRIX.md`** | Integration smoke tests — PR #100 gate |
-| **`docs/review/ARCHITECTURE_COHERENCE.md`** | Frozen architecture target + streamlining rules |
-| **`docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`** | **Minimal mode review** — Phase A (MVP user journey) then Phase B (parked in production); session schedule + MVP gate |
-| **`docs/review/MINIMAL_MODE_MODULE_MAP.md`** | Minimal mode module inventory, diagrams, file lists per domain |
-| **`docs/review/MAGNUS_V1_OPPORTUNITIES.md`** | Redirect → `docs/product/MAGNUS_IDEAS.md` |
+| **`docs/review/README.md`** | **Review index** — when you say “review”, start here |
+| **`docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`** | **The review plan** — Phase A (MVP user journey) → MVP gate → Phase B (parked in production) |
+| **`docs/review/MINIMAL_MODE_MODULE_MAP.md`** | Module inventory, diagrams, file lists (companion) |
+| **`docs/review/GOLDEN_PATH_TEST_RESULTS.md`** | Golden-path test results (MVP gate verification input) |
+| **`docs/review/MAGNUS_ACCURACY_SCORECARD.md`** | Accuracy metrics from `npm run test:accuracy` (MVP gate verification input) |
 | **`docs/ARCHITECTURE.md`** | What the system is: Magnus, four pillars, connections, ownership |
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
 | **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
@@ -334,7 +326,7 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 | `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero production orphans (test-only helpers excluded) |
 | `npx tsx scripts/dev/validate-user-query-catalog.mts` | Validate 158 user-query routing hints against detectors |
 | `npx tsx scripts/dev/generate-chat-message-test-suite.mts` | Build 1000 NL chat message tests from real chats + catalog |
-| `npx tsx scripts/dev/analyze-chat-test-suite.mts` | Structural + production-pair analysis → `docs/review/CHAT_MESSAGE_TEST_SUITE_ANALYSIS.md` |
+| `npx tsx scripts/dev/analyze-chat-test-suite.mts` | Structural + production-pair analysis (log findings in `docs/review/MINIMAL_MODE_JOURNEY_LOG.md`) |
 | `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
 | `npx tsx scripts/upsert-user-integrations.mts` | Update `user_integrations` for a user without wiping data |
 | `npx tsx scripts/reset-user-notion-lists.mts` | Reset list architecture + re-sync notion_registry for a user |
@@ -383,9 +375,9 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 
 ---
 
-## v1 close-out (PR #91–#100)
+## Code review
 
-**Status:** In progress (PR #90 merged). Execute [`docs/review/V1_HARDENING_PLAN.md`](docs/review/V1_HARDENING_PLAN.md) — technical hardening + four-pillar reintegration. Track in [`docs/review/V1_HARDENING_LOG.md`](docs/review/V1_HARDENING_LOG.md). Agents: read the master plan before any v1 hardening PR. **PR #99** includes reminder frequency expansion (every-N-days, until-date, replace-on-correct) — see segment 10.3 and bug B-001 in the hardening log.
+**Single plan:** [`docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`](docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md) (index: [`docs/review/README.md`](docs/review/README.md)). Phase A = minimal MVP; Phase B = parked production code after MVP gate.
 
 ---
 
@@ -432,4 +424,4 @@ reconciliation: `src/proactive/subscriptions/ensureDefaults.ts`.
 
 ---
 
-**Last updated:** 2026-09-12 (Notion daily sync default; lists CRUD + minimal mode Notion mirror)
+**Last updated:** 2026-09-12 (single review plan; removed superseded hardening/audit docs)
