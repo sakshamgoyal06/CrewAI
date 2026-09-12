@@ -36,6 +36,8 @@ export type CompactMorningBriefPayload = {
   calendarToday: CompactCalendarLine[];
   /** Proactive reminders scheduled for today. */
   todayReminders: CompactReminder[];
+  /** Open todos from the tasks list, highest priority first. */
+  openTodos: Array<{ title: string; priority: string | null }>;
 };
 
 function eventLocalDateKey(
@@ -182,5 +184,10 @@ export function buildCompactMorningBriefPayload(
     headsUp: limitedHeadsUp,
     calendarToday,
     todayReminders,
+    openTodos:
+      bundle.dayContext?.todos.slice(0, 5).map((t) => ({
+        title: t.title,
+        priority: t.priority ?? null,
+      })) ?? [],
   };
 }

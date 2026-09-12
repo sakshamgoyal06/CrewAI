@@ -14,6 +14,7 @@ Include ONLY sections that have data in the JSON context:
 3. **Calendar** — bullet list from calendarToday (use the line text; max 5). Skip if empty.
 4. **Today's plan** — bullet list of todayCommitments (time + title when time exists). Max 5 items. Skip if empty.
 5. **Reminders** — bullet list from todayReminders (time + label). Skip if empty.
+5b. **Open todos** — bullet list from openTodos (title, and priority when set). Max 4. Skip if empty. These are the user's real open items — never invent one.
 6. **Meals** — bullet list of todayMeals (slot: title). Skip if empty.
 7. **Heads up** — only items in headsUp (yesterday misses, major reminders). Max 2. No guilt.
 8. **Intention** — ONLY when hasMorningIntentionToday is false: end with ONE short question — "What's the one thing that makes today a win?" Tell them you'll confirm before saving. Do not ask if they already logged morning intention today.

@@ -74,4 +74,36 @@ describe("buildCompactMorningBriefPayload", () => {
     );
     expect(payload.todayMeals).toEqual([]);
   });
+
+  // Knowing the day means knowing the todos, not only the appointments.
+  it("carries open todos and the unanswered-intention count", () => {
+    const payload = buildCompactMorningBriefPayload(
+      baseBundle({
+        unansweredIntentionDays: 4,
+        dayContext: {
+          localDate: "2026-08-12",
+          label: "Today",
+          timezone: "UTC",
+          tzAbbrev: "UTC",
+          calendarText: "Nothing on Google Calendar.",
+          eventLogText: "No logged commitments for this day.",
+          remindersText: "No reminders set for this day.",
+          reminders: [],
+          todos: [
+            { title: "Pay the electricity bill", priority: "High" },
+            { title: "Renew passport" },
+          ],
+          todosText: "- Pay the electricity bill (High)\n- Renew passport",
+          plannedMealsText: "",
+          loggedMealsText: "",
+        },
+      }),
+    );
+
+    expect(payload.openTodos).toEqual([
+      { title: "Pay the electricity bill", priority: "High" },
+      { title: "Renew passport", priority: null },
+    ]);
+    expect(payload.unansweredIntentionDays).toBe(4);
+  });
 });

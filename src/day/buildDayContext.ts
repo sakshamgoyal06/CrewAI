@@ -9,6 +9,7 @@ import { localDateKey, timezoneAbbrev } from "../nutrition/localDate.js";
 import { offsetDateKey } from "../nutrition/parseMealPlanJson.js";
 import { formatPlanDay, getPlanEntriesForDate } from "../nutrition/store/mealPlanStore.js";
 import { getSessionsForLocalDate } from "../nutrition/store/mealHistoryStore.js";
+import { fetchListBySlug, queryListItems } from "../lists/listStore.js";
 import { formatReminderList, listUpcomingReminders } from "../proactive/reminderStore.js";
 import { readCalendarEvents } from "../agents/tools/calendarTool.js";
 import { listEventsTool } from "../agents/tools/eventLogTool.js";
@@ -16,6 +17,12 @@ import { listEventsTool } from "../agents/tools/eventLogTool.js";
 export type DayContextReminder = {
   at: string;
   label: string;
+};
+
+export type DayContextTodo = {
+  title: string;
+  priority?: string;
+  status?: string;
 };
 
 export type DayContext = {
@@ -27,6 +34,9 @@ export type DayContext = {
   eventLogText: string;
   remindersText: string;
   reminders: DayContextReminder[];
+  /** Open items on the tasks list — the user's todos, highest priority first. */
+  todos: DayContextTodo[];
+  todosText: string;
   plannedMealsText: string;
   loggedMealsText: string;
 };
@@ -67,7 +77,41 @@ export function resolveOverviewDate(
   return { localDate: today, label: "Today", offsetDays: 0 };
 }
 
-/** Load calendar, commitments, reminders, and optional meals for one local day. */
+const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+
+/** Open todos, highest priority first. A day without them is not the whole day. */
+async function loadOpenTodos(
+  userProfileId: string,
+  limit = 8,
+): Promise<DayContextTodo[]> {
+  const list = await fetchListBySlug(userProfileId, "tasks");
+  if (!list.ok || !list.data) {
+    return [];
+  }
+  const items = await queryListItems({
+    userProfileId,
+    listId: list.data.id,
+    openStatuses: list.data.open_statuses,
+    limit: 50,
+  });
+  if (!items.ok) {
+    return [];
+  }
+  return items.data
+    .map((row) => ({
+      title: row.title.trim(),
+      priority: row.priority ?? undefined,
+      status: row.status ?? undefined,
+    }))
+    .filter((row) => row.title !== "")
+    .sort(
+      (a, b) =>
+        (PRIORITY_ORDER[a.priority ?? ""] ?? 3) - (PRIORITY_ORDER[b.priority ?? ""] ?? 3),
+    )
+    .slice(0, limit);
+}
+
+/** Load calendar, commitments, reminders, todos, and optional meals for one local day. */
 export async function buildDayContext(input: BuildDayContextInput): Promise<DayContext> {
   const tz = input.timezone;
   const offsetDays = input.offsetDays ?? 0;
@@ -75,9 +119,18 @@ export async function buildDayContext(input: BuildDayContextInput): Promise<DayC
   const rangeStart = startOfLocalDay(new Date(), tz, offsetDays);
   const rangeEnd = startOfLocalDay(new Date(), tz, offsetDays + 1);
   const tzAbbrev = timezoneAbbrev(tz);
+  // Todos are not dated, so they belong to today and ahead — not to a retrospective day.
+  const includeTodos = offsetDays >= 0;
 
-  const [calendarText, eventLogText, mealEntries, loggedSessions, loggedDayTotals, reminderRows] =
-    await Promise.all([
+  const [
+    calendarText,
+    eventLogText,
+    mealEntries,
+    loggedSessions,
+    loggedDayTotals,
+    reminderRows,
+    todos,
+  ] = await Promise.all([
       readCalendarEvents({
         startIso: rangeStart.toISOString(),
         endIso: rangeEnd.toISOString(),
@@ -101,6 +154,7 @@ export async function buildDayContext(input: BuildDayContextInput): Promise<DayC
         userProfileId: input.userProfileId,
         timezone: tz,
       }),
+      includeTodos ? loadOpenTodos(input.userProfileId) : Promise.resolve([]),
     ]);
 
   const dayReminders = reminderRows.filter(
@@ -115,6 +169,15 @@ export async function buildDayContext(input: BuildDayContextInput): Promise<DayC
     at: r.at!.toISOString(),
     label: r.title.trim() || "Reminder",
   }));
+
+  const todosText =
+    todos.length > 0
+      ? todos
+          .map((t) => `- ${t.title}${t.priority ? ` (${t.priority})` : ""}`)
+          .join("\n")
+      : includeTodos
+        ? "Nothing open on your tasks list."
+        : "";
 
   const plannedMealsText = includeMeals
     ? formatPlanDay(mealEntries, input.label, input.localDate)
@@ -132,6 +195,8 @@ export async function buildDayContext(input: BuildDayContextInput): Promise<DayC
     eventLogText: eventLogText.trim() || "No logged commitments for this day.",
     remindersText,
     reminders,
+    todos,
+    todosText,
     plannedMealsText,
     loggedMealsText,
   };
@@ -154,6 +219,10 @@ export function formatDayContextSections(
     "**Reminders**",
     ctx.remindersText,
   ];
+
+  if (ctx.todosText) {
+    sections.push("", "**Open todos** (tasks list, highest priority first)", ctx.todosText);
+  }
 
   if (includeMeals) {
     sections.push(

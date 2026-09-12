@@ -38,6 +38,11 @@ vi.mock("../../../proactive/reminderStore.js", () => ({
   formatReminderList: () => "No reminders set for this day.",
 }));
 
+vi.mock("../../../lists/listStore.js", () => ({
+  fetchListBySlug: vi.fn().mockResolvedValue({ ok: true, data: null }),
+  queryListItems: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+}));
+
 import { executeDayOverviewCapability } from "./dayOverview.js";
 
 function ctx(raw: string) {
