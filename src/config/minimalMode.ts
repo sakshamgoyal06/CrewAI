@@ -127,6 +127,17 @@ const PARKED_GENERAL_CAPABILITY_LABELS: Record<string, string> = {
   goal_manage: "Goals",
 };
 
+/**
+ * Health capabilities outside Phase 1 are not all meals. Naming the wrong feature back at the
+ * user reads as a bot that did not understand the question, so each parked area says its own name.
+ */
+const PARKED_HEALTH_CAPABILITY_LABELS: Record<string, string> = {
+  energy: "Sleep, energy and recovery coaching",
+  long_term_planning: "Multi-month training programming",
+  alternates: "Food substitutions",
+  nutrition_advice: "Nutrition advice",
+};
+
 const PARKED_INTENT_LABELS: Record<Intent, string> = {
   WEALTH: "Wealth / money coaching",
   HAPPINESS: "Happiness / leisure coaching",
@@ -242,6 +253,13 @@ export function parkedIntentReply(intent: Intent): string {
 
 export function parkedGeneralCapabilityReply(capability: string): string {
   const label = PARKED_GENERAL_CAPABILITY_LABELS[capability] ?? capability.replace(/_/g, " ");
+  return parkedFeatureReply(label);
+}
+
+export function parkedHealthCapabilityReply(capability: string): string {
+  const label =
+    PARKED_HEALTH_CAPABILITY_LABELS[capability] ??
+    (capability.startsWith("meal_") ? "Meals & nutrition" : capability.replace(/_/g, " "));
   return parkedFeatureReply(label);
 }
 

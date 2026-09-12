@@ -82,26 +82,6 @@ export async function runOrchestratorReply(input: {
   displayName?: string;
   mealPhoto?: { fileId: string; caption?: string | null };
 }): Promise<OrchestratorReply> {
-  if (isMinimalMode() && input.mealPhoto?.fileId) {
-    const ctx: AgentContext = {
-      userProfileId: input.userProfileId,
-      telegramUserId: input.telegramUserId,
-      timezone: input.timezone,
-      rawMessage: input.userMessage,
-      intent: "GENERAL",
-    };
-    return finalizeOrchestratorReply(ctx, {
-      replyText: parkedFeatureReply("Photo / vision"),
-      intent: "GENERAL",
-      delegatedAgent: "Magnus",
-      agentMetadata: {
-        parked: "photo_vision",
-        pillar_compose: false,
-        magnus_voice_finalized: true,
-      },
-    });
-  }
-
   const winConditionTurn = await handleWinConditionPendingTurn({
     userProfileId: input.userProfileId,
     message: input.userMessage,
@@ -275,13 +255,15 @@ export async function runOrchestratorReply(input: {
     preview: t.content.slice(0, 280),
   }));
 
-  const photoContext =
-    !isMinimalMode() && input.mealPhoto?.fileId
-      ? await buildPhotoContext({
-          photo: input.mealPhoto,
-          recentTurns: photoTurnPreviews,
-        })
-      : undefined;
+  // Vision runs in minimal mode too: a photo of a book stack or a whiteboard schedule feeds
+  // lists and calendar, which are Phase 1. Only a plate of food is parked, and only below,
+  // once the analysis has told us that is what it is.
+  const photoContext = input.mealPhoto?.fileId
+    ? await buildPhotoContext({
+        photo: input.mealPhoto,
+        recentTurns: photoTurnPreviews,
+      })
+    : undefined;
 
   const effectiveUserMessage = photoContext
     ? augmentMessageWithPhotoContext(input.userMessage, photoContext)
@@ -327,7 +309,7 @@ export async function runOrchestratorReply(input: {
       assembled.parserSignals.explicit_meal_log;
     const replyText =
       parkedTopic ??
-      (input.mealPhoto?.fileId ? parkedFeatureReply("Photo / vision") : null) ??
+      (isMealPhotoPurpose(photoContext) ? parkedFeatureReply("Meal photos") : null) ??
       (parkedMeals ? parkedFeatureReply("Meals & nutrition") : null);
     if (replyText) {
       const ctx: AgentContext = {

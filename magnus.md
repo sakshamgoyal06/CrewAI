@@ -305,7 +305,8 @@ See `.env.example`, which is grouped by purpose. Highlights beyond the six requi
 - **`MAGNUS_PILLAR_PLAN_COMPOSE`** — Haiku composer for pillar step replies (default on; single- and multi-step).
 - **`MAGNUS_PILLAR_COMPOSE_MODEL`** — Composer model (default `claude-haiku-4-5`).
 - **`MAGNUS_MAX_TOOL_ROUNDS`** — Magnus agent tool loop cap (default 12).
-- **`MAGNUS_TURN_TIMEOUT_MS`** — Orchestrator turn budget before user-facing timeout reply (default 240000).
+- **`MAGNUS_TURN_TIMEOUT_MS`** — Orchestrator turn budget before user-facing timeout reply (default 90000).
+- **`MAGNUS_DEFAULT_EVENT_REMINDER_LEAD_MINUTES`** — Auto `remind_at` on new **planned** timed commitments (default 30; `0` disables).
 
 ---
 
@@ -403,17 +404,24 @@ logging ritual — not a single cross-pillar adherence score yet.
 **Supporting (live):** YouTube / YT Music, morning brief, conversation.  
 **Phase 2 (after Phase 1 is solid):** meal logging & nutrition — explicitly parked until then.
 
-| Live | Parked (set `MAGNUS_MINIMAL_MODE=false` to restore) |
-|------|-----|
-| Phase 1 focus areas above | **Meals**, nutrition, meal photos |
+| Live | Parked |
+|------|--------|
+| Phase 1 focus areas above | **Meals**, nutrition, **meal photos** |
 | Sub-agent **parse → execute → compose**, one Magnus voice | Wealth / Happiness / Wisdom pillars |
-| Proactive: evening journal, drift guard, activity completion, gym reconcile | Meal proactive kinds, week/month rhythm, nutrition nightly |
-| | Notion, LifeOS, projects, vision/photos, health onboarding gate |
+| Proactive: full day/week/month rhythm (evening journal, week planning, weekly wrap, monthly goal review, drift guard, midday encouragement, stale-list + chat-inactivity nudges), activity completion, gym reconcile, custom reminders | Meal proactive kinds, nutrition nightly, project kinds |
+| **Non-meal photos** (lists, schedule, documents via vision) | Notion, LifeOS joy tank, projects, Zerodha |
+| `manage_proactive_messages` in chat — turn rhythms on/off | |
+| Lists: `add_list_items` batch add, human list-name resolution (`todo list` → tasks) | |
+| Reminders: every-N-days + until-date, replace-on-correct, cancel by label | |
+| Hevy routine/workout writes from plain language | |
+| Day overview + morning brief: open todos, calendar conflict detection | |
+| Planned commitments: default **30 min** reminder (`MAGNUS_DEFAULT_EVENT_REMINDER_LEAD_MINUTES`, `0` disables) | |
 
 Implementation: `src/config/minimalMode.ts` — `MINIMAL_FOCUS_AREAS`, capability catalogs, Magnus
-tool allowlist, proactive jobs/kinds filter, intent classification. Parked features return a clear
-user-facing message (meals deferred to Phase 2).
+tool allowlist, proactive jobs/kinds filter, intent classification. Parked features return a plain
+message naming what is live (no host env-var instructions). Boot-time rhythm subscription
+reconciliation: `src/proactive/subscriptions/ensureDefaults.ts`.
 
 ---
 
-**Last updated:** 2026-09-10 (one-shot reminder 24h late window + auto-miss; minimal mode Phase 1 focus)
+**Last updated:** 2026-09-12 (minimal mode Phase 1 lifecycle: lists, reminders, workouts, logging, day todos, on-track closure)

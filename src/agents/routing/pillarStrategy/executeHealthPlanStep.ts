@@ -4,7 +4,7 @@
 import {
   isMinimalHealthCapability,
   isMinimalMode,
-  parkedFeatureReply,
+  parkedHealthCapabilityReply,
 } from "../../../config/minimalMode.js";
 import type { AgentContext, AgentResult } from "../../types.js";
 import { softDeleteMostRecentSession, getSessionsForLocalDate, updateMealSessionSlot } from "../../../nutrition/store/mealHistoryStore.js";
@@ -51,7 +51,7 @@ export async function executeHealthPlanStep(
 
   if (isMinimalMode() && !isMinimalHealthCapability(cap)) {
     return {
-      text: parkedFeatureReply("Meals & nutrition"),
+      text: parkedHealthCapabilityReply(cap),
       metadata: {
         specialist: "HealthComposite",
         parked_capability: cap,

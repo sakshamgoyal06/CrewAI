@@ -11,6 +11,7 @@ import {
   magnusDefaultToolAllowlist,
   MINIMAL_FOCUS_AREAS,
   MINIMAL_MAGNUS_TOOL_NAMES,
+  parkedHealthCapabilityReply,
 } from "./minimalMode.js";
 import { GENERAL_CAPABILITY_CATALOG } from "../agents/routing/pillarStrategy/catalogs/generalCatalog.js";
 import { HEALTH_CAPABILITY_CATALOG } from "../agents/routing/pillarStrategy/catalogs/healthCatalog.js";
@@ -139,5 +140,11 @@ describe("minimalMode", () => {
   it("filters consultable pillars to HEALTH in minimal mode", () => {
     process.env.MAGNUS_MINIMAL_MODE = "true";
     expect(filterConsultablePillars(["HEALTH", "WEALTH"])).toEqual(["HEALTH"]);
+  });
+
+  it("names parked health capabilities by what they are, not always meals", () => {
+    expect(parkedHealthCapabilityReply("energy")).toContain("Sleep");
+    expect(parkedHealthCapabilityReply("meal_log")).toContain("Meals");
+    expect(parkedHealthCapabilityReply("long_term_planning")).toContain("training");
   });
 });
