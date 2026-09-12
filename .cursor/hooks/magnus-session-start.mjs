@@ -36,7 +36,17 @@ const truncated =
 // Consume stdin JSON when Cursor pipes input (avoid blocking on manual `node` runs)
 consumeStdinIfPiped();
 
+const reviewBanner = [
+  "## Magnus review (read first when owner says review)",
+  "",
+  "**Only review plan:** `docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md` (index: `docs/review/README.md`).",
+  "**Deleted — do not cite:** `V1_HARDENING_PLAN.md`, pillar audits, old audit docs.",
+  "Start Phase A Session A1 unless owner specifies another session. Log: `docs/review/MINIMAL_MODE_JOURNEY_LOG.md`.",
+  "",
+].join("\n");
+
 const additional_context = [
+  reviewBanner,
   "## Magnus project tracker (injected at session start)",
   "",
   truncated,

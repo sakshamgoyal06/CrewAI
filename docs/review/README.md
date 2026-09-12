@@ -17,3 +17,5 @@ When you or an agent refer to **“the review”**, **“review plan”**, or **
 - `MINIMAL_MODE_PARKED_LOG.md` — Phase B findings
 
 **Product scope:** [`docs/product/MINIMAL_MODE_FOCUS.md`](../product/MINIMAL_MODE_FOCUS.md)
+
+**Starting a new agent?** Copy the prompt from [`AGENT_START.md`](./AGENT_START.md).

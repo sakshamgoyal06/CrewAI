@@ -1,0 +1,36 @@
+---
+description: Magnus architecture review — ONLY docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md (not V1_HARDENING)
+alwaysApply: true
+---
+
+# Magnus architecture review (agent reference)
+
+## If the owner says "review", "architecture review", or "start A1"
+
+**Read and follow ONLY:**
+
+1. `docs/review/README.md`
+2. `docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`
+
+**Do not read or cite** `V1_HARDENING_PLAN.md`, `V1_HARDENING_LOG.md`, pillar audits, or old audit docs — **they were deleted from the repo**.
+
+Start at **Session A1 → Stage 0 (process boot)** unless the owner names another session.
+
+Log findings in `docs/review/MINIMAL_MODE_JOURNEY_LOG.md`.
+
+## Phases
+
+| Phase | When | Doc section |
+|-------|------|-------------|
+| **A** | Now | Minimal MVP — sessions A1–A15 → MVP gate |
+| **B** | After MVP gate | Parked production code — sessions B0–B8 |
+
+Companion: `docs/review/MINIMAL_MODE_MODULE_MAP.md`
+
+## Ideas (not review)
+
+`docs/product/MAGNUS_IDEAS.md` — new capability only; do not implement during Phase A unless assigned.
+
+## Operational tracker
+
+`magnus.md` — behaviour, env, database.

@@ -1,37 +1,14 @@
 ---
-description: Minimal mode review plan and ideas backlog — read before review or feature work
+description: DEPRECATED alias — use magnus-review.mdc and docs/review/README.md
 alwaysApply: true
 ---
 
-# Magnus review & ideas (agent reference)
+# DEPRECATED — do not use V1 hardening docs
 
-## Review (code tightening)
+`V1_HARDENING_PLAN.md` and related files **no longer exist** on `main`.
 
-**Single source of truth:** `docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`  
+**The only review plan:** `docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`  
 **Index:** `docs/review/README.md`  
-**Companion:** `docs/review/MINIMAL_MODE_MODULE_MAP.md`
+**Cursor rule:** `.cursor/rules/magnus-review.mdc`
 
-When the owner says **review**, **hardening**, or **tighten**, follow the journey plan:
-
-1. **Phase A** — minimal MVP (user journey, sessions A1–A15) until **MVP gate** passes
-2. **Phase B** — parked code still in production (sessions B0–B8), only after MVP gate
-
-Log progress in `docs/review/MINIMAL_MODE_JOURNEY_LOG.md` (Phase A) or `MINIMAL_MODE_PARKED_LOG.md` (Phase B).
-
-Do **not** use removed plans (`V1_HARDENING_PLAN`, pillar audits, old audits). They are superseded.
-
-## Product ideas (post–MVP only)
-
-- **Ideas backlog:** `docs/product/MAGNUS_IDEAS.md` — `IDEA-###` ids; not in scope during Phase A review unless owner assigns.
-- **Do not** implement ideas from that doc during minimal MVP review unless explicitly assigned.
-
-## Operational tracker
-
-- `magnus.md` at repo root — behaviour, env, database; update when shipping behaviour changes.
-
-## Review vs ideas
-
-| Review (fix & optimize) | Ideas (new capability) |
-|-------------------------|-------------------------|
-| `MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md` | `MAGNUS_IDEAS.md` |
-| Phase A then Phase B | After MVP gate + owner assigns |
+If you were about to open a hardening plan file, stop — read the journey review plan instead.
