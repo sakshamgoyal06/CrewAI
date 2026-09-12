@@ -29,6 +29,8 @@ ship anything that changes behaviour, dependencies, environment, or the database
 | **`docs/review/PILLAR_CONTEXT_MAP.md`** | Required memory context per intent |
 | **`docs/review/CONNECTION_SMOKE_MATRIX.md`** | Integration smoke tests — PR #100 gate |
 | **`docs/review/ARCHITECTURE_COHERENCE.md`** | Frozen architecture target + streamlining rules |
+| **`docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`** | **Minimal mode review** — Phase A (MVP user journey) then Phase B (parked in production); session schedule + MVP gate |
+| **`docs/review/MINIMAL_MODE_MODULE_MAP.md`** | Minimal mode module inventory, diagrams, file lists per domain |
 | **`docs/review/MAGNUS_V1_OPPORTUNITIES.md`** | Redirect → `docs/product/MAGNUS_IDEAS.md` |
 | **`docs/ARCHITECTURE.md`** | What the system is: Magnus, four pillars, connections, ownership |
 | **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
