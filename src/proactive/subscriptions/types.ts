@@ -113,12 +113,21 @@ export const CATALOG_KINDS = [
   "weekly_nutrition_review",
 ] as const;
 
-/** Rhythm kinds enabled by default when provisioning the owner user. */
+/**
+ * Rhythm kinds every allowlisted user gets unless they turn them off.
+ *
+ * `ensureDefaultRhythmSubscriptions` reconciles these on every dispatcher tick (once per local
+ * day per user), so a profile provisioned before a kind existed still receives it. A row the user
+ * disabled is never re-enabled — only missing rows are inserted.
+ */
 export const RHYTHM_DEFAULT_ENABLED_KINDS: CatalogProactiveKind[] = [
   "evening_journal",
   "week_planning",
   "weekly_wrap",
   "monthly_goal_review",
+  "drift_guard",
+  "chat_inactivity",
+  "stale_list_nudge",
 ];
 
 export type CatalogProactiveKind = (typeof CATALOG_KINDS)[number];

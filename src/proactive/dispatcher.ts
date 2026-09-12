@@ -6,6 +6,7 @@ import type { ProactiveKindContext } from "./kinds/types.js";
 import { incrementAdaptiveCap, runProactiveGuards } from "./guards.js";
 import { sendProactiveTelegram } from "./outbound.js";
 import { buildProactiveSignals } from "./signals.js";
+import { ensureDefaultRhythmSubscriptionsOncePerDay } from "./subscriptions/ensureDefaults.js";
 import {
   expireStaleOneShotReminders,
   listDueCustomReminders,
@@ -151,6 +152,11 @@ export async function runProactiveDispatcher(now: Date): Promise<void> {
         timezone: target.timezone,
         now,
       });
+
+      await ensureDefaultRhythmSubscriptionsOncePerDay(
+        target.userProfileId,
+        signals.local.dateKey,
+      );
 
       const subs = await listEnabledSubscriptions(target.userProfileId);
       const customDue = dueCustomByUser.get(target.userProfileId) ?? [];

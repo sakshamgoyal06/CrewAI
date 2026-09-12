@@ -39,6 +39,8 @@ const MINIMAL_GENERAL_CAPABILITIES = new Set([
   "youtube",
   "lists",
   "journal_note",
+  "daily_checkin",
+  "proactive",
   "conversation",
   "pillar_consultation",
 ]);
@@ -75,6 +77,7 @@ export const MINIMAL_MAGNUS_TOOL_NAMES = new Set([
   "log_note",
   "get_daily_checkin",
   "log_daily_checkin",
+  "manage_proactive_messages",
 ]);
 
 const MINIMAL_PROACTIVE_JOBS = new Set([
@@ -85,19 +88,28 @@ const MINIMAL_PROACTIVE_JOBS = new Set([
   "proactive_subscriptions",
 ]);
 
-/** Catalog proactive kinds allowed in minimal mode (meals and rhythm planning excluded). */
+/**
+ * Catalog proactive kinds allowed in minimal mode — everything except meal and project kinds.
+ *
+ * Phase 1 is about staying on track, which needs the full rhythm (day, week, month) plus the
+ * nudges that notice drift and silence. Only nutrition and project kinds stay parked.
+ */
 const MINIMAL_PROACTIVE_KINDS = new Set([
   "evening_journal",
   "evening_log_followup",
   "drift_guard",
   "custom_reminder",
+  "week_planning",
+  "weekly_wrap",
+  "monthly_goal_review",
+  "midday_encouragement",
+  "stale_list_nudge",
+  "chat_inactivity",
 ]);
 
 const PARKED_GENERAL_CAPABILITY_LABELS: Record<string, string> = {
-  lifeos: "LifeOS logging",
+  lifeos: "Joy tank and pillar status",
   notion: "Notion",
-  proactive: "Proactive rhythm nudges",
-  journal_note: "Journal notes",
   zerodha_connect: "Zerodha",
   project_setup: "Project planning",
   project_manage: "Project management",
@@ -207,10 +219,10 @@ export function magnusDefaultToolAllowlist(): string[] | undefined {
 
 export function parkedFeatureReply(feature: string): string {
   return (
-    `**${feature}** is temporarily parked while Magnus runs in minimal mode. ` +
-    "Right now I'm focused on **workouts**, **calendar**, **lists**, **reminders**, and **logging** " +
-    "(plus YouTube and morning brief). **Meal logging** comes next after these are solid. " +
-    "Set `MAGNUS_MINIMAL_MODE=false` on the host to restore full Magnus."
+    `I'm not handling **${feature}** yet. ` +
+    "What I do properly right now: your **calendar**, **lists and todos**, **reminders**, " +
+    "**workouts**, and **logging your day** — plus YouTube and the morning brief. " +
+    "**Meals and nutrition** are next."
   );
 }
 

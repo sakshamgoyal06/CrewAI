@@ -11,9 +11,9 @@ const CAPABILITY_ALIASES: Record<MagnusRoutingCapability, string[]> = {
   youtube: ["youtube"],
   lists: ["lists"],
   event_log: ["event_log"],
-  journal: ["journal"],
+  journal: ["journal_note", "daily_checkin"],
   proactive: ["proactive"],
-  lifeos: ["lifeos"],
+  lifeos: ["lifeos", "daily_checkin"],
   notion: ["notion"],
   connect: ["calendar", "youtube", "notion"],
 };

@@ -44,12 +44,18 @@ describe("minimalMode", () => {
       "event_log",
       "youtube",
       "lists",
+      "daily_checkin",
       "reminders",
+      "proactive",
       "journal_note",
       "conversation",
     ]);
     expect(isParkedGeneralCapability("youtube")).toBe(false);
     expect(isParkedGeneralCapability("notion")).toBe(true);
+    expect(isParkedGeneralCapability("daily_checkin")).toBe(false);
+    expect(isParkedGeneralCapability("proactive")).toBe(false);
+    expect(isParkedGeneralCapability("journal_note")).toBe(false);
+    expect(isParkedGeneralCapability("lifeos")).toBe(true);
 
     const health = filterCapabilityCatalog(HEALTH_CAPABILITY_CATALOG);
     expect(health.capabilities.map((c) => c.id)).toEqual(["hevy_write", "fitness", "generic_ack"]);
@@ -81,14 +87,32 @@ describe("minimalMode", () => {
     expect(isMinimalProactiveJobEnabled("nutrition_nightly")).toBe(false);
   });
 
-  it("allows logging and workout proactive kinds only", () => {
+  it("allows the full rhythm and parks only meal and project kinds", () => {
     process.env.MAGNUS_MINIMAL_MODE = "true";
-    expect(isMinimalProactiveKindEnabled("evening_journal")).toBe(true);
-    expect(isMinimalProactiveKindEnabled("evening_log_followup")).toBe(true);
-    expect(isMinimalProactiveKindEnabled("drift_guard")).toBe(true);
-    expect(isMinimalProactiveKindEnabled("custom_reminder")).toBe(true);
-    expect(isMinimalProactiveKindEnabled("meal_log_reminder")).toBe(false);
-    expect(isMinimalProactiveKindEnabled("week_planning")).toBe(false);
+    for (const kind of [
+      "evening_journal",
+      "evening_log_followup",
+      "drift_guard",
+      "custom_reminder",
+      "week_planning",
+      "weekly_wrap",
+      "monthly_goal_review",
+      "midday_encouragement",
+      "stale_list_nudge",
+      "chat_inactivity",
+    ]) {
+      expect(isMinimalProactiveKindEnabled(kind), kind).toBe(true);
+    }
+    for (const kind of [
+      "meal_log_reminder",
+      "meal_adherence_nudge",
+      "meal_eod_reconciliation",
+      "meal_gap_nudge",
+      "weekly_nutrition_review",
+      "project_conflict_review",
+    ]) {
+      expect(isMinimalProactiveKindEnabled(kind), kind).toBe(false);
+    }
   });
 
   it("exposes a magnus tool allowlist with lists and youtube", () => {
@@ -100,6 +124,7 @@ describe("minimalMode", () => {
     expect(allowlist).toContain("list_items");
     expect(allowlist).toContain("log_note");
     expect(allowlist).toContain("log_daily_checkin");
+    expect(allowlist).toContain("manage_proactive_messages");
     expect(allowlist).not.toContain("connect_notion");
     expect(MINIMAL_MAGNUS_TOOL_NAMES.has("read_calendar")).toBe(true);
   });

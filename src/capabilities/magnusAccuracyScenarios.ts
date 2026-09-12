@@ -141,7 +141,7 @@ export const MINIMAL_ACCURACY_ORCHESTRATOR_CASES: MagnusAccuracyOrchestratorCase
     category: "parked_meals",
     idealIntent: "GENERAL",
     idealCapability: "conversation",
-    replyContains: "temporarily parked",
+    replyContains: "not handling",
     replyExcludes: "logged",
   }),
   orchestratorCase({
@@ -151,7 +151,7 @@ export const MINIMAL_ACCURACY_ORCHESTRATOR_CASES: MagnusAccuracyOrchestratorCase
     category: "parked_wealth",
     idealIntent: "GENERAL",
     idealCapability: "conversation",
-    replyContains: "temporarily parked",
+    replyContains: "not handling",
   }),
   orchestratorCase({
     id: "min-park-notion-1",
@@ -160,7 +160,7 @@ export const MINIMAL_ACCURACY_ORCHESTRATOR_CASES: MagnusAccuracyOrchestratorCase
     category: "parked_notion",
     idealIntent: "GENERAL",
     idealCapability: "conversation",
-    replyContains: "temporarily parked",
+    replyContains: "not handling",
   }),
   orchestratorCase({
     id: "min-park-happiness-1",
@@ -169,7 +169,7 @@ export const MINIMAL_ACCURACY_ORCHESTRATOR_CASES: MagnusAccuracyOrchestratorCase
     category: "parked_happiness",
     idealIntent: "GENERAL",
     idealCapability: "conversation",
-    replyContains: "temporarily parked",
+    replyContains: "not handling",
   }),
 ];
 
