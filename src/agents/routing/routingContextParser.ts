@@ -19,6 +19,7 @@ const GENERAL_CAPABILITIES = [
   "youtube",
   "lists",
   "event_log",
+  "reminders",
   "journal",
   "proactive",
   "lifeos",
@@ -122,7 +123,7 @@ When **pending_context** is present, use it:
 
 - **magnus_capabilities**: subset of ${JSON.stringify(GENERAL_CAPABILITIES)} implied by this message. Examples:
   - calendar bulk read/delete/create → ["calendar"]
-  - remind me at 9am → ["proactive"]
+  - remind me at 9am → ["reminders"] (task reminder; evening journal / rhythm → ["proactive"])
   - add to watchlist → ["lists"]
   - connect notion → ["notion","connect"]
 

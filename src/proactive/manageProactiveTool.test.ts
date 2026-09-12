@@ -50,6 +50,19 @@ describe("manageProactiveMessages", () => {
     expect(out).toContain("on");
   });
 
+  it("refuses meal proactive kinds in minimal mode", async () => {
+    process.env.MAGNUS_MINIMAL_MODE = "true";
+    const out = await manageProactiveMessages({
+      userProfileId: "u1",
+      timezone: "UTC",
+      action: "enable",
+      kind: "meal_log_reminder",
+      local_hour: 20,
+    });
+    expect(out).toContain("not handling");
+    expect(upsertCatalogSubscription).not.toHaveBeenCalled();
+  });
+
   it("enables evening journal catalog kind", async () => {
     vi.mocked(upsertCatalogSubscription).mockResolvedValue({
       ok: true,

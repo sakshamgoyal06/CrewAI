@@ -3,7 +3,9 @@
  */
 import { zonedTimeToInstant } from "../events/eventTime.js";
 import { parseReminderTime } from "./parseReminderTime.js";
+import { isMinimalProactiveKindEnabled, parkedFeatureReply } from "../config/minimalMode.js";
 import {
+  CATALOG_KINDS,
   CATALOG_KIND_LABELS,
   isCatalogKind,
   type CatalogProactiveKind,
@@ -37,9 +39,10 @@ export async function manageProactiveMessages(input: {
   if (action === "list") {
     const subs = await listAllSubscriptions(input.userProfileId);
     if (subs.length === 0) {
+      const catalogKinds = CATALOG_KINDS.filter((k) => isMinimalProactiveKindEnabled(k));
       return [
         "No proactive messages configured.",
-        "Catalog kinds (opt in with enable): evening_journal, week_planning, weekly_wrap, monthly_goal_review, drift_guard, midday_encouragement, stale_list_nudge, chat_inactivity, meal_log_reminder, meal_adherence_nudge, meal_eod_reconciliation, meal_gap_nudge, weekly_nutrition_review.",
+        `Catalog kinds (opt in with enable): ${catalogKinds.join(", ")}.`,
         "Say enable evening journal at 9pm, or create_reminder with message + at.",
       ].join("\n");
     }
@@ -64,6 +67,9 @@ export async function manageProactiveMessages(input: {
     }
 
     if (isCatalogKind(kind)) {
+      if (enabled && !isMinimalProactiveKindEnabled(kind)) {
+        return parkedFeatureReply("Meals & nutrition");
+      }
       const schedulePatch: RecurringLocalSchedule | undefined =
         enabled && input.local_hour != null
           ? {

@@ -31,7 +31,7 @@ export const MINIMAL_FOCUS_AREAS = [
 
 export type MinimalFocusArea = (typeof MINIMAL_FOCUS_AREAS)[number];
 
-const MINIMAL_GENERAL_CAPABILITIES = new Set([
+export const MINIMAL_GENERAL_CAPABILITIES = new Set([
   "calendar",
   "event_log",
   "reminders",
@@ -49,7 +49,7 @@ const MINIMAL_GENERAL_CAPABILITIES = new Set([
  * `journal` is here because logging is a Phase 1 focus area: when a "note this down" ask
  * lands on HEALTH anyway, the entry has to be savable rather than lost in a prompt-only agent.
  */
-const MINIMAL_HEALTH_CAPABILITIES = new Set([
+export const MINIMAL_HEALTH_CAPABILITIES = new Set([
   "fitness",
   "hevy_write",
   "journal",

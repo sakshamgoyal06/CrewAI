@@ -11,9 +11,9 @@ export const GENERAL_CAPABILITY_CATALOG: CapabilityCatalog = {
     },
     {
       id: "day_overview",
-      summary: "Holistic day snapshot: Google Calendar + event log commitments + planned meals",
+      summary: "Holistic day snapshot: Google Calendar + event log commitments + open todos",
       disambiguation:
-        'User wants the **whole day** or schedule — "what does my day/tomorrow look like", "entire day", "what\'s on tomorrow", calendar AND meals AND commitments together. Prefer over calendar alone when they ask about the full day, not food-only.',
+        'User wants the **whole day** or schedule — "what does my day/tomorrow look like", "entire day", "what\'s on tomorrow", calendar AND commitments AND todos together. Prefer over calendar alone when they ask about the full day.',
     },
     {
       id: "calendar",

@@ -134,7 +134,10 @@ vi.mock("../agents/health/mealPlanReadAgent.js", () => ({
 }));
 
 vi.mock("../agents/health/healthJournalAgent.js", () => ({
-  runHealthJournalAgent: vi.fn(),
+  runHealthJournalAgent: vi.fn().mockResolvedValue({
+    text: "Health journal reply.",
+    metadata: { specialist: "HealthJournal" },
+  }),
 }));
 
 vi.mock("../pillars/health/workouts/agents/hevyWriteAgent.js", () => ({
