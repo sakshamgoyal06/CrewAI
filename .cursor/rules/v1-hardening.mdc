@@ -1,14 +1,11 @@
 ---
-description: DEPRECATED alias — use magnus-review.mdc and docs/review/README.md
+description: DEPRECATED — v1 retired; use magnus-review.mdc and v2 build plan
 alwaysApply: true
 ---
 
-# DEPRECATED — do not use V1 hardening docs
+# DEPRECATED — v1 hardening and journey review
 
-`V1_HARDENING_PLAN.md` and related files **no longer exist** on `main`.
+Magnus **v1** is archived (`archive/legacy-v1/`). Journey review docs live there under `docs/review/`.
 
-**The only review plan:** `docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`  
-**Index:** `docs/review/README.md`  
+**Active development:** [`docs/product/MAGNUS_V2_21_DAY_BUILD_PLAN.md`](../../docs/product/MAGNUS_V2_21_DAY_BUILD_PLAN.md)  
 **Cursor rule:** `.cursor/rules/magnus-review.mdc`
-
-If you were about to open a hardening plan file, stop — read the journey review plan instead.

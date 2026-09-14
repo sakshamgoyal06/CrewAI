@@ -1,0 +1,427 @@
+# Magnus — project tracker
+
+**Release:** Magnus **v1.0** — see [`docs/product/MAGNUS_VERSIONS.md`](docs/product/MAGNUS_VERSIONS.md)  
+**This file is the source of truth** for what the code does and how to run it. Update it when you
+ship anything that changes behaviour, dependencies, environment, or the database.
+
+| Doc | Purpose |
+|-----|---------|
+| **`docs/product/MAGNUS_VERSIONS.md`** | v0 vs v1+ history, roadmap (v1→beta), bump policy |
+| **`docs/product/VISION.md`** | Long-term product vision and philosophy (prefer over stale sections in `MAGNUS_CORE_CONTEXT.md`) |
+| **`docs/product/BRD.md`** | Business requirements — stakeholders, objectives, scope |
+| **`docs/product/PRD.md`** | Product requirements — user stories, functional reqs |
+| **`docs/product/TRD.md`** | Technical requirements — stack, interfaces, security, deploy |
+| **`docs/product/ACTIVITY_TAXONOMY.md`** | Operations · Goals · Projects activity layer |
+| **`docs/product/MINIMAL_MODE_FOCUS.md`** | Minimal mode Phase 1 focus (workouts, calendar, lists, reminders, logging) and meal sequencing |
+| **`docs/product/PROJECT_DEFINITION.md`** | Project anatomy, lifecycle, UX |
+| **`docs/product/FRONTLOAD_CONTEXT.md`** | Routing context frontload — per-turn assembly before classify (PR #92) |
+| **`docs/diagrams/ARCHITECTURE_DIAGRAMS.md`** | Mermaid diagrams: context, sequence, routing, deployment |
+| **`docs/TOOLS_AND_AGENTS.md`** | Repo diagram: agents, tools, proactive jobs, integrations |
+| **`docs/USER_QUERY_GUIDE.md`** | What users can ask → routing path and expected output |
+| **`docs/DATABASE_SCHEMA.md`** | Full Postgres + Redis schema, ERD, migration index |
+| **`docs/review/README.md`** | **Review index** — when you say “review”, start here |
+| **`docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`** | **The review plan** — Phase A (MVP user journey) → MVP gate → Phase B (parked in production) |
+| **`docs/review/MINIMAL_MODE_MODULE_MAP.md`** | Module inventory, diagrams, file lists (companion) |
+| **`docs/review/GOLDEN_PATH_TEST_RESULTS.md`** | Golden-path test results (MVP gate verification input) |
+| **`docs/review/MAGNUS_ACCURACY_SCORECARD.md`** | Accuracy metrics from `npm run test:accuracy` (MVP gate verification input) |
+| **`docs/ARCHITECTURE.md`** | What the system is: Magnus, four pillars, connections, ownership |
+| **`docs/TELEGRAM_SETUP.md`** | Setting up the bot and keeping it always on |
+| **`docs/GOOGLE_CALENDAR.md`** | Calendar setup, including headless auth for the deploy |
+| **`docs/YOUTUBE.md`** | YouTube / YT Music setup (search, playlists, bookmarks, cue) |
+| **`docs/NOTION_SETUP.md`** | Notion OAuth redirect URI + in-chat connect flow |
+| **`docs/NOTION_LIFEOS_STRUCTURE.md`** | Notion ↔ Supabase list/log map, gaps, ideal registry layout |
+| **`docs/TODO_LIST_RECOMMENDATION_SCHEMAS.md`** | TODO: rich list schemas + recommend filters for all default lists |
+| **`MAGNUS_CORE_CONTEXT.md`** | Product intent and philosophy |
+
+---
+
+## What Magnus is
+
+A **multi-user** Telegram bot (one deployment, many provisioned `user_profile` rows). The user writes plain language; Magnus answers in one voice. Each turn
+is silently classified to one of five intents — four pillars plus Magnus's own work — and a
+specialist may write the answer, but the user is never told and cannot address one directly.
+
+**There are exactly two registered commands: `/start` and `/help`.** Both are answered locally with no model
+call. No menu, no lane picker, no per-department commands. Rituals such as the morning brief use
+plain language (`morning brief`, legacy `/morningbrief`) — not registered slash commands.
+
+| Owner | Scope |
+|---|---|
+| **Magnus** (`GENERAL`) | The day and week, Google Calendar, YouTube / YT Music, journaling and logging, reminders, **projects & goals**, cross-pillar questions, ordinary conversation. Operations tools; Accountability Agent vets all writes. |
+| **Health** | Training, workouts, meals and macros, sleep, recovery, the health journal. Deep: sub-router, Hevy, nutrition providers, program memory, onboarding gate. |
+| **Wealth** | Budgeting, spending, saving, debt, net worth, financial goals, investing philosophy. **Zerodha (Kite Connect)** read-only: holdings, Coin MF, SIPs — see `docs/ZERODHA.md`. |
+| **Happiness** | Books, film, music, games, hobbies, creative practice, rest, travel, relationships. |
+| **Wisdom** | Learning plans, skills and craft, career direction and growth, shipping projects. |
+
+Wealth has **Zerodha integration** (Kite Connect OAuth, read-only portfolio context). Happiness and Wisdom use shared **operations tools** (calendar, lists, events) via `runAgentWithTools`; pillar depth remains Health-first.
+
+---
+
+## Quick facts
+
+| Item | Detail |
+|------|--------|
+| **Runtime** | Node.js ≥ 20, TypeScript ESM, `tsx` for dev |
+| **Entry** | `src/index.ts` |
+| **Interface** | Telegram (Telegraf) — long polling or webhook |
+| **Health HTTP** | Express on `HEALTH_PORT`/`PORT`: `GET /health`, `GET /ready`, `GET /oauth/google`, `GET /oauth/notion`, `GET /oauth/kite`, `GET /oauth/google/callback`, `GET /oauth/notion/callback`, `GET /oauth/kite/callback`, legacy `/oauth/youtube/*`, `POST /internal/jobs/morning-brief` |
+| **Model** | `claude-sonnet-4-6` for classification and every agent |
+| **Supabase project** | `xdrpjfdhduskhzryevze` (ap-northeast-1) |
+| **Logging** | pino JSON; Telegram user ids masked in production |
+| **Deploy** | Railway from `Dockerfile` + `railway.toml` (restart ALWAYS, one replica) |
+
+---
+
+## Quick start
+
+```bash
+npm install
+cp .env.example .env          # fill the six required values
+npm run telegram:check        # what your env enables, and what Telegram currently holds
+npm run telegram:setup        # register /start + /help, menu button, profile text
+npm run dev
+```
+
+**Required to boot:** `TELEGRAM_BOT_TOKEN`, `ANTHROPIC_API_KEY`, `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`. Set
+`MAGNUS_AUTO_ALLOWLIST_NEW_USERS=false` by default — new Telegram users get a refusal until
+provisioned (`scripts/provision-owner-user.mts` or `allowlisted=true` in Supabase).
+
+`npm test` needs the dummy Supabase/Anthropic/Redis values from `.github/workflows/ci.yml` in your
+shell or `.env`.
+
+---
+
+## Source layout
+
+| Path | Responsibility |
+|------|----------------|
+| `src/index.ts` | Boot: clients → capability log → Telegram runtime → health server → watchdog → graceful shutdown |
+| `src/magnus.ts` | Turn handler: allowlist gate, chat persistence, typing indicator, orchestrator call. Starts the Morning Brief cron. |
+| `src/agents/magnusOrchestrator.ts` | Classify → memory → parse/execute/compose per pillar; GENERAL uses parser plan (incl. day_overview, pillar_consultation); `finalizeMagnusVoice` at exit |
+| `src/agents/orchestratorIntent.ts` | Five-way classifier with LLM **routing context** hints; no regex routing |
+| `src/agents/routing/routingContextParser.ts` | Haiku sub-agent: structural signals + Magnus capability list for intent classifier and pillar parsers |
+| `src/agents/routing/intentRoutingHints.ts` | Async facade over `routingContextParser` for intent classifier |
+| `src/agents/routing/reversibleAction.ts` | Redis-backed last reversible write (`meal_undo`) for disambiguation-free undo |
+| `src/agents/routing/handleReversibleAction.ts` | Orchestrator prelude: "Undo this" resolves to last registered write |
+| `src/agents/routing/pillarConsultationSignals.ts` | Pillar consultation list from routing context parser (LLM) |
+| `src/agents/routing/agentConsultation.ts` | Reconciler for `pillar_consultation` multi-pillar step |
+| `src/projects/` | Projects layer: store, setup FSM, themes, executor, conflict service |
+| `src/agents/tools/runAgentWithTools.ts` | Pillar agents with shared operations tools |
+| `src/agents/routing/accountabilityAgent.ts` | Terminal vet + action ledger + Magnus voice |
+| `src/agents/routing/pillarStrategy/` | Capability catalogs → Haiku plan parser → step executors → composer (`composePillarPlanReply`) |
+| `src/agents/routing/pillarStrategy/dayOverview.ts` | Holistic day snapshot: calendar + commitments + meals |
+| `src/agents/magnusAgent.ts` | Magnus himself: calendar, YouTube, event log, journaling, reminders — tool loop (optional capability-filtered tools on GENERAL) |
+| `src/agents/tools/calendarTool.ts` | Google Calendar; per-user tokens; delete/update sync linked `magnus_events` rows; **read-before-write** guard blocks update/delete without `read_calendar` in the same turn |
+| `src/day/buildDayContext.ts` | Shared calendar + commitments + reminders (+ optional meals) for morning brief and `day_overview` |
+| `src/agents/tools/youtubeConnectTool.ts` | In-chat `connect_google` / aliases — Calendar + YouTube one consent |
+| `src/agents/tools/youtubeTool.ts` | YouTube / YT Music: search, recommend, playlists, bookmarks, cue (per-user token) |
+| `src/agents/tools/eventLogTool.ts` | Event log tools: plan, update, reschedule, list (`magnus_events`) |
+| `src/integrations/notion/notionProvision.ts` | Post-OAuth: create Magnus hub, Journal, standard list databases in Notion |
+| `src/agents/tools/notionConnectTool.ts` | `connect_notion`, `setup_notion` Magnus tools |
+| `src/lifeos/` | LifeOS Postgres writers: goals, pillar status, joy tank |
+| `src/agents/routing/actionIntegrity.ts` | Blocks false save/add/log claims unless tools actually succeeded |
+| `src/agents/tools/listTool.ts` | List catalog + `recommend_list_items` filters + `lookup_list_item` (added-at from `created_at`) |
+| `src/lists/` | List catalog templates, Supabase store, service orchestration, optional Notion mirror |
+| `src/agents/tools/logNoteTool.ts` | Journal note → `magnus_daily_logs`, mirrored to Notion when configured; can link to an event; auto-reconciles open/missed event rows when the note reports completion |
+| `src/lists/listService.ts` | List catalog + `log_daily_checkin` / `get_daily_checkin` writers (checkins list + LifeOS dual-write) |
+| `src/users/` | Per-user program memory (`user_program_memory`) and integrations (`user_integrations`) |
+| `src/events/` | Event log domain: timezone helpers, Supabase store, calendar sync, formatting, **completion reconcile** (`eventCompletionReconcile.ts` — journal text → `missed`/`planned` → `done`) |
+| `src/logging/` | **Logging framework**: unified `dailyLogStatus`, evening journal FSM (`eveningJournalPending`), **activity completion** FSM (`activityCompletionPending` + Haiku parser), decline tracking, proactive gating, companion `evening_log_followup` |
+| `src/youtube/` | Bookmarks, cue queue, Magnus playlist state, **`playlistResolve`** (pillar aliases vs YT account title match; `youtubeAccountOnly` when user says YT Music) |
+| `src/agents/pillarPhilosophy.ts` | Four-pillar definitions, intent→route map, live vs parked in minimal mode |
+| `src/agents/registry.ts` | The four pillar agents; first match on intent wins |
+| `src/agents/pillarSpecialist.ts` | Shared runner for Wealth, Happiness, Wisdom |
+| `src/agents/health/healthRouter.ts` | Health composite: pillar plan parser (LLM) → capability executors (compose pipeline) |
+| `src/agents/health/healthOnboarding.ts` | Four-question gate on `user_health_profile` |
+| `src/agents/memory/` | `loadMemoryContext`, `selectContextSlice`, `memory_topics`, **`memoryTopicMatch`** (hybrid forget: keyword + semantic + disambiguation), **`memory_embeddings` / `recall_context`**, `memoryTopicCommands`, `userKnowledge` layer, `formatMemoryBlockForSystem`, `augmentUserWithMemory` |
+| `src/agents/context/` | `assembleRoutingContext`, `loadGrowthSnapshot`, `growthHelpers` — frontload before classify (PR #92) |
+| `src/agents/routing/intentToPillarRoute.ts` | Intent → pillar label for metadata |
+| `src/meals/` | Meal parsing, estimate chain, `meal_logs` writes, **intake collapse** (one occasion → one log), **session similarity dedupe**, **slot correction** |
+| `src/nutrition/` | Local-date helpers, rollups/plan stores, **planning journey** (`meal_plan_sessions`), anomaly detection, weekly review, journal context |
+| `src/pillars/health/workouts/` | Hevy client, fitness agent, Hevy write agent |
+| `src/pillars/health/references/` | Reads committed program memory + Telegram journals |
+| `src/jobs/` | Morning Brief: compact focus/plan/meals prompt, journal reconcile before missed sweep, cron, timezone window. Optional. |
+| `src/events/gymHevyMatch.ts` | Match planned gym events to Hevy workouts (session label, local date) |
+| `src/events/gymHevyReconcile.ts` | After grace window: sync event log from Hevy or nudge user |
+| `src/proactive/` | Magnus-initiated Telegram: outbound HTML, dedupe, kind registry, dispatcher, subscriptions |
+| `src/proactive/rhythm/` | Day/week/month rhythm summaries for proactive check-ins |
+| `src/proactive/jobs/gymHevyReconcileJob.ts` | Cron: gym ↔ Hevy reconciliation for connected users |
+| `src/proactive/jobs/activityCompletionJob.ts` | Cron: post-activity completion nudge after planned end + grace; arms completion FSM |
+| `src/proactive/jobs/nutritionNightlyJob.ts` | Cron: EOD rollup recompute, anomaly flags, program-memory sync |
+| `src/tools/telegram.ts` | Telegraf bot, `/start` and `/help`, rate limit, update dedupe, webhook mount |
+| `src/tools/telegramWatchdog.ts` | Liveness probe; exits so the host restarts |
+| `src/config/telegramRuntime.ts` | Polling vs webhook, public URL derivation, handler timeout |
+| `src/config/telegramCommands.ts` | The two registered commands (import-free, so the CLI needs no credentials) |
+| `src/config/magnusCapabilities.ts` | Env → capability report for `telegram:check` and the boot log |
+| `src/healthServer.ts` | `/health`, `/ready`, Morning Brief job route, Telegram webhook, unified Google OAuth (`GET /oauth/google/callback`) |
+| `src/integrations/googleCalendar/` | OAuth (env refresh token or local token file) + Calendar operations |
+| `src/integrations/youtube/` | YouTube Data API operations + auth helpers |
+| `src/integrations/google/` | Unified in-chat OAuth (Calendar + YouTube scopes, dual-write tokens) |
+| `src/config/publicBaseUrl.ts` | Public HTTPS base for OAuth redirect URIs |
+| `mcp/google-calendar/server.mts` | Optional stdio MCP server for Cursor — not part of the bot |
+
+---
+
+## Behaviour
+
+1. **Identity (multi-user)** — Each Telegram user is keyed by `ctx.from.id` → unique `user_profile.telegram_chat_id` → canonical `user_profile.id`. All domain tables use `user_profile_id`; writes must scope by it (see `projectStore`, `projectSessionStore`). Personalised fields: `display_name`, `timezone`, `north_star_goal`, `user_tier`, `access_flags`. New users auto-insert on first message; `allowlisted=false` until provisioned (`scripts/provision-owner-user.mts` or manual Supabase flip). Per-user integrations live in `user_integrations` (Calendar, YouTube, Hevy, Notion, Kite) — not host env.
+2. **Four pillars + Magnus** — Five intents: **GENERAL** (Magnus coordinator, tools) + **HEALTH**, **WEALTH**, **HAPPINESS**, **WISDOM** specialists. Canonical definitions in `src/agents/pillarPhilosophy.ts`. User never addresses a specialist; routing is silent; one Magnus voice at exit. Minimal mode may **park runtime depth** for some pillars without removing the model — metadata still records the intended pillar.
+3. **Access** — `allowlisted`, `user_tier`, `access_flags` on `user_profile`. Not allowlisted means
+   a fixed refusal and no chat rows.
+4. **Rate limit** — Redis fixed 60s window per user (`MAGNUS_RATE_LIMIT_PER_MINUTE`, 0 disables).
+5. **Dedupe** — `update_id` claimed in Redis for 24h, so webhook retries never double-reply.
+6. **Classification** — Five intents. `GENERAL` is Magnus's own work, not a fallback bucket.
+   Each turn: **`assembleRoutingContext`** loads identity, integrations, pending FSM state,
+   recent turns, active work, standing rules, and a **growth snapshot** (day frame, north star goals,
+   commitments/errands, project consistency, slipping routines by `activity_key`, issues,
+   joy/pillar KPIs). **`routingContextParser`** (Haiku) then produces structural hints and Magnus
+   capability lists from the message + recent turns. Five-way intent classifier (Sonnet) receives
+   hints + assembled context; per-pillar **plan parser** (Haiku) runs step executors. Primary routing is
+   LLM-based (`routingContextParser` + Sonnet classifier); documented exceptions include photo intent,
+   Haiku-hint shortcuts, FSM preludes, and local `/start`/`/help`/memory commands. Calendar management
+   (read/delete/create) routes through the **`calendar`** capability and
+   Magnus tool loop, not `day_overview`. On `GENERAL`, the plan parser may choose `pillar_consultation`,
+   `day_overview`, `calendar`, etc. Pillar specialists are prompt-only except Health (capability
+   executors) and Wealth (Kite read in executor).
+6. **Memory** — Loaded once per turn: recent chat, rolling summary, **memory topics** (upsert by `topic_key` in `memory_topics`; index-only labels in prompts when `MAGNUS_MEMORY_TOPIC_INDEX_ONLY=true`), structured profile/goals/logs, **active projects block** in user knowledge. **`selectContextSlice`** trims context for calendar/list focused GENERAL turns (≤8 verbatim turns, ≤3.5KB block). **Tool result spill:** outputs > `MAGNUS_TOOL_RESULT_SPILL_CHARS` persist to Redis; loop sees `{ artifact_id, preview, count }`; internal `read_tool_artifact` for full body. **Semantic recall:** `memory_embeddings` (pgvector) + Layer-2 **`recall_context`** tool; embed on journal/topic/decision-turn writes. Telegram: **remember …** / **forget …** / **what do you remember?** handled before orchestrator (no model). Post-turn extract upserts topics (newer wins). **Accountability Agent** at orchestrator exit: `action_ledger` + `accountability` metadata on tool turns. Tunable via `MAGNUS_MEMORY_*`, `MAGNUS_TOOL_RESULT_*`, `MAGNUS_EMBED_*`.
+7. **Persistence** — `magnus_chat_messages` gets a user row and an assistant row per turn, with
+   routing in `metadata` (`delegated_agent`, `agent_metadata`). Columns `message_type`
+   (`conversation` | `automated`) and `delivery_trigger` (`manual`, `scheduled`, `http`,
+   `event_reminder`, `system`, …) classify normal chat vs Magnus-initiated outbound and why it
+   was sent. **Project setup:** draft sessions do **not** hijack calendar/day/gym/meals; lock/cancel parsed by LLM (`parseProjectSetupTurn`) in orchestrator prelude before routing.
+9. **Replies** — One reply per turn, chunked only for Telegram's size limit, sent as HTML.
+10. **Proactive Telegram** — Magnus can initiate messages without a user turn: in-process cron
+   (`MAGNUS_PROACTIVE_CRON_ENABLED`, default on) runs scheduled jobs every
+   `MAGNUS_PROACTIVE_CRON_INTERVAL_MINUTES` (default 5). Jobs: **morning brief** (local hour from
+   `MAGNUS_MORNING_BRIEF_LOCAL_HOUR` in `user_profile.timezone`; Redis dedupe per calendar day),
+   **event reminders** (`remind_at` on `magnus_events`, sets `reminded_at` after send),    **gym ↔ Hevy
+   reconcile** (3 hours after planned gym time: if Hevy has a session that day, mark the event log
+   `done` with Hevy start/end and tell the user; otherwise ask once if they missed it / want to
+   postpone), **activity completion** (planned end + `MAGNUS_ACTIVITY_COMPLETION_GRACE_MINUTES`, default 30m:
+   nudge for done/missed/skip/postpone; Haiku parser + confirm-before-save; postpones sync linked Google
+   Calendar when `google_event_id` set; skips gym events when Hevy is connected), **nutrition nightly** (~23:00 local: recompute rollups, anomaly flags, sync persistent
+   lapse patterns to `program_learnings`; `MAGNUS_NUTRITION_NIGHTLY_ENABLED`), **subscription dispatcher** (`evening_journal`, `evening_log_followup` (auto when evening journal enabled), `drift_guard`, `midday_encouragement`, `stale_list_nudge`,
+   `chat_inactivity`, `custom_reminder`, `meal_log_reminder`, `meal_adherence_nudge`, `meal_eod_reconciliation`, `meal_gap_nudge`, `weekly_nutrition_review` via `magnus_proactive_subscriptions` — modular kind registry in
+   `src/proactive/kinds/`). **Logging framework** (`src/logging/`): unified per-day status (`empty` → `morning_only` → `partial` → `complete` / `declined`); morning win loop (`winConditionPending`); evening journal session (`eveningJournalPending`: `awaiting_engagement` → `collecting` → `confirming` → `log_daily_checkin`); **activity completion** session (`activityCompletionPending`: `awaiting_response` → `confirming` → `update_event` / `reschedule_event`); explicit skip sets `logging_declined` so nudges stop; companion follow-up ~22:00 only when primary nudge sent and session still open. **Routing:** `routingContextParser` (Haiku) classifies structural signals (`prefer_intent_health`, `parked_feature_topic`, `looks_like_evening_journal`, pending FSM context) — no regex routing bypass in orchestrator or minimal-mode parking. **Rhythm cadence** (catalog kinds): **Morning Brief** (~7:00 local, scheduled job — short focus/plan/meals read + optional intention question; replaces separate morning orientation), `evening_journal` (~21:00, day summary + EOD review), `week_planning` (Monday ~8:00), `weekly_wrap` (Friday ~18:00, includes nutrition week slice), `monthly_goal_review` (1st of month ~10:00). Owner provision seeds evening/weekly/monthly rhythm via `seedDefaultRhythmSubscriptions`.    User controls via `manage_proactive_messages` tool: list/enable/disable/disable_all
+   catalog kinds, create one-shot or daily custom reminders (`create_reminder` /
+   `create_recurring_reminder`). **Task reminders** use `manage_reminders`: list, create,
+   create_recurring (daily or weekly), update, snooze, cancel — standalone (`custom_reminder`) or
+   commitment-linked (`magnus_events.remind_at`). **One-shot custom reminders** deliver only within
+   `MAGNUS_ONE_SHOT_REMINDER_MAX_LATE_HOURS` (default 24) after `at`; older rows are disabled with
+   `config.status: missed` — no stale backlog dumps. **Activity completion** nudges and auto-miss use the
+   same 24h window when logging is still open (`planned` / `in_progress` → `missed` via sweep). Relative
+   time parsing for one-shots (`tomorrow 8pm`, `Sunday 9:30am`, `in 30 minutes`, `6 months from today on
+   the 1st`). Reschedule carries
+   `remind_at` by the same delta as `planned_start_at`. `day_overview` includes reminders for the day.
+   LLM gate+compose (Haiku) for evening journal, drift guard, midday encouragement, stale list nudges,
+   and chat inactivity; quiet hours 23:00–06:00 local; adaptive cap 3/day (scheduled + user-asked
+   reminders exempt).    Manual brief: say `morning brief` or
+   `/morningbrief`. After the brief, the next reply to the win question goes through a confirm loop (yes → log `morning_intention` on check-in; no → try again; explicit skip ends the loop). Outbound uses HTML formatting and is logged to `magnus_chat_messages` with
+   `metadata.proactive`.
+11. **Event log** — Magnus tools `log_event`, `update_event`, `reschedule_event`, `list_events` write
+   to `magnus_events`. Moving a commitment closes the old row and opens a linked replacement (never
+   edits time in place). A second `log_event` for the same activity with a different time within two
+   hours is rejected — Magnus must call `reschedule_event` instead. Calendar delete/update cancels or
+   reschedules the linked event-log row automatically. Memory and the Morning Brief read commitments
+   around today plus per-activity adherence from `magnus_event_activity_stats`.
+12. **Google (Calendar + YouTube)** — Per-user tokens in `user_integrations`. In chat: “connect
+    Google” → one consent; `GET /oauth/google/callback` stores the same refresh token on
+    `google_calendar_refresh_token` and `google_youtube_refresh_token`. Host needs a **Web**
+    OAuth client (`GOOGLE_CLIENT_ID` / `SECRET`). YouTube playlists resolve by pillar name
+    (`wisdom`, `wealth`, `magnus`, …), free-text title (fuzzy match), or `PL…` id; aliases cached in
+    `magnus_youtube_state.playlist_aliases`. When the exact playlist is missing or `add` has no
+    `playlist_id`, the tool lists close matches (or all playlists) for the user to pick — never
+    silently defaults to Magnus on add. Bulk actions: `clear` (empty playlist), `dedupe` (remove duplicate videos).
+13. **Intent routing** — Only Magnus (`GENERAL`) has tools. YouTube actions, list/LifeOS/Notion
+    phrases, and short continuations after a Magnus tool turn coerce to `GENERAL`. Pillar specialists
+    are prompt-only and must not claim tool actions (see `pillarSpecialist.ts` guard). Health has
+    sub-router depth; Wealth loads Kite read-only portfolio context. **Photo turns:** `src/vision/`
+    analyzes caption + recent chat, infers purpose (`meal_log`, `list_items`, …) and routes to the
+    correct pillar; `meal_log_photo` only when purpose is food. Short meal-slot follow-ups (`Dinner?`)
+    after meal context route to HEALTH `meal_plan_read`.
+14. **Gym schedule** — Fitness turns inject today's session from locked `weekly_schedule` program memory
+    (Mon-first table) before Hevy history.
+15. **Pillar execution plans** — Every routed pillar runs a Haiku **plan parser**
+    (`MAGNUS_PILLAR_STRATEGY_MODEL`, default `claude-haiku-4-5`) that sees the user message,
+    **routing hints** (meal session flags, integration connectivity, recent turn previews), and returns
+    an ordered **steps[]** array (1–`MAGNUS_PILLAR_PLAN_MAX_STEPS`, default 4). **Architecture:
+    input parse → execute → output parse (compose)** — one Magnus voice at terminal exit. **Step executors**
+    run sequentially with full context and prior-step outcomes; GENERAL steps use Magnus with
+    capability-filtered tools or `day_overview` / `pillar_consultation`. On `pillar_consultation`,
+    Magnus only receives tools the user message actually needs (`consultationMagnusTools.ts`) — e.g.
+    no YouTube tools on gym+meal plan turns. A **composer**
+    (`MAGNUS_PILLAR_PLAN_COMPOSE`, default on) re-voices every step output (single- and multi-step).
+    `finalizeMagnusVoice` at the orchestrator boundary catches any path that did not already compose.
+    Terminal confirmations (e.g. cancel planning, OAuth links) set `pillar_compose: false`. Deterministic
+    pre-gates stay before the parser where unambiguous (explicit meal log, **food** meal photo) — then through
+    compose like other capabilities. **Photo attachments:** every Telegram photo runs context-aware vision
+    (`src/vision/`) using caption + recent turns — infers purpose (meal_log, list_items, receipt, …) and
+    routes to the right pillar (not blindly HEALTH). Vision summary is appended to the user message for
+    parsers and agents; meal_log_photo only when purpose is food. **Meal log intake:** natural-language eating messages route through the **Meal Intake Parser** agent (`mealIntakeParserAgent`) on the full message + recent context — it outputs how many meals, slots, and per-item components (no regex splitting). Full-day recount sets `replace_today_log` on the plan, **soft-deletes earlier same-day logs** before saving, and multi-step compose uses **saved step metadata + DB day total** (no LLM-invented meals or arithmetic). **Meal plan vs log:** shared rules in `src/meals/mealPlanVsLog.ts` (`MEAL_PLAN_VS_LOG_RULES`, `MEAL_DATA_ARCHITECTURE`) injected into nutrition, parser, planning, compose, Magnus core, health subclassifier, and journal prompts. `meal_plan_*` = future menu (`meal_plan_entries`, no calorie totals); `meal_log` = eaten food (`meal_logs`, only source of daily kcal). Future-tense menus ("I'll eat", "will be") route to planning, not `meal_log`. Present-tense eating ("I'm having…", "I'm eating…") and `I ate/had` anywhere in the message are accepted. **Duplicate guard:** fuzzy session similarity blocks near-identical re-logs in the same slot. **Slot corrections** update `meal_slot` on an existing session. **Undo:** meal logs register a reversible action; "Undo this" soft-deletes without disambiguation. When meal routing fires but text cannot be normalized, Magnus asks **yes/no** to confirm logging (Redis `meal_log_pending`). Parser scaffolding (`Log breakfast:`, "Log afternoon tea") is rejected. Plan slots mark **logged** only when the saved meal clearly matches the plan title (staple conflicts like rice vs chapati block a false "Plan matched"). `meal_day_breakdown` / meal history use deterministic output (`pillar_compose: false`) from `meal_logs` only. `day_overview` shows logged and planned meals in separate sections. Calorie-total disputes route to `meal_history`, not `meal_log`. Meal-plan create vs read is parser-owned. **day_overview** (GENERAL)
+    loads calendar + event log + planned meals. Review-step meal Q&A answers without re-posting the draft.
+    Happiness/Wisdom catalogs include multiple capabilities (recommendations, travel, learning plan, etc.).
+
+---
+
+## Database
+
+**Written:** `user_profile`, `magnus_chat_messages`, `magnus_daily_logs`, `magnus_events`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`, `meal_plan_sessions`, `meal_plan_templates`,
+`user_health_profile`, `user_program_memory`, `user_integrations`, `memory_summaries` (rolling summary; legacy semantic facts when topics disabled), `memory_topics` (curated topic upsert), `memory_embeddings` (pgvector recall), `projects`, `features`, `project_sessions`,
+`magnus_youtube_bookmarks`, `magnus_youtube_cues`, `magnus_youtube_state` (includes `playlist_aliases` JSONB for pillar playlist ids).
+
+**Read only:** `workouts`, `goals`, `daily_scores`, `happiness_reserve`,
+`patterns`, `life_patterns`, `pillar_status`, `kpi_readings`, `magnus_insights`, `daily_plans`,
+`magnus_events_open`, `magnus_event_activity_stats`.
+
+Public tables use RLS with a `service_role_only` policy; the service role key bypasses it. The new
+Supabase `sb_secret_…` key format works as service role.
+
+`supabase/migrations/` covers `magnus_daily_logs`, `user_health_profile`, `meal_logs`, `meal_daily_rollups`, `meal_plan_entries`, `meal_plan_sessions`,
+`projects`, `features`, `project_sessions`, `magnus_events`, `magnus_proactive_subscriptions`, `memory_summaries`, `memory_topics`, `magnus_youtube_*` (incl. `playlist_aliases`), and `magnus_chat_messages` type columns;
+older schema was applied directly to the project before those migrations existed. **`20260810160000_projects_and_sessions.sql`** applied to hosted Supabase 2026-08-10 — upgrades legacy `projects`/`features` columns and adds `project_sessions`. **`20260905170000_supabase_security_hardening.sql`** (hosted 2026-09-05) — LifeOS views use `security_invoker`; `purge_expired_magnus_chat_messages()` is `service_role` only. **`20260905173000_revoke_graphql_api_roles.sql`** — revokes all `anon`/`authenticated` grants on `public` (Magnus uses `service_role` only). **`20260906160000_memory_topics.sql`** applied to hosted Supabase 2026-09-06 — curated memory topics (upsert by `topic_key`). **`20260906170000_memory_embeddings.sql`** applied to hosted Supabase 2026-09-06 — pgvector recall (`memory_embeddings`, `match_memory_embeddings` RPC).
+
+---
+
+## Environment
+
+See `.env.example`, which is grouped by purpose. Highlights beyond the six required values:
+
+- **`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`** — shared OAuth app on the host (Railway).
+  Per-user refresh tokens live in `user_integrations`.
+- **Per-user keys** (Hevy, Notion, calendar + YouTube refresh tokens) — in Supabase
+  `user_integrations`. Seed with `npx tsx scripts/upsert-user-integrations.mts` (local `.env`),
+  not Railway. See `docs/YOUTUBE.md` / `docs/GOOGLE_CALENDAR.md`.
+- **`USDA_FDC_API_KEY`, `CALORIENINJAS_API_KEY`** — meal macros (platform-level).
+- **`MAGNUS_TELEGRAM_MODE=webhook`** — recommended on a host; no 409 on overlapping deploys.
+- **`MAGNUS_PROACTIVE_CRON_ENABLED`** — scheduled Magnus-initiated Telegram (default on). Set
+  `MAGNUS_MORNING_BRIEF_CRON_ENABLED=false` to skip only the brief job.
+- **`MAGNUS_PILLAR_STRATEGY_MODEL`** — Plan parser model (default `claude-haiku-4-5`).
+- **`MAGNUS_PILLAR_PLAN_MAX_STEPS`** — Max steps per plan (default `4`, max `8`).
+- **`MAGNUS_PILLAR_PLAN_COMPOSE`** — Haiku composer for pillar step replies (default on; single- and multi-step).
+- **`MAGNUS_PILLAR_COMPOSE_MODEL`** — Composer model (default `claude-haiku-4-5`).
+- **`MAGNUS_MAX_TOOL_ROUNDS`** — Magnus agent tool loop cap (default 12).
+- **`MAGNUS_TURN_TIMEOUT_MS`** — Orchestrator turn budget before user-facing timeout reply (default 90000).
+- **`MAGNUS_DEFAULT_EVENT_REMINDER_LEAD_MINUTES`** — Auto `remind_at` on new **planned** timed commitments (default 30; `0` disables).
+- **`MAGNUS_NOTION_LIST_SYNC_INTERVAL_MINUTES`** — Scheduled Supabase ↔ Notion list reconciliation for connected users (default **1440** = once per day; `0` disables). Chat `sync notion` runs immediately anytime. Supabase is canonical.
+- **`MAGNUS_NOTION_LIST_SYNC_ENABLED`** — Master switch for the `notion_list_sync` proactive job (default on when proactive cron is on).
+- **`MAGNUS_NOTION_LIST_SYNC_MAX_USERS_PER_TICK`** — Rate cap per cron tick (default 5).
+
+---
+
+## Scripts
+
+| Command | Purpose |
+|---------|---------|
+| `npm run dev` | Watch mode |
+| `npm run build` / `npm start` | Compile to `dist/`, run compiled |
+| `npm test` | Vitest unit tests |
+| `npm run test:accuracy` | Magnus accuracy suite — routing, tools, integrity, minimal gates (`docs/review/MAGNUS_ACCURACY_SCORECARD.md`) |
+| `npm run telegram:check` | Capability report + current Telegram config (`-- --json`, `-- --probe-conflict`) |
+| `npm run telegram:setup` | Apply Telegram config: webhook, commands, menu button, description |
+| `npm run test:supabase` | Supabase insert/delete smoke test (+ `memory_summaries` reachable) |
+| `npm run db:apply -- supabase/migrations/<file>.sql` | Apply a migration via direct Postgres (`SUPABASE_DB_PASSWORD`) |
+| `npm run google-calendar:auth` | One-time OAuth; prints the refresh token for the host |
+| `npm run youtube:auth` | One-time YouTube OAuth; prints refresh token to store in `user_integrations` |
+| `npx tsx scripts/dev/import-graph.mts` | Dead-code audit — should report zero production orphans (test-only helpers excluded) |
+| `npx tsx scripts/dev/validate-user-query-catalog.mts` | Validate 158 user-query routing hints against detectors |
+| `npx tsx scripts/dev/generate-chat-message-test-suite.mts` | Build 1000 NL chat message tests from real chats + catalog |
+| `npx tsx scripts/dev/analyze-chat-test-suite.mts` | Structural + production-pair analysis (log findings in `docs/review/MINIMAL_MODE_JOURNEY_LOG.md`) |
+| `npx tsx scripts/provision-owner-user.mts` | Wipe + recreate owner `user_profile`, seed program memory and integrations |
+| `npx tsx scripts/upsert-user-integrations.mts` | Update `user_integrations` for a user without wiping data |
+| `npx tsx scripts/reset-user-notion-lists.mts` | Reset list architecture + re-sync notion_registry for a user |
+| `npx tsx scripts/audit-notion-lifeos.mts` | Inventory LifeOS hub + accessible Notion databases |
+| `npx tsx scripts/nutrition/rebuild-rollups.mts` | Rebuild `meal_daily_rollups` from `meal_logs` |
+
+**Meal planning journey:** User says "plan my meals for the week" → … Locked plan edits via parser → **meal_plan_skip** / **meal_plan_swap** (replace one dish with `new_title`, or exchange two slots with `slot` + `exchange_with_slot`). **Photo logging:** …
+
+---
+
+## Operations
+
+- **Always on** — `docs/TELEGRAM_SETUP.md` → "Keeping it always on". Railway restarts `ALWAYS`, one
+  replica, healthcheck on `/health`.
+- **Webhook vs polling** — Only one process may poll a token; webhook mode makes overlapping
+  deploys harmless. `npm run telegram:check -- --probe-conflict` detects a duplicate poller.
+- **Watchdog** — Probes Telegram every 60s and exits non-zero after five failures so the host
+  restarts. Also re-registers a drifted webhook.
+- **Uptime** — Railway only healthchecks at deploy time; add an external ping on `/ready`.
+- **Secrets** — Never commit `.env`. Rotate anything that has been pasted anywhere.
+
+---
+
+## Not built yet
+
+- **Memory reads LifeOS tables only when enabled** — `MAGNUS_LIFEOS_CONTEXT_ENABLED=false` (default).
+  Magnus tools write LifeOS: `add_goal` (dual-write), `update_pillar_status`, `log_joy_tank`, `list_lifeos_goals`.
+  Set `MAGNUS_LIFEOS_CONTEXT_ENABLED=true` when tables have data.
+- **List recommendation schemas** — `recommend_list_items` filters `extra` JSONB today; richer
+  per-archetype columns and Notion mirror fields remain planned. See
+  **`docs/TODO_LIST_RECOMMENDATION_SCHEMAS.md`**.
+- **Schema not reproducible** from `supabase/migrations/` for tables predating April 2026 migrations.
+  Baseline migrations for `user_profile` and `magnus_chat_messages` added 2026-08-04; LifeOS tables
+  remain in `scripts/magnus_db_hardening.sql` (see `supabase/README.md`).
+- **Semantic recall** — `memory_embeddings` (pgvector) + `recall_context` tool (Step 4); topic index in prompts.
+- **Wealth, Happiness, Wisdom are shallow** — one prompt each, no tools or data (Wealth has read-only Zerodha context today; see below).
+- **Kite write (long-term)** — equity order placement/cancel via Kite Connect, behind `MAGNUS_KITE_ORDERS_ENABLED`, static IP on the developer console, and a Telegram **CONFIRM** flow separate from wealth coaching. Probe script: `npm run kite:test-write` (`scripts/wealth/kite/test-write-endpoints.mts`). **Live probe (2026-08-03):** Coin MF writes (`POST/DELETE /mf/orders`, `/mf/sips`) return **403 Insufficient permission** — not available on this app/plan; equity `POST /orders/regular` blocked until **static IP** is configured; equity cancel auth works (404 on fake id). Do not build MF execution in Magnus unless Zerodha opens those APIs.
+- **Morning Brief reads Google Calendar** — shared `buildDayContext()` (Step 6) loads calendar +
+  reminders for today; compact brief JSON includes `calendarToday` and `todayReminders` when connected.
+  Event log commitments remain in `todayCommitments`. Meals omitted in minimal mode.
+- **Activity/inactivity proactive** — `stale_list_nudge` (queued joy/media items idle 14+ days) and
+  `chat_inactivity` (no Telegram messages for 3+ days) are opt-in catalog kinds with LLM gate+compose.
+- **No E2E tests** against live Telegram, Supabase, Hevy, Google Calendar or YouTube (turn-handler smoke in `src/magnus.smoke.test.ts` only).
+- **Notion list mirror** — Supabase canonical; Telegram writes mirror immediately; scheduled `notion_list_sync` reconciles once per day (default). Say **sync notion** for immediate pull. OAuth reconnect provisions a fresh **Magnus** page.
+- **Hevy in Telegram** — Fitness turns inject the last 5 Hevy list rows with **full per-set detail** (weight×reps or duration) via `formatHevyWorkoutsForPrompt` — not headline-only summaries. **Session volume** (working-set tonnage) is computed deterministically from Hevy set data (`workoutVolume.ts`); agents must not guess volume. **Pillar consultation** (`pillar_consultation`): Magnus tools + pillar specialists run in parallel; `consultationOutcome.ts` builds a structured fulfillment summary, strips stale capability denials (e.g. Magnus saying it cannot pull Hevy when Health loaded it), and `composePillarPlanReply` composes one voice from user intent + delegation map.
+
+---
+
+## Code review
+
+**Single plan:** [`docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md`](docs/review/MINIMAL_MODE_JOURNEY_REVIEW_PLAN.md) (index: [`docs/review/README.md`](docs/review/README.md)). Phase A = minimal MVP; Phase B = parked production code after MVP gate.
+
+---
+
+## Minimal mode (production scope fence)
+
+When **`MAGNUS_MINIMAL_MODE=true`** (default in **`NODE_ENV=production`** unless explicitly set
+`false`), Magnus runs a **scoped** build. Full product direction: **`docs/product/MINIMAL_MODE_FOCUS.md`**.
+
+**Problem we solve in Phase 1:** is the user **sticking to their plan**, or are **commitments failing**?
+That needs trustworthy event-log closure (activity completion, gym ↔ Hevy, missed sweep) plus daily
+logging ritual — not a single cross-pillar adherence score yet.
+
+### Phase 1 — perfect these five
+
+| Focus | Live capabilities |
+|-------|-------------------|
+| **Workouts** | Hevy / fitness, gym ↔ Hevy reconcile, drift guard |
+| **Calendar** | Google Calendar + `magnus_events` event log |
+| **Lists** | Supabase lists + optional Notion mirror (`connect_notion`, scheduled sync) |
+| **Reminders** | `manage_reminders`, event `remind_at`, event-reminder cron, custom reminders |
+| **Logging** | Morning win intention, evening journal FSM, activity completion, `log_note` / `get_daily_log` / check-in tools |
+
+**Supporting (live):** YouTube / YT Music, morning brief, conversation.  
+**Phase 2 (after Phase 1 is solid):** meal logging & nutrition — explicitly parked until then.
+
+| Live | Parked |
+|------|--------|
+| Phase 1 focus areas above | **Meals**, nutrition, **meal photos** |
+| Sub-agent **parse → execute → compose**, one Magnus voice | Wealth / Happiness / Wisdom pillars |
+| Proactive: full day/week/month rhythm (evening journal, week planning, weekly wrap, monthly goal review, drift guard, midday encouragement, stale-list + chat-inactivity nudges), activity completion, gym reconcile, custom reminders | Meal proactive kinds, nutrition nightly, project kinds |
+| **Non-meal photos** (lists, schedule, documents via vision) | LifeOS joy tank, projects, Zerodha |
+| **Notion list mirror** — connect, setup, `sync_notion`, scheduled `notion_list_sync` job | LifeOS journal hub, morning brief Notion page |
+| `manage_proactive_messages` in chat — turn rhythms on/off | |
+| Lists: `add_list_items`, `delete_list_item`, human list-name resolution (`todo list` → tasks), `add_goal` | |
+| Reminders: every-N-days + until-date, replace-on-correct, cancel by label | |
+| Hevy routine/workout writes from plain language | |
+| Day overview + morning brief: open todos, calendar conflict detection | |
+| Planned commitments: default **30 min** reminder (`MAGNUS_DEFAULT_EVENT_REMINDER_LEAD_MINUTES`, `0` disables) | |
+
+Implementation: `src/config/minimalMode.ts` — `MINIMAL_FOCUS_AREAS`, capability catalogs, Magnus
+tool allowlist, proactive jobs/kinds filter, intent classification. Parked features return a plain
+message naming what is live (no host env-var instructions). Boot-time rhythm subscription
+reconciliation: `src/proactive/subscriptions/ensureDefaults.ts`.
+
+---
+
+**Last updated:** 2026-09-12 (single review plan; removed superseded hardening/audit docs)
