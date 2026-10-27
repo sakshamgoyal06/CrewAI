@@ -1,64 +1,54 @@
-# Magnus Health PWA — plan
+# Magnus Health PWA: plan
 
-Started 2026-10-27. Goal: turn Magnus into an installable web app for the **health pillar only**: log and create Hevy workouts, track steps and walks, make sure meals and calories get logged, organize the day around the plan, keep one north-star number, nudge with notifications, and explain (RCA) why the plan isn't being followed.
+Started 2026-10-27. Magnus is now one product: an installable web app for the **health pillar only**. It logs and creates Hevy workouts, tracks steps and walks, makes sure meals and calories get logged, organizes the day around the plan, keeps one north-star number, nudges with notifications, and explains (RCA) why the plan isn't being followed.
+
+## Decisions (2026-10-27)
+
+- **Phone:** Android. Steps, walks and scale readings come from Health Connect through the HC Webhook app.
+- **Goal model:** an outcome goal (target weight, body fat %, and/or muscle mass by a deadline), tracked by **weekly weigh-ins**. Daily tracking is the consistency metric that drives it.
+- **Telegram bot:** off and staying off. Everything not needed by the app is in `archive/` with a note (`archive/README.md`).
+- **Meals:** logged in the app through estimate → editable draft → confirm. Must be robust and tested.
+- **UI:** a considered, premium look, not default styling. **Chat is the home page**; the tracker is the second page. Both can log, with the tracker as the secondary entry point.
 
 ## Architecture
 
-**Front end.** A small static PWA in `pwa/` (plain HTML/CSS/JS, no build step), served by the existing Express server at `/app`. Manifest + service worker make it installable on the home screen and let the shell open offline. API calls always hit the network.
+**Front end.** Static PWA in `pwa/` (plain HTML/CSS/JS, no build step), served at `/app`. Manifest + service worker (shell cached, API always network). Two tabs: **Coach** (chat, home) and **Tracker**. Bottom sheets for quick logging and goal/targets.
 
-**Back end.** No new service. The same Node process that runs the Telegram bot gets a JSON API under `/api/health` (`src/healthApp/`). It reuses what is already built:
+Design language: warm near-black (light mode: warm paper), one gold accent, editorial serif (Instrument Serif) for numbers and headings over a tight grotesk (Inter Tight), hairline borders, a floating glass tab bar. The north star is a 7-segment ring; goal metrics show progress, required vs actual weekly pace, a pace tag and a trend sparkline.
 
-| Need | Reused code |
+**Back end.** One Node process (`src/index.ts` → `src/healthServer.ts`) with a JSON API at `/api/health` (`src/healthApp/`). Every write goes through `src/healthApp/actions.ts` with one zod schema per action, so a log from chat and a log from the tracker are the same row.
+
+| Need | Code |
 |---|---|
-| Hevy read/write | `src/pillars/health/workouts/hevy/*` (client, per-user key in `user_integrations`) |
-| Meals + calories | `estimateMealNutrition` → `recordMealSession` → `meal_logs` (parked in Telegram minimal mode, but the code and tables are live) |
-| Targets | `user_health_profile` (calorie/protein targets exist; this adds step target + training days) |
-| Day planning | Google Calendar integration (`src/integrations/googleCalendar`, `magnus_events`) |
-| Scheduled nudges | proactive engine (`src/proactive/*`: cron, dedupe, guards, rhythm kinds) |
+| Coach chat | `chat.ts`: Claude (`claude-opus-5-5`, server-side refusal fallback on) with tools: `get_status`, `draft_meal`, `delete_meal`, `log_steps`, `log_body_checkin`, `set_goal`, `set_daily_targets`. History in `health_chat_messages`. |
+| Meals | `meals.ts`: estimator chain (web search → USDA → CalorieNinjas → optional LLM) → editable draft; confirm saves exactly the confirmed items into `meal_logs`; draft id = `meal_session_id`, so retries never double-log; soft delete. |
+| Goal + weigh-ins | `goalProgress.ts` (pure), `bodyStore.ts`; tables `health_goals` (one active), `health_body_checkins` (one per day). |
+| Steps / walks | `healthConnect.ts`: hourly buckets upserted into `health_activity_samples`, day totals rebuilt into `health_daily_activity`. Manual entry via `/steps`. |
+| North star | `northStar.ts` (pure). |
+| Hevy | `src/pillars/health/workouts/hevy/` (client, per-user key). |
 
-**Auth.** Single-user app: one long random token (`MAGNUS_HEALTH_APP_TOKEN`) mapped to one `user_profile` (`MAGNUS_HEALTH_APP_USER_PROFILE_ID`). The PWA stores it on the device; phone automations send the same header. Can move to Supabase Auth magic links later if anyone else ever uses it.
-
-**Steps data.** A web app cannot read Apple Health or Health Connect, so steps are pushed in:
-
-- **iPhone:** an iOS Shortcuts personal automation (a few times a day + 9 pm) runs *Find Health Samples → Steps, today → sum* and POSTs `{steps, walkMinutes, source: "ios_shortcut"}` to `/api/health/steps`. Free, ~5 minutes to set up. The paid *Health Auto Export* app does the same on a schedule with less fiddling.
-- **Android:** Health Connect has no web API and the Google Fit REST API is being retired, so it needs a helper (Tasker / an HTTP-shortcut app reading Health Connect) or manual entry.
-- **Manual entry** in the app always works.
-
-The endpoint upserts one row per local day (`health_daily_activity`), latest total wins, so repeated pushes are safe.
-
-**Notifications.** Web Push with VAPID keys (`web-push` package), a `push_subscriptions` table, and a push sender next to the existing Telegram outbound so the proactive engine can target either. iPhone needs iOS 16.4+ and the app added to the Home Screen; Android/desktop Chrome work directly.
+**Auth.** Single user: `MAGNUS_HEALTH_APP_TOKEN` (bearer) mapped to `MAGNUS_HEALTH_APP_USER_PROFILE_ID`. `npm run app:setup` prints both.
 
 ## North-star metric
 
-**On-track days in the last 7** (goal: 5/7).
+**On-track days in the last 7** (goal: 5/7). A day is on-track when every check that applies is met:
 
-A day is on-track when every check that applies to it is met:
+1. **Meals logged**: at least 3.
+2. **Calories in range**: 60–100% of the daily target (under 60% reads as under-logging).
+3. **Protein**: at or above target.
+4. **Steps**: at or above target (default 8,000).
+5. **Workout** in Hevy, only on planned training days.
 
-1. **Meals logged**: at least 3 meal entries (logging is the habit that makes everything else measurable).
-2. **Calories in range**: between 60% and 100% of the daily target (below 60% reads as under-logging, not discipline).
-3. **Protein**: at or above target (only if a target is set).
-4. **Steps**: at or above the step target (default 8,000).
-5. **Workout**: logged in Hevy, *only on planned training days*.
-
-Why this one: it's a leading indicator you control every day (weight and body fat lag by weeks), it rolls workouts, steps and food into one number, a missed day shows *which* check failed so the RCA has something concrete to work on, and a rolling 7-day window means one bad day doesn't reset a streak. The today view also shows a 0–100 score (mean progress across checks) so the day has a visible "how close am I".
-
-The outcome goal (e.g. weight by a date) still matters: it sets the calorie/protein/step targets the checks score against, and gets reviewed weekly.
+It's a leading indicator you control every day; weight and body fat lag by weeks. The outcome goal sets the targets and is read weekly: each metric shows where it is, the pace needed to hit the deadline, the actual 4-week trend, and when the trend lands.
 
 ## Phases
 
-1. **Foundation (this PR).** `/api/health` (today snapshot, meal log, steps ingest), `health_daily_activity` table + step target/training days, deterministic north-star scoring, installable PWA with today view, meal and steps logging, recent Hevy workouts.
-2. **Notifications.** Web Push subscribe flow, push channel in the proactive engine, first nudges: morning plan, meal-not-logged at meal times, step pace check mid-afternoon, training-day workout reminder, evening score wrap. Quiet hours and one-nudge-per-check-per-day dedupe.
-3. **Workouts + day planner.** Today's planned session from the weekly schedule, start-in-Hevy link, log a workout and create routines from the app (existing `createHevyWorkout` / `createHevyRoutine` / Hevy write agent). "Plan my day": propose workout, walk and meal blocks into free Google Calendar gaps, write them on confirm.
-4. **RCA.** Deterministic signal mining over 14–28 days (misses by check, weekday, time of day, calendar load, late/skipped meals, sleep if available), then Claude writes one short hypothesis + one small experiment. Triggered on two off-track days in a row or a week below goal, plus a weekly review. Store RCAs and whether the experiment helped so later ones learn.
-5. **Polish.** Settings screen for targets and training days, trends (4–12 weeks), offline queue for logs, decide whether Telegram stays as a second front door.
-
-## Open questions
-
-- iPhone or Android? Decides the steps pipeline and notification setup.
-- The outcome goal and current targets: calories, protein, steps, training days.
-- Keep the Telegram bot running alongside, or replace it?
-- Meals are parked in production minimal mode. The PWA meal endpoint uses the estimator chain directly; confirm the provider keys (USDA / CalorieNinjas) and web-search cost are fine.
+1. **Foundation (PR #114).** Everything above: API, coach chat, robust meals, goals + weigh-ins, north star, Health Connect sync, the app, archive.
+2. **Notifications.** Web Push (VAPID, `push_subscriptions`), scheduler reusing `archive/src/proactive` ideas (dedupe, quiet hours). First nudges: morning plan, meal not logged by slot time, mid-afternoon step pace, training-day workout reminder, evening score wrap, Sunday weigh-in.
+3. **Workouts + day planner.** Log a workout and create routines from chat and tracker (bring back `hevyWriteAgent`), today's planned session from training days. "Plan my day": workout, walk and meal blocks into free Google Calendar time on confirm.
+4. **RCA.** Deterministic signal mining over 14–28 days (which check fails, which weekdays, time of day, late or skipped meals, calendar load), then Claude writes one hypothesis and one small experiment. Triggered by two off-track days in a row or a week below goal, plus a weekly review. Store RCAs and whether the experiment helped.
+5. **Polish.** Trends (4–12 weeks), offline queue for logs, photo meal logging, settings for check-in day and quiet hours.
 
 ## Housekeeping
 
-`.env` is tracked in git and holds a real Hevy API key. Rotate the key in Hevy; removing the file from git history is a separate cleanup.
+`.env` is tracked in git and holds a real Hevy API key. Rotate it in Hevy; purging it from git history is a separate cleanup.

@@ -1,35 +1,71 @@
 /**
- * JSON API behind the health PWA, mounted on the existing Express server under `/api/health`.
+ * JSON API behind the health PWA, mounted on the Express server under `/api/health`.
  * Every route needs `Authorization: Bearer <MAGNUS_HEALTH_APP_TOKEN>`.
  */
 import express from "express";
 import { z } from "zod";
 
 import { logger } from "../logger.js";
-import { estimateMealNutrition } from "../meals/estimateMealNutrition.js";
-import { recordMealSession } from "../meals/recordMealLog.js";
 import { localDateKey } from "../nutrition/localDate.js";
 import { loggableError } from "../util/loggableError.js";
-import { ACTIVITY_SOURCES, upsertDailyActivity } from "./activityStore.js";
+import {
+  checkinInput,
+  confirmMeal,
+  goalInput,
+  logCheckin,
+  logSteps,
+  mealConfirmInput,
+  mealDraftInput,
+  removeMeal,
+  setGoal,
+  setTargets,
+  startMealDraft,
+  stepsInput,
+  targetsInput,
+  type ActionContext,
+} from "./actions.js";
 import { authenticateHealthApp, healthAppAuthConfig } from "./auth.js";
+import { loadChatHistory, runHealthChat } from "./chat.js";
+import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
+import { listMealsForDate } from "./meals.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const chatInput = z.object({ text: z.string().trim().min(1).max(2000) });
 
-const stepsBody = z.object({
-  date: z.string().regex(DATE_RE).optional(),
-  steps: z.coerce.number().int().min(0).max(200_000),
-  walkMinutes: z.coerce.number().int().min(0).max(1440).optional(),
-  walkDistanceM: z.coerce.number().int().min(0).max(500_000).optional(),
-  source: z.enum(ACTIVITY_SOURCES).optional(),
-});
+type Locals = { userProfileId: string };
+type Handler = (ctx: ActionContext, req: express.Request) => Promise<{ status?: number; body: unknown }>;
 
-const mealBody = z.object({
-  text: z.string().trim().min(2).max(500),
-  slot: z.enum(["breakfast", "lunch", "dinner", "snack", "unspecified"]).optional(),
-});
+/** Wraps a handler with the user's timezone context, body validation errors and a 500 guard. */
+function route(name: string, handler: Handler): express.RequestHandler {
+  return async (req, res) => {
+    const { userProfileId } = res.locals as Locals;
+    try {
+      const { timezone } = await loadHealthProfile(userProfileId);
+      const out = await handler({ userProfileId, timezone }, req);
+      res.status(out.status ?? 200).json(out.body);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        res.status(400).json({ error: "invalid_body", issues: err.issues });
+        return;
+      }
+      logger.error({ err: loggableError(err), route: name }, "health app route failed");
+      res.status(500).json({ error: "server_error" });
+    }
+  };
+}
 
-type AuthedLocals = { userProfileId: string };
+/** Maps an action result to an HTTP response: validation-style failures are 400s. */
+function fromResult(r: { ok: boolean; error?: string }): { status: number; body: unknown } {
+  if (r.ok) return { status: 200, body: r };
+  const clientErrors = new Set([
+    "future_date",
+    "deadline_must_be_after_start",
+    "invalid_id",
+    "no_items",
+    "meal session not found",
+  ]);
+  return { status: clientErrors.has(r.error ?? "") ? 400 : 500, body: r };
+}
 
 export function createHealthAppRouter(): express.Router {
   const router = express.Router();
@@ -40,93 +76,92 @@ export function createHealthAppRouter(): express.Router {
       res.status(401).json({ error: "unauthorized" });
       return;
     }
-    (res.locals as AuthedLocals).userProfileId = userProfileId;
+    (res.locals as Locals).userProfileId = userProfileId;
     next();
   });
 
-  router.get("/today", async (_req, res) => {
-    const { userProfileId } = res.locals as AuthedLocals;
-    try {
-      res.status(200).json(await buildHealthSnapshot(userProfileId));
-    } catch (err) {
-      logger.error({ err: loggableError(err) }, "health app snapshot failed");
-      res.status(500).json({ error: "snapshot_failed" });
-    }
-  });
+  router.get(
+    "/today",
+    route("today", async (ctx) => ({ body: await buildHealthSnapshot(ctx.userProfileId) })),
+  );
 
-  /** Steps ingest: the PWA's manual entry and phone automations (iOS Shortcut, Health Auto Export). */
-  router.post("/steps", async (req, res) => {
-    const parsed = stepsBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "invalid_body", issues: parsed.error.issues });
-      return;
-    }
-    const { userProfileId } = res.locals as AuthedLocals;
-    try {
-      const { timezone } = await loadHealthProfile(userProfileId);
-      const today = localDateKey(new Date(), timezone);
-      const date = parsed.data.date ?? today;
-      if (date > today) {
-        res.status(400).json({ error: "future_date" });
-        return;
-      }
-      const saved = await upsertDailyActivity(userProfileId, {
-        localDate: date,
-        steps: parsed.data.steps,
-        walkMinutes: parsed.data.walkMinutes ?? null,
-        walkDistanceM: parsed.data.walkDistanceM ?? null,
-        source: parsed.data.source ?? "api",
-      });
-      if (!saved.ok) {
-        logger.warn({ error: saved.error }, "health app steps upsert failed");
-        res.status(500).json({ error: "save_failed" });
-        return;
-      }
-      res.status(200).json({ ok: true, date, steps: parsed.data.steps });
-    } catch (err) {
-      logger.error({ err: loggableError(err) }, "health app steps failed");
-      res.status(500).json({ error: "save_failed" });
-    }
-  });
+  router.get(
+    "/chat",
+    route("chat-history", async (ctx) => ({
+      body: { messages: await loadChatHistory(ctx.userProfileId, 50) },
+    })),
+  );
 
-  /** Free-text meal log through the same estimator chain and `meal_logs` table as Telegram. */
-  router.post("/meals", async (req, res) => {
-    const parsed = mealBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "invalid_body", issues: parsed.error.issues });
-      return;
-    }
-    const { userProfileId } = res.locals as AuthedLocals;
-    try {
-      const { timezone } = await loadHealthProfile(userProfileId);
-      const estimate = await estimateMealNutrition(parsed.data.text);
-      const saved = await recordMealSession({
-        userProfileId,
-        rawText: parsed.data.text,
-        estimate,
-        sourceChannel: "api",
-        timezone,
-        mealSlot: parsed.data.slot ?? "unspecified",
-      });
-      if (!saved.ok) {
-        logger.warn({ error: saved.error }, "health app meal save failed");
-        res.status(500).json({ error: "save_failed" });
-        return;
-      }
-      res.status(200).json({
-        ok: true,
-        duplicate: saved.duplicateSkipped === true,
-        date: saved.date,
-        calories: estimate.calories,
-        proteinG: estimate.protein_g,
-        source: estimate.source,
-        items: estimate.items.map((i) => ({ name: i.name, calories: i.calories ?? null })),
-      });
-    } catch (err) {
-      logger.error({ err: loggableError(err) }, "health app meal log failed");
-      res.status(500).json({ error: "save_failed" });
-    }
-  });
+  router.post(
+    "/chat",
+    route("chat", async (ctx, req) => {
+      const { text } = chatInput.parse(req.body);
+      return { body: await runHealthChat(ctx, text) };
+    }),
+  );
+
+  router.post(
+    "/meals/draft",
+    route("meal-draft", async (ctx, req) => ({
+      body: await startMealDraft(ctx, mealDraftInput.parse(req.body)),
+    })),
+  );
+
+  router.post(
+    "/meals/confirm",
+    route("meal-confirm", async (ctx, req) =>
+      fromResult(await confirmMeal(ctx, mealConfirmInput.parse(req.body))),
+    ),
+  );
+
+  router.get(
+    "/meals",
+    route("meals", async (ctx, req) => {
+      const date =
+        typeof req.query.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
+          ? req.query.date
+          : localDateKey(new Date(), ctx.timezone);
+      return { body: { date, meals: await listMealsForDate(ctx.userProfileId, date) } };
+    }),
+  );
+
+  router.delete(
+    "/meals/:id",
+    route("meal-delete", async (ctx, req) => fromResult(await removeMeal(ctx, String(req.params.id)))),
+  );
+
+  /** Steps ingest: manual entry and phone automations. */
+  router.post(
+    "/steps",
+    route("steps", async (ctx, req) => fromResult(await logSteps(ctx, stepsInput.parse(req.body)))),
+  );
+
+  /** Android: HC Webhook pushes Health Connect steps, distance, exercise and scale readings here. */
+  router.post(
+    "/ingest/health-connect",
+    route("ingest-health-connect", async (ctx, req) =>
+      fromResult(await ingestHealthConnect(ctx, healthConnectPayload.parse(req.body))),
+    ),
+  );
+
+  router.post(
+    "/checkins",
+    route("checkin", async (ctx, req) =>
+      fromResult(await logCheckin(ctx, checkinInput.parse(req.body))),
+    ),
+  );
+
+  router.post(
+    "/goal",
+    route("goal", async (ctx, req) => fromResult(await setGoal(ctx, goalInput.parse(req.body)))),
+  );
+
+  router.post(
+    "/targets",
+    route("targets", async (ctx, req) =>
+      fromResult(await setTargets(ctx, targetsInput.parse(req.body))),
+    ),
+  );
 
   return router;
 }

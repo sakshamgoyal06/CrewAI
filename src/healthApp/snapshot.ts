@@ -11,6 +11,9 @@ import {
 } from "../pillars/health/workouts/hevy/index.js";
 import { supabase } from "../tools/clients.js";
 import { getActivityRange, type DailyActivity } from "./activityStore.js";
+import { getActiveGoal, getBodyCheckins } from "./bodyStore.js";
+import { computeGoalProgress, type BodyCheckin, type GoalProgress } from "./goalProgress.js";
+import { listMealsForDate } from "./meals.js";
 import {
   computeNorthStar,
   DEFAULT_MIN_MEAL_SESSIONS,
@@ -46,7 +49,20 @@ export type HealthSnapshot = {
   targets: HealthTargets;
   workouts: WorkoutSummary[];
   hevyConnected: boolean;
+  goal: GoalProgress | null;
+  /** Body check-ins for the last ~6 months, oldest first, for the trend chart. */
+  checkins: BodyCheckin[];
+  meals: Array<{
+    mealSessionId: string;
+    slot: string;
+    text: string;
+    calories: number;
+    proteinG: number;
+    loggedAt: string;
+  }>;
 };
+
+const CHECKIN_HISTORY_DAYS = 180;
 
 /** Local dates oldest → newest, ending today. */
 export function windowDates(now: Date, timezone: string, days = WINDOW_DAYS): string[] {
@@ -173,10 +189,14 @@ export async function buildHealthSnapshot(
   const from = dates[0]!;
   const to = dates[dates.length - 1]!;
 
-  const [meals, activity, hevy] = await Promise.all([
+  const historyFrom = localDateKey(new Date(now.getTime() - CHECKIN_HISTORY_DAYS * DAY_MS), timezone);
+  const [meals, activity, hevy, goal, checkins, todayMealList] = await Promise.all([
     loadMealDays(userProfileId, from, to),
     getActivityRange(userProfileId, from, to),
     loadRecentWorkouts(userProfileId, timezone),
+    getActiveGoal(userProfileId),
+    getBodyCheckins(userProfileId, historyFrom),
+    listMealsForDate(userProfileId, to),
   ]);
 
   const workoutsByDate = new Map<string, number>();
@@ -219,5 +239,15 @@ export async function buildHealthSnapshot(
     targets,
     workouts: hevy.workouts,
     hevyConnected: hevy.connected,
+    goal: goal ? computeGoalProgress(goal, checkins, to) : null,
+    checkins,
+    meals: todayMealList.map((m) => ({
+      mealSessionId: m.mealSessionId,
+      slot: m.mealSlot,
+      text: m.rawText,
+      calories: Math.round(m.calories),
+      proteinG: Math.round(m.protein_g),
+      loggedAt: m.loggedAt,
+    })),
   };
 }
