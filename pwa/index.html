@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1412">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Magnus Health</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="app">
+    <section id="setup" class="card" hidden>
+      <h1>Magnus Health</h1>
+      <p class="muted">Paste your app token to connect. It stays on this device.</p>
+      <form id="setup-form">
+        <input id="token" type="password" autocomplete="off" placeholder="App token" required>
+        <button type="submit">Connect</button>
+      </form>
+    </section>
+
+    <div id="home" hidden>
+      <header class="top">
+        <div>
+          <p class="eyebrow" id="date-label">Today</p>
+          <h1>Health</h1>
+        </div>
+        <button id="refresh" class="ghost" aria-label="Refresh">↻</button>
+      </header>
+
+      <section class="card north" aria-labelledby="ns-label">
+        <p class="eyebrow" id="ns-label">North star · on-track days, last 7</p>
+        <div class="ns-row">
+          <span class="ns-value" id="ns-value">–</span>
+          <span class="ns-goal" id="ns-goal"></span>
+        </div>
+        <ol class="dots" id="ns-dots"></ol>
+        <p class="hint" id="ns-hint"></p>
+      </section>
+
+      <section class="card">
+        <div class="row-between">
+          <h2>Today</h2>
+          <span class="score" id="today-score">–</span>
+        </div>
+        <ul class="checks" id="checks"></ul>
+      </section>
+
+      <section class="card">
+        <h2>Log a meal</h2>
+        <form id="meal-form">
+          <textarea id="meal-text" rows="2" placeholder="2 eggs, toast with butter, black coffee" required></textarea>
+          <div class="row">
+            <select id="meal-slot" aria-label="Meal">
+              <option value="unspecified">Meal</option>
+              <option value="breakfast">Breakfast</option>
+              <option value="lunch">Lunch</option>
+              <option value="dinner">Dinner</option>
+              <option value="snack">Snack</option>
+            </select>
+            <button type="submit">Log meal</button>
+          </div>
+        </form>
+        <p class="result" id="meal-result" role="status"></p>
+      </section>
+
+      <section class="card">
+        <h2>Steps and walks</h2>
+        <form id="steps-form" class="row">
+          <input id="steps" type="number" inputmode="numeric" min="0" placeholder="Steps today" required>
+          <input id="walk" type="number" inputmode="numeric" min="0" placeholder="Walk min">
+          <button type="submit">Save</button>
+        </form>
+        <p class="result" id="steps-result" role="status"></p>
+      </section>
+
+      <section class="card">
+        <h2>Recent workouts</h2>
+        <ul class="workouts" id="workouts"></ul>
+      </section>
+
+      <p class="foot"><button id="signout" class="link">Disconnect this device</button></p>
+    </div>
+  </main>
+  <script src="app.js" type="module"></script>
+</body>
+</html>

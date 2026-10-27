@@ -1,7 +1,10 @@
+import path from "node:path";
+
 import express from "express";
 
 import { rejectUnlessOAuthDiagnosticsAllowed } from "./config/security.js";
 import { healthListenPort } from "./env.js";
+import { createHealthAppRouter } from "./healthApp/router.js";
 import { morningBriefInternalSecret } from "./jobs/morningBriefEnv.js";
 import { runMorningBrief } from "./jobs/morningBrief.js";
 import { logger } from "./logger.js";
@@ -58,6 +61,21 @@ export function startHealthServer(options: HealthServerOptions = {}): Promise<He
     });
     logger.info("telegram webhook route mounted");
   }
+
+  /** Health PWA: static shell at `/app`, JSON API at `/api/health` (bearer-token auth). */
+  app.use("/api/health", createHealthAppRouter());
+  app.use(
+    "/app",
+    express.static(process.env.MAGNUS_HEALTH_APP_DIR?.trim() || path.resolve("pwa"), {
+      index: "index.html",
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith("sw.js")) {
+          res.setHeader("Cache-Control", "no-cache");
+          res.setHeader("Service-Worker-Allowed", "/app/");
+        }
+      },
+    }),
+  );
 
   app.get("/ready", async (_req, res) => {
     try {

@@ -1,0 +1,13 @@
+{
+  "name": "Magnus Health",
+  "short_name": "Magnus",
+  "description": "Workouts, steps and meals in one place, scored against one north-star number.",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#0f1412",
+  "theme_color": "#0f1412",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
