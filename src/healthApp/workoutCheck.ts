@@ -11,6 +11,7 @@ import { loggableError } from "../util/loggableError.js";
 import type { ActionContext } from "./actions.js";
 import { formatTime, zonedInstant, type GymSlot } from "./gymSlot.js";
 import { loadHealthProfile, loadRecentWorkouts, weekdayOfDate, type WorkoutSummary } from "./snapshot.js";
+import { analyzeTraining, hevyKey, loadWorkoutHistory, workoutReview } from "./training.js";
 import {
   getWorkoutChecks,
   insertWorkoutCheck,
@@ -77,7 +78,22 @@ type Deps = {
   getChecks: typeof getWorkoutChecks;
   insertCheck: typeof insertWorkoutCheck;
   postMessage: typeof postCoachMessage;
+  /** Post-workout note (new bests, stalled lifts) for a workout the check found, or null. */
+  review: (userProfileId: string, timezone: string, now: Date, workout: WorkoutSummary) => Promise<string | null>;
 };
+
+async function reviewFromHevy(
+  userProfileId: string,
+  timezone: string,
+  now: Date,
+  workout: WorkoutSummary,
+): Promise<string | null> {
+  const apiKey = await hevyKey(userProfileId);
+  if (!apiKey) return null;
+  const history = await loadWorkoutHistory(apiKey, now, 8);
+  if (!history.ok) return null;
+  return workoutReview(workout, workout.localDate, analyzeTraining(history.workouts, now, timezone, 8));
+}
 
 const defaultDeps: Deps = {
   loadProfile: (id) => loadHealthProfile(id),
@@ -85,6 +101,7 @@ const defaultDeps: Deps = {
   getChecks: (id, from, to) => getWorkoutChecks(id, from, to),
   insertCheck: (id, check) => insertWorkoutCheck(id, check),
   postMessage: (id, content, cards) => postCoachMessage(id, content, cards),
+  review: reviewFromHevy,
 };
 
 /** Runs any due checks once. Safe to call repeatedly: each day is checked at most once. */
@@ -122,6 +139,9 @@ export async function runWorkoutChecks(
     if (status === "missing") {
       const card: WorkoutCheckCard = { type: "workout_check", date, gymTime: gym.time!, status };
       await deps.postMessage(userProfileId, missedWorkoutMessage(date, today, gym), [card]);
+    } else if (workout) {
+      const note = await deps.review(userProfileId, timezone, now, workout).catch(() => null);
+      if (note) await deps.postMessage(userProfileId, note, []);
     }
   }
   return results;

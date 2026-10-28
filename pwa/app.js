@@ -39,6 +39,12 @@ function friendlyError(code) {
     invalid_body: "Some values look off. Check and try again.",
     deadline_must_be_after_start: "The deadline needs to be after today.",
     no_items: "Add at least one item.",
+    hevy_not_connected: "Hevy isn't connected for this account.",
+    hevy_unavailable: "Couldn't reach Hevy. Try again in a minute.",
+    routine_changed_in_hevy: "That routine changed in Hevy since. Ask the coach for a fresh suggestion.",
+    routine_not_found: "That routine no longer exists in Hevy.",
+    proposal_discarded: "That suggestion was discarded.",
+    proposal_in_progress: "Already sending that to Hevy.",
   }[code] || "Something went wrong. Try again.";
 }
 
@@ -373,6 +379,113 @@ function autosize() {
 function appendCard(c) {
   if (c.type === "meal_draft") $("thread").append(mealDraftCard(c.draft));
   else if (c.type === "workout_check") $("thread").append(workoutCheckCard(c));
+  else if (c.type === "hevy_proposal") $("thread").append(hevyProposalCard(c));
+}
+
+// ---------- Hevy proposal card ----------
+
+const PROPOSAL_LABEL = { routine_update: "Routine change", routine_create: "New routine", workout_log: "Log workout" };
+const LINE_MARK = { add: "+", remove: "−", change: "→", keep: "·", info: "" };
+
+/** A change the coach wants to make in Hevy. Nothing is written until Apply. */
+function hevyProposalCard(p) {
+  const card = el("div", { class: "draft proposal" });
+
+  function render(cur) {
+    if (cur.status === "applied" || cur.status === "discarded") {
+      card.className = "draft done";
+      card.replaceChildren(
+        cur.status === "applied"
+          ? el("div", { class: "done-line" }, `✓ ${cur.kind === "workout_log" ? "Logged" : cur.kind === "routine_create" ? "Created" : "Updated"} in Hevy · ${cur.title}`)
+          : el("div", { class: "muted" }, `Discarded · ${PROPOSAL_LABEL[cur.kind]} · ${cur.title}`),
+      );
+      return;
+    }
+    const apply = el("button", { class: "btn primary", type: "button" }, cur.status === "failed" ? "Try again" : "Apply to Hevy");
+    const discard = el("button", { class: "btn", type: "button" }, "Discard");
+    apply.addEventListener("click", async () => {
+      apply.disabled = discard.disabled = true;
+      apply.textContent = "Sending…";
+      try {
+        await api(`/hevy/proposals/${cur.proposalId}/apply`, { method: "POST" });
+        render({ ...cur, status: "applied" });
+        toast("Saved to Hevy.");
+        refresh();
+        loadTraining(true);
+      } catch (err) {
+        render({ ...cur, status: "failed", errorText: err.message });
+      }
+    });
+    discard.addEventListener("click", async () => {
+      apply.disabled = discard.disabled = true;
+      try {
+        await api(`/hevy/proposals/${cur.proposalId}/discard`, { method: "POST" });
+        render({ ...cur, status: "discarded" });
+      } catch (err) {
+        apply.disabled = discard.disabled = false;
+        toast(err.message);
+      }
+    });
+    card.className = "draft proposal";
+    card.replaceChildren(...[
+      el("p", { class: "eyebrow" }, `${PROPOSAL_LABEL[cur.kind]} · check and apply`),
+      el("h3", { class: "proposal-title" }, cur.title),
+      cur.reason ? el("p", { class: "draft-note" }, cur.reason) : null,
+      el("ul", { class: "changes" }, ...cur.lines.map((l) => el("li", { class: l.kind }, el("span", { class: "sign" }, LINE_MARK[l.kind]), el("span", {}, l.text)))),
+      cur.status === "failed" ? el("p", { class: "draft-note err" }, cur.errorText || friendlyError(cur.error)) : null,
+      el("div", { class: "draft-actions" }, discard, apply),
+    ].filter(Boolean));
+  }
+
+  render(p);
+  return card;
+}
+
+// ---------- training (tracker) ----------
+
+const TREND_LABEL = { progressing: "Progressing", stalled: "Stalled", regressing: "Slipping", new: "New" };
+
+async function loadTraining(fresh = false) {
+  try {
+    const r = await api(`/training${fresh ? "?fresh=1" : ""}`);
+    renderTraining(r);
+  } catch {
+    $("lifts").replaceChildren(el("li", { class: "none" }, "Couldn't load Hevy history."));
+  }
+}
+
+function renderTraining(r) {
+  const a = r.analysis;
+  if (!r.connected || !a) {
+    $("lifts-meta").textContent = "";
+    $("lifts").replaceChildren(el("li", { class: "none" }, "Connect Hevy to see how your lifts are moving."));
+    $("lifts-ask").hidden = true;
+    return;
+  }
+  $("lifts-meta").textContent = `${a.workoutsPerWeek}/wk · ${a.weeks} weeks`;
+  const order = { regressing: 0, stalled: 1, progressing: 2, new: 3 };
+  const rows = [...a.exercises].filter((e) => e.e1rmSeries.length).sort((x, y) => order[x.trend] - order[y.trend] || y.sessions - x.sessions).slice(0, 6);
+  $("lifts").replaceChildren(
+    ...(rows.length
+      ? rows.map((e) =>
+          el("li", {},
+            el("div", { class: "main" },
+              el("div", { class: "title" }, e.title),
+              el("div", { class: "sub" }, [e.lastTopSet ? `Last ${e.lastTopSet}` : null, `${e.sessions} sessions`].filter(Boolean).join(" · ")),
+            ),
+            el("div", { class: "right" },
+              el("span", { class: `tag ${e.trend}` }, `${TREND_LABEL[e.trend]}${e.changePct != null && e.trend !== "stalled" && e.trend !== "new" ? ` ${e.changePct > 0 ? "+" : ""}${e.changePct}%` : ""}`),
+            ),
+          ),
+        )
+      : [el("li", { class: "none" }, "No weighted lifts in the last 8 weeks.")]),
+  );
+  const stuck = [...a.stalled, ...a.regressing];
+  $("lifts-ask").hidden = !stuck.length;
+  $("lifts-ask").onclick = () => {
+    setView("coach");
+    send(`${stuck.slice(0, 3).join(", ")} ${stuck.length === 1 ? "has" : "have"} stopped moving. What should I change in my routine?`);
+  };
 }
 
 // ---------- workout check card ----------
@@ -745,6 +858,7 @@ function start() {
   renderChips(null);
   loadHistory();
   refresh();
+  loadTraining();
 }
 
 if ("serviceWorker" in navigator) {

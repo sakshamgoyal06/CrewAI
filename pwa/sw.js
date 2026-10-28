@@ -1,5 +1,5 @@
 // App shell cache. API calls always go to the network so numbers are never stale.
-const CACHE = "magnus-health-v3";
+const CACHE = "magnus-health-v4";
 const SHELL = ["/app/", "/app/index.html", "/app/styles.css", "/app/app.js", "/app/manifest.webmanifest", "/app/icon.svg"];
 
 self.addEventListener("install", (event) => {

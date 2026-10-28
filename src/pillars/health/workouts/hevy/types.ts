@@ -33,10 +33,36 @@ export type HevyWorkoutsPage = {
   workouts?: HevyWorkout[];
 };
 
+export type HevyRoutineSet = {
+  index?: number;
+  type?: string;
+  weight_kg?: number | null;
+  reps?: number | null;
+  distance_meters?: number | null;
+  duration_seconds?: number | null;
+  custom_metric?: number | null;
+  rep_range?: { start?: number | null; end?: number | null } | null;
+};
+
+export type HevyRoutineExercise = {
+  index?: number;
+  title?: string;
+  notes?: string | null;
+  exercise_template_id?: string;
+  /** The API has used both spellings. */
+  superset_id?: number | null;
+  supersets_id?: number | null;
+  rest_seconds?: number | null;
+  sets?: HevyRoutineSet[];
+};
+
 export type HevyRoutine = {
   id?: string;
   title?: string;
   folder_id?: number | null;
+  notes?: string | null;
+  updated_at?: string;
+  exercises?: HevyRoutineExercise[];
 };
 
 export type HevyRoutinesPage = {

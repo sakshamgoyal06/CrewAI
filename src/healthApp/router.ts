@@ -29,6 +29,8 @@ import { loadChatHistory, runHealthChat } from "./chat.js";
 import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
 import { listMealsForDate } from "./meals.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
+import { applyProposal, cardFromRow, discardProposal, getProposals } from "./hevyProposals.js";
+import { analyzeTraining, hevyKey, loadWorkoutHistory } from "./training.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
 
@@ -66,9 +68,19 @@ function fromResult(r: { ok: boolean; error?: string }): { status: number; body:
     "no_items",
     "meal session not found",
     "hevy_not_connected",
+    "proposal_not_found",
+    "proposal_discarded",
+    "proposal_in_progress",
+    "proposal_not_pending",
+    "routine_changed_in_hevy",
+    "routine_not_found",
   ]);
   return { status: clientErrors.has(r.error ?? "") ? 400 : 500, body: r };
 }
+
+/** Hevy history takes several requests; the tracker re-reads it at most every few minutes. */
+const TRAINING_CACHE_MS = 10 * 60_000;
+const trainingCache = new Map<string, { at: number; body: unknown }>();
 
 export function createHealthAppRouter(): express.Router {
   const router = express.Router();
@@ -101,6 +113,17 @@ export function createHealthAppRouter(): express.Router {
           m.cards = m.cards.map((c) => {
             const current = c.type === "workout_check" ? checks.get(c.date) : undefined;
             return current && c.type === "workout_check" ? { ...c, status: current.status, reason: current.reason } : c;
+          });
+        }
+      }
+      // Hevy proposal cards show whether they've since been applied or discarded.
+      const ids = messages.flatMap((m) => m.cards.flatMap((c) => (c.type === "hevy_proposal" ? [c.proposalId] : [])));
+      if (ids.length) {
+        const rows = await getProposals(ctx.userProfileId, ids);
+        for (const m of messages) {
+          m.cards = m.cards.map((c) => {
+            const row = c.type === "hevy_proposal" ? rows.get(c.proposalId) : undefined;
+            return row ? cardFromRow(row) : c;
           });
         }
       }
@@ -185,6 +208,37 @@ export function createHealthAppRouter(): express.Router {
     route("workout-check", async (ctx, req) =>
       fromResult(await answerWorkoutCheck(ctx, workoutCheckAnswerInput.parse(req.body))),
     ),
+  );
+
+  /** Coach-proposed Hevy changes: nothing is written to Hevy until apply. */
+  router.post(
+    "/hevy/proposals/:id/apply",
+    route("hevy-apply", async (ctx, req) => {
+      const r = await applyProposal(ctx, String(req.params.id));
+      if (r.ok) trainingCache.delete(ctx.userProfileId);
+      return fromResult(r);
+    }),
+  );
+  router.post(
+    "/hevy/proposals/:id/discard",
+    route("hevy-discard", async (ctx, req) => fromResult(await discardProposal(ctx, String(req.params.id)))),
+  );
+
+  /** Training analysis for the tracker: progressing / stalled lifts over the last 8 weeks. */
+  router.get(
+    "/training",
+    route("training", async (ctx, req) => {
+      const cached = trainingCache.get(ctx.userProfileId);
+      if (cached && Date.now() - cached.at < TRAINING_CACHE_MS && req.query.fresh !== "1") return { body: cached.body };
+      const apiKey = await hevyKey(ctx.userProfileId);
+      if (!apiKey) return { body: { connected: false, analysis: null } };
+      const now = new Date();
+      const h = await loadWorkoutHistory(apiKey, now, 8);
+      if (!h.ok) return { status: 502, body: { error: "hevy_unavailable" } };
+      const body = { connected: true, analysis: analyzeTraining(h.workouts, now, ctx.timezone, 8) };
+      trainingCache.set(ctx.userProfileId, { at: Date.now(), body });
+      return { body };
+    }),
   );
 
   return router;

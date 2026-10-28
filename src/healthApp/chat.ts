@@ -25,16 +25,34 @@ import {
 } from "./actions.js";
 import type { MealDraft } from "./meals.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
+import {
+  newRoutineInput,
+  proposeNewRoutine,
+  proposeRoutineChange,
+  proposeWorkoutLog,
+  routineChangeInput,
+  workoutLogInput,
+  type HevyProposalCard,
+} from "./hevyProposals.js";
+import {
+  analyzeTraining,
+  exerciseCatalog,
+  hevyKey,
+  loadRoutines,
+  loadWorkoutHistory,
+  routineForModel,
+  searchTemplates,
+} from "./training.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
 
 export function healthChatModel(): string {
   return process.env.MAGNUS_HEALTH_CHAT_MODEL?.trim() || "claude-opus-5-5";
 }
 
-const MAX_TOOL_ROUNDS = 6;
+const MAX_TOOL_ROUNDS = 10;
 const HISTORY_MESSAGES = 20;
 
-export type ChatCard = { type: "meal_draft"; draft: MealDraft } | WorkoutCheckCard;
+export type ChatCard = { type: "meal_draft"; draft: MealDraft } | WorkoutCheckCard | HevyProposalCard;
 
 export type ChatReply = {
   text: string;
@@ -54,8 +72,35 @@ How to work:
 - Use get_status before answering questions about progress, and quote its numbers; never invent numbers.
 - If a goal or targets are missing and the question needs them, ask for them in one short question.
 - Workouts: on training days the app checks Hevy a few hours after the gym slot and asks in chat if nothing is logged. When they answer (skipped and why, or trained but didn't log it), record it with answer_workout_check. If they skipped, ask why in one short question if they didn't say.
+- Training (Hevy): use get_training_analysis to see what's progressing, stalled or going backwards, and get_routines for their current plan. To change Hevy (swap or add an exercise, change sets/reps/rest, create a routine, log a workout), find exercise ids with search_exercises, then call the matching propose_* tool. It shows a card they apply; nothing changes in Hevy until they do, so never say it's done. Suggest changes from the data: a lift that has stalled for 3+ weeks gets a rep-range change or a close variation, not a whole new program. Keep a routine's other exercises as they are unless asked.
 - When they're off track, look for the concrete cause in the data (which check keeps failing, which days) and suggest one small, specific change.
 - Keep replies short: 1 to 4 sentences, plain text, no headings. Use kg and kcal.`;
+
+const SET_SCHEMA = {
+  type: "object",
+  properties: {
+    type: { type: "string", enum: ["warmup", "normal", "failure", "dropset"] },
+    weightKg: { type: "number" },
+    reps: { type: "integer" },
+    repRange: {
+      type: "object",
+      properties: { start: { type: "integer" }, end: { type: "integer" } },
+      required: ["start", "end"],
+    },
+    durationSeconds: { type: "integer" },
+  },
+};
+
+const EXERCISE_SCHEMA = {
+  type: "object",
+  properties: {
+    exerciseTemplateId: { type: "string" },
+    sets: { type: "array", items: SET_SCHEMA },
+    restSeconds: { type: "integer" },
+    notes: { type: "string" },
+  },
+  required: ["exerciseTemplateId", "sets"],
+};
 
 const tools: Anthropic.Tool[] = [
   {
@@ -153,6 +198,114 @@ const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: "get_training_analysis",
+    description:
+      "Analyse Hevy history: workouts per week, weekly volume, and per exercise the estimated-1RM trend (progressing / stalled / regressing / new), last top set and working sets per week.",
+    input_schema: {
+      type: "object",
+      properties: { weeks: { type: "integer", description: "Window, 2–16 weeks. Default 8." } },
+    },
+  },
+  {
+    name: "get_routines",
+    description: "The person's Hevy routines with each exercise's exerciseTemplateId, sets scheme, rest and notes.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "search_exercises",
+    description: "Find Hevy exercise templates by name, e.g. 'incline dumbbell press'. Returns ids to use in propose_* tools.",
+    input_schema: {
+      type: "object",
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    },
+  },
+  {
+    name: "propose_routine_change",
+    description:
+      "Propose edits to one existing Hevy routine as operations: replace (swap an exercise), add, remove, update (sets/rest/notes). Exercises not mentioned stay as they are. Shows a card; nothing changes in Hevy until the person applies it.",
+    input_schema: {
+      type: "object",
+      properties: {
+        routineId: { type: "string" },
+        reason: { type: "string", description: "One sentence on why, from their data." },
+        title: { type: "string", description: "Only to rename the routine." },
+        changes: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              op: { type: "string", enum: ["replace", "add", "remove", "update"] },
+              exerciseTemplateId: { type: "string", description: "The exercise in the routine (replace/remove/update)." },
+              newExerciseTemplateId: { type: "string", description: "replace: the new exercise." },
+              exercise: { ...EXERCISE_SCHEMA, description: "add: the exercise to add." },
+              afterExerciseTemplateId: { type: "string", description: "add: insert after this exercise; default at the end." },
+              sets: { type: "array", items: SET_SCHEMA },
+              restSeconds: { type: "integer" },
+              notes: { type: "string" },
+            },
+            required: ["op"],
+          },
+        },
+      },
+      required: ["routineId", "reason", "changes"],
+    },
+  },
+  {
+    name: "propose_new_routine",
+    description: "Propose a new Hevy routine. Shows a card; it's created only when the person applies it.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        reason: { type: "string" },
+        notes: { type: "string" },
+        exercises: { type: "array", items: EXERCISE_SCHEMA },
+      },
+      required: ["title", "exercises"],
+    },
+  },
+  {
+    name: "propose_workout_log",
+    description:
+      "Propose logging a completed workout to Hevy from what they describe (exercises, weights, reps). Shows a card; it's logged only when the person applies it.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "e.g. the routine name, 'Push', 'Legs'." },
+        startTime: { type: "string", description: "ISO 8601 with offset, in their timezone." },
+        durationMin: { type: "integer" },
+        description: { type: "string" },
+        exercises: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              exerciseTemplateId: { type: "string" },
+              sets: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    type: { type: "string", enum: ["warmup", "normal", "failure", "dropset"] },
+                    weightKg: { type: "number" },
+                    reps: { type: "integer" },
+                    durationSeconds: { type: "integer" },
+                    distanceMeters: { type: "integer" },
+                    rpe: { type: "number" },
+                  },
+                },
+              },
+              notes: { type: "string" },
+            },
+            required: ["exerciseTemplateId", "sets"],
+          },
+        },
+      },
+      required: ["title", "startTime", "durationMin", "exercises"],
+    },
+  },
+  {
     name: "answer_workout_check",
     description:
       "Record the answer to the post-gym-slot workout check: recheck (look in Hevy again), skipped (with reason), or trained_unlogged (trained but didn't log in Hevy; counts as the day's workout).",
@@ -200,6 +353,18 @@ type ToolOutcome = { result: unknown; card?: ChatCard; changed?: boolean };
 
 function invalid(err: z.ZodError): ToolOutcome {
   return { result: { ok: false, error: "invalid_input", issues: err.issues.map((i) => i.message) } };
+}
+
+async function withParsed<S extends z.ZodTypeAny, R>(
+  schema: S,
+  input: unknown,
+  fn: (data: z.infer<S>) => Promise<R>,
+): Promise<R | { ok: false; error: "invalid_input"; issues: string[] }> {
+  const p = schema.safeParse(input);
+  if (!p.success) {
+    return { ok: false, error: "invalid_input", issues: p.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) };
+  }
+  return fn(p.data);
 }
 
 export async function runTool(
@@ -254,6 +419,47 @@ export async function runTool(
       if (!p.success) return invalid(p.error);
       const r = await setTargets(ctx, p.data);
       return { result: r, changed: r.ok };
+    }
+    case "get_training_analysis": {
+      const weeks = Math.min(16, Math.max(2, Number((input as { weeks?: unknown })?.weeks) || 8));
+      const apiKey = await hevyKey(ctx.userProfileId);
+      if (!apiKey) return { result: { ok: false, error: "hevy_not_connected" } };
+      const now = ctx.now ?? new Date();
+      const h = await loadWorkoutHistory(apiKey, now, weeks);
+      if (!h.ok) return { result: { ok: false, error: "hevy_unavailable" } };
+      const a = analyzeTraining(h.workouts, now, ctx.timezone, weeks);
+      // The full e1RM series is for charts; the model only needs the summary.
+      return { result: { ...a, exercises: a.exercises.map(({ e1rmSeries, ...e }) => ({ ...e, latestE1rm: e1rmSeries.at(-1)?.e1rm ?? null })) } };
+    }
+    case "get_routines": {
+      const apiKey = await hevyKey(ctx.userProfileId);
+      if (!apiKey) return { result: { ok: false, error: "hevy_not_connected" } };
+      const r = await loadRoutines(apiKey);
+      return { result: r.ok ? { routines: r.routines.map(routineForModel) } : { ok: false, error: "hevy_unavailable" } };
+    }
+    case "search_exercises": {
+      const query = String((input as { query?: unknown })?.query ?? "").slice(0, 100);
+      const apiKey = await hevyKey(ctx.userProfileId);
+      if (!apiKey) return { result: { ok: false, error: "hevy_not_connected" } };
+      const cat = await exerciseCatalog(apiKey);
+      if (!cat.ok) return { result: { ok: false, error: "hevy_unavailable" } };
+      return { result: { matches: searchTemplates(query, cat.templates) } };
+    }
+    case "propose_routine_change":
+    case "propose_new_routine":
+    case "propose_workout_log": {
+      const r =
+        name === "propose_routine_change"
+          ? await withParsed(routineChangeInput, input, (d) => proposeRoutineChange(ctx, d))
+          : name === "propose_new_routine"
+            ? await withParsed(newRoutineInput, input, (d) => proposeNewRoutine(ctx, d))
+            : await withParsed(workoutLogInput, input, (d) => proposeWorkoutLog(ctx, d));
+      if ("issues" in r) return { result: r };
+      if (!r.ok) return { result: r };
+      return {
+        result: { shownToUserAsCard: true, proposalId: r.card.proposalId, summary: r.card.lines.map((l) => l.text) },
+        card: r.card,
+      };
     }
     case "answer_workout_check": {
       const p = workoutCheckAnswerInput.safeParse(input);

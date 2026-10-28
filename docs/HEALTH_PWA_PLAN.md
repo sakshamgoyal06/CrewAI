@@ -25,7 +25,7 @@ Design language: warm near-black (light mode: warm paper), one gold accent, edit
 | Goal + weigh-ins | `goalProgress.ts` (pure), `bodyStore.ts`; tables `health_goals` (one active), `health_body_checkins` (one per day). |
 | Steps / walks | `healthConnect.ts`: hourly buckets upserted into `health_activity_samples`, day totals rebuilt into `health_daily_activity`. Manual entry via `/steps`. |
 | North star | `northStar.ts` (pure). |
-| Hevy | `src/pillars/health/workouts/hevy/` (client, per-user key). Read-only in the app so far. |
+| Hevy | `src/pillars/health/workouts/hevy/` (client, per-user key). `training.ts`: 8-week analysis (Epley e1RM trend per lift: progressing / stalled / regressing). `hevyProposals.ts`: coach proposes routine edits (as operations on the live routine), new routines and workout logs; stored in `health_hevy_proposals` and sent to Hevy only on apply (idempotent; refuses if the routine changed in Hevy since). |
 | Gym slot check | `workoutCheck.ts`: in-process timer every 5 min. On training days, `gym_time` + delay (default 3 h) → read Hevy; if nothing, post a check card in chat. Answers (skipped + reason, trained but unlogged) go in `health_workout_checks` for RCA; "trained, unlogged" counts as the day's workout. |
 
 **Auth.** Single user: `MAGNUS_HEALTH_APP_TOKEN` (bearer) mapped to `MAGNUS_HEALTH_APP_USER_PROFILE_ID`. `npm run app:setup` prints both.
@@ -46,7 +46,7 @@ It's a leading indicator you control every day; weight and body fat lag by weeks
 
 1. **Foundation (PR #114).** Everything above: API, coach chat, robust meals, goals + weigh-ins, north star, Health Connect sync, the app, archive.
 2. **Notifications.** Web Push (VAPID, `push_subscriptions`), scheduler reusing `archive/src/proactive` ideas (dedupe, quiet hours). First nudges: morning plan, meal not logged by slot time, mid-afternoon step pace, training-day workout reminder, evening score wrap, Sunday weigh-in.
-3. **Workouts + day planner.** Log a workout and create routines from chat and tracker (bring back `hevyWriteAgent`), today's planned session from training days. "Plan my day": workout, walk and meal blocks into free Google Calendar time on confirm.
+3. **Day planner.** (Hevy write landed early, 2026-10-28.) Today's planned session from training days. "Plan my day": workout, walk and meal blocks into free Google Calendar time on confirm.
 4. **RCA.** Deterministic signal mining over 14–28 days (which check fails, which weekdays, time of day, late or skipped meals, calendar load), then Claude writes one hypothesis and one small experiment. Triggered by two off-track days in a row or a week below goal, plus a weekly review. Store RCAs and whether the experiment helped.
 5. **Polish.** Trends (4–12 weeks), offline queue for logs, photo meal logging, settings for check-in day and quiet hours.
 

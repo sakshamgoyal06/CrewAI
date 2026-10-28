@@ -65,6 +65,7 @@ function deps(over: {
   existing?: Map<string, WorkoutCheck>;
   hevy?: { connected: boolean; fetched: boolean; workouts: Array<{ localDate: string; id: string }> };
   inserted?: boolean;
+  review?: string;
 } = {}) {
   const posted: Array<{ content: string; cards: unknown[] }> = [];
   const inserts: WorkoutCheck[] = [];
@@ -97,6 +98,7 @@ function deps(over: {
       postMessage: vi.fn(async (_u: string, content: string, cards: unknown[]) => {
         posted.push({ content, cards });
       }),
+      review: vi.fn(async () => over.review ?? null),
     },
   };
 }
@@ -122,6 +124,15 @@ describe("runWorkoutChecks", () => {
     expect(out).toEqual([{ date: "2026-10-28", status: "found" }]);
     expect(inserts[0]).toMatchObject({ status: "found", hevyWorkoutId: "w9" });
     expect(posted).toHaveLength(0);
+  });
+
+  it("posts a post-workout review when there's something to say", async () => {
+    const { d, posted } = deps({
+      hevy: { connected: true, fetched: true, workouts: [{ localDate: "2026-10-28", id: "w9" }] },
+      review: "Push is in Hevy. New best: Bench Press 82.5 kg × 6.",
+    });
+    await runWorkoutChecks("u1", DUE_NOW, d);
+    expect(posted).toEqual([{ content: "Push is in Hevy. New best: Bench Press 82.5 kg × 6.", cards: [] }]);
   });
 
   it("runs at most once per day", async () => {
