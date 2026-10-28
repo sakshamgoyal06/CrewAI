@@ -13,7 +13,9 @@ import { supabase } from "../tools/clients.js";
 import { getActivityRange, type DailyActivity } from "./activityStore.js";
 import { getActiveGoal, getBodyCheckins } from "./bodyStore.js";
 import { computeGoalProgress, type BodyCheckin, type GoalProgress } from "./goalProgress.js";
+import { checkTime, DEFAULT_CHECK_DELAY_MIN } from "./gymSlot.js";
 import { listMealsForDate } from "./meals.js";
+import { getWorkoutChecks, type WorkoutCheck } from "./workoutCheckStore.js";
 import {
   computeNorthStar,
   DEFAULT_MIN_MEAL_SESSIONS,
@@ -49,6 +51,10 @@ export type HealthSnapshot = {
   targets: HealthTargets;
   workouts: WorkoutSummary[];
   hevyConnected: boolean;
+  /** Gym slot on training days and when the automatic Hevy check runs (local "HH:MM"). */
+  gym: { time: string | null; checkDelayMin: number; checkAt: string | null };
+  /** Post-gym-slot checks in the 7-day window, newest first. */
+  workoutChecks: WorkoutCheck[];
   goal: GoalProgress | null;
   /** Body check-ins for the last ~6 months, oldest first, for the trend chart. */
   checkins: BodyCheckin[];
@@ -79,12 +85,18 @@ export function weekdayOfDate(date: string): number {
 
 export async function loadHealthProfile(
   userProfileId: string,
-): Promise<{ timezone: string; targets: HealthTargets }> {
+): Promise<{
+  timezone: string;
+  targets: HealthTargets;
+  gym: { time: string | null; checkDelayMin: number };
+}> {
   const [profile, health] = await Promise.all([
     supabase.from("user_profile").select("timezone").eq("id", userProfileId).maybeSingle(),
     supabase
       .from("user_health_profile")
-      .select("daily_calorie_target, daily_protein_g_target, daily_step_target, training_days")
+      .select(
+        "daily_calorie_target, daily_protein_g_target, daily_step_target, training_days, gym_time, workout_check_delay_min",
+      )
       .eq("user_profile_id", userProfileId)
       .maybeSingle(),
   ]);
@@ -104,6 +116,10 @@ export async function loadHealthProfile(
       stepTarget: num(h.daily_step_target) ?? DEFAULT_STEP_TARGET,
       trainingDays,
       minMealSessions: DEFAULT_MIN_MEAL_SESSIONS,
+    },
+    gym: {
+      time: typeof h.gym_time === "string" && /^\d{2}:\d{2}/.test(h.gym_time) ? h.gym_time.slice(0, 5) : null,
+      checkDelayMin: num(h.workout_check_delay_min) ?? DEFAULT_CHECK_DELAY_MIN,
     },
   };
 }
@@ -162,46 +178,54 @@ export function summarizeWorkout(w: HevyWorkout, timezone: string): WorkoutSumma
   };
 }
 
-async function loadRecentWorkouts(
+/** `fetched` is false when Hevy is connected but the request failed, so an empty list means nothing. */
+export async function loadRecentWorkouts(
   userProfileId: string,
   timezone: string,
-): Promise<{ connected: boolean; workouts: WorkoutSummary[] }> {
+): Promise<{ connected: boolean; fetched: boolean; workouts: WorkoutSummary[] }> {
   const apiKey = (await hevyApiKeyForUser(userProfileId)) ?? hevyApiKeyFromEnv();
   if (!apiKey) {
-    return { connected: false, workouts: [] };
+    return { connected: false, fetched: false, workouts: [] };
   }
   const page = await fetchHevyWorkoutsPage(apiKey, 1, 10);
   if (!page.ok) {
-    return { connected: true, workouts: [] };
+    return { connected: true, fetched: false, workouts: [] };
   }
   const workouts = (page.data.workouts ?? [])
     .map((w) => summarizeWorkout(w, timezone))
     .filter((w): w is WorkoutSummary => w !== null);
-  return { connected: true, workouts };
+  return { connected: true, fetched: true, workouts };
 }
 
 export async function buildHealthSnapshot(
   userProfileId: string,
   now = new Date(),
 ): Promise<HealthSnapshot> {
-  const { timezone, targets } = await loadHealthProfile(userProfileId);
+  const { timezone, targets, gym } = await loadHealthProfile(userProfileId);
   const dates = windowDates(now, timezone);
   const from = dates[0]!;
   const to = dates[dates.length - 1]!;
 
   const historyFrom = localDateKey(new Date(now.getTime() - CHECKIN_HISTORY_DAYS * DAY_MS), timezone);
-  const [meals, activity, hevy, goal, checkins, todayMealList] = await Promise.all([
+  const [meals, activity, hevy, goal, checkins, todayMealList, workoutChecks] = await Promise.all([
     loadMealDays(userProfileId, from, to),
     getActivityRange(userProfileId, from, to),
     loadRecentWorkouts(userProfileId, timezone),
     getActiveGoal(userProfileId),
     getBodyCheckins(userProfileId, historyFrom),
     listMealsForDate(userProfileId, to),
+    getWorkoutChecks(userProfileId, from, to),
   ]);
 
   const workoutsByDate = new Map<string, number>();
   for (const w of hevy.workouts) {
     workoutsByDate.set(w.localDate, (workoutsByDate.get(w.localDate) ?? 0) + 1);
+  }
+  // "Trained but didn't log it in Hevy" still counts as the day's workout.
+  for (const c of workoutChecks.values()) {
+    if (c.status === "trained_unlogged" && !workoutsByDate.has(c.localDate)) {
+      workoutsByDate.set(c.localDate, 1);
+    }
   }
 
   const days = dates.map((date) => {
@@ -239,6 +263,8 @@ export async function buildHealthSnapshot(
     targets,
     workouts: hevy.workouts,
     hevyConnected: hevy.connected,
+    gym: { ...gym, checkAt: checkTime(gym) },
+    workoutChecks: [...workoutChecks.values()].sort((a, b) => b.localDate.localeCompare(a.localDate)),
     goal: goal ? computeGoalProgress(goal, checkins, to) : null,
     checkins,
     meals: todayMealList.map((m) => ({

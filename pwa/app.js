@@ -166,6 +166,7 @@ function renderSnapshot(s) {
       : [el("li", { class: "none" }, "Nothing logged yet today.")]),
   );
 
+  $("workouts-meta").textContent = s.gym?.time ? `Gym ${clock(s.gym.time)} · check ${clock(s.gym.checkAt)}` : "Hevy";
   $("workouts").replaceChildren(
     ...(!s.hevyConnected
       ? [el("li", { class: "none" }, "Hevy isn't connected for this account.")]
@@ -330,7 +331,7 @@ async function loadHistory() {
     $("thread").replaceChildren();
     for (const m of messages) {
       addMessage(m.role === "user" ? "user" : "coach", m.content);
-      for (const c of m.cards || []) if (c.type === "meal_draft") $("thread").append(mealDraftCard(c.draft));
+      for (const c of m.cards || []) appendCard(c);
     }
     scrollThread();
   } catch (err) {
@@ -351,7 +352,7 @@ async function send(text) {
     const reply = await api("/chat", { method: "POST", body: JSON.stringify({ text }) });
     typing.remove();
     addMessage("coach", reply.text);
-    for (const c of reply.cards) if (c.type === "meal_draft") $("thread").append(mealDraftCard(c.draft));
+    for (const c of reply.cards) appendCard(c);
     scrollThread();
     if (reply.changed) refresh();
   } catch (err) {
@@ -367,6 +368,83 @@ function autosize() {
   const t = $("input");
   t.style.height = "auto";
   t.style.height = `${Math.min(140, t.scrollHeight)}px`;
+}
+
+function appendCard(c) {
+  if (c.type === "meal_draft") $("thread").append(mealDraftCard(c.draft));
+  else if (c.type === "workout_check") $("thread").append(workoutCheckCard(c));
+}
+
+// ---------- workout check card ----------
+
+const SKIP_REASONS = ["Tired", "Busy", "Sore or injured", "Sick", "Travelling"];
+
+function clock(hhmm) {
+  if (!hhmm) return "";
+  const [h, m] = hhmm.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
+}
+
+/** Asked a few hours after the gym slot when Hevy has nothing for the day. */
+function workoutCheckCard(c) {
+  const card = el("div", { class: "draft check" });
+  const day = `${WD_LONG[dateOf(c.date).getUTCDay()]} ${dateOf(c.date).getUTCDate()}`;
+
+  async function answer(body, buttons) {
+    for (const b of buttons) b.disabled = true;
+    try {
+      const r = await api("/workout-check", { method: "POST", body: JSON.stringify({ date: c.date, ...body }) });
+      if (r.status === "missing") {
+        toast("Still nothing in Hevy for that day.");
+        for (const b of buttons) b.disabled = false;
+        return;
+      }
+      render({ ...c, status: r.status, reason: body.reason ?? null });
+      refresh();
+    } catch (err) {
+      for (const b of buttons) b.disabled = false;
+      toast(err.message);
+    }
+  }
+
+  function render(cur) {
+    if (cur.status !== "missing") {
+      card.className = "draft done";
+      const line =
+        cur.status === "found" ? "✓ Workout found in Hevy" :
+        cur.status === "trained_unlogged" ? "✓ Trained, not logged in Hevy" :
+        `Skipped${cur.reason ? ` · ${cur.reason}` : ""}`;
+      card.replaceChildren(el("div", { class: cur.status === "skipped" ? "muted" : "done-line" }, `${line} · ${day}`));
+      return;
+    }
+    const recheck = el("button", { class: "btn", type: "button" }, "Check Hevy again");
+    const trained = el("button", { class: "btn", type: "button" }, "Trained, didn't log");
+    const skipped = el("button", { class: "btn primary", type: "button" }, "Skipped");
+    const buttons = [recheck, trained, skipped];
+    recheck.addEventListener("click", () => answer({ answer: "recheck" }, buttons));
+    trained.addEventListener("click", () => answer({ answer: "trained_unlogged" }, buttons));
+    const reasons = el("div", { class: "reasons", hidden: true });
+    skipped.addEventListener("click", () => { reasons.hidden = !reasons.hidden; });
+    const other = el("input", { class: "field", placeholder: "Other reason", maxlength: "300" });
+    reasons.append(
+      el("p", { class: "draft-note" }, "What got in the way? This feeds the weekly review."),
+      el("div", { class: "chips wrap" },
+        ...SKIP_REASONS.map((r) => el("button", { class: "chip", type: "button", onclick: (e) => answer({ answer: "skipped", reason: r }, [...buttons, ...reasons.querySelectorAll("button")]) }, r))),
+      el("form", { class: "reason-other", onsubmit: (e) => { e.preventDefault(); answer({ answer: "skipped", reason: other.value.trim() || undefined }, [...buttons, ...reasons.querySelectorAll("button")]); } },
+        other, el("button", { class: "btn", type: "submit" }, "Save")),
+    );
+    card.className = "draft check";
+    card.replaceChildren(
+      el("p", { class: "eyebrow" }, `Workout check · ${day}`),
+      el("p", { class: "check-line" }, `Nothing in Hevy after your ${clock(cur.gymTime)} slot.`),
+      el("div", { class: "draft-actions" }, recheck, trained),
+      el("div", { class: "draft-actions" }, skipped),
+      reasons,
+    );
+  }
+
+  render(c);
+  return card;
 }
 
 // ---------- meal draft card ----------
@@ -590,7 +668,7 @@ const SHEETS = {
         el("button", { class: "btn primary block", type: "submit" }, "Save goal"),
       ),
       el("form", { class: "stack", onsubmit: submitter(async (fd) => {
-        await api("/targets", { method: "POST", body: JSON.stringify({ calorieTarget: num(fd.get("kcal")), proteinTarget: num(fd.get("prot")), stepTarget: num(fd.get("steps")), trainingDays: [...days] }) });
+        await api("/targets", { method: "POST", body: JSON.stringify({ calorieTarget: num(fd.get("kcal")), proteinTarget: num(fd.get("prot")), stepTarget: num(fd.get("steps")), trainingDays: [...days], gymTime: fd.get("gym") || null, checkDelayMin: num(fd.get("delay")) }) });
         toast("Targets saved.");
         refresh();
       }) },
@@ -601,6 +679,14 @@ const SHEETS = {
           el("label", {}, "Steps", el("input", { class: "field", name: "steps", type: "number", inputmode: "numeric", value: t.stepTarget ?? null })),
         ),
         el("label", {}, "Training days", dayButtons),
+        el("div", { class: "grid2" },
+          el("label", {}, "Gym slot", el("input", { class: "field", name: "gym", type: "time", value: s?.gym?.time ?? null })),
+          el("label", {}, "Check Hevy after",
+            el("select", { class: "field", name: "delay" },
+              ...[[120, "2 hours"], [180, "3 hours"], [240, "4 hours"]].map(([v, label]) =>
+                el("option", { value: String(v), selected: (s?.gym?.checkDelayMin ?? 180) === v ? "" : null }, label)))),
+        ),
+        el("p", { class: "hint" }, "On training days, if Hevy has no workout by then, I'll ask in chat."),
         el("button", { class: "btn block", type: "submit" }, "Save targets"),
       ),
       el("p", { class: "section-label" }, "Device"),
@@ -645,7 +731,12 @@ $("composer").addEventListener("submit", (e) => {
   send(text);
 });
 
-document.addEventListener("visibilitychange", () => { if (!document.hidden && store.get(TOKEN_KEY, "")) refresh(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden || !store.get(TOKEN_KEY, "")) return;
+  refresh();
+  // The workout check posts into chat on its own, so pick that up when the app comes back.
+  if (!state.sending) loadHistory();
+});
 
 function start() {
   showShell();

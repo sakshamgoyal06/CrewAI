@@ -29,6 +29,8 @@ import { loadChatHistory, runHealthChat } from "./chat.js";
 import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
 import { listMealsForDate } from "./meals.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
+import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
+import { getWorkoutChecks } from "./workoutCheckStore.js";
 
 const chatInput = z.object({ text: z.string().trim().min(1).max(2000) });
 
@@ -63,6 +65,7 @@ function fromResult(r: { ok: boolean; error?: string }): { status: number; body:
     "invalid_id",
     "no_items",
     "meal session not found",
+    "hevy_not_connected",
   ]);
   return { status: clientErrors.has(r.error ?? "") ? 400 : 500, body: r };
 }
@@ -87,9 +90,22 @@ export function createHealthAppRouter(): express.Router {
 
   router.get(
     "/chat",
-    route("chat-history", async (ctx) => ({
-      body: { messages: await loadChatHistory(ctx.userProfileId, 50) },
-    })),
+    route("chat-history", async (ctx) => {
+      const messages = await loadChatHistory(ctx.userProfileId, 50);
+      // Workout check cards show the day's current answer, not the status they were posted with.
+      const dates = messages.flatMap((m) => m.cards.flatMap((c) => (c.type === "workout_check" ? [c.date] : [])));
+      if (dates.length) {
+        const sorted = [...dates].sort();
+        const checks = await getWorkoutChecks(ctx.userProfileId, sorted[0]!, sorted[sorted.length - 1]!);
+        for (const m of messages) {
+          m.cards = m.cards.map((c) => {
+            const current = c.type === "workout_check" ? checks.get(c.date) : undefined;
+            return current && c.type === "workout_check" ? { ...c, status: current.status, reason: current.reason } : c;
+          });
+        }
+      }
+      return { body: { messages } };
+    }),
   );
 
   router.post(
@@ -160,6 +176,14 @@ export function createHealthAppRouter(): express.Router {
     "/targets",
     route("targets", async (ctx, req) =>
       fromResult(await setTargets(ctx, targetsInput.parse(req.body))),
+    ),
+  );
+
+  /** Answer to the post-gym-slot check: recheck Hevy, skipped (with reason), or trained but unlogged. */
+  router.post(
+    "/workout-check",
+    route("workout-check", async (ctx, req) =>
+      fromResult(await answerWorkoutCheck(ctx, workoutCheckAnswerInput.parse(req.body))),
     ),
   );
 

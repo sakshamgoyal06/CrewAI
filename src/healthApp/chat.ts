@@ -25,6 +25,7 @@ import {
 } from "./actions.js";
 import type { MealDraft } from "./meals.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
+import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
 
 export function healthChatModel(): string {
   return process.env.MAGNUS_HEALTH_CHAT_MODEL?.trim() || "claude-opus-5-5";
@@ -33,7 +34,7 @@ export function healthChatModel(): string {
 const MAX_TOOL_ROUNDS = 6;
 const HISTORY_MESSAGES = 20;
 
-export type ChatCard = { type: "meal_draft"; draft: MealDraft };
+export type ChatCard = { type: "meal_draft"; draft: MealDraft } | WorkoutCheckCard;
 
 export type ChatReply = {
   text: string;
@@ -52,6 +53,7 @@ How to work:
 - Several foods eaten together are one meal: pass the whole description in one draft_meal call.
 - Use get_status before answering questions about progress, and quote its numbers; never invent numbers.
 - If a goal or targets are missing and the question needs them, ask for them in one short question.
+- Workouts: on training days the app checks Hevy a few hours after the gym slot and asks in chat if nothing is logged. When they answer (skipped and why, or trained but didn't log it), record it with answer_workout_check. If they skipped, ask why in one short question if they didn't say.
 - When they're off track, look for the concrete cause in the data (which check keeps failing, which days) and suggest one small, specific change.
 - Keep replies short: 1 to 4 sentences, plain text, no headings. Use kg and kcal.`;
 
@@ -139,7 +141,29 @@ const tools: Anthropic.Tool[] = [
         proteinTarget: { type: "integer" },
         stepTarget: { type: "integer" },
         trainingDays: { type: "array", items: { type: "integer" } },
+        gymTime: {
+          type: ["string", "null"],
+          description: "Gym slot start on training days, local 24h HH:MM. null clears it.",
+        },
+        checkDelayMin: {
+          type: "integer",
+          description: "Minutes after the gym slot to check Hevy for a workout (default 180).",
+        },
       },
+    },
+  },
+  {
+    name: "answer_workout_check",
+    description:
+      "Record the answer to the post-gym-slot workout check: recheck (look in Hevy again), skipped (with reason), or trained_unlogged (trained but didn't log in Hevy; counts as the day's workout).",
+    input_schema: {
+      type: "object",
+      properties: {
+        date: { type: "string", description: "YYYY-MM-DD; defaults to today." },
+        answer: { type: "string", enum: ["recheck", "skipped", "trained_unlogged"] },
+        reason: { type: "string", description: "Why they skipped, in their words." },
+      },
+      required: ["answer"],
     },
   },
 ];
@@ -167,6 +191,8 @@ export function statusForModel(s: HealthSnapshot): Record<string, unknown> {
     mealsToday: s.meals,
     recentWorkouts: s.workouts.slice(0, 5),
     hevyConnected: s.hevyConnected,
+    gymSlot: s.gym,
+    workoutChecks: s.workoutChecks,
   };
 }
 
@@ -227,6 +253,12 @@ export async function runTool(
       const p = targetsInput.safeParse(input);
       if (!p.success) return invalid(p.error);
       const r = await setTargets(ctx, p.data);
+      return { result: r, changed: r.ok };
+    }
+    case "answer_workout_check": {
+      const p = workoutCheckAnswerInput.safeParse(input);
+      if (!p.success) return invalid(p.error);
+      const r = await answerWorkoutCheck(ctx, p.data);
       return { result: r, changed: r.ok };
     }
     default:

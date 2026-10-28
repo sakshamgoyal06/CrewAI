@@ -64,6 +64,14 @@ export const targetsInput = z
     proteinTarget: z.coerce.number().int().min(20).max(400).optional(),
     stepTarget: z.coerce.number().int().min(1000).max(50_000).optional(),
     trainingDays: z.array(z.coerce.number().int().min(0).max(6)).max(7).optional(),
+    /** Local "HH:MM" start of the gym slot on training days; null clears it. */
+    gymTime: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "expected HH:MM")
+      .nullable()
+      .optional(),
+    /** Minutes after the gym slot to check Hevy for a logged workout. */
+    checkDelayMin: z.coerce.number().int().min(30).max(720).optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: "nothing to update" });
 

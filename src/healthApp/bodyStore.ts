@@ -122,6 +122,8 @@ export type TargetsInput = {
   proteinTarget?: number | null;
   stepTarget?: number | null;
   trainingDays?: number[] | null;
+  gymTime?: string | null;
+  checkDelayMin?: number;
 };
 
 export async function updateDailyTargets(
@@ -133,6 +135,8 @@ export async function updateDailyTargets(
   if (input.proteinTarget !== undefined) patch.daily_protein_g_target = input.proteinTarget;
   if (input.stepTarget !== undefined) patch.daily_step_target = input.stepTarget;
   if (input.trainingDays !== undefined) patch.training_days = input.trainingDays;
+  if (input.gymTime !== undefined) patch.gym_time = input.gymTime;
+  if (input.checkDelayMin !== undefined) patch.workout_check_delay_min = input.checkDelayMin;
   const { error } = await supabase
     .from("user_health_profile")
     .upsert(patch, { onConflict: "user_profile_id" });

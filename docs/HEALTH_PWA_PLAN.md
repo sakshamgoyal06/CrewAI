@@ -25,7 +25,8 @@ Design language: warm near-black (light mode: warm paper), one gold accent, edit
 | Goal + weigh-ins | `goalProgress.ts` (pure), `bodyStore.ts`; tables `health_goals` (one active), `health_body_checkins` (one per day). |
 | Steps / walks | `healthConnect.ts`: hourly buckets upserted into `health_activity_samples`, day totals rebuilt into `health_daily_activity`. Manual entry via `/steps`. |
 | North star | `northStar.ts` (pure). |
-| Hevy | `src/pillars/health/workouts/hevy/` (client, per-user key). |
+| Hevy | `src/pillars/health/workouts/hevy/` (client, per-user key). Read-only in the app so far. |
+| Gym slot check | `workoutCheck.ts`: in-process timer every 5 min. On training days, `gym_time` + delay (default 3 h) → read Hevy; if nothing, post a check card in chat. Answers (skipped + reason, trained but unlogged) go in `health_workout_checks` for RCA; "trained, unlogged" counts as the day's workout. |
 
 **Auth.** Single user: `MAGNUS_HEALTH_APP_TOKEN` (bearer) mapped to `MAGNUS_HEALTH_APP_USER_PROFILE_ID`. `npm run app:setup` prints both.
 

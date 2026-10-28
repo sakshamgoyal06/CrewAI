@@ -4,6 +4,7 @@ A personal health coach as an installable web app (PWA). Chat is the home screen
 
 - **Coach chat**: tell it what you ate, walked or weighed in plain words. Meals come back as an editable estimate you confirm; steps, weigh-ins, goals and targets save directly. Ask "why am I off track?" and it answers from your data.
 - **Tracker**: the north-star number (on-track days in the last 7), goal progress with required vs actual pace and a projected date, today's checks, meals, and recent Hevy workouts.
+- **Gym slot check**: set a gym time for training days. A few hours after it (3 by default), the server checks Hevy; if no workout is there, the coach asks in chat whether you trained, and a skip is stored with its reason.
 - **Android sync**: steps, walks and smart-scale readings arrive from Health Connect through the HC Webhook app.
 
 The older Telegram assistant is parked in [`archive/`](archive/README.md). The plan and phases are in [`docs/HEALTH_PWA_PLAN.md`](docs/HEALTH_PWA_PLAN.md).
@@ -24,11 +25,11 @@ supabase/migrations/    database schema
 
 1. `npm install`
 2. Copy `.env.example` to `.env` and fill the required values.
-3. Apply the migration `supabase/migrations/20261027120000_health_app_activity.sql` (Supabase SQL editor, or `SUPABASE_DB_PASSWORD=… npm run db:apply -- <file>`).
+3. Apply the migrations `supabase/migrations/20261027120000_health_app_activity.sql` and `20261028090000_health_gym_slot.sql` (Supabase SQL editor, or `SUPABASE_DB_PASSWORD=… npm run db:apply -- <file>`).
 4. `OWNER_TIMEZONE=Asia/Kolkata npm run app:setup`, then put the two printed values (`MAGNUS_HEALTH_APP_USER_PROFILE_ID`, `MAGNUS_HEALTH_APP_TOKEN`) in `.env` / Railway.
 5. Store your Hevy key: `npx tsx scripts/upsert-user-integrations.mts` (or set `HEVY_API_KEY`).
 6. `npm run dev`, open `http://localhost:8080/app/`, paste the token. On the phone, open the Railway URL in Chrome → menu → **Install app**.
-7. In the app, open **Tracker → ⚙** and set your goal (target weight / body fat / muscle mass + deadline) and daily targets.
+7. In the app, open **Tracker → ⚙** and set your goal (target weight / body fat / muscle mass + deadline) and daily targets, training days and gym slot.
 
 ## Android steps and weigh-ins (Health Connect)
 
@@ -55,7 +56,8 @@ All routes need `Authorization: Bearer <MAGNUS_HEALTH_APP_TOKEN>`.
 | `GET /api/health/meals?date=` · `DELETE /api/health/meals/:id` | List · remove a meal |
 | `POST /api/health/steps` | Manual steps / walk minutes for a day |
 | `POST /api/health/checkins` | Weigh-in: weight, body fat %, muscle mass |
-| `POST /api/health/goal` · `POST /api/health/targets` | Outcome goal · daily targets and training days |
+| `POST /api/health/goal` · `POST /api/health/targets` | Outcome goal · daily targets, training days, gym slot (`gymTime`, `checkDelayMin`) |
+| `POST /api/health/workout-check` | Answer the post-gym check: `recheck`, `skipped` (+ `reason`), `trained_unlogged` |
 | `POST /api/health/ingest/health-connect` | HC Webhook payloads |
 
 ## Test
