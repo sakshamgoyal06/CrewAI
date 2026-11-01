@@ -16,10 +16,14 @@ const store = {
   },
 };
 
-const state = { snapshot: null, sending: false, historySig: null, trainingLoaded: false };
+const state = {
+  snapshot: null, sending: false, historySig: null, trainingLoaded: false,
+  history: null, selectedDate: null, open: new Set(), trend: { metric: "calories", range: 30 },
+};
 // Last good responses, so a cold open paints instantly and the network only fills in changes.
 const CHAT_CACHE_KEY = "magnus-chat-cache";
 const SNAPSHOT_CACHE_KEY = "magnus-snapshot-cache";
+const HISTORY_CACHE_KEY = "magnus-history-cache";
 
 // ---------- API ----------
 
@@ -50,6 +54,7 @@ async function api(path, options = {}) {
     store.set(TOKEN_KEY, null);
     store.set(CHAT_CACHE_KEY, null);
     store.set(SNAPSHOT_CACHE_KEY, null);
+    store.set(HISTORY_CACHE_KEY, null);
     showConnect();
     throw new Error("This device was disconnected. Paste your token again.");
   }
@@ -155,7 +160,8 @@ function setView(view) {
   if (view === "tracker") {
     window.scrollTo(0, 0);
     // Hevy history is several slow calls; only fetch it once the tracker is actually opened.
-    if (!state.trainingLoaded) { state.trainingLoaded = true; loadTraining(); }
+    if (!state.trainingLoaded) { state.trainingLoaded = true; loadTraining(); loadDays(); }
+    else if (state.history) requestAnimationFrame(renderTrend);
   }
 }
 
@@ -163,6 +169,7 @@ function setView(view) {
 
 async function refresh() {
   try {
+    if (state.trainingLoaded) loadDays();
     state.snapshot = await api("/today");
     renderSnapshot(state.snapshot);
     store.set(SNAPSHOT_CACHE_KEY, state.snapshot);
@@ -194,54 +201,8 @@ function renderSnapshot(s) {
 
   renderGoal(s);
 
-  $("today-score").textContent = s.today.onTrack ? "On track" : `${s.today.score}%`;
-  $("checks").replaceChildren(
-    ...s.today.checks.map((c) =>
-      el("li", { class: c.met ? "met" : "" },
-        el("span", { class: "dot" }),
-        el("span", {}, c.label),
-        el("span", { class: "detail" }, c.detail),
-        el("div", { class: "bar" }, el("i", { style: `width:${Math.round(c.progress * 100)}%` })),
-      ),
-    ),
-  );
-
-  const meals = s.meals || [];
-  $("meals-meta").textContent = `${fmt(s.today.calories)} kcal · ${fmt(s.today.proteinG)} g protein`;
-  $("meals").replaceChildren(
-    ...(meals.length
-      ? meals.map((m) =>
-          el("li", {},
-            el("div", { class: "main" },
-              el("div", { class: "title" }, m.text),
-              el("div", { class: "sub" }, `${cap(m.slot)} · ${new Date(m.loggedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`),
-            ),
-            el("div", { class: "right" },
-              el("span", {}, `${fmt(m.calories)} kcal`),
-              el("button", { class: "del", type: "button", "aria-label": `Remove ${m.text}`, onclick: () => deleteMeal(m) }, "×"),
-            ),
-          ),
-        )
-      : [el("li", { class: "none" }, "Nothing logged yet today.")]),
-  );
-
-  $("workouts-meta").textContent = s.gym?.time ? `Gym ${clock(s.gym.time)} · check ${clock(s.gym.checkAt)}` : "Hevy";
-  $("workouts").replaceChildren(
-    ...(!s.hevyConnected
-      ? [el("li", { class: "none" }, "Hevy isn't connected for this account.")]
-      : s.workouts.length
-        ? s.workouts.slice(0, 5).map((w) =>
-            el("li", {},
-              el("div", { class: "main" },
-                el("div", { class: "title" }, w.title),
-                el("div", { class: "sub" }, `${WD_LONG[dateOf(w.localDate).getUTCDay()]} ${dateOf(w.localDate).getUTCDate()}`),
-              ),
-              el("div", { class: "right meta" }, [w.durationMin != null ? `${w.durationMin} min` : null, `${w.exerciseCount} exercises`].filter(Boolean).join(" · ")),
-            ),
-          )
-        : [el("li", { class: "none" }, "No recent workouts.")]),
-  );
-
+  // Day cards: from the history once it's loaded; until then today's numbers from this snapshot.
+  if (!state.history) renderDay();
   renderChips(s);
 }
 
@@ -335,6 +296,468 @@ async function deleteMeal(m) {
     toast(err.message);
   }
 }
+
+// ---------- days: food, activity, trends ----------
+// One /history call carries the last 30 days in full (meal items, macros, steps, burn, Hevy sets),
+// so picking a day or switching a chart never waits on the network.
+
+const SLOT_LABEL = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack", unspecified: "Meal" };
+const MACROS = [["proteinG", "Protein", 4, "p"], ["carbsG", "Carbs", 4, "c"], ["fatG", "Fat", 9, "f"]];
+
+async function loadDays() {
+  if (loadDays.running) return;
+  loadDays.running = true;
+  try {
+    state.history = await api("/history?days=30");
+    store.set(HISTORY_CACHE_KEY, state.history);
+    renderDays();
+  } catch (err) {
+    if (!state.history) $("fuel-body").replaceChildren(el("p", { class: "none" }, "Couldn't load your days. Pull down or reopen to retry."));
+  } finally {
+    loadDays.running = false;
+  }
+}
+
+function todayKey() {
+  return state.history?.today || state.snapshot?.today?.date || null;
+}
+
+function selectedDay() {
+  const days = state.history?.days || [];
+  return days.find((d) => d.date === state.selectedDate) || days.at(-1) || null;
+}
+
+function selectDay(date, { scroll = false } = {}) {
+  state.selectedDate = date;
+  renderStrip();
+  renderDay();
+  renderTrend();
+  if (scroll) $("days-strip").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderDays() {
+  const h = state.history;
+  if (!h) return;
+  // A new day, or a date that fell out of the window: back to today.
+  if (!h.days.some((d) => d.date === state.selectedDate)) state.selectedDate = h.today;
+  renderStrip(true);
+  renderDay();
+  renderTrend();
+}
+
+const shortDate = (d) => dateOf(d).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+const dayName = (d) => (d === todayKey() ? "Today" : shortDate(d));
+const timeOf = (iso) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+function renderStrip(scrollToEnd = false) {
+  const strip = $("days-strip");
+  const days = state.history?.days || [];
+  strip.replaceChildren(
+    ...days.map((d) => {
+      const logged = d.meals.length || d.steps || d.workouts.length;
+      const b = el("button", {
+        type: "button", role: "tab",
+        class: ["day-pill", d.date === state.selectedDate && "sel", d.date === todayKey() && "today"].filter(Boolean).join(" "),
+        "aria-selected": String(d.date === state.selectedDate),
+        "aria-label": `${shortDate(d.date)}${d.onTrack ? ", on track" : ""}${d.workouts.length ? ", workout" : ""}`,
+        onclick: () => selectDay(d.date),
+      },
+        el("span", { class: "wd" }, WD[d.weekday]),
+        el("span", { class: "dn" }, String(dateOf(d.date).getUTCDate())),
+        el("i", { class: `mark ${d.onTrack ? "on" : logged ? "some" : ""}${d.workouts.length || d.trainedUnlogged ? " lift" : ""}` }),
+      );
+      return b;
+    }),
+  );
+  if (scrollToEnd) strip.scrollLeft = strip.scrollWidth;
+  else strip.querySelector(".sel")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+/** Today's numbers before /history has ever loaded: same shape as a history day, fewer fields. */
+function snapshotDay() {
+  const s = state.snapshot;
+  if (!s) return null;
+  return {
+    date: s.today.date, weekday: dateOf(s.today.date).getUTCDay(), isTrainingDay: s.today.isTrainingDay,
+    onTrack: s.today.onTrack, score: s.today.score, checks: s.today.checks,
+    calories: s.today.calories, proteinG: s.today.proteinG, carbsG: null, fatG: null,
+    meals: (s.meals || []).map((m) => ({ ...m, proteinG: m.proteinG, carbsG: null, fatG: null, items: [] })).reverse(),
+    steps: s.today.steps, walkMinutes: s.today.walkMinutes, burn: null, workouts: [], trainedUnlogged: false, partial: true,
+  };
+}
+
+function renderDay() {
+  const d = (state.history && selectedDay()) || snapshotDay();
+  if (!d) return;
+  const isToday = d.date === todayKey() || d.partial;
+  const t = state.history?.targets || state.snapshot?.targets || {};
+  renderFuel(d, t);
+  renderMove(d, t, isToday);
+  $("day-card-title").textContent = isToday ? "Today" : shortDate(d.date);
+  $("today-score").textContent = d.onTrack ? "On track" : `${d.score}%`;
+  $("checks").replaceChildren(
+    ...d.checks.map((c) =>
+      el("li", { class: c.met ? "met" : "" },
+        el("span", { class: "dot" }),
+        el("span", {}, c.label),
+        el("span", { class: "detail" }, c.detail),
+        el("div", { class: "bar" }, el("i", { style: `width:${Math.round(c.progress * 100)}%` })),
+      ),
+    ),
+  );
+  $("quick-row").hidden = !isToday;
+}
+
+function renderFuel(d, t) {
+  const target = t.calorieTarget;
+  $("fuel-meta").textContent = d.meals.length ? `${d.meals.length} meal${d.meals.length === 1 ? "" : "s"}` : "";
+  const over = target && d.calories > target;
+  const top = el("div", { class: "fuel-top" },
+    el("div", { class: "big" }, el("span", { class: "num" }, fmt(d.calories)), el("span", { class: "unit" }, "kcal")),
+    target
+      ? el("div", { class: "side" },
+          el("div", {}, `of ${fmt(target)}`),
+          el("div", { class: over ? "warn" : "muted" }, over ? `${fmt(d.calories - target)} over` : `${fmt(target - d.calories)} left`))
+      : el("button", { class: "link", type: "button", onclick: () => openSheet("settings") }, "Set a calorie target"),
+  );
+  const meter = target
+    ? el("div", { class: `meter${over ? " over" : ""}`, role: "img", "aria-label": `${fmt(d.calories)} of ${fmt(target)} kcal` },
+        el("i", { style: `width:${Math.min(100, Math.round((d.calories / target) * 100))}%` }))
+    : null;
+
+  let macros = null;
+  if (d.carbsG != null) {
+    const kcal = MACROS.map(([k, , per]) => (d[k] || 0) * per);
+    const total = kcal.reduce((a, b) => a + b, 0);
+    macros = el("div", { class: "macros-block" },
+      total
+        ? el("div", { class: "macro-bar", role: "img", "aria-label": MACROS.map(([k, label]) => `${label} ${fmt(d[k])} g`).join(", ") },
+            ...MACROS.map(([, , , cls], i) => (kcal[i] ? el("i", { class: cls, style: `flex-grow:${kcal[i]}` }) : null)))
+        : el("div", { class: "macro-bar empty" }),
+      el("div", { class: "macro-legend" },
+        ...MACROS.map(([k, label, , cls], i) =>
+          el("div", { class: "ml" },
+            el("span", { class: "k" }, el("i", { class: `sw ${cls}` }), label),
+            el("span", { class: "v" }, `${fmt(d[k])}`, el("small", {}, " g"),
+              k === "proteinG" && t.proteinTarget ? el("small", { class: "of" }, ` / ${fmt(t.proteinTarget)}`) : null),
+            el("span", { class: "pct" }, total ? `${Math.round((kcal[i] / total) * 100)}%` : "–"),
+          ))),
+    );
+  } else {
+    macros = el("div", { class: "macro-legend" }, el("div", { class: "ml" }, el("span", { class: "k" }, el("i", { class: "sw p" }), "Protein"), el("span", { class: "v" }, `${fmt(d.proteinG)}`, el("small", {}, " g"))));
+  }
+  $("fuel-body").replaceChildren(...[top, meter, macros].filter(Boolean));
+
+  $("meals").replaceChildren(
+    ...(d.meals.length
+      ? d.meals.map((m) => mealRow(m, d))
+      : [el("li", { class: "none" }, d.date === todayKey() ? "Nothing logged yet today." : "No meals logged this day.")]),
+  );
+}
+
+function expander(key, head, body) {
+  const open = state.open.has(key);
+  const li = el("li", { class: `row${open ? " open" : ""}` });
+  const btn = el("button", { class: "row-head", type: "button", "aria-expanded": String(open) }, ...head, el("span", { class: "chev", "aria-hidden": "true" }));
+  const panel = el("div", { class: "row-body" }, ...(open ? body() : []));
+  btn.addEventListener("click", () => {
+    const now = !state.open.has(key);
+    now ? state.open.add(key) : state.open.delete(key);
+    li.classList.toggle("open", now);
+    btn.setAttribute("aria-expanded", String(now));
+    panel.replaceChildren(...(now ? body().filter(Boolean) : []));
+  });
+  li.append(btn, panel);
+  return li;
+}
+
+function mealRow(m) {
+  return expander(`meal:${m.mealSessionId}`,
+    [
+      el("span", { class: "main" },
+        el("span", { class: "title" }, m.text),
+        el("span", { class: "sub" }, `${SLOT_LABEL[m.slot] || cap(m.slot)} · ${timeOf(m.loggedAt)}`),
+      ),
+      el("span", { class: "right" }, el("b", {}, fmt(m.calories)), el("small", {}, " kcal")),
+    ],
+    () => [
+      m.carbsG != null
+        ? el("div", { class: "chips-row" }, ...MACROS.map(([k, label, , cls]) => el("span", { class: "mchip" }, el("i", { class: `sw ${cls}` }), `${label} `, el("b", {}, `${fmt(m[k], 1)} g`))))
+        : el("div", { class: "chips-row" }, el("span", { class: "mchip" }, el("i", { class: "sw p" }), "Protein ", el("b", {}, `${fmt(m.proteinG)} g`))),
+      m.items?.length
+        ? el("ul", { class: "items-list" },
+            ...m.items.map((i) =>
+              el("li", {},
+                el("span", { class: "iname" }, i.name),
+                el("span", { class: "ikcal" }, `${fmt(i.calories)}`),
+                el("span", { class: "imac" }, `P ${fmt(i.proteinG)} · C ${fmt(i.carbsG)} · F ${fmt(i.fatG)}`),
+              )))
+        : null,
+      el("div", { class: "row-actions" },
+        el("button", { class: "link danger", type: "button", onclick: () => deleteMeal(m) }, "Remove meal")),
+    ]);
+}
+
+function renderMove(d, t, isToday) {
+  const hevy = state.history?.hevy;
+  const s = state.snapshot;
+  $("move-meta").textContent = isToday && d.isTrainingDay && s?.gym?.time ? `Gym ${clock(s.gym.time)}` : d.isTrainingDay ? "Training day" : "Rest day";
+  const stepT = t.stepTarget || 8000;
+  const mins = d.workouts.reduce((a, w) => a + (w.durationMin || 0), 0);
+  const tile = (label, value, unit, sub, pct) =>
+    el("div", { class: "tile" },
+      el("div", { class: "tl" }, label),
+      el("div", { class: "tv" }, value, unit ? el("small", {}, ` ${unit}`) : null),
+      pct != null ? el("div", { class: "meter thin" }, el("i", { style: `width:${Math.min(100, Math.round(pct * 100))}%` })) : null,
+      el("div", { class: "ts" }, sub),
+    );
+  $("move-tiles").replaceChildren(
+    tile("Steps", fmt(d.steps), null, `of ${fmt(stepT)}`, d.steps / stepT),
+    tile("Burned", d.burn ? fmt(d.burn.kcal) : "–", d.burn ? "kcal" : null, d.burn ? (d.burn.source === "estimate" ? "estimated" : "from phone") : "no data yet", null),
+    tile("Workout", d.workouts.length ? fmt(mins) : d.trainedUnlogged ? "✓" : "–", d.workouts.length ? "min" : null,
+      d.workouts.length ? `${fmt(d.workouts.reduce((a, w) => a + w.volumeKg, 0))} kg lifted` : d.trainedUnlogged ? "not in Hevy" : d.isTrainingDay ? "none logged" : "rest", null),
+  );
+  const rows = d.workouts.map((w) =>
+    expander(`w:${w.id || w.startTime}`,
+      [
+        el("span", { class: "main" },
+          el("span", { class: "title" }, w.title),
+          el("span", { class: "sub" }, [timeOf(w.startTime), w.durationMin != null ? `${w.durationMin} min` : null, `${w.exercises.length} exercises`].filter(Boolean).join(" · ")),
+        ),
+        el("span", { class: "right" }, el("b", {}, fmt(w.volumeKg)), el("small", {}, " kg")),
+      ],
+      () => [
+        el("ol", { class: "ex-list" },
+          ...w.exercises.map((e) =>
+            el("li", {},
+              el("div", { class: "ex-name" }, e.title),
+              el("div", { class: "sets" }, ...e.sets.map((st) => el("span", { class: `set${st.type === "warmup" ? " warm" : st.type === "failure" ? " fail" : st.type === "dropset" ? " drop" : ""}`, title: st.type }, setLabel(st)))),
+            ))),
+        el("p", { class: "hint" }, `${w.setCount} working sets · warm-ups faded`),
+      ]));
+  $("workouts").replaceChildren(
+    ...(rows.length
+      ? rows
+      : [el("li", { class: "none" },
+          hevy === "not_connected" ? "Hevy isn't connected for this account."
+          : hevy === "unavailable" ? "Couldn't reach Hevy just now."
+          : d.trainedUnlogged ? "You trained but didn't log it in Hevy."
+          : d.partial ? "Loading workouts…"
+          : "No workout logged.")]),
+  );
+}
+
+function setLabel(st) {
+  if (st.weightKg != null && st.reps != null) return `${fmt(st.weightKg, 1)} × ${st.reps}`;
+  if (st.reps != null) return `${st.reps} reps`;
+  if (st.distanceM != null) return st.distanceM >= 1000 ? `${fmt(st.distanceM / 1000, 2)} km` : `${fmt(st.distanceM)} m`;
+  if (st.durationS != null) return st.durationS >= 120 ? `${Math.round(st.durationS / 60)} min` : `${st.durationS} s`;
+  return "set";
+}
+
+// ---------- trends chart ----------
+
+const TREND = {
+  calories: {
+    unit: "kcal",
+    value: (d) => d.calories,
+    target: (t) => t.calorieTarget,
+    summary(days, t) {
+      const logged = days.filter((d) => d.calories > 0);
+      if (!logged.length) return ["No meals logged in this range.", null];
+      const avg = logged.reduce((a, d) => a + d.calories, 0) / logged.length;
+      const inRange = t.calorieTarget ? logged.filter((d) => d.calories >= t.calorieTarget * 0.6 && d.calories <= t.calorieTarget).length : null;
+      return [`${fmt(avg)} kcal`, `average on ${logged.length} logged day${logged.length === 1 ? "" : "s"}${inRange != null ? ` · ${inRange} within target` : ""}`];
+    },
+    tip: (d) => [`${fmt(d.calories)} kcal`, `${d.meals.length} meal${d.meals.length === 1 ? "" : "s"}`],
+  },
+  macros: {
+    unit: "kcal",
+    stack: (d) => MACROS.map(([k, , per]) => (d[k] || 0) * per),
+    summary(days, t) {
+      const logged = days.filter((d) => d.calories > 0);
+      if (!logged.length) return ["No meals logged in this range.", null];
+      const avg = (k) => logged.reduce((a, d) => a + (d[k] || 0), 0) / logged.length;
+      return [`${fmt(avg("proteinG"))} g protein`, `daily average · ${fmt(avg("carbsG"))} g carbs · ${fmt(avg("fatG"))} g fat${t.proteinTarget ? ` · target ${fmt(t.proteinTarget)} g protein` : ""}`];
+    },
+    tip: (d) => [`${fmt(d.calories)} kcal`, ...MACROS.map(([k, label]) => `${label} ${fmt(d[k])} g`)],
+  },
+  steps: {
+    unit: "steps",
+    value: (d) => d.steps,
+    target: (t) => t.stepTarget,
+    summary(days, t) {
+      const withSteps = days.filter((d) => d.steps > 0);
+      if (!withSteps.length) return ["No steps synced yet.", "Set up Health Connect sync, or add steps by hand from Today."];
+      const avg = withSteps.reduce((a, d) => a + d.steps, 0) / withSteps.length;
+      const hit = days.filter((d) => d.steps >= (t.stepTarget || 8000)).length;
+      return [`${fmt(avg)} steps`, `daily average · ${hit} day${hit === 1 ? "" : "s"} at ${fmt(t.stepTarget || 8000)}+`];
+    },
+    tip: (d) => [`${fmt(d.steps)} steps`, d.walkMinutes ? `${d.walkMinutes} min walking` : null],
+  },
+  burn: {
+    unit: "kcal",
+    value: (d) => d.burn?.kcal || 0,
+    estimated: (d) => d.burn?.source === "estimate",
+    summary(days) {
+      const withBurn = days.filter((d) => d.burn);
+      if (!withBurn.length) return ["Nothing to show yet.", "Burn comes from steps and workouts."];
+      const avg = withBurn.reduce((a, d) => a + d.burn.kcal, 0) / withBurn.length;
+      return [`${fmt(avg)} kcal`, "active calories, daily average"];
+    },
+    tip: (d) => (d.burn ? [`${fmt(d.burn.kcal)} kcal`, d.burn.source === "estimate" ? `est. · steps ${fmt(d.burn.stepsKcal)} + gym ${fmt(d.burn.workoutKcal)}` : "Health Connect"] : ["No data"]),
+  },
+  training: {
+    unit: "min",
+    value: (d) => d.workouts.reduce((a, w) => a + (w.durationMin || 0), 0),
+    summary(days) {
+      const ws = days.flatMap((d) => d.workouts);
+      if (!ws.length) return ["No workouts in this range.", null];
+      const vol = ws.reduce((a, w) => a + w.volumeKg, 0);
+      return [`${ws.length} workout${ws.length === 1 ? "" : "s"}`, `${fmt((ws.length / days.length) * 7, 1)} a week · ${fmt(vol)} kg lifted`];
+    },
+    tip: (d) => (d.workouts.length ? [...d.workouts.map((w) => `${w.title} · ${w.durationMin ?? "?"} min`), `${fmt(d.workouts.reduce((a, w) => a + w.volumeKg, 0))} kg lifted`] : [d.isTrainingDay ? "Training day, nothing logged" : "Rest"]),
+  },
+};
+
+function niceMax(v) {
+  if (v <= 0) return 1;
+  const p = 10 ** Math.floor(Math.log10(v));
+  const n = v / p;
+  return ([1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find((s) => n <= s) ?? 10) * p;
+}
+const compact = (v) => (v >= 10000 ? `${fmt(v / 1000)}K` : v >= 1000 ? `${fmt(v / 1000, 1)}K` : fmt(v));
+
+function renderTrend() {
+  const h = state.history;
+  if (!h) return;
+  const { metric, range } = state.trend;
+  for (const b of document.querySelectorAll("#trend-tabs button")) b.classList.toggle("on", b.dataset.metric === metric);
+  for (const b of document.querySelectorAll("#trend-range button")) b.classList.toggle("on", Number(b.dataset.range) === range);
+  const cfg = TREND[metric];
+  const days = h.days.slice(-range);
+  const t = h.targets || {};
+  const [headline, sub] = cfg.summary(days, t);
+  const summary = $("trend-summary");
+  const showSummary = () => {
+    summary.classList.remove("picked");
+    summary.replaceChildren(el("span", { class: "tv" }, headline), ...(sub ? [el("span", { class: "ts" }, sub)] : []));
+  };
+  // Tapping a bar swaps the summary for that day's readout, so nothing floats over the chart.
+  const showDay = (d) => {
+    if (!d) return showSummary();
+    const [first, ...rest] = cfg.tip(d).filter(Boolean);
+    summary.classList.add("picked");
+    summary.replaceChildren(
+      el("span", { class: "tv" }, first),
+      el("span", { class: "ts" }, [dayName(d.date), ...rest].join(" · ")),
+      el("button", { class: "link pick-open", type: "button", onclick: () => selectDay(d.date, { scroll: true }) }, "Open day →"),
+    );
+  };
+  showSummary();
+
+  const notes = {
+    burn: days.some((d) => d.burn?.source === "estimate")
+      ? "Faded bars are estimates from steps and workout time. Turn on Active calories in HC Webhook to use your phone's numbers."
+      : "",
+    macros: "Calories from each macro: protein and carbs 4 kcal/g, fat 9 kcal/g.",
+  };
+  $("trend-note").textContent = notes[metric] || "Tap a bar to see that day.";
+  const target = cfg.target ? cfg.target(t) : null;
+  $("trend-legend").replaceChildren(
+    ...(metric === "macros" ? MACROS.map(([, label, , cls]) => el("span", { class: "lg" }, el("i", { class: `sw ${cls}` }), label)) : []),
+    ...(target ? [el("span", { class: "lg" }, el("i", { class: "key-target" }), `Target ${fmt(target)}`)] : []),
+  );
+  barChart($("trend-chart"), days, cfg, target, showDay);
+}
+
+function barChart(host, days, cfg, target, onPick) {
+  const W = Math.max(260, host.clientWidth || 320), H = 168;
+  const padL = 34, padR = 4, padT = 10, padB = 22;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const stacks = days.map((d) => (cfg.stack ? cfg.stack(d) : [cfg.value(d)]));
+  const totals = stacks.map((s) => s.reduce((a, b) => a + b, 0));
+  const max = niceMax(Math.max(...totals, target || 0) * 1.05);
+  const slot = iw / days.length;
+  const bw = Math.max(3, Math.min(24, slot * 0.62));
+  const y = (v) => padT + ih - (v / max) * ih;
+  const colors = cfg.stack ? ["p", "c", "f"] : ["one"];
+
+  const s = svg("svg", { viewBox: `0 0 ${W} ${H}`, width: String(W), height: String(H), role: "img", "aria-label": `${cfg.unit} per day, last ${days.length} days` });
+  for (const v of [0, max / 2, max]) {
+    s.append(svg("line", { class: "grid", x1: String(padL), x2: String(W - padR), y1: String(y(v)), y2: String(y(v)) }));
+    const tx = svg("text", { class: "axis", x: String(padL - 6), y: String(y(v) + 3.5), "text-anchor": "end" });
+    tx.textContent = compact(v);
+    s.append(tx);
+  }
+  const bars = [];
+  days.forEach((d, i) => {
+    const cx = padL + slot * i + slot / 2;
+    const g = svg("g", { class: `col${d.date === state.selectedDate ? " sel" : ""}${cfg.estimated?.(d) ? " est" : ""}` });
+    let base = 0;
+    const segs = stacks[i];
+    const lastNonZero = segs.reduce((acc, v, j) => (v > 0 ? j : acc), -1);
+    segs.forEach((v, j) => {
+      if (v <= 0) return;
+      // 2px surface gap between stacked parts; only the top end is rounded, the baseline stays square.
+      const top = y(base + v);
+      const yb = y(base) - (base > 0 ? 2 : 0);
+      const hgt = yb - top;
+      if (hgt > 0.5) {
+        const x0 = cx - bw / 2, r = j === lastNonZero ? Math.min(4, bw / 2, hgt) : 0;
+        g.append(svg("path", {
+          class: `bar ${colors[j]}`,
+          d: `M ${x0} ${yb} V ${top + r} Q ${x0} ${top} ${x0 + r} ${top} H ${x0 + bw - r} Q ${x0 + bw} ${top} ${x0 + bw} ${top + r} V ${yb} Z`,
+        }));
+      }
+      base += v;
+    });
+    if (!totals[i]) g.append(svg("circle", { class: "zero", cx: String(cx), cy: String(y(0) - 1.5), r: "1.5" }));
+    s.append(g);
+    bars.push(g);
+    const showLabel = days.length <= 7 || (days.length - 1 - i) % 7 === 0;
+    if (showLabel) {
+      const tx = svg("text", { class: `axis${d.date === state.selectedDate ? " strong" : ""}`, x: String(cx), y: String(H - 6), "text-anchor": "middle" });
+      tx.textContent = days.length <= 7 ? WD[d.weekday] : String(dateOf(d.date).getUTCDate());
+      s.append(tx);
+    }
+  });
+  if (target) s.append(svg("line", { class: "target", x1: String(padL), x2: String(W - padR), y1: String(y(target)), y2: String(y(target)) }));
+  // Which day the cards above show.
+  const si = days.findIndex((d) => d.date === state.selectedDate);
+  if (si >= 0) s.append(svg("circle", { class: "selmark", cx: String(padL + slot * si + slot / 2), cy: String(H - 18.5), r: "2" }));
+  const hit = svg("rect", { class: "hit", x: String(padL), y: "0", width: String(iw), height: String(H) });
+  s.append(hit);
+
+  host.replaceChildren(s);
+
+  let active = -1;
+  const show = (i) => {
+    if (i === active) return;
+    active = i;
+    bars.forEach((b, j) => b.classList.toggle("dim", i >= 0 && j !== i));
+    onPick(i >= 0 ? days[i] : null);
+  };
+  const indexAt = (e) => {
+    const r = s.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * W - padL;
+    return Math.max(0, Math.min(days.length - 1, Math.floor(x / slot)));
+  };
+  host.hideTip = () => show(-1);
+  hit.addEventListener("pointerdown", (e) => show(indexAt(e)));
+  // Phones fire emulated mouse events after a tap; only a real hover device follows the pointer.
+  const hover = matchMedia("(hover: hover)").matches;
+  hit.addEventListener("pointermove", (e) => { if ((hover && e.pointerType === "mouse") || e.buttons) show(indexAt(e)); });
+  hit.addEventListener("pointerleave", (e) => { if (hover && e.pointerType === "mouse") show(-1); });
+}
+
+for (const b of document.querySelectorAll("#trend-tabs button")) b.addEventListener("click", () => { state.trend.metric = b.dataset.metric; renderTrend(); });
+for (const b of document.querySelectorAll("#trend-range button")) b.addEventListener("click", () => { state.trend.range = Number(b.dataset.range); renderTrend(); });
+document.addEventListener("pointerdown", (e) => {
+  if (!e.target.closest("#trend-chart, #trend-summary")) $("trend-chart").hideTip?.();
+});
+let resizeTimer;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderTrend, 150); });
 
 // ---------- coach ----------
 
@@ -1104,10 +1527,13 @@ function start() {
   renderChips(null);
   const cachedChat = store.get(CHAT_CACHE_KEY, null);
   if (Array.isArray(cachedChat)) renderHistory(cachedChat);
+  const cachedDays = store.get(HISTORY_CACHE_KEY, null);
+  if (cachedDays?.days?.length) state.history = cachedDays;
   const cachedSnap = store.get(SNAPSHOT_CACHE_KEY, null);
   if (cachedSnap) {
     try { state.snapshot = cachedSnap; renderSnapshot(cachedSnap); } catch { state.snapshot = null; }
   }
+  if (state.history) { try { renderDays(); } catch { state.history = null; } }
   loadHistory();
   refresh();
   flushQueue();

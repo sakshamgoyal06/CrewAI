@@ -14,6 +14,8 @@ export type DailyActivity = {
   steps: number;
   walkMinutes: number | null;
   walkDistanceM: number | null;
+  /** Active calories from the phone; left out of the write when unknown. */
+  activeKcal?: number | null;
   source: ActivitySource;
 };
 
@@ -22,18 +24,24 @@ export async function upsertDailyActivity(
   userProfileId: string,
   activity: DailyActivity,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { error } = await supabase.from("health_daily_activity").upsert(
-    {
-      user_profile_id: userProfileId,
-      local_date: activity.localDate,
-      steps: activity.steps,
-      walk_minutes: activity.walkMinutes,
-      walk_distance_m: activity.walkDistanceM,
-      source: activity.source,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_profile_id,local_date" },
-  );
+  const row: Record<string, unknown> = {
+    user_profile_id: userProfileId,
+    local_date: activity.localDate,
+    steps: activity.steps,
+    walk_minutes: activity.walkMinutes,
+    walk_distance_m: activity.walkDistanceM,
+    source: activity.source,
+    updated_at: new Date().toISOString(),
+  };
+  if (activity.activeKcal != null) row.active_kcal = Math.round(activity.activeKcal);
+  const write = (r: Record<string, unknown>) =>
+    supabase.from("health_daily_activity").upsert(r, { onConflict: "user_profile_id,local_date" });
+  let { error } = await write(row);
+  // Before the active_kcal migration the column doesn't exist; keep the steps.
+  if (error && "active_kcal" in row && /active_kcal/.test(error.message)) {
+    delete row.active_kcal;
+    ({ error } = await write(row));
+  }
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
