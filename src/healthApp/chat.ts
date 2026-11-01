@@ -47,7 +47,9 @@ import { cardFromReport, runRca, type RcaCard } from "./rca.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
 
 export function healthChatModel(): string {
-  return process.env.MAGNUS_HEALTH_CHAT_MODEL?.trim() || "claude-opus-5-5";
+  // Sonnet answers a tool-heavy coach turn several times faster than Opus; set the env var to
+  // trade speed back for depth.
+  return process.env.MAGNUS_HEALTH_CHAT_MODEL?.trim() || "claude-sonnet-5-5";
 }
 
 const MAX_TOOL_ROUNDS = 10;
@@ -68,7 +70,7 @@ The person has an outcome goal (body weight, body fat %, muscle mass by a deadli
 
 How to work:
 - When the person tells you something loggable, log it with a tool right away. Steps, walks, weigh-ins and targets save directly.
-- Meals: call draft_meal. It returns an estimate that the app shows as an editable card. Tell them the estimate in one line and ask them to check and confirm the card. Never say a meal is logged until they confirm it.
+- Meals: call draft_meal. It returns an estimate that the app shows as an editable card, and the app writes the line under it. If you say anything about it, ask them to check and confirm the card. Never say a meal is logged or saved until they confirm it.
 - Several foods eaten together are one meal: pass the whole description in one draft_meal call.
 - Use get_status before answering questions about progress, and quote its numbers; never invent numbers.
 - If a goal or targets are missing and the question needs them, ask for them in one short question.
@@ -487,6 +489,27 @@ export async function runTool(
   }
 }
 
+/** The coach's line under meal draft cards. */
+export function mealDraftReply(drafts: MealDraft[]): string {
+  const missing = drafts.filter((d) => !d.estimated);
+  const found = drafts.filter((d) => d.estimated);
+  const parts: string[] = [];
+  if (found.length) {
+    const kcal = found.reduce((s, d) => s + d.totals.calories, 0);
+    const protein = Math.round(found.reduce((s, d) => s + d.totals.protein_g, 0));
+    const slot = found.length === 1 && found[0]!.slot !== "unspecified" ? ` for ${found[0]!.slot}` : "";
+    parts.push(`That comes to about ${kcal} kcal and ${protein} g protein${slot}. Check the card, fix anything that's off, then tap Confirm & log.`);
+  }
+  if (missing.length) {
+    parts.push(
+      found.length
+        ? "I couldn't find numbers for one of them, so fill in its calories and protein on the card."
+        : "I couldn't find reliable numbers for that. Enter the calories and protein on the card, then tap Confirm & log.",
+    );
+  }
+  return parts.join(" ");
+}
+
 type CreateFn = (params: Record<string, unknown>) => Promise<Anthropic.Message>;
 
 function defaultCreate(): CreateFn {
@@ -614,6 +637,16 @@ export async function runHealthChat(
       }),
     );
     messages.push({ role: "user", content: results });
+
+    // A meal draft needs no second model pass: the card carries the numbers, and a fixed line is
+    // faster and can't claim the meal is already logged.
+    if (toolUses.every((tu) => tu.name === "draft_meal")) {
+      const drafts = cards.filter((c): c is Extract<ChatCard, { type: "meal_draft" }> => c.type === "meal_draft");
+      if (drafts.length === toolUses.length) {
+        text = mealDraftReply(drafts.map((c) => c.draft));
+        break;
+      }
+    }
   }
 
   if (!text) {

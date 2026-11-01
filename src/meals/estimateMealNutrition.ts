@@ -16,7 +16,39 @@ export async function estimateMealNutrition(
   if (!q) {
     return unavailable("empty query");
   }
+  const key = estimateCacheKey(q);
+  const hit = estimateCache.get(key);
+  if (hit && Date.now() - hit.at < ESTIMATE_CACHE_TTL_MS) {
+    return hit.estimate;
+  }
+  const estimate = await estimateUncached(q);
+  if (estimate.calories !== null) {
+    estimateCache.delete(key);
+    estimateCache.set(key, { at: Date.now(), estimate });
+    if (estimateCache.size > ESTIMATE_CACHE_MAX) {
+      estimateCache.delete(estimateCache.keys().next().value!);
+    }
+  }
+  return estimate;
+}
 
+/**
+ * Same meal text → same estimate for a day, so repeat meals (the usual breakfast) come back
+ * instantly. The user still sees and can edit the card before anything is saved.
+ */
+const ESTIMATE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const ESTIMATE_CACHE_MAX = 300;
+const estimateCache = new Map<string, { at: number; estimate: MealNutritionEstimate }>();
+
+export function estimateCacheKey(text: string): string {
+  return text.toLowerCase().replace(/[^\p{L}\p{N}.]+/gu, " ").trim();
+}
+
+export function clearEstimateCache(): void {
+  estimateCache.clear();
+}
+
+async function estimateUncached(q: string): Promise<MealNutritionEstimate> {
   if (mealLogWebResearchEnabled()) {
     const web = await estimateViaWebResearch(q);
     if (web && web.calories !== null) {

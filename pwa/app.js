@@ -14,7 +14,10 @@ const store = {
   },
 };
 
-const state = { snapshot: null, sending: false };
+const state = { snapshot: null, sending: false, historySig: null, trainingLoaded: false };
+// Last good responses, so a cold open paints instantly and the network only fills in changes.
+const CHAT_CACHE_KEY = "magnus-chat-cache";
+const SNAPSHOT_CACHE_KEY = "magnus-snapshot-cache";
 
 // ---------- API ----------
 
@@ -41,6 +44,8 @@ async function api(path, options = {}) {
   }
   if (res.status === 401) {
     store.set(TOKEN_KEY, null);
+    store.set(CHAT_CACHE_KEY, null);
+    store.set(SNAPSHOT_CACHE_KEY, null);
     showConnect();
     throw new Error("This device was disconnected. Paste your token again.");
   }
@@ -142,7 +147,11 @@ function setView(view) {
   $("view-tracker").hidden = view !== "tracker";
   for (const t of document.querySelectorAll(".tab")) t.classList.toggle("active", t.dataset.view === view);
   if (location.hash !== `#${view}`) history.replaceState(null, "", `#${view}`);
-  if (view === "tracker") window.scrollTo(0, 0);
+  if (view === "tracker") {
+    window.scrollTo(0, 0);
+    // Hevy history is several slow calls; only fetch it once the tracker is actually opened.
+    if (!state.trainingLoaded) { state.trainingLoaded = true; loadTraining(); }
+  }
 }
 
 // ---------- snapshot ----------
@@ -151,6 +160,7 @@ async function refresh() {
   try {
     state.snapshot = await api("/today");
     renderSnapshot(state.snapshot);
+    store.set(SNAPSHOT_CACHE_KEY, state.snapshot);
   } catch (err) {
     toast(err.message);
   }
@@ -336,11 +346,12 @@ function renderChips(s) {
   $("chips").replaceChildren(
     ...chips.map(([label, text]) =>
       el("button", { class: "chip", type: "button", onclick: () => {
+        // Questions send straight away (no keyboard pop-up); the rest pre-fill for the person to finish.
+        if (text.endsWith("?")) { send(text); return; }
         const input = $("input");
         input.value = text;
         input.focus();
         autosize();
-        if (text.endsWith("?")) $("composer").requestSubmit();
       } }, label),
     ),
   );
@@ -368,24 +379,51 @@ function renderEmpty() {
   );
 }
 
+function historySig(messages) {
+  const last = messages.at(-1);
+  return `${messages.length}|${last?.createdAt ?? ""}|${JSON.stringify(messages.flatMap((m) => (m.cards || []).map((c) => c.status ?? "")))}`;
+}
+
+function renderHistory(messages) {
+  const sig = historySig(messages);
+  // Rebuilding the whole thread is the slow part on a phone; skip it when nothing changed.
+  if (sig === state.historySig) return;
+  state.historySig = sig;
+  if (!messages.length) return renderEmpty();
+  const t = $("thread");
+  const prevBehavior = t.style.scrollBehavior;
+  t.style.scrollBehavior = "auto";
+  t.replaceChildren();
+  for (const m of messages) {
+    addMessage(m.role === "user" ? "user" : "coach", m.content);
+    for (const c of m.cards || []) appendCard(c);
+  }
+  requestAnimationFrame(() => { t.scrollTop = t.scrollHeight; t.style.scrollBehavior = prevBehavior; });
+}
+
 async function loadHistory() {
   try {
     const { messages } = await api("/chat");
-    if (!messages.length) return renderEmpty();
-    $("thread").replaceChildren();
-    for (const m of messages) {
-      addMessage(m.role === "user" ? "user" : "coach", m.content);
-      for (const c of m.cards || []) appendCard(c);
-    }
-    scrollThread();
+    if (state.sending) return;
+    renderHistory(messages);
+    store.set(CHAT_CACHE_KEY, messages.slice(-50));
   } catch (err) {
-    renderEmpty();
+    if (!state.historySig) renderEmpty();
   }
 }
 
+// A coach turn can take a while (meal web search); past this the UI frees up instead of looking dead.
+const CHAT_TIMEOUT_MS = 90_000;
+
+/** Returns false when the message wasn't sent, so the caller keeps the text. */
 async function send(text) {
-  if (state.sending || !text.trim()) return;
+  if (!text.trim()) return false;
+  if (state.sending) {
+    toast("Still answering your last message. One moment.");
+    return false;
+  }
   state.sending = true;
+  state.historySig = null;
   $("send").disabled = true;
   if ($("thread").querySelector(".empty")) $("thread").replaceChildren();
   addMessage("user", text);
@@ -393,7 +431,11 @@ async function send(text) {
   $("thread").append(typing);
   scrollThread();
   try {
-    const reply = await api("/chat", { method: "POST", body: JSON.stringify({ text }) });
+    let timer;
+    const reply = await Promise.race([
+      api("/chat", { method: "POST", body: JSON.stringify({ text }) }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("That's taking too long. The answer will show when you reopen the app, or try again.")), CHAT_TIMEOUT_MS); }),
+    ]).finally(() => clearTimeout(timer));
     typing.remove();
     addMessage("coach", reply.text);
     for (const c of reply.cards) appendCard(c);
@@ -406,6 +448,7 @@ async function send(text) {
     state.sending = false;
     $("send").disabled = false;
   }
+  return true;
 }
 
 function autosize() {
@@ -830,7 +873,7 @@ function mealDraftCard(draft, { onDone } = {}) {
     el("p", { class: "eyebrow" }, "Meal estimate · check and confirm"),
     kcal, macros,
     !draft.estimated ? el("p", { class: "draft-note" }, "No estimate found. Enter calories and protein yourself.") : null,
-    draft.servingAssumption ? el("p", { class: "draft-note" }, draft.servingAssumption) : null,
+    draft.servingAssumption ? assumptionNote(draft.servingAssumption) : null,
     seg, list,
     el("button", { class: "add-line", type: "button", onclick: () => { items.push({ name: "", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }); renderItems(); totals(); list.querySelector("li:last-child input")?.focus(); } }, "+ Add item"),
     el("div", { class: "draft-actions" }, discard, confirm),
@@ -839,6 +882,14 @@ function mealDraftCard(draft, { onDone } = {}) {
   renderItems();
   totals();
   return card;
+}
+
+// Short assumptions show inline; long ones collapse to one line with "How estimated".
+function assumptionNote(text) {
+  if (text.length <= 110) return el("p", { class: "draft-note" }, text);
+  return el("details", { class: "draft-why" },
+    el("summary", {}, el("span", { class: "peek" }, text), el("span", { class: "more" }, "How estimated"), el("span", { class: "less" }, "Hide details")),
+    el("p", {}, text));
 }
 
 function finishedCard(card, draft, status) {
@@ -889,7 +940,14 @@ const SHEETS = {
   meal() {
     const holder = el("div");
     const form = el("form", { class: "stack", onsubmit: submitter(async (fd) => {
-      const draft = await api("/meals/draft", { method: "POST", body: JSON.stringify({ text: fd.get("text") }) });
+      const btn = form.querySelector("button[type=submit]");
+      btn.textContent = "Estimating… (checks the web, ~10 s)";
+      let draft;
+      try {
+        draft = await api("/meals/draft", { method: "POST", body: JSON.stringify({ text: fd.get("text") }) });
+      } finally {
+        btn.textContent = "Estimate";
+      }
       form.hidden = true;
       holder.replaceChildren(mealDraftCard(draft, { onDone: () => setTimeout(closeSheet, 700) }));
     }) },
@@ -1021,6 +1079,7 @@ $("input").addEventListener("keydown", (e) => {
 $("composer").addEventListener("submit", (e) => {
   e.preventDefault();
   const text = $("input").value;
+  if (!text.trim() || state.sending) { send(text); return; }
   $("input").value = "";
   autosize();
   send(text);
@@ -1038,9 +1097,14 @@ function start() {
   $("greeting").textContent = greeting();
   setView(location.hash === "#tracker" ? "tracker" : "coach");
   renderChips(null);
+  const cachedChat = store.get(CHAT_CACHE_KEY, null);
+  if (Array.isArray(cachedChat)) renderHistory(cachedChat);
+  const cachedSnap = store.get(SNAPSHOT_CACHE_KEY, null);
+  if (cachedSnap) {
+    try { state.snapshot = cachedSnap; renderSnapshot(cachedSnap); } catch { state.snapshot = null; }
+  }
   loadHistory();
   refresh();
-  loadTraining();
   flushQueue();
 }
 

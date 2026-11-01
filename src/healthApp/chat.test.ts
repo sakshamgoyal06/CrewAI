@@ -25,7 +25,7 @@ vi.mock("./actions.js", async (orig) => {
   return { ...real, startMealDraft: actions.startMealDraft, logSteps: actions.logSteps };
 });
 
-import { historyToMessages, runHealthChat } from "./chat.js";
+import { historyToMessages, mealDraftReply, runHealthChat } from "./chat.js";
 
 const ctx = { userProfileId: "profile-1", timezone: "UTC", now: new Date("2026-10-27T08:00:00Z") };
 
@@ -60,38 +60,33 @@ beforeEach(() => {
 });
 
 describe("runHealthChat", () => {
-  it("drafts a meal through the tool and returns it as a card without logging it", async () => {
-    const calls: Array<Record<string, unknown>> = [];
-    const create = vi
-      .fn()
-      .mockImplementationOnce(async (p: Record<string, unknown>) => {
-        calls.push(structuredClone(p));
-        return msg(
-          [{ type: "tool_use", id: "t1", name: "draft_meal", input: { text: "2 eggs" } } as Anthropic.ToolUseBlock],
-          "tool_use",
-        );
-      })
-      .mockImplementationOnce(async (p: Record<string, unknown>) => {
-        calls.push(structuredClone(p));
-        return msg([{ type: "text", text: "About 143 kcal. Check the card and confirm.", citations: null } as Anthropic.TextBlock], "end_turn");
-      });
+  it("drafts a meal through the tool and answers without a second model call", async () => {
+    const create = vi.fn().mockResolvedValueOnce(
+      msg(
+        [{ type: "tool_use", id: "t1", name: "draft_meal", input: { text: "2 eggs" } } as Anthropic.ToolUseBlock],
+        "tool_use",
+      ),
+    );
 
     const reply = await runHealthChat(ctx, "had 2 eggs", { create, history: [] });
 
-    expect(reply.text).toBe("About 143 kcal. Check the card and confirm.");
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(reply.text).toBe(
+      "That comes to about 143 kcal and 13 g protein for breakfast. Check the card, fix anything that's off, then tap Confirm & log.",
+    );
+    expect(reply.text).not.toMatch(/logged|saved/i);
     expect(reply.cards).toEqual([{ type: "meal_draft", draft }]);
     expect(reply.changed).toBe(false);
     expect(actions.startMealDraft).toHaveBeenCalledWith(ctx, { text: "2 eggs" });
 
-    // Second request carries the assistant tool_use turn and the tool_result.
-    const second = calls[1]!.messages as Anthropic.MessageParam[];
-    expect(second.at(-2)?.role).toBe("assistant");
-    const toolResult = (second.at(-1)!.content as Anthropic.ToolResultBlockParam[])[0]!;
-    expect(toolResult.tool_use_id).toBe("t1");
-    expect(JSON.parse(toolResult.content as string)).toMatchObject({ shownToUserAsCard: true });
-
     expect(saved.map((r) => r.role)).toEqual(["user", "assistant"]);
     expect(saved[1]!.cards).toEqual([{ type: "meal_draft", draft }]);
+  });
+
+  it("asks the person to fill in numbers when no estimate was found", () => {
+    expect(mealDraftReply([{ ...draft, estimated: false, items: [], totals: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 } }])).toMatch(
+      /couldn't find reliable numbers/,
+    );
   });
 
   it("logs steps directly and marks the turn as changed", async () => {

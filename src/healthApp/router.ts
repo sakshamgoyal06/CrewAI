@@ -51,11 +51,22 @@ type Locals = { userProfileId: string };
 type Handler = (ctx: ActionContext, req: express.Request) => Promise<{ status?: number; body: unknown }>;
 
 /** Wraps a handler with the user's timezone context, body validation errors and a 500 guard. */
+/** Every request needs the timezone; it almost never changes, so skip the two-query lookup. */
+const TZ_CACHE_MS = 10 * 60 * 1000;
+const tzCache = new Map<string, { at: number; timezone: string }>();
+async function cachedTimezone(userProfileId: string): Promise<string> {
+  const hit = tzCache.get(userProfileId);
+  if (hit && Date.now() - hit.at < TZ_CACHE_MS) return hit.timezone;
+  const { timezone } = await loadHealthProfile(userProfileId);
+  tzCache.set(userProfileId, { at: Date.now(), timezone });
+  return timezone;
+}
+
 function route(name: string, handler: Handler): express.RequestHandler {
   return async (req, res) => {
     const { userProfileId } = res.locals as Locals;
     try {
-      const { timezone } = await loadHealthProfile(userProfileId);
+      const timezone = await cachedTimezone(userProfileId);
       const out = await handler({ userProfileId, timezone }, req);
       res.status(out.status ?? 200).json(out.body);
     } catch (err) {

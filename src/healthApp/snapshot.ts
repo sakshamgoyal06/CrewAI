@@ -197,6 +197,21 @@ export async function loadRecentWorkouts(
   return { connected: true, fetched: true, workouts };
 }
 
+/**
+ * The tracker refreshes after every log; Hevy is a slow external call, so reuse a fetch from the
+ * last minute. Failed fetches are not cached.
+ */
+const HEVY_SNAPSHOT_CACHE_MS = 60 * 1000;
+const hevySnapshotCache = new Map<string, { at: number; value: Awaited<ReturnType<typeof loadRecentWorkouts>> }>();
+async function recentWorkoutsCached(userProfileId: string, timezone: string) {
+  const key = `${userProfileId}|${timezone}`;
+  const hit = hevySnapshotCache.get(key);
+  if (hit && Date.now() - hit.at < HEVY_SNAPSHOT_CACHE_MS) return hit.value;
+  const value = await loadRecentWorkouts(userProfileId, timezone);
+  if (value.fetched) hevySnapshotCache.set(key, { at: Date.now(), value });
+  return value;
+}
+
 export async function buildHealthSnapshot(
   userProfileId: string,
   now = new Date(),
@@ -210,7 +225,7 @@ export async function buildHealthSnapshot(
   const [meals, activity, hevy, goal, checkins, todayMealList, workoutChecks] = await Promise.all([
     loadMealDays(userProfileId, from, to),
     getActivityRange(userProfileId, from, to),
-    loadRecentWorkouts(userProfileId, timezone),
+    recentWorkoutsCached(userProfileId, timezone),
     getActiveGoal(userProfileId),
     getBodyCheckins(userProfileId, historyFrom),
     listMealsForDate(userProfileId, to),
