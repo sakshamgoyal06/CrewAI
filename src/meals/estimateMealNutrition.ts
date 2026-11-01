@@ -4,9 +4,10 @@ import { estimateViaCalorieNinjas } from "./providers/calorieNinjas.js";
 import { estimateViaLlm } from "./providers/llmEstimate.js";
 import { estimateViaUsdaFdc } from "./providers/usdaFdc.js";
 import { estimateViaWebResearch } from "./providers/webResearchEstimate.js";
+import { estimateWithFoodDb } from "./foodDbEstimate.js";
 
 /**
- * Order: **Anthropic web_search → USDA FDC → CalorieNinjas → optional Claude JSON**. Web runs
+ * Order: **own food table (web_search for unseen foods) → USDA FDC → CalorieNinjas → optional Claude JSON**. Web runs
  * unless `MAGNUS_MEAL_LOG_WEB_FIRST=false`; the LLM fallback only with `MAGNUS_MEAL_LOG_LLM_FALLBACK=true`.
  */
 export async function estimateMealNutrition(
@@ -49,7 +50,24 @@ export function clearEstimateCache(): void {
 }
 
 async function estimateUncached(q: string): Promise<MealNutritionEstimate> {
-  if (mealLogWebResearchEnabled()) {
+  const webEnabled = mealLogWebResearchEnabled();
+  // Our own food table first; only foods it doesn't have go to the web (and get saved).
+  let webTried = false;
+  const fromDb = await estimateWithFoodDb(
+    q,
+    webEnabled
+      ? (text, components) => {
+          webTried = true;
+          return estimateViaWebResearch(text, components);
+        }
+      : null,
+  ).catch(() => null);
+  if (fromDb && fromDb.calories !== null) {
+    return fromDb;
+  }
+
+  // Don't pay for a second web search when the first one already failed.
+  if (webEnabled && !webTried) {
     const web = await estimateViaWebResearch(q);
     if (web && web.calories !== null) {
       return web;

@@ -4,6 +4,12 @@ const web = vi.hoisted(() => ({ estimateViaWebResearch: vi.fn() }));
 vi.mock("./providers/webResearchEstimate.js", () => web);
 vi.mock("./providers/usdaFdc.js", () => ({ estimateViaUsdaFdc: vi.fn().mockResolvedValue(null) }));
 vi.mock("./providers/calorieNinjas.js", () => ({ estimateViaCalorieNinjas: vi.fn().mockResolvedValue(null) }));
+vi.mock("./foodStore.js", () => ({
+  lookupFoods: vi.fn().mockResolvedValue(new Map()),
+  findFood: (rows: Map<string, unknown>, k: string, u: string) => rows.get(`${k}|${u}`),
+  saveFoods: vi.fn().mockResolvedValue(undefined),
+  markFoodsUsed: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("./providers/llmEstimate.js", () => ({ estimateViaLlm: vi.fn().mockResolvedValue(null) }));
 
 import { clearEstimateCache, estimateCacheKey, estimateMealNutrition } from "./estimateMealNutrition.js";

@@ -6,6 +6,10 @@ export type MealItemLine = {
   fat_g?: number;
   /** How this line’s numbers relate to what the user ate (e.g. inferred serving). */
   portion_note?: string;
+  /** 1-based component number when the estimator was given a numbered component list. */
+  component_index?: number;
+  /** Estimated weight of the amount eaten, in grams. */
+  grams?: number;
 };
 
 export type MealNutritionEstimate = {
@@ -20,6 +24,7 @@ export type MealNutritionEstimate = {
     | "calorieninjas"
     | "usda_fdc"
     | "llm_estimate"
+    | "food_db"
     | "unavailable";
   providerRaw: Record<string, unknown> | null;
   /**
