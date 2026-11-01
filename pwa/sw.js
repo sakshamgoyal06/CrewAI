@@ -1,5 +1,5 @@
 // App shell cache. API calls always go to the network so numbers are never stale.
-const CACHE = "magnus-health-v4";
+const CACHE = "magnus-health-v5";
 const SHELL = ["/app/", "/app/index.html", "/app/styles.css", "/app/app.js", "/app/manifest.webmanifest", "/app/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -28,5 +28,40 @@ self.addEventListener("fetch", (event) => {
         return res;
       })
       .catch(() => caches.match(event.request).then((hit) => hit || caches.match("/app/index.html"))),
+  );
+});
+
+// Push notifications from the proactive scheduler.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Magnus", {
+      body: data.body || "",
+      icon: "/app/icon.svg",
+      badge: "/app/icon.svg",
+      tag: data.tag || "magnus",
+      renotify: true,
+      data: { url: data.url || "/app/" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || "/app/", self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      const open = wins.find((w) => w.url.startsWith(`${self.location.origin}/app/`));
+      if (open) {
+        open.navigate(target).catch(() => {});
+        return open.focus();
+      }
+      return self.clients.openWindow(target);
+    }),
   );
 });

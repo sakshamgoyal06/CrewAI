@@ -4,13 +4,13 @@ import { logger } from "./logger.js";
 import { loggableError } from "./util/loggableError.js";
 import "./tools/clients.js";
 import { healthAppAuthConfig } from "./healthApp/auth.js";
-import { startWorkoutCheckScheduler } from "./healthApp/workoutCheck.js";
+import { startProactiveScheduler } from "./healthApp/proactive.js";
 import { startHealthServer } from "./healthServer.js";
 
 async function main(): Promise<void> {
   const server = await startHealthServer();
   const appUser = healthAppAuthConfig()?.userProfileId;
-  const stopWorkoutChecks = appUser ? startWorkoutCheckScheduler(appUser) : () => {};
+  const stopProactive = appUser ? startProactiveScheduler(appUser) : () => {};
 
   let shuttingDown = false;
   const shutdown = (signal: string): void => {
@@ -19,7 +19,7 @@ async function main(): Promise<void> {
     }
     shuttingDown = true;
     logger.info({ signal }, "shutting down");
-    stopWorkoutChecks();
+    stopProactive();
     void server.close().then(() => process.exit(0));
     // Never hold a redeploy hostage waiting on in-flight work.
     setTimeout(() => process.exit(0), 10_000).unref();

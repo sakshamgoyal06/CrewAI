@@ -43,6 +43,7 @@ import {
   routineForModel,
   searchTemplates,
 } from "./training.js";
+import { cardFromReport, runRca, type RcaCard } from "./rca.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
 
 export function healthChatModel(): string {
@@ -52,7 +53,7 @@ export function healthChatModel(): string {
 const MAX_TOOL_ROUNDS = 10;
 const HISTORY_MESSAGES = 20;
 
-export type ChatCard = { type: "meal_draft"; draft: MealDraft } | WorkoutCheckCard | HevyProposalCard;
+export type ChatCard = { type: "meal_draft"; draft: MealDraft } | WorkoutCheckCard | HevyProposalCard | RcaCard;
 
 export type ChatReply = {
   text: string;
@@ -73,7 +74,7 @@ How to work:
 - If a goal or targets are missing and the question needs them, ask for them in one short question.
 - Workouts: on training days the app checks Hevy a few hours after the gym slot and asks in chat if nothing is logged. When they answer (skipped and why, or trained but didn't log it), record it with answer_workout_check. If they skipped, ask why in one short question if they didn't say.
 - Training (Hevy): use get_training_analysis to see what's progressing, stalled or going backwards, and get_routines for their current plan. To change Hevy (swap or add an exercise, change sets/reps/rest, create a routine, log a workout), find exercise ids with search_exercises, then call the matching propose_* tool. It shows a card they apply; nothing changes in Hevy until they do, so never say it's done. Suggest changes from the data: a lift that has stalled for 3+ weeks gets a rep-range change or a close variation, not a whole new program. Keep a routine's other exercises as they are unless asked.
-- When they're off track, look for the concrete cause in the data (which check keeps failing, which days) and suggest one small, specific change.
+- When they're off track or ask why, call root_cause_analysis. It mines the last three weeks and returns evidence, one hypothesis and one 7-day experiment, shown as a card they can take up. Explain it in a sentence or two; don't stack extra advice on top.
 - Keep replies short: 1 to 4 sentences, plain text, no headings. Use kg and kcal.`;
 
 const SET_SCHEMA = {
@@ -306,6 +307,12 @@ const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: "root_cause_analysis",
+    description:
+      "Find why they're off track: mines the last 3 weeks (which checks fail, which days, missing meals, late eating, step patterns, skip reasons), then writes one hypothesis and one 7-day experiment. Shows a card they can accept.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
     name: "answer_workout_check",
     description:
       "Record the answer to the post-gym-slot workout check: recheck (look in Hevy again), skipped (with reason), or trained_unlogged (trained but didn't log in Hevy; counts as the day's workout).",
@@ -459,6 +466,14 @@ export async function runTool(
       return {
         result: { shownToUserAsCard: true, proposalId: r.card.proposalId, summary: r.card.lines.map((l) => l.text) },
         card: r.card,
+      };
+    }
+    case "root_cause_analysis": {
+      const r = await runRca(ctx.userProfileId, "manual", ctx.now);
+      if (!r) return { result: { ok: false, error: "not_enough_data", hint: "Fewer than 3 days with anything logged in the last 3 weeks." } };
+      return {
+        result: { shownToUserAsCard: true, evidence: r.report.signals.map((x) => x.text), hypothesis: r.report.hypothesis, experiment: r.report.experiment },
+        card: cardFromReport(r.report),
       };
     }
     case "answer_workout_check": {

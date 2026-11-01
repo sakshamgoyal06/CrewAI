@@ -18,11 +18,27 @@ const state = { snapshot: null, sending: false };
 
 // ---------- API ----------
 
+// Logs that are safe to replay (each is an upsert or idempotent) wait here when the phone is offline.
+const QUEUE_KEY = "magnus-offline-queue";
+const QUEUEABLE = [/^\/steps$/, /^\/checkins$/, /^\/meals\/confirm$/, /^\/workout-check$/];
+
 async function api(path, options = {}) {
-  const res = await fetch(`/api/health${path}`, {
-    ...options,
-    headers: { "content-type": "application/json", authorization: `Bearer ${store.get(TOKEN_KEY, "")}` },
-  });
+  let res;
+  try {
+    res = await fetch(`/api/health${path}`, {
+      ...options,
+      headers: { "content-type": "application/json", authorization: `Bearer ${store.get(TOKEN_KEY, "")}` },
+    });
+  } catch (err) {
+    if (options.method === "POST" && QUEUEABLE.some((re) => re.test(path)) && !options.replay) {
+      const q = store.get(QUEUE_KEY, []);
+      q.push({ path, body: options.body, at: Date.now() });
+      store.set(QUEUE_KEY, q.slice(-50));
+      toast("Offline. Saved on this phone; it syncs when you're back online.");
+      return { ok: true, queued: true, totals: { calories: 0 } };
+    }
+    throw new Error("You're offline.");
+  }
   if (res.status === 401) {
     store.set(TOKEN_KEY, null);
     showConnect();
@@ -45,7 +61,29 @@ function friendlyError(code) {
     routine_not_found: "That routine no longer exists in Hevy.",
     proposal_discarded: "That suggestion was discarded.",
     proposal_in_progress: "Already sending that to Hevy.",
+    push_not_configured: "Push isn't set up on the server yet (VAPID keys).",
+    no_devices: "This device isn't subscribed yet.",
+    not_enough_data: "Not enough logged days yet to find a pattern.",
   }[code] || "Something went wrong. Try again.";
+}
+
+async function flushQueue() {
+  const q = store.get(QUEUE_KEY, []);
+  if (!q.length || !navigator.onLine) return;
+  const left = [];
+  for (const item of q) {
+    try {
+      await api(item.path, { method: "POST", body: item.body, replay: true });
+    } catch (err) {
+      // A rejected log (bad data, expired) is dropped; a network failure keeps it for later.
+      if (err.message === "You're offline.") left.push(item);
+    }
+  }
+  store.set(QUEUE_KEY, left);
+  if (left.length < q.length) {
+    toast(`Synced ${q.length - left.length} saved log${q.length - left.length === 1 ? "" : "s"}.`);
+    refresh();
+  }
 }
 
 // ---------- helpers ----------
@@ -380,6 +418,149 @@ function appendCard(c) {
   if (c.type === "meal_draft") $("thread").append(mealDraftCard(c.draft));
   else if (c.type === "workout_check") $("thread").append(workoutCheckCard(c));
   else if (c.type === "hevy_proposal") $("thread").append(hevyProposalCard(c));
+  else if (c.type === "rca") $("thread").append(rcaCard(c));
+}
+
+// ---------- root-cause card ----------
+
+const RCA_STATUS = { trying: "Trying it this week", declined: "Skipped", helped: "It helped", no_change: "Didn't move the needle" };
+
+/** Why the days slipped: evidence, one hypothesis, one experiment to take up. */
+function rcaCard(c) {
+  const card = el("div", { class: "draft rca" });
+  function render(cur) {
+    const actions = cur.status === "proposed"
+      ? (() => {
+          const yes = el("button", { class: "btn primary", type: "button" }, "I'll try it");
+          const no = el("button", { class: "btn", type: "button" }, "Not this one");
+          const go = async (action) => {
+            yes.disabled = no.disabled = true;
+            try {
+              const r = await api(`/rca/${cur.reportId}`, { method: "POST", body: JSON.stringify({ action }) });
+              render({ ...cur, status: r.status });
+              if (action === "try") toast("Noted. I'll check in a week whether it helped.");
+            } catch (err) {
+              yes.disabled = no.disabled = false;
+              toast(err.message);
+            }
+          };
+          yes.addEventListener("click", () => go("try"));
+          no.addEventListener("click", () => go("decline"));
+          return el("div", { class: "draft-actions" }, no, yes);
+        })()
+      : el("p", { class: `rca-status ${cur.status}` }, RCA_STATUS[cur.status] || cur.status);
+    card.replaceChildren(
+      el("p", { class: "eyebrow" }, "Root cause · last 3 weeks"),
+      el("p", { class: "rca-hypothesis" }, cur.hypothesis),
+      cur.evidence?.length ? el("ul", { class: "changes evidence" }, ...cur.evidence.map((t) => el("li", { class: "info" }, el("span", { class: "sign" }, "·"), el("span", {}, t)))) : null,
+      el("div", { class: "experiment" }, el("p", { class: "section-label" }, "Experiment · 7 days"), el("p", {}, cur.experiment)),
+      actions,
+    );
+  }
+  render(c);
+  return card;
+}
+
+// ---------- push notifications ----------
+
+function b64ToBytes(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, (ch) => ch.charCodeAt(0));
+}
+
+async function currentSubscription() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
+  const reg = await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+
+async function enablePush() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("This browser can't receive push. Install the app from Chrome first.");
+  const { publicKey } = await api("/push");
+  if (!publicKey) throw new Error(friendlyError("push_not_configured"));
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") throw new Error("Notifications are blocked for this app in Android settings.");
+  const reg = await navigator.serviceWorker.ready;
+  const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) }));
+  await api("/push/subscribe", { method: "POST", body: JSON.stringify(sub.toJSON()) });
+}
+
+async function disablePush() {
+  const sub = await currentSubscription();
+  if (!sub) return;
+  await api("/push/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => {});
+  await sub.unsubscribe();
+}
+
+const NUDGES = [
+  ["morning_plan", "Morning plan"],
+  ["meal_reminder", "Meal reminders"],
+  ["step_pace", "Step pace"],
+  ["workout_check", "Workout check"],
+  ["evening_wrap", "Evening wrap"],
+  ["weigh_in", "Weekly weigh-in"],
+  ["rca", "Root-cause reviews"],
+];
+
+function notificationsSection() {
+  const wrap = el("div", { class: "stack" }, el("p", { class: "section-label" }, "Notifications"));
+  const status = el("p", { class: "hint" }, "Checking…");
+  const toggle = el("button", { class: "btn block", type: "button" }, "…");
+  const test = el("button", { class: "link", type: "button", hidden: true }, "Send a test");
+  const kinds = el("div", { class: "toggles" });
+  const quiet = el("div", { class: "grid2" });
+  wrap.append(status, toggle, test, kinds, quiet);
+
+  let prefs = { quietStart: "22:30", quietEnd: "07:00", off: [] };
+  const savePrefs = async (patch) => {
+    prefs = { ...prefs, ...patch };
+    try { await api("/push/prefs", { method: "POST", body: JSON.stringify(patch) }); } catch (err) { toast(err.message); }
+  };
+
+  async function paint() {
+    const sub = await currentSubscription().catch(() => null);
+    const on = !!sub && Notification.permission === "granted";
+    status.textContent = on ? "On for this phone. Tap a nudge to turn it off." : "Off. Turn on to get nudges for meals, steps, workouts and reviews.";
+    toggle.textContent = on ? "Turn off on this phone" : "Turn on notifications";
+    toggle.className = on ? "btn block" : "btn primary block";
+    test.hidden = !on;
+    kinds.replaceChildren(...NUDGES.map(([k, label]) => {
+      const b = el("button", { type: "button", class: prefs.off.includes(k) ? "" : "on", "aria-pressed": String(!prefs.off.includes(k)) }, label);
+      b.addEventListener("click", () => {
+        const off = prefs.off.includes(k) ? prefs.off.filter((x) => x !== k) : [...prefs.off, k];
+        savePrefs({ off });
+        paint();
+      });
+      return b;
+    }));
+    kinds.hidden = !on;
+    quiet.hidden = !on;
+  }
+
+  toggle.addEventListener("click", async () => {
+    toggle.disabled = true;
+    try {
+      (await currentSubscription()) ? await disablePush() : await enablePush();
+    } catch (err) {
+      toast(err.message);
+    }
+    toggle.disabled = false;
+    paint();
+  });
+  test.addEventListener("click", async () => {
+    try { await api("/push/test", { method: "POST" }); toast("Sent. It should arrive in a few seconds."); } catch (err) { toast(err.message); }
+  });
+
+  api("/push").then((r) => {
+    prefs = r.prefs || prefs;
+    quiet.replaceChildren(
+      el("label", {}, "Quiet from", el("input", { class: "field", type: "time", value: prefs.quietStart, onchange: (e) => savePrefs({ quietStart: e.target.value }) })),
+      el("label", {}, "Until", el("input", { class: "field", type: "time", value: prefs.quietEnd, onchange: (e) => savePrefs({ quietEnd: e.target.value }) })),
+    );
+    paint();
+  }).catch(() => paint());
+  return wrap;
 }
 
 // ---------- Hevy proposal card ----------
@@ -802,6 +983,7 @@ const SHEETS = {
         el("p", { class: "hint" }, "On training days, if Hevy has no workout by then, I'll ask in chat."),
         el("button", { class: "btn block", type: "submit" }, "Save targets"),
       ),
+      notificationsSection(),
       el("p", { class: "section-label" }, "Device"),
       el("button", { class: "link", type: "button", onclick: () => { store.set(TOKEN_KEY, null); closeSheet(); showConnect(); } }, "Disconnect this device"),
     );
@@ -859,7 +1041,10 @@ function start() {
   loadHistory();
   refresh();
   loadTraining();
+  flushQueue();
 }
+
+window.addEventListener("online", flushQueue);
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/app/sw.js", { scope: "/app/" }).catch(() => {});

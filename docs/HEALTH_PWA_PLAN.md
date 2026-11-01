@@ -45,10 +45,10 @@ It's a leading indicator you control every day; weight and body fat lag by weeks
 ## Phases
 
 1. **Foundation (PR #114).** Everything above: API, coach chat, robust meals, goals + weigh-ins, north star, Health Connect sync, the app, archive.
-2. **Notifications.** Web Push (VAPID, `push_subscriptions`), scheduler reusing `archive/src/proactive` ideas (dedupe, quiet hours). First nudges: morning plan, meal not logged by slot time, mid-afternoon step pace, training-day workout reminder, evening score wrap, Sunday weigh-in.
+2. **Notifications. Done 2026-11-01.** Web Push (VAPID, `push_subscriptions`), scheduler reusing `archive/src/proactive` ideas (dedupe, quiet hours). First nudges: morning plan, meal not logged by slot time, mid-afternoon step pace, training-day workout reminder, evening score wrap, Sunday weigh-in.
 3. **Day planner.** (Hevy write landed early, 2026-10-28.) Today's planned session from training days. "Plan my day": workout, walk and meal blocks into free Google Calendar time on confirm.
-4. **RCA.** Deterministic signal mining over 14–28 days (which check fails, which weekdays, time of day, late or skipped meals, calendar load), then Claude writes one hypothesis and one small experiment. Triggered by two off-track days in a row or a week below goal, plus a weekly review. Store RCAs and whether the experiment helped.
-5. **Polish.** Trends (4–12 weeks), offline queue for logs, photo meal logging, settings for check-in day and quiet hours.
+4. **RCA. Done 2026-11-01** (`rca.ts`, `proactive.ts`). Deterministic signal mining over 14–28 days (which check fails, which weekdays, time of day, late or skipped meals, calendar load), then Claude writes one hypothesis and one small experiment. Triggered by two off-track days in a row or a week below goal, plus a weekly review. Store RCAs and whether the experiment helped.
+5. **Polish.** Done: offline queue for logs, quiet hours and per-nudge toggles. Left: trends view (4–12 weeks), photo meal logging, choosing the check-in day.
 
 ## Housekeeping
 

@@ -11,6 +11,7 @@
  *   OWNER_TIMEZONE=Asia/Kolkata    sets user_profile.timezone (days are scored in this zone)
  */
 import "dotenv/config";
+import webpush from "web-push";
 import { randomBytes } from "node:crypto";
 
 import { supabase } from "../src/tools/clients.js";
@@ -71,3 +72,8 @@ if (hpError) console.warn(`user_health_profile: ${hpError.message}`);
 console.log("\nAdd these to Railway (or .env). The token is new each run; keep the one you deploy.\n");
 console.log(`MAGNUS_HEALTH_APP_USER_PROFILE_ID=${profileId}`);
 console.log(`MAGNUS_HEALTH_APP_TOKEN=${randomBytes(32).toString("hex")}`);
+// Push notifications. Generate once; changing them later means every device re-subscribes.
+const vapid = webpush.generateVAPIDKeys();
+console.log(`MAGNUS_VAPID_PUBLIC_KEY=${vapid.publicKey}`);
+console.log(`MAGNUS_VAPID_PRIVATE_KEY=${vapid.privateKey}`);
+console.log("MAGNUS_VAPID_SUBJECT=mailto:you@example.com   # your email");

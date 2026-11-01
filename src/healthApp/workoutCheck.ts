@@ -5,9 +5,7 @@
  */
 import { z } from "zod";
 
-import { logger } from "../logger.js";
 import { localDateKey } from "../nutrition/localDate.js";
-import { loggableError } from "../util/loggableError.js";
 import type { ActionContext } from "./actions.js";
 import { formatTime, zonedInstant, type GymSlot } from "./gymSlot.js";
 import { loadHealthProfile, loadRecentWorkouts, weekdayOfDate, type WorkoutSummary } from "./snapshot.js";
@@ -186,28 +184,4 @@ export async function answerWorkoutCheck(
     reason: input.answer === "skipped" ? input.reason?.trim() || null : null,
   });
   return saved.ok ? { ok: true, status: input.answer } : saved;
-}
-
-/** Runs the check every few minutes in this process. Returns a stop function. */
-export function startWorkoutCheckScheduler(
-  userProfileId: string,
-  intervalMs = SCHEDULER_INTERVAL_MS,
-): () => void {
-  let running = false;
-  const tick = async (): Promise<void> => {
-    if (running) return;
-    running = true;
-    try {
-      const results = await runWorkoutChecks(userProfileId);
-      if (results.length) logger.info({ results }, "workout check ran");
-    } catch (err) {
-      logger.warn({ err: loggableError(err) }, "workout check failed");
-    } finally {
-      running = false;
-    }
-  };
-  const timer = setInterval(() => void tick(), intervalMs);
-  timer.unref();
-  void tick();
-  return () => clearInterval(timer);
 }

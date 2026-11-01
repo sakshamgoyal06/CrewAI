@@ -31,6 +31,17 @@ import { listMealsForDate } from "./meals.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
 import { applyProposal, cardFromRow, discardProposal, getProposals } from "./hevyProposals.js";
 import { analyzeTraining, hevyKey, loadWorkoutHistory } from "./training.js";
+import {
+  deleteSubscription,
+  getPrefs,
+  prefsInput,
+  pushConfig,
+  saveSubscription,
+  savePrefs,
+  sendNotification,
+  subscriptionInput,
+} from "./push.js";
+import { cardFromReport, getReports, rcaResponseInput, respondToRca, runRca } from "./rca.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
 
@@ -74,6 +85,7 @@ function fromResult(r: { ok: boolean; error?: string }): { status: number; body:
     "proposal_not_pending",
     "routine_changed_in_hevy",
     "routine_not_found",
+    "report_not_found",
   ]);
   return { status: clientErrors.has(r.error ?? "") ? 400 : 500, body: r };
 }
@@ -124,6 +136,17 @@ export function createHealthAppRouter(): express.Router {
           m.cards = m.cards.map((c) => {
             const row = c.type === "hevy_proposal" ? rows.get(c.proposalId) : undefined;
             return row ? cardFromRow(row) : c;
+          });
+        }
+      }
+      // Root-cause cards show whether the experiment was taken up, and how it went.
+      const rcaIds = messages.flatMap((m) => m.cards.flatMap((c) => (c.type === "rca" ? [c.reportId] : [])));
+      if (rcaIds.length) {
+        const reports = await getReports(ctx.userProfileId, rcaIds);
+        for (const m of messages) {
+          m.cards = m.cards.map((c) => {
+            const r = c.type === "rca" ? reports.get(c.reportId) : undefined;
+            return r ? cardFromReport(r) : c;
           });
         }
       }
@@ -222,6 +245,59 @@ export function createHealthAppRouter(): express.Router {
   router.post(
     "/hevy/proposals/:id/discard",
     route("hevy-discard", async (ctx, req) => fromResult(await discardProposal(ctx, String(req.params.id)))),
+  );
+
+  /** Web Push: the app asks for the VAPID key, then registers its subscription. */
+  router.get(
+    "/push",
+    route("push-config", async (ctx) => ({
+      body: { publicKey: pushConfig()?.publicKey ?? null, prefs: await getPrefs(ctx.userProfileId) },
+    })),
+  );
+  router.post(
+    "/push/subscribe",
+    route("push-subscribe", async (ctx, req) =>
+      fromResult(await saveSubscription(ctx.userProfileId, subscriptionInput.parse(req.body), req.get("user-agent"))),
+    ),
+  );
+  router.post(
+    "/push/unsubscribe",
+    route("push-unsubscribe", async (ctx, req) => {
+      const { endpoint } = z.object({ endpoint: z.string().url() }).parse(req.body);
+      return fromResult(await deleteSubscription(ctx.userProfileId, endpoint));
+    }),
+  );
+  router.post(
+    "/push/test",
+    route("push-test", async (ctx) => {
+      const r = await sendNotification(ctx.userProfileId, {
+        kind: "morning_plan",
+        dedupeKey: `test:${Date.now()}`,
+        title: "Magnus",
+        body: "Notifications are on. I'll nudge you about meals, steps, workouts and your weekly review.",
+        url: "/app/#coach",
+      });
+      return { status: r.sent ? 200 : 400, body: { ok: r.sent, ...r, error: r.reason } };
+    }),
+  );
+  router.post(
+    "/push/prefs",
+    route("push-prefs", async (ctx, req) => fromResult(await savePrefs(ctx.userProfileId, prefsInput.parse(req.body)))),
+  );
+
+  /** Root-cause analysis on demand, and the person's answer to its experiment. */
+  router.post(
+    "/rca",
+    route("rca", async (ctx) => {
+      const r = await runRca(ctx.userProfileId, "manual");
+      return r ? { body: { ok: true, card: cardFromReport(r.report) } } : { status: 400, body: { ok: false, error: "not_enough_data" } };
+    }),
+  );
+  router.post(
+    "/rca/:id",
+    route("rca-respond", async (ctx, req) =>
+      fromResult(await respondToRca(ctx, String(req.params.id), rcaResponseInput.parse(req.body).action)),
+    ),
   );
 
   /** Training analysis for the tracker: progressing / stalled lifts over the last 8 weeks. */
