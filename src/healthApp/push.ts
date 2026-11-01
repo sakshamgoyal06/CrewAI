@@ -12,8 +12,12 @@ import { loggableError } from "../util/loggableError.js";
 
 export type PushConfig = { publicKey: string; privateKey: string; subject: string };
 
+const DEFAULT_VAPID_PUBLIC_KEY =
+  "BAvH5sNC8GBb9FMFInwZgC6V3eMsz5LBDb2CbmbMd8J97i0ECAelH87s144Ol2dOY5mqLu3tNlKk8SS9WfyI50o";
+
 export function pushConfig(): PushConfig | null {
-  const publicKey = process.env.MAGNUS_VAPID_PUBLIC_KEY?.trim() || "";
+  // TEMP default: the public half of the VAPID pair is not a secret. Cleanup: move to env.
+  const publicKey = process.env.MAGNUS_VAPID_PUBLIC_KEY?.trim() || DEFAULT_VAPID_PUBLIC_KEY;
   const privateKey = process.env.MAGNUS_VAPID_PRIVATE_KEY?.trim() || "";
   const subject = process.env.MAGNUS_VAPID_SUBJECT?.trim() || "mailto:magnus@example.com";
   return publicKey && privateKey ? { publicKey, privateKey, subject } : null;

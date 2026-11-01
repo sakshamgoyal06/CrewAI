@@ -9,9 +9,12 @@ export type HealthAppAuthConfig = {
   userProfileId: string;
 };
 
+const DEFAULT_OWNER_PROFILE_ID = "73365666-4285-42af-a59e-43ba68ea65c0";
+
 export function healthAppAuthConfig(): HealthAppAuthConfig | null {
   const token = process.env.MAGNUS_HEALTH_APP_TOKEN?.trim() || "";
-  const userProfileId = process.env.MAGNUS_HEALTH_APP_USER_PROFILE_ID?.trim() || "";
+  // TEMP default (not a secret) so only the token has to be set in Railway. Cleanup: move to env.
+  const userProfileId = process.env.MAGNUS_HEALTH_APP_USER_PROFILE_ID?.trim() || DEFAULT_OWNER_PROFILE_ID;
   if (token.length < 24 || !userProfileId) {
     return null;
   }
