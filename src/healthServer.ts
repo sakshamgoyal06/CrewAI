@@ -18,6 +18,7 @@ export function startHealthServer(): Promise<HealthServer> {
   app.disable("x-powered-by");
   // Health Connect syncs can carry a day or two of buckets; everything else is tiny.
   app.use("/api/health/ingest", express.json({ limit: "2mb" }));
+  app.use("/api/health/events", express.json({ limit: "128kb" }));
   app.use(express.json({ limit: "32kb" }));
 
   app.get("/health", (_req, res) => {

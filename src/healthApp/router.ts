@@ -25,6 +25,7 @@ import {
   type ActionContext,
 } from "./actions.js";
 import { authenticateHealthApp, healthAppAuthConfig } from "./auth.js";
+import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from "./events.js";
 import { loadChatHistory, runHealthChat } from "./chat.js";
 import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
 import { listMealsForDate } from "./meals.js";
@@ -75,6 +76,7 @@ function route(name: string, handler: Handler): express.RequestHandler {
         return;
       }
       logger.error({ err: loggableError(err), route: name }, "health app route failed");
+      res.locals.routeError = err instanceof Error ? err.message : String(err);
       res.status(500).json({ error: "server_error" });
     }
   };
@@ -115,7 +117,34 @@ export function createHealthAppRouter(): express.Router {
       return;
     }
     (res.locals as Locals).userProfileId = userProfileId;
+    // Server-side timing per route, written to health_app_events next to the client's view of it.
+    if (req.path !== "/events") {
+      const started = performance.now();
+      res.on("finish", () => {
+        recordServerRoute({
+          userProfileId,
+          route: req.route?.path ? `${req.method} ${String(req.route.path)}` : `${req.method} ${req.path}`,
+          method: req.method,
+          path: req.path,
+          status: res.statusCode,
+          durationMs: performance.now() - started,
+          sessionId: req.get("x-magnus-session") ?? undefined,
+          error: typeof res.locals.routeError === "string" ? res.locals.routeError : undefined,
+        });
+      });
+    }
     next();
+  });
+
+  /** Client telemetry from the PWA: answered at once, written to the table in batches. */
+  router.post("/events", (req, res) => {
+    const parsed = clientEventsInput.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid_body" });
+      return;
+    }
+    enqueueEvents(clientRows((res.locals as Locals).userProfileId, parsed.data, req.get("user-agent")));
+    res.status(204).end();
   });
 
   router.get(

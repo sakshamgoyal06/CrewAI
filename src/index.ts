@@ -4,6 +4,7 @@ import { logger } from "./logger.js";
 import { loggableError } from "./util/loggableError.js";
 import "./tools/clients.js";
 import { healthAppAuthConfig } from "./healthApp/auth.js";
+import { flushEvents } from "./healthApp/events.js";
 import { startProactiveScheduler } from "./healthApp/proactive.js";
 import { startHealthServer } from "./healthServer.js";
 
@@ -20,7 +21,11 @@ async function main(): Promise<void> {
     shuttingDown = true;
     logger.info({ signal }, "shutting down");
     stopProactive();
-    void server.close().then(() => process.exit(0));
+    void server
+      .close()
+      .then(() => flushEvents())
+      .catch(() => {})
+      .then(() => process.exit(0));
     // Never hold a redeploy hostage waiting on in-flight work.
     setTimeout(() => process.exit(0), 10_000).unref();
   };

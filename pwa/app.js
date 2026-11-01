@@ -1,6 +1,8 @@
 // Magnus health app. Coach chat is home; the tracker is the second page. Both write through
 // the same /api/health endpoints, so anything logged in one shows up in the other.
 
+import { SESSION_ID, trackApi } from "./telemetry.js";
+
 const TOKEN_KEY = "magnus-health-token";
 const CONFIRMED_KEY = "magnus-confirmed-drafts";
 const $ = (id) => document.getElementById(id);
@@ -27,12 +29,14 @@ const QUEUEABLE = [/^\/steps$/, /^\/checkins$/, /^\/meals\/confirm$/, /^\/workou
 
 async function api(path, options = {}) {
   let res;
+  const started = performance.now();
   try {
     res = await fetch(`/api/health${path}`, {
       ...options,
-      headers: { "content-type": "application/json", authorization: `Bearer ${store.get(TOKEN_KEY, "")}` },
+      headers: { "content-type": "application/json", authorization: `Bearer ${store.get(TOKEN_KEY, "")}`, "x-magnus-session": SESSION_ID },
     });
   } catch (err) {
+    trackApi(path, options.method, 0, performance.now() - started, options.replay ? "network (replay)" : "network");
     if (options.method === "POST" && QUEUEABLE.some((re) => re.test(path)) && !options.replay) {
       const q = store.get(QUEUE_KEY, []);
       q.push({ path, body: options.body, at: Date.now() });
@@ -50,6 +54,7 @@ async function api(path, options = {}) {
     throw new Error("This device was disconnected. Paste your token again.");
   }
   const body = await res.json().catch(() => ({}));
+  trackApi(path, options.method, res.status, performance.now() - started, res.ok ? null : body.error || `http_${res.status}`);
   if (!res.ok) throw new Error(friendlyError(body.error));
   return body;
 }
