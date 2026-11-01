@@ -346,11 +346,12 @@ function renderChips(s) {
   $("chips").replaceChildren(
     ...chips.map(([label, text]) =>
       el("button", { class: "chip", type: "button", onclick: () => {
+        // Questions send straight away (no keyboard pop-up); the rest pre-fill for the person to finish.
+        if (text.endsWith("?")) { send(text); return; }
         const input = $("input");
         input.value = text;
         input.focus();
         autosize();
-        if (text.endsWith("?")) $("composer").requestSubmit();
       } }, label),
     ),
   );
@@ -411,8 +412,16 @@ async function loadHistory() {
   }
 }
 
+// A coach turn can take a while (meal web search); past this the UI frees up instead of looking dead.
+const CHAT_TIMEOUT_MS = 90_000;
+
+/** Returns false when the message wasn't sent, so the caller keeps the text. */
 async function send(text) {
-  if (state.sending || !text.trim()) return;
+  if (!text.trim()) return false;
+  if (state.sending) {
+    toast("Still answering your last message. One moment.");
+    return false;
+  }
   state.sending = true;
   state.historySig = null;
   $("send").disabled = true;
@@ -422,7 +431,11 @@ async function send(text) {
   $("thread").append(typing);
   scrollThread();
   try {
-    const reply = await api("/chat", { method: "POST", body: JSON.stringify({ text }) });
+    let timer;
+    const reply = await Promise.race([
+      api("/chat", { method: "POST", body: JSON.stringify({ text }) }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("That's taking too long. The answer will show when you reopen the app, or try again.")), CHAT_TIMEOUT_MS); }),
+    ]).finally(() => clearTimeout(timer));
     typing.remove();
     addMessage("coach", reply.text);
     for (const c of reply.cards) appendCard(c);
@@ -435,6 +448,7 @@ async function send(text) {
     state.sending = false;
     $("send").disabled = false;
   }
+  return true;
 }
 
 function autosize() {
@@ -1065,6 +1079,7 @@ $("input").addEventListener("keydown", (e) => {
 $("composer").addEventListener("submit", (e) => {
   e.preventDefault();
   const text = $("input").value;
+  if (!text.trim() || state.sending) { send(text); return; }
   $("input").value = "";
   autosize();
   send(text);
