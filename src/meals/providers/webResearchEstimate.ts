@@ -32,8 +32,6 @@ Shape:
 
 grams: your best estimate of the weight of the amount eaten for that item.
 
-When the user message lists **numbered components**, return exactly one item per component with its "index", numbers for the amount stated (or one typical serving when it says "no amount given"), and nothing for foods not listed.
-
 serving_assumption: 1–2 short sentences (under 220 characters) on portions assumed and data basis.
 
 items: one row per logical food, or one summary row for a single dish. Macros should sum consistently with top-level calories when possible.`;
@@ -180,21 +178,13 @@ function parseEstimateJson(
  * Anthropic server **web_search** tool (real-time web), then structured JSON. No SerpAPI.
  * Returns null if disabled, API errors, or JSON parse fails. Org must allow web search in Console.
  */
-async function estimateViaAnthropicWebSearch(
-  query: string,
-  components?: WebComponent[],
-): Promise<MealNutritionEstimate | null> {
+async function estimateViaAnthropicWebSearch(query: string): Promise<MealNutritionEstimate | null> {
   const q = query.trim();
   if (!q || !mealLogAnthropicWebSearchEnabled()) {
     return null;
   }
 
-  const list = components?.length
-    ? `\n\nNumbered components to estimate (one item each, keep the index):\n${components
-        .map((c) => `${c.index}. ${c.name} — ${c.amount}`)
-        .join("\n")}`
-    : "";
-  const userContent = `Food / meal line to estimate:\n${q}${list}\n\nReply with **only** one JSON object as specified in the system message (no markdown fences).`;
+  const userContent = `Food / meal line to estimate:\n${q}\n\nReply with **only** one JSON object as specified in the system message (no markdown fences).`;
 
   try {
     const msg = await anthropic.messages.create({
@@ -236,17 +226,8 @@ async function estimateViaAnthropicWebSearch(
   }
 }
 
-/** A food the caller wants numbers for, e.g. { index: 1, name: "paratha", amount: "2 piece" }. */
-export type WebComponent = { index: number; name: string; amount: string };
-
-/**
- * Web-first estimate via the Anthropic `web_search` server tool. With `components`, returns one
- * item per component (tagged with `component_index` and `grams`) so results can be stored per food.
- */
-export async function estimateViaWebResearch(
-  query: string,
-  components?: WebComponent[],
-): Promise<MealNutritionEstimate | null> {
+/** Web-first whole-meal estimate via the Anthropic `web_search` server tool. */
+export async function estimateViaWebResearch(query: string): Promise<MealNutritionEstimate | null> {
   const q = query.trim();
   if (!q) {
     return null;
@@ -257,5 +238,5 @@ export async function estimateViaWebResearch(
   }
 
   logger.debug({ querySnippet: q.slice(0, 100) }, "meal web research via Anthropic web_search");
-  return estimateViaAnthropicWebSearch(q, components);
+  return estimateViaAnthropicWebSearch(q);
 }

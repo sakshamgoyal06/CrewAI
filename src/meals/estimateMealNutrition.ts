@@ -5,9 +5,10 @@ import { estimateViaLlm } from "./providers/llmEstimate.js";
 import { estimateViaUsdaFdc } from "./providers/usdaFdc.js";
 import { estimateViaWebResearch } from "./providers/webResearchEstimate.js";
 import { estimateWithFoodDb } from "./foodDbEstimate.js";
+import { breakdownViaWebResearch } from "./providers/webBreakdown.js";
 
 /**
- * Order: **own food table (web_search for unseen foods) → USDA FDC → CalorieNinjas → optional Claude JSON**. Web runs
+ * Order: **ingredients from our food table (web_search breaks down unseen items) → USDA FDC → CalorieNinjas → optional Claude JSON**. Web runs
  * unless `MAGNUS_MEAL_LOG_WEB_FIRST=false`; the LLM fallback only with `MAGNUS_MEAL_LOG_LLM_FALLBACK=true`.
  */
 export async function estimateMealNutrition(
@@ -51,14 +52,14 @@ export function clearEstimateCache(): void {
 
 async function estimateUncached(q: string): Promise<MealNutritionEstimate> {
   const webEnabled = mealLogWebResearchEnabled();
-  // Our own food table first; only foods it doesn't have go to the web (and get saved).
+  // Built from ingredients in our food table; only unseen items go to the web (and get saved).
   let webTried = false;
   const fromDb = await estimateWithFoodDb(
     q,
     webEnabled
-      ? (text, components) => {
+      ? (text, items, known) => {
           webTried = true;
-          return estimateViaWebResearch(text, components);
+          return breakdownViaWebResearch(text, items, known);
         }
       : null,
   ).catch(() => null);
