@@ -7,10 +7,16 @@ import { anthropic } from "../../tools/clients.js";
 import { mealLogAnthropicWebSearchEnabled } from "../mealEnv.js";
 import type { MealItemLine, MealNutritionEstimate } from "../types.js";
 
+/** Each search is a sequential round trip; two covers a meal plus one branded item. */
+export const WEB_SEARCH_MAX_USES = 2;
+const WEB_ESTIMATE_TIMEOUT_MS = 40_000;
+
 /** Evidence comes only from the `web_search` server tool — no pre-fetched excerpts. */
 const SYSTEM_ANTHROPIC_WEB = `You are a nutrition estimation assistant. The user gives one food / meal line (may include grams, counts, or brand names).
 
 You **must** call the **web_search** tool at least once to find current nutrition, menu, or label data before you write JSON. Do not rely on memory alone for branded or restaurant items.
+
+Speed matters (the person is waiting on their phone): make **one** search that covers the whole meal (e.g. "paratha baingan sabzi calories per piece"). Search a second time only if a named brand or restaurant item was not covered by the first results. For everyday home-cooked foods, standard per-serving values from the first search are enough.
 
 Rules:
 - Prefer **brand / restaurant menu** numbers when the user names a chain or dish.
@@ -24,7 +30,7 @@ After searching, output **nothing except** one raw JSON object: no markdown fenc
 Shape:
 {"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"serving_assumption":string,"items":[{"name":string,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"portion_note"?:string}]}
 
-serving_assumption: 1–4 short sentences on basis and inference.
+serving_assumption: 1–2 short sentences (under 220 characters) on portions assumed and data basis.
 
 items: one row per logical food, or one summary row for a single dish. Macros should sum consistently with top-level calories when possible.`;
 
@@ -179,11 +185,15 @@ async function estimateViaAnthropicWebSearch(query: string): Promise<MealNutriti
   try {
     const msg = await anthropic.messages.create({
       model: HEALTH_SPECIALIST_MODEL,
-      max_tokens: 2048,
+      max_tokens: 1200,
       system: SYSTEM_ANTHROPIC_WEB,
       messages: [{ role: "user", content: userContent }],
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
-    } as unknown as Parameters<(typeof anthropic)["messages"]["create"]>[0]);
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: WEB_SEARCH_MAX_USES }],
+    } as unknown as Parameters<(typeof anthropic)["messages"]["create"]>[0], {
+      // A stuck search must not hang the app; the next provider takes over.
+      timeout: WEB_ESTIMATE_TIMEOUT_MS,
+      maxRetries: 0,
+    });
 
     const raw = stripJsonFence(allTextFromMessage(msg as Message).trim());
     const citationMeta = citationsFromAnthropicWebMessage(msg as Message);

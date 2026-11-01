@@ -217,7 +217,8 @@ export async function saveConfirmedMeal(
   if (error) {
     return { ok: false, error: error.message };
   }
-  await recomputeDailyRollup(userProfileId, input.localDate);
+  // Nothing in the app reads the rollup back, so don't make the person wait on it.
+  void recomputeDailyRollup(userProfileId, input.localDate).catch(() => undefined);
   return {
     ok: true,
     mealSessionId: input.draftId,

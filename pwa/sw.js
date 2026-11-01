@@ -1,5 +1,6 @@
-// App shell cache. API calls always go to the network so numbers are never stale.
-const CACHE = "magnus-health-v5";
+// App shell: served from cache at once, refreshed in the background (a new deploy shows on the
+// next open). API calls always go to the network so numbers are never stale.
+const CACHE = "magnus-health-v6";
 const SHELL = ["/app/", "/app/index.html", "/app/styles.css", "/app/app.js", "/app/manifest.webmanifest", "/app/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -20,14 +21,18 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET" || url.pathname.startsWith("/api/")) {
     return;
   }
+  const network = fetch(event.request).then((res) => {
+    if (res.ok) {
+      const copy = res.clone();
+      caches.open(CACHE).then((c) => c.put(event.request, copy));
+    }
+    return res;
+  });
+  event.waitUntil(network.catch(() => undefined));
   event.respondWith(
-    fetch(event.request)
-      .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(event.request, copy));
-        return res;
-      })
-      .catch(() => caches.match(event.request).then((hit) => hit || caches.match("/app/index.html"))),
+    caches.match(event.request).then(
+      (hit) => hit || network.catch(() => caches.match("/app/index.html")),
+    ),
   );
 });
 
