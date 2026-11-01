@@ -64,6 +64,14 @@ function label(node) {
   return node.id || (d.view && `tab:${d.view}`) || (d.sheet && `sheet:${d.sheet}`) || node.getAttribute("aria-label") || (node.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40) || node.tagName.toLowerCase();
 }
 
+// FCP can land after the load event on a cached start, so watch for it instead of reading once.
+let fcpEntry = null;
+try {
+  new PerformanceObserver((list) => {
+    for (const e of list.getEntries()) if (e.name === "first-contentful-paint") fcpEntry = e;
+  }).observe({ type: "paint", buffered: true });
+} catch { /* unsupported */ }
+
 function install() {
   // Taps on anything clickable. Inputs are not recorded.
   document.addEventListener("click", (e) => {
@@ -81,7 +89,7 @@ function install() {
 
   window.addEventListener("load", () => setTimeout(() => {
     const n = performance.getEntriesByType?.("navigation")?.[0];
-    const paint = performance.getEntriesByName?.("first-contentful-paint")?.[0];
+    const paint = performance.getEntriesByName?.("first-contentful-paint")?.[0] || fcpEntry;
     track("page_load", location.pathname + location.hash, n ? {
       type: n.type,
       ttfbMs: Math.round(n.responseStart),
@@ -93,7 +101,7 @@ function install() {
       standalone: matchMedia("(display-mode: standalone)").matches,
       screen: `${innerWidth}x${innerHeight}`,
     } : {}, { durationMs: n ? Math.round(n.loadEventEnd || performance.now()) : Math.round(performance.now()) });
-  }, 0));
+  }, 1000)); // after first paint, which can come later than load on a cached start
 
   // Main-thread hangs and laggy taps (Chrome on Android supports both).
   try {

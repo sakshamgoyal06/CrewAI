@@ -152,6 +152,17 @@ describe("runRca", () => {
     expect(row.baseline_rate).toBeCloseTo(10 / 14);
   });
 
+  it("ignores days before the first meal log (tracking hadn't started)", async () => {
+    // Hevy shows workouts all fortnight, but meals only start on day 13.
+    const recs = records((i) => ({ workout: true, steps: 9000, meals: i >= 12 ? goodDay : undefined }));
+    const save = vi.fn();
+    const deps = { load: async () => ({ records: recs, targets, timezone: TZ }), past: async () => [], insight: vi.fn() as never, save };
+    expect(await runRca("u1", "weekly_review", new Date(), deps)).toBeNull();
+    expect(save).not.toHaveBeenCalled();
+    const none = records(() => ({ workout: true, steps: 9000 }));
+    expect(await runRca("u1", "manual", new Date(), { ...deps, load: async () => ({ records: none, targets, timezone: TZ }) })).toBeNull();
+  });
+
   it("skips automatic runs when nothing is off", async () => {
     const recs = records(() => ({ meals: goodDay, workout: true }));
     const save = vi.fn();

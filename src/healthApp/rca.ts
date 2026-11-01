@@ -520,7 +520,13 @@ export async function runRca(
   now = new Date(),
   deps: RunDeps = defaultRunDeps,
 ): Promise<{ report: RcaReport; records: DayRecord[] } | null> {
-  const { records, targets } = await deps.load(userProfileId, now, RCA_WINDOW_DAYS);
+  const loaded = await deps.load(userProfileId, now, RCA_WINDOW_DAYS);
+  const { targets } = loaded;
+  // Days before the first meal log aren't "missed meals": tracking hadn't started (Hevy and
+  // step history reach further back than the app). Only judge from the first logged meal on.
+  const firstLogged = loaded.records.findIndex((r) => r.mealSessions > 0);
+  if (firstLogged < 0) return null;
+  const records = loaded.records.slice(firstLogged);
   const recent = records.filter((r) => r.mealSessions > 0 || r.steps > 0 || r.workout);
   if (recent.length < 3) return null;
   const signals = findSignals(recent, targets);
