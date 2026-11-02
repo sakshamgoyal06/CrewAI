@@ -85,8 +85,12 @@ export function startHealthServer(): Promise<HealthServer> {
       },
     }),
   );
+  // The landing page; the app itself lives at /app.
+  const siteDir = process.env.MAGNUS_SITE_DIR?.trim() || path.resolve("site");
   app.get("/", (_req, res) => {
-    res.redirect(302, "/app/");
+    res.sendFile(path.join(siteDir, "index.html"), (err) => {
+      if (err && !res.headersSent) res.redirect(302, "/app/");
+    });
   });
 
   const port = healthListenPort();
