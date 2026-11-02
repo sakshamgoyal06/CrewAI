@@ -2,6 +2,7 @@
 // the same /api/health endpoints, so anything logged in one shows up in the other.
 
 import { SESSION_ID, trackApi } from "./telemetry.js";
+import { runOnboarding } from "./onboarding.js";
 import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
 const TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } })();
@@ -26,6 +27,7 @@ const CHAT_CACHE_KEY = "magnus-chat-cache";
 const SNAPSHOT_CACHE_KEY = "magnus-snapshot-cache";
 const HISTORY_CACHE_KEY = "magnus-history-cache";
 const USUAL_CACHE_KEY = "magnus-usual-meals";
+const ONBOARDED_KEY = "magnus-onboarded";
 
 // ---------- API ----------
 
@@ -42,7 +44,7 @@ async function request(path, options, force = false) {
 }
 
 function clearLocalData() {
-  for (const k of [USUAL_CACHE_KEY, CHAT_CACHE_KEY, SNAPSHOT_CACHE_KEY, HISTORY_CACHE_KEY, QUEUE_KEY]) store.set(k, null);
+  for (const k of [USUAL_CACHE_KEY, CHAT_CACHE_KEY, SNAPSHOT_CACHE_KEY, HISTORY_CACHE_KEY, QUEUE_KEY, ONBOARDED_KEY]) store.set(k, null);
 }
 
 function endSession(message) {
@@ -104,6 +106,9 @@ function friendlyError(code) {
     meal_not_found: "That meal isn't in your usual list any more.",
     not_food: "I don't see a meal in that photo. Try a clearer shot of the plate, or type what you ate.",
     unreadable: "I couldn't read that photo. Try again, or type what you ate.",
+    owner_account: "The owner account can't be deleted from the app.",
+    daily_limit: "You've hit today's limit for the coach. Log from the tracker, or try again tomorrow.",
+    hevy_key_invalid: "Hevy didn't accept that key. Copy it again from hevy.com → Settings → Developer.",
   }[code] || "Something went wrong. Try again.";
 }
 
@@ -1239,7 +1244,25 @@ function accountSection() {
   const hevy = el("div", { class: "stack" });
   const hc = el("div", { class: "stack" });
   const out = el("button", { class: "link danger", type: "button", onclick: () => { if (confirm("Sign out of Magnus on this phone?")) { closeSheet(); endSession(); } } }, "Sign out");
-  wrap.append(who, el("p", { class: "section-label" }, "Hevy"), hevy, el("p", { class: "section-label" }, "Health Connect"), hc, out);
+  const download = el("button", { class: "link", type: "button", onclick: async () => {
+    try {
+      const data = await api("/account/export");
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+      el("a", { href: url, download: `magnus-export-${new Date().toISOString().slice(0, 10)}.json` }).click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (err) { toast(err.message); }
+  } }, "Download my data");
+  const remove = el("button", { class: "link danger", type: "button", onclick: async () => {
+    const typed = prompt("This deletes your account and every meal, weigh-in and message. It can't be undone. Type DELETE to confirm.");
+    if (typed !== "DELETE") return;
+    try {
+      await api("/account", { method: "DELETE", body: JSON.stringify({ confirm: "DELETE" }) });
+      closeSheet();
+      endSession("Your account and data were deleted.");
+    } catch (err) { toast(err.message); }
+  } }, "Delete account");
+  wrap.append(who, el("p", { class: "section-label" }, "Hevy"), hevy, el("p", { class: "section-label" }, "Health Connect"), hc,
+    el("p", { class: "section-label" }, "Your data"), el("p", { class: "hint" }, "Your data is yours: download all of it, or delete it for good."), el("div", { class: "row-between" }, download, remove), out);
 
   function paintHevy(connected) {
     if (connected) {
@@ -1813,7 +1836,24 @@ document.addEventListener("visibilitychange", () => {
   if (!state.sending) loadHistory();
 });
 
-function start() {
+/** A new account goes through the interview before the coach opens. Asked once per device. */
+async function ensureOnboarded() {
+  if (store.get(ONBOARDED_KEY, false)) return true;
+  let account;
+  try { account = await api("/account"); } catch (err) { return !/Signed out|Invite only/.test(err.message); }
+  if (!account.onboarded) {
+    $("connect").hidden = true;
+    $("shell").hidden = true;
+    $("onboarding").hidden = false;
+    await runOnboarding($("onboarding"), { api, el, toast });
+    $("onboarding").hidden = true;
+  }
+  store.set(ONBOARDED_KEY, true);
+  return true;
+}
+
+async function start() {
+  if (!(await ensureOnboarded())) return;
   showShell();
   $("greeting").textContent = greeting();
   setView(location.hash === "#tracker" ? "tracker" : "coach");

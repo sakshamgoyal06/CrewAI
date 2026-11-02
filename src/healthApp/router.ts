@@ -33,6 +33,9 @@ import {
 } from "./accounts.js";
 import { connectHevy, disconnectHevy, hevyConnected, hevyKeyInput } from "./integrations.js";
 import { supabase } from "../tools/clients.js";
+import { takeUse } from "./usageLimits.js";
+import { deleteAccount, exportAccount } from "./privacy.js";
+import { completeOnboarding, isOnboarded, onboardingInput, startingPlan } from "./onboarding.js";
 import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from "./events.js";
 import { loadChatHistory, runHealthChat } from "./chat.js";
 import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
@@ -181,6 +184,7 @@ export function createHealthAppRouter(): express.Router {
       ]);
       return {
         body: {
+          onboarded: await isOnboarded(ctx.userProfileId),
           name: data?.display_name ?? null,
           email: data?.email ?? null,
           timezone: ctx.timezone,
@@ -188,6 +192,40 @@ export function createHealthAppRouter(): express.Router {
           tokens,
         },
       };
+    }),
+  );
+
+  /** The plan the interview answers would give, without saving anything (live preview). */
+  router.post(
+    "/onboarding/preview",
+    route("onboarding-preview", async (ctx, req) => {
+      const input = onboardingInput.parse(req.body);
+      return { body: { ok: true, plan: startingPlan(input, localDateKey(new Date(), ctx.timezone)) } };
+    }),
+  );
+
+  /** Saves the interview: profile, first weigh-in, goal, targets, and a welcome in chat. */
+  router.post(
+    "/onboarding",
+    route("onboarding", async (ctx, req) => {
+      const r = await completeOnboarding(ctx, onboardingInput.parse(req.body));
+      return r.ok ? { body: r } : fromResult(r);
+    }),
+  );
+
+  /** Everything Magnus holds about the person, as one JSON download. */
+  router.get(
+    "/account/export",
+    route("account-export", async (ctx) => ({ body: await exportAccount(ctx.userProfileId) })),
+  );
+
+  /** Deletes the account and all its data. The body must say `{ "confirm": "DELETE" }`. */
+  router.delete(
+    "/account",
+    route("account-delete", async (ctx, req) => {
+      z.object({ confirm: z.literal("DELETE") }).parse(req.body ?? {});
+      const r = await deleteAccount(ctx.userProfileId);
+      return r.ok ? { body: r } : { status: r.error === "owner_account" ? 400 : 500, body: r };
     }),
   );
 
@@ -279,6 +317,9 @@ export function createHealthAppRouter(): express.Router {
     "/chat",
     route("chat", async (ctx, req) => {
       const { text } = chatInput.parse(req.body);
+      if (!takeUse(ctx.userProfileId, "chat", localDateKey(new Date(), ctx.timezone))) {
+        return { status: 429, body: { error: "daily_limit" } };
+      }
       return { body: await runHealthChat(ctx, text) };
     }),
   );
@@ -294,7 +335,11 @@ export function createHealthAppRouter(): express.Router {
   router.post(
     "/meals/photo",
     route("meal-photo", async (ctx, req) => {
-      const r = await draftMealFromPhoto(ctx, photoMealInput.parse(req.body));
+      const input = photoMealInput.parse(req.body);
+      if (!takeUse(ctx.userProfileId, "photo", localDateKey(new Date(), ctx.timezone))) {
+        return { status: 429, body: { ok: false, error: "daily_limit" } };
+      }
+      const r = await draftMealFromPhoto(ctx, input);
       return { status: r.ok ? 200 : 400, body: r };
     }),
   );
