@@ -58,10 +58,12 @@ describe("readMealPhoto", () => {
     const r = await readMealPhoto({ image: IMG, mediaType: "image/jpeg", note: "ate half the dal" }, create);
     expect(r).toEqual({ ok: true, text: "2 roti, 1 bowl dal", foods: expect.any(Array), assumption: "Roti look about 40 g." });
     const params = (create.mock.calls[0] as unknown as [Record<string, any>])[0];
-    expect(params.tool_choice).toEqual({ type: "tool", name: "report_meal" });
+    expect(params.tool_choice).toEqual({ type: "auto" });
+
     const content = params.messages[0].content;
     expect(content[0]).toMatchObject({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: IMG } });
     expect(content[1].text).toContain("ate half the dal");
+    expect(content[1].text).toContain("calling the report_meal tool");
   });
 
   it("says so when the photo isn't food", async () => {
