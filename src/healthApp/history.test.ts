@@ -73,14 +73,14 @@ describe("detailWorkout", () => {
 
 describe("burn", () => {
   it("uses the phone's active calories when present", () => {
-    expect(burnForDay({ activeKcal: 412.6, steps: 8000, workoutMinutes: 60, weightKg: 80 })).toMatchObject({ kcal: 413, source: "health_connect" });
+    expect(burnForDay({ activeKcal: 412.6, steps: 8000, workouts: [{ startTime: "2026-10-28T12:00:00Z", durationMin: 60 }], activities: [], weightKg: 80 })).toMatchObject({ kcal: 413, source: "health_connect" });
   });
 
   it("estimates from steps and workout time otherwise", () => {
     expect(stepsBurn(8000, 80)).toBe(320);
     expect(workoutBurn(60, 80)).toBe(420);
-    expect(burnForDay({ activeKcal: null, steps: 8000, workoutMinutes: 60, weightKg: 80 })).toEqual({ kcal: 740, source: "estimate", stepsKcal: 320, workoutKcal: 420 });
-    expect(burnForDay({ activeKcal: 0, steps: 0, workoutMinutes: 0, weightKg: 80 })).toBeNull();
+    expect(burnForDay({ activeKcal: null, steps: 8000, workouts: [{ startTime: "2026-10-28T12:00:00Z", durationMin: 60 }], activities: [], weightKg: 80 })).toEqual({ kcal: 740, source: "estimate", stepsKcal: 320, workoutKcal: 420, activityKcal: 0, activities: [] });
+    expect(burnForDay({ activeKcal: 0, steps: 0, workouts: [], activities: [], weightKg: 80 })).toBeNull();
   });
 });
 

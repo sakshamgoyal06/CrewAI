@@ -6,6 +6,8 @@
 import { localDateKey } from "../nutrition/localDate.js";
 import type { HevyWorkout } from "../pillars/health/workouts/hevy/index.js";
 import { supabase } from "../tools/clients.js";
+import { burnForDay, trainingActivity, typicalTrainingBurn, type Activity, type Burn, type NotCounted, type StepBucket, type TimedWorkout } from "./activities.js";
+import { FALLBACK_WEIGHT_KG, getActivities } from "./activityLog.js";
 import { getBodyCheckins } from "./bodyStore.js";
 import { hevyHistoryCached } from "./hevyHistory.js";
 import { scoreDay, type DayCheck, type HealthTargets } from "./northStar.js";
@@ -15,8 +17,8 @@ import { getWorkoutChecks } from "./workoutCheckStore.js";
 export const DEFAULT_HISTORY_DAYS = 30;
 export const MAX_HISTORY_DAYS = 56;
 const DAY_MS = 86_400_000;
-/** Used for burn estimates until a weigh-in exists. */
-const FALLBACK_WEIGHT_KG = 75;
+export { stepsBurn, workoutBurn, burnForDay } from "./activities.js";
+export type { Burn } from "./activities.js";
 
 export type MacroItem = { name: string; calories: number; proteinG: number; carbsG: number; fatG: number };
 
@@ -46,13 +48,7 @@ export type HistoryWorkout = {
   exercises: Array<{ title: string; sets: HistorySet[] }>;
 };
 
-export type Burn = {
-  kcal: number;
-  /** health_connect: the phone's active calories. estimate: from steps, workout time and body weight. */
-  source: "health_connect" | "estimate";
-  stepsKcal: number;
-  workoutKcal: number;
-};
+export type HistoryActivity = Activity & { counted: boolean; why: NotCounted };
 
 export type HistoryDay = {
   date: string;
@@ -71,6 +67,10 @@ export type HistoryDay = {
   distanceM: number | null;
   burn: Burn | null;
   workouts: HistoryWorkout[];
+  /** Swims, runs, sports... (not Hevy), with whether each counts toward the day's burn. */
+  activities: HistoryActivity[];
+  /** The activity that stood in for the day's training, e.g. "Football · 60 min". */
+  sportCounted: string | null;
   /** "Trained, didn't log it in Hevy" from the post-gym check. */
   trainedUnlogged: boolean;
 };
@@ -188,31 +188,6 @@ export function detailWorkout(w: HevyWorkout): HistoryWorkout | null {
   };
 }
 
-/** Roughly 0.5 kcal per kg of body weight per 1,000 steps (≈0.04 kcal a step at 80 kg). */
-export function stepsBurn(steps: number, weightKg: number): number {
-  return Math.round(steps * weightKg * 0.0005);
-}
-
-/** Resistance training at ~5 METs: kcal/min = MET × 3.5 × kg / 200. */
-export function workoutBurn(minutes: number, weightKg: number): number {
-  return Math.round((minutes * 5 * 3.5 * weightKg) / 200);
-}
-
-export function burnForDay(input: {
-  activeKcal: number | null;
-  steps: number;
-  workoutMinutes: number;
-  weightKg: number;
-}): Burn | null {
-  const stepsKcal = stepsBurn(input.steps, input.weightKg);
-  const workoutKcal = workoutBurn(input.workoutMinutes, input.weightKg);
-  if (input.activeKcal != null && input.activeKcal > 0) {
-    return { kcal: Math.round(input.activeKcal), source: "health_connect", stepsKcal, workoutKcal };
-  }
-  if (!stepsKcal && !workoutKcal) return null;
-  return { kcal: stepsKcal + workoutKcal, source: "estimate", stepsKcal, workoutKcal };
-}
-
 export function clampDays(v: unknown): number {
   const d = Math.round(Number(v));
   return Number.isFinite(d) && d >= 1 ? Math.min(d, MAX_HISTORY_DAYS) : DEFAULT_HISTORY_DAYS;
@@ -228,7 +203,7 @@ export async function buildHealthHistory(
   const from = dates[0]!;
   const to = dates[dates.length - 1]!;
 
-  const [mealRes, activityRes, hevy, checkins, workoutChecks] = await Promise.all([
+  const [mealRes, activityRes, hevy, checkins, workoutChecks, activities, stepRes] = await Promise.all([
     supabase
       .from("meal_logs")
       .select("meal_session_id, local_date, meal_slot, raw_text, description, calories, protein_g, carbs_g, fat_g, logged_at, created_at, component_index")
@@ -241,7 +216,22 @@ export async function buildHealthHistory(
     hevyHistoryCached(userProfileId, { now }),
     getBodyCheckins(userProfileId, localDateKey(new Date(now.getTime() - 180 * DAY_MS), timezone)),
     getWorkoutChecks(userProfileId, from, to),
+    getActivities(userProfileId, from, to),
+    supabase
+      .from("health_activity_samples")
+      .select("local_date, start_time, end_time, value")
+      .eq("user_profile_id", userProfileId)
+      .eq("kind", "steps")
+      .gte("local_date", from)
+      .lte("local_date", to),
   ]);
+  const actsByDate = new Map<string, Activity[]>();
+  for (const a of activities) actsByDate.set(a.localDate, [...(actsByDate.get(a.localDate) ?? []), a]);
+  const bucketsByDate = new Map<string, StepBucket[]>();
+  for (const r of (stepRes.data ?? []) as Array<Record<string, unknown>>) {
+    const d = String(r.local_date);
+    bucketsByDate.set(d, [...(bucketsByDate.get(d) ?? []), { startTime: String(r.start_time), endTime: String(r.end_time), count: Number(r.value) || 0 }]);
+  }
 
   const meals = groupMeals((mealRes.data ?? []) as MealRow[]);
   const activity = new Map<string, Record<string, unknown>>();
@@ -261,6 +251,11 @@ export async function buildHealthHistory(
   }
 
   const weightKg = [...checkins].reverse().find((c) => c.weight_kg != null)?.weight_kg ?? null;
+  const kg = weightKg ?? FALLBACK_WEIGHT_KG;
+  const allMinutes = hevy.connected && hevy.ok
+    ? hevy.workouts.map((w) => (w.start_time && w.end_time ? Math.round((Date.parse(w.end_time) - Date.parse(w.start_time)) / 60_000) : 0))
+    : [];
+  const typicalBurn = typicalTrainingBurn(allMinutes, kg);
 
   const days: HistoryDay[] = dates.map((date) => {
     const dayMeals = meals.get(date) ?? [];
@@ -271,6 +266,20 @@ export async function buildHealthHistory(
     const proteinG = r1(dayMeals.reduce((t, m) => t + m.proteinG, 0));
     const steps = n(a?.steps);
     const weekday = weekdayOfDate(date);
+    const dayActs = actsByDate.get(date) ?? [];
+    const timed: TimedWorkout[] = dayWorkouts.map((w) => ({ startTime: w.startTime, durationMin: w.durationMin }));
+    const isTraining = targets.trainingDays.includes(weekday);
+    const sport = isTraining && !dayWorkouts.length && !trainedUnlogged ? trainingActivity(dayActs, timed, typicalBurn) : null;
+    const sportCounted = sport ? `${sport.label} · ${sport.durationMin} min` : null;
+    const burn: Burn | null = burnForDay({
+      activeKcal: nOrNull(a?.active_kcal),
+      steps,
+      workouts: timed,
+      activities: dayActs,
+      stepBuckets: bucketsByDate.get(date),
+      weightKg: kg,
+    });
+    const lines = new Map((burn?.activities ?? []).map((l) => [l.id, l]));
     const score = scoreDay(
       {
         date,
@@ -280,6 +289,7 @@ export async function buildHealthHistory(
         proteinG,
         steps,
         workoutsLogged: dayWorkouts.length || (trainedUnlogged ? 1 : 0),
+        sportLabel: sportCounted,
       },
       targets,
     );
@@ -298,13 +308,10 @@ export async function buildHealthHistory(
       steps,
       walkMinutes: nOrNull(a?.walk_minutes),
       distanceM: nOrNull(a?.walk_distance_m),
-      burn: burnForDay({
-        activeKcal: nOrNull(a?.active_kcal),
-        steps,
-        workoutMinutes: dayWorkouts.reduce((t, w) => t + (w.durationMin ?? 0), 0),
-        weightKg: weightKg ?? FALLBACK_WEIGHT_KG,
-      }),
+      burn,
       workouts: dayWorkouts,
+      activities: dayActs.map((x) => ({ ...x, counted: lines.get(x.id)?.counted ?? true, why: lines.get(x.id)?.why ?? null })),
+      sportCounted,
       trainedUnlogged,
     };
   });

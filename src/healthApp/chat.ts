@@ -24,6 +24,7 @@ import {
   type ActionContext,
 } from "./actions.js";
 import type { MealDraft } from "./meals.js";
+import { activityDraftInput, buildActivityDraft, deleteActivity, type ActivityDraft } from "./activityLog.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
 import {
   newRoutineInput,
@@ -80,8 +81,11 @@ const HISTORY_MESSAGES = 20;
 
 export type CalorieReviewCard = { type: "calorie_review"; review: Extract<CalorieReview, { status: "ok" }> };
 
+export type ActivityDraftCard = { type: "activity_draft"; draft: ActivityDraft };
+
 export type ChatCard =
   | { type: "meal_draft"; draft: MealDraft }
+  | ActivityDraftCard
   | WorkoutCheckCard
   | HevyProposalCard
   | RcaCard
@@ -102,6 +106,9 @@ How to work:
 - When the person tells you something loggable, log it with a tool right away. Steps, walks, weigh-ins and targets save directly.
 - Meals: call draft_meal. It returns an estimate that the app shows as an editable card, and the app writes the line under it. If you say anything about it, ask them to check and confirm the card. Never say a meal is logged or saved until they confirm it.
 - Several foods eaten together are one meal: pass the whole description in one draft_meal call.
+- Activities outside Hevy (swimming, running, cycling, football, badminton, cricket, yoga, dance, any sport): call draft_activity with what they did and for how long. It shows a card with the calorie estimate that they save; never say it's saved before they do. Ask one short question if the duration is missing. Pass kcal only when they quote a number from their watch. A plain step count goes to log_steps, not here. Lifting goes to Hevy, not here.
+- Calories burned show on the tracker but never change the calorie target: the adaptive target already reflects their usual activity. Don't tell them to eat back exercise calories.
+- On a training day with no Hevy workout, a sport counts as the day's training only if it burned about as much as their usual gym session; the card says whether it did. Their plan needs at least 3 strength sessions a week (fewer if they train fewer days); if sport is eating into that, say so plainly.
 - Use get_status before answering questions about progress, and quote its numbers; never invent numbers.
 - If a goal or targets are missing and the question needs them, ask for them in one short question.
 - Workouts: on training days the app checks Hevy a few hours after the gym slot and asks in chat if nothing is logged. When they answer (skipped and why, or trained but didn't log it), record it with answer_workout_check. If they skipped, ask why in one short question if they didn't say.
@@ -157,6 +164,29 @@ const tools: Anthropic.Tool[] = [
       },
       required: ["text"],
     },
+  },
+  {
+    name: "draft_activity",
+    description:
+      "Estimate calories burned for an activity that isn't lifting (swim, run, cycle, sport, yoga...) and show it as a card to save. Does not save it. Says whether it counts as the day's training.",
+    input_schema: {
+      type: "object",
+      properties: {
+        activity: { type: "string", description: "What they did, e.g. 'swimming', 'football', 'badminton doubles'." },
+        durationMin: { type: "integer" },
+        intensity: { type: "string", enum: ["easy", "moderate", "hard"], description: "From how they describe it; default moderate." },
+        distanceKm: { type: "number" },
+        kcal: { type: "integer", description: "Only if they quote a number from a watch or machine." },
+        date: { type: "string", description: "YYYY-MM-DD, default today" },
+        startTime: { type: "string", description: "Local HH:MM when they started, if they said." },
+      },
+      required: ["activity", "durationMin"],
+    },
+  },
+  {
+    name: "delete_activity",
+    description: "Remove a logged activity by its id (from get_status recentActivities).",
+    input_schema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
   },
   {
     name: "delete_meal",
@@ -394,6 +424,15 @@ export function statusForModel(s: HealthSnapshot): Record<string, unknown> {
     hevyConnected: s.hevyConnected,
     gymSlot: s.gym,
     workoutChecks: s.workoutChecks,
+    recentActivities: (s.activities ?? []).map((a) => ({
+      id: a.id,
+      date: a.localDate,
+      label: a.label,
+      durationMin: a.durationMin,
+      kcal: a.kcal,
+      from: a.source === "health_connect" ? "Health Connect" : "logged",
+      countedTwice: Boolean(a.duplicateOf),
+    })),
   };
 }
 
@@ -438,6 +477,28 @@ export async function runTool(
         },
         card: { type: "meal_draft", draft },
       };
+    }
+    case "draft_activity": {
+      const p = activityDraftInput.safeParse({ ...(input as object), source: "chat" });
+      if (!p.success) return invalid(p.error);
+      const draft = await buildActivityDraft(ctx, p.data);
+      if ("ok" in draft) return { result: draft };
+      return {
+        result: {
+          shownToUserAsCard: true,
+          label: draft.label,
+          kcal: draft.kcal,
+          alreadyFromHealthConnect: draft.duplicateOf,
+          countsAsTraining: draft.training.countsAsTraining,
+          trainingNote: draft.training.note,
+        },
+        card: { type: "activity_draft", draft },
+      };
+    }
+    case "delete_activity": {
+      const id = (input as { id?: unknown })?.id;
+      const r = await deleteActivity(ctx, typeof id === "string" ? id : "");
+      return { result: r, changed: r.ok };
     }
     case "delete_meal": {
       const id = (input as { mealSessionId?: unknown })?.mealSessionId;
@@ -531,6 +592,17 @@ export async function runTool(
     default:
       return { result: { ok: false, error: `unknown tool ${name}` } };
   }
+}
+
+/** The coach's line under an activity card. */
+export function activityDraftReply(d: ActivityDraft): string {
+  if (d.duplicateOf) {
+    return `Health Connect already has ${d.duplicateOf.label.toLowerCase()} for that day (${d.duplicateOf.durationMin} min, about ${d.duplicateOf.kcal} kcal), so I won't count it twice. If it was a separate session, save it from the card.`;
+  }
+  const what = `${d.durationMin} min of ${d.label.toLowerCase()}`;
+  const parts = [`That's about ${d.kcal} kcal for ${what}${d.kcalSource === "user" ? ", as your watch said" : ""}. Check the card and tap Save.`];
+  if (d.training.note) parts.push(d.training.note);
+  return parts.join(" ");
 }
 
 /** The coach's line under meal draft cards. */
@@ -709,6 +781,13 @@ export async function runHealthChat(
 
     // A meal draft needs no second model pass: the card carries the numbers, and a fixed line is
     // faster and can't claim the meal is already logged.
+    if (toolUses.length === 1 && toolUses[0]!.name === "draft_activity") {
+      const card = cards.find((c): c is ActivityDraftCard => c.type === "activity_draft");
+      if (card) {
+        text = activityDraftReply(card.draft);
+        break;
+      }
+    }
     if (toolUses.every((tu) => tu.name === "draft_meal")) {
       const drafts = cards.filter((c): c is Extract<ChatCard, { type: "meal_draft" }> => c.type === "meal_draft");
       if (drafts.length === toolUses.length) {

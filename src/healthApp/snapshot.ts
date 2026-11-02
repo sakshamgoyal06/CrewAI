@@ -10,6 +10,8 @@ import {
 } from "../pillars/health/workouts/hevy/index.js";
 import { supabase } from "../tools/clients.js";
 import { ownerHevyFallback } from "./auth.js";
+import { trainingActivity, typicalTrainingBurn, type Activity } from "./activities.js";
+import { FALLBACK_WEIGHT_KG, getActivities } from "./activityLog.js";
 import { getActivityRange, type DailyActivity } from "./activityStore.js";
 import { getActiveGoal, getBodyCheckins } from "./bodyStore.js";
 import { computeGoalProgress, type BodyCheckin, type GoalProgress } from "./goalProgress.js";
@@ -58,6 +60,8 @@ export type HealthSnapshot = {
   goal: GoalProgress | null;
   /** Body check-ins for the last ~6 months, oldest first, for the trend chart. */
   checkins: BodyCheckin[];
+  /** Non-Hevy activities (swims, runs, sports) in the 7-day window, oldest first. */
+  activities: Activity[];
   meals: Array<{
     mealSessionId: string;
     slot: string;
@@ -222,7 +226,7 @@ export async function buildHealthSnapshot(
   const to = dates[dates.length - 1]!;
 
   const historyFrom = localDateKey(new Date(now.getTime() - CHECKIN_HISTORY_DAYS * DAY_MS), timezone);
-  const [meals, activity, hevy, goal, checkins, todayMealList, workoutChecks] = await Promise.all([
+  const [meals, activity, hevy, goal, checkins, todayMealList, workoutChecks, activities] = await Promise.all([
     loadMealDays(userProfileId, from, to),
     getActivityRange(userProfileId, from, to),
     recentWorkoutsCached(userProfileId, timezone),
@@ -230,7 +234,10 @@ export async function buildHealthSnapshot(
     getBodyCheckins(userProfileId, historyFrom),
     listMealsForDate(userProfileId, to),
     getWorkoutChecks(userProfileId, from, to),
+    getActivities(userProfileId, from, to),
   ]);
+  const kg = [...checkins].reverse().find((c) => c.weight_kg != null)?.weight_kg ?? FALLBACK_WEIGHT_KG;
+  const typicalBurn = typicalTrainingBurn(hevy.workouts.map((w) => w.durationMin ?? 0), kg);
 
   const workoutsByDate = new Map<string, number>();
   for (const w of hevy.workouts) {
@@ -246,6 +253,8 @@ export async function buildHealthSnapshot(
   const days = dates.map((date) => {
     const m = meals.get(date);
     const a: DailyActivity | undefined = activity.get(date);
+    const logged = workoutsByDate.get(date) ?? 0;
+    const sport = logged ? null : trainingActivity(activities.filter((x) => x.localDate === date), [], typicalBurn);
     return scoreDay(
       {
         date,
@@ -254,7 +263,8 @@ export async function buildHealthSnapshot(
         calories: m?.calories ?? 0,
         proteinG: m?.proteinG ?? 0,
         steps: a?.steps ?? 0,
-        workoutsLogged: workoutsByDate.get(date) ?? 0,
+        workoutsLogged: logged,
+        sportLabel: sport ? `${sport.label} · ${sport.durationMin} min` : null,
       },
       targets,
     );
@@ -282,6 +292,7 @@ export async function buildHealthSnapshot(
     workoutChecks: [...workoutChecks.values()].sort((a, b) => b.localDate.localeCompare(a.localDate)),
     goal: goal ? computeGoalProgress(goal, checkins, to) : null,
     checkins,
+    activities,
     meals: todayMealList.map((m) => ({
       mealSessionId: m.mealSessionId,
       slot: m.mealSlot,
