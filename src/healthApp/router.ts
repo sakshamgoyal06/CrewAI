@@ -29,6 +29,8 @@ import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from 
 import { loadChatHistory, runHealthChat } from "./chat.js";
 import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
 import { listMealsForDate } from "./meals.js";
+import { draftMealFromPhoto } from "./mealCards.js";
+import { photoMealInput } from "./photoMeal.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
 import { applyProposal, cardFromRow, discardProposal, getProposals } from "./hevyProposals.js";
 import { analyzeTraining } from "./training.js";
@@ -217,6 +219,15 @@ export function createHealthAppRouter(): express.Router {
     route("meal-draft", async (ctx, req) => ({
       body: await startMealDraft(ctx, mealDraftInput.parse(req.body)),
     })),
+  );
+
+  /** Photo of the plate → the same editable draft card, posted into the chat. */
+  router.post(
+    "/meals/photo",
+    route("meal-photo", async (ctx, req) => {
+      const r = await draftMealFromPhoto(ctx, photoMealInput.parse(req.body));
+      return { status: r.ok ? 200 : 400, body: r };
+    }),
   );
 
   router.post(

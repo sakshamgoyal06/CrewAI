@@ -79,6 +79,8 @@ function friendlyError(code) {
     push_not_configured: "Push isn't set up on the server yet (VAPID keys).",
     no_devices: "This device isn't subscribed yet.",
     not_enough_data: "Not enough logged days yet to find a pattern.",
+    not_food: "I don't see a meal in that photo. Try a clearer shot of the plate, or type what you ate.",
+    unreadable: "I couldn't read that photo. Try again, or type what you ate.",
   }[code] || "Something went wrong. Try again.";
 }
 
@@ -846,6 +848,14 @@ const CHAT_TIMEOUT_MS = 90_000;
 /** Returns false when the message wasn't sent, so the caller keeps the text. */
 async function send(text) {
   if (!text.trim()) return false;
+  return coachTurn(addMessage.bind(null, "user", text), () => api("/chat", { method: "POST", body: JSON.stringify({ text }) }));
+}
+
+/**
+ * One exchange in the thread: the person's bubble, a typing indicator, then the reply and its
+ * cards. Shared by typed messages, meal photos and repeat meals.
+ */
+async function coachTurn(showUser, request) {
   if (state.sending) {
     toast("Still answering your last message. One moment.");
     return false;
@@ -854,19 +864,19 @@ async function send(text) {
   state.historySig = null;
   $("send").disabled = true;
   if ($("thread").querySelector(".empty")) $("thread").replaceChildren();
-  addMessage("user", text);
+  showUser();
   const typing = el("div", { class: "msg coach typing" }, el("i"), el("i"), el("i"));
   $("thread").append(typing);
   scrollThread();
   try {
     let timer;
     const reply = await Promise.race([
-      api("/chat", { method: "POST", body: JSON.stringify({ text }) }),
+      request(),
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("That's taking too long. The answer will show when you reopen the app, or try again.")), CHAT_TIMEOUT_MS); }),
     ]).finally(() => clearTimeout(timer));
     typing.remove();
     addMessage("coach", reply.text);
-    for (const c of reply.cards) appendCard(c);
+    for (const c of reply.cards || []) appendCard(c);
     scrollThread();
     if (reply.changed) refresh();
   } catch (err) {
@@ -877,6 +887,53 @@ async function send(text) {
     $("send").disabled = false;
   }
   return true;
+}
+
+// ---------- meal photos ----------
+
+const PHOTO_MAX_PX = 1280;
+
+/** Shrinks a camera photo to ~1280 px JPEG (a few hundred KB) before upload; returns base64. */
+async function photoToJpeg(file) {
+  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(() => null);
+  if (!bmp) throw new Error("Couldn't open that image. Try a JPEG or PNG photo.");
+  const scale = Math.min(1, PHOTO_MAX_PX / Math.max(bmp.width, bmp.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bmp.width * scale);
+  canvas.height = Math.round(bmp.height * scale);
+  canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  bmp.close?.();
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+  if (!blob) throw new Error("Couldn't prepare that photo.");
+  const dataUrl = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error("Couldn't read that photo."));
+    r.readAsDataURL(blob);
+  });
+  return String(dataUrl).split(",")[1];
+}
+
+/** Photo of the plate → draft card in the thread. Text in the composer goes along as a note. */
+async function sendPhoto(file) {
+  if (!file) return;
+  if (state.sending) { toast("Still answering your last message. One moment."); return; }
+  const note = $("input").value.trim();
+  $("input").value = "";
+  autosize();
+  const preview = URL.createObjectURL(file);
+  await coachTurn(
+    () => {
+      $("thread").append(el("div", { class: "msg user photo" },
+        el("img", { src: preview, alt: "Meal photo", onload: () => scrollThread() }),
+        note ? el("span", {}, note) : null));
+      scrollThread();
+    },
+    async () => {
+      const image = await photoToJpeg(file);
+      return api("/meals/photo", { method: "POST", body: JSON.stringify({ image, mediaType: "image/jpeg", note: note || undefined }) });
+    },
+  );
 }
 
 function autosize() {
@@ -1360,9 +1417,10 @@ const num = (v) => (v === "" || v == null ? undefined : Number(v));
 
 const SHEETS = {
   quick() {
-    return el("div", { class: "quick-row" },
+    return el("div", { class: "quick-row two" },
       ...[["meal", "Meal"], ["steps", "Steps"], ["checkin", "Weigh-in"]].map(([k, l]) =>
-        el("button", { class: "quick", type: "button", onclick: () => openSheet(k) }, el("span", {}, l))));
+        el("button", { class: "quick", type: "button", onclick: () => openSheet(k) }, el("span", {}, l))),
+      el("button", { class: "quick", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, el("span", {}, "Photo")));
   },
 
   meal() {
@@ -1382,6 +1440,7 @@ const SHEETS = {
       el("textarea", { class: "field", name: "text", rows: "3", required: true, placeholder: "e.g. 2 rotis, a bowl of dal, 100 g paneer bhurji", minlength: "2" }),
       el("button", { class: "btn primary block", type: "submit" }, "Estimate"),
       el("p", { class: "hint" }, "You'll see the estimate and can fix any line before it's logged."),
+      el("button", { class: "link", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, "Or snap a photo of the plate"),
     );
     return el("div", {}, form, holder);
   },
@@ -1489,6 +1548,13 @@ for (const t of document.querySelectorAll(".tab")) t.addEventListener("click", (
 $("coach-stat").addEventListener("click", () => setView("tracker"));
 $("settings-btn").addEventListener("click", () => openSheet("settings"));
 $("quick").addEventListener("click", () => openSheet("quick"));
+$("photo").addEventListener("click", () => $("photo-input").click());
+$("photo-input").addEventListener("change", (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if ($("view-coach").hidden) setView("coach");
+  sendPhoto(file);
+});
 $("sheet-close").addEventListener("click", closeSheet);
 $("scrim").addEventListener("click", closeSheet);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });

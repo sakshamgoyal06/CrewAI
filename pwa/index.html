@@ -48,6 +48,10 @@
         <div class="chips" id="chips"></div>
         <form id="composer" class="composer">
           <button class="icon-btn" id="quick" type="button" aria-label="Quick add">+</button>
+          <button class="icon-btn" id="photo" type="button" aria-label="Log a meal from a photo">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          </button>
+          <input id="photo-input" type="file" accept="image/*" hidden>
           <textarea id="input" rows="1" placeholder="Log a meal, steps, weight… or ask" autocomplete="off"></textarea>
           <button class="send" id="send" type="submit" aria-label="Send">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>

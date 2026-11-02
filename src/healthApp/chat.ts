@@ -559,6 +559,20 @@ async function saveChatMessage(
   }
 }
 
+/**
+ * Writes a turn that didn't go through the model (a meal photo, a repeat meal) into the chat, so
+ * its card stays in the thread and the coach sees it in later turns.
+ */
+export async function recordChatTurn(
+  userProfileId: string,
+  userText: string,
+  replyText: string,
+  cards: ChatCard[],
+): Promise<void> {
+  await saveChatMessage(userProfileId, "user", userText);
+  await saveChatMessage(userProfileId, "assistant", replyText, cards);
+}
+
 /** History as API messages: must start with a user turn and alternate cleanly. */
 export function historyToMessages(
   history: Array<{ role: "user" | "assistant"; content: string }>,
