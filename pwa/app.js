@@ -1009,6 +1009,55 @@ async function sendPhoto(file) {
   );
 }
 
+// ---------- weekly review ----------
+
+const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
+
+function weeklyReviewView(r) {
+  const w = r.week;
+  const p = r.previous;
+  const delta = (cur, prev, unit = "") => {
+    if (prev == null || cur == null) return null;
+    const d = Math.round(cur - prev);
+    return d === 0 ? "same as last week" : `${d > 0 ? "+" : "−"}${fmt(Math.abs(d))}${unit} vs last week`;
+  };
+  const stat = (label, value, target, sub) => el("div", { class: "review-stat" },
+    el("small", {}, label),
+    el("strong", {}, value),
+    target ? el("span", { class: "hint" }, target) : null,
+    sub ? el("span", { class: "hint" }, sub) : null);
+  const t = r.targets;
+  const out = [
+    el("p", { class: "review-headline" }, r.headline),
+    el("div", { class: "review-days" }, ...r.days.map((d) => el("span", { class: `review-day${d.onTrack ? " on" : ""}`, title: d.date },
+      el("i", {}), el("small", {}, WEEKDAY_LETTERS[d.weekday])))),
+    el("div", { class: "review-grid" },
+      stat("On-track days", `${w.onTrackDays} / 7`, `goal ${r.onTrackGoal}`, p ? delta(w.onTrackDays, p.onTrackDays) : null),
+      stat("Avg calories", w.avgCalories == null ? "–" : fmt(w.avgCalories), t.calorieTarget ? `target ${fmt(t.calorieTarget)}` : null, `${w.daysLogged} of 7 days logged`),
+      stat("Avg protein", w.avgProteinG == null ? "–" : `${w.avgProteinG} g`, t.proteinTarget ? `target ${t.proteinTarget} g` : null, p ? delta(w.avgProteinG, p.avgProteinG, " g") : null),
+      stat("Avg steps", fmt(w.avgSteps), `target ${fmt(t.stepTarget)}`, p ? delta(w.avgSteps, p.avgSteps) : null),
+      stat("Workouts", `${w.workouts}`, w.plannedWorkouts ? `${w.plannedWorkouts} planned` : null, null),
+    ),
+  ];
+  if (r.goal) {
+    out.push(el("p", { class: "section-label" }, `Goal · ${r.goal.weeksLeft} weeks left`));
+    for (const m of r.goal.metrics) {
+      const pace = { ahead: "Ahead of pace", on_pace: "On pace", behind: "Behind pace", reached: "Reached", not_enough_data: "Need more weigh-ins" }[m.pace] || m.pace;
+      const per = (v) => (v == null ? "–" : `${v > 0 ? "+" : ""}${Math.round(v * 100) / 100} ${m.unit}/wk`);
+      out.push(el("div", { class: `review-goal ${m.pace}` },
+        el("div", { class: "row-between" }, el("strong", {}, `${m.label}: ${m.latest ?? "–"} → ${m.target} ${m.unit}`), el("span", { class: "tag" }, pace)),
+        el("span", { class: "hint" }, `Needed ${per(m.requiredPerWeek)} · actual ${per(m.actualPerWeek)}${m.projectedDate ? ` · on this trend you get there ${new Date(m.projectedDate).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}` : ""}`)));
+    }
+    if (r.goal.checkinDue) out.push(el("button", { class: "btn block", type: "button", onclick: () => openSheet("checkin") }, "Log this week's weigh-in"));
+  }
+  out.push(
+    el("p", { class: "section-label" }, "Next week's one thing"),
+    el("p", { class: "review-focus" }, r.focus),
+    el("button", { class: "btn primary block", type: "button", onclick: () => { closeSheet(); setView("coach"); $("input").value = "Let's go over my week. What should I change?"; autosize(); $("input").focus(); } }, "Talk it through with the coach"),
+  );
+  return out;
+}
+
 async function sendBarcode(code, grams) {
   await coachTurn(
     () => { addMessage("user", `▥ Scanned barcode ${code}${grams ? ` (${grams} g)` : ""}`); scrollThread(); },
@@ -1664,7 +1713,7 @@ function openSheet(kind) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", quick: "Quick add", scan: "Scan a packet" };
+  const titles = { meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", quick: "Quick add", scan: "Scan a packet", review: "Your week" };
   $("sheet-title").textContent = titles[kind];
   body.replaceChildren(SHEETS[kind]());
   $("sheet").hidden = false;
@@ -1690,6 +1739,12 @@ const SHEETS = {
         el("button", { class: "quick", type: "button", onclick: () => openSheet(k) }, el("span", {}, l))),
       el("button", { class: "quick", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, el("span", {}, "Photo")),
       el("button", { class: "quick", type: "button", onclick: () => openSheet("scan") }, el("span", {}, "Barcode")));
+  },
+
+  review() {
+    const box = el("div", { class: "stack review" }, el("p", { class: "hint" }, "Putting your week together…"));
+    api("/review/week").then((r) => box.replaceChildren(...weeklyReviewView(r))).catch((err) => box.replaceChildren(el("p", { class: "hint" }, err.message)));
+    return box;
   },
 
   scan() {
@@ -1838,6 +1893,7 @@ $("google-signin").addEventListener("click", async () => {
 for (const t of document.querySelectorAll(".tab")) t.addEventListener("click", () => setView(t.dataset.view));
 $("coach-stat").addEventListener("click", () => setView("tracker"));
 $("settings-btn").addEventListener("click", () => openSheet("settings"));
+$("review-btn").addEventListener("click", () => openSheet("review"));
 $("quick").addEventListener("click", () => openSheet("quick"));
 $("photo").addEventListener("click", () => $("photo-input").click());
 $("photo-input").addEventListener("change", (e) => {

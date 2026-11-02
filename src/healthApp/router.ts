@@ -42,6 +42,7 @@ import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
 import { listMealsForDate } from "./meals.js";
 import { draftMealFromPhoto } from "./mealCards.js";
 import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
+import { loadWeeklyReview } from "./weeklyReview.js";
 import { getUsualMeals, repeatUsualMeal } from "./frequentMeals.js";
 import { photoMealInput } from "./photoMeal.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
@@ -425,6 +426,12 @@ export function createHealthAppRouter(): express.Router {
     route("targets", async (ctx, req) =>
       fromResult(await setTargets(ctx, targetsInput.parse(req.body))),
     ),
+  );
+
+  /** The last 7 days vs targets and goal, compared with the week before, and next week's focus. */
+  router.get(
+    "/review/week",
+    route("review-week", async (ctx) => ({ body: await loadWeeklyReview(ctx.userProfileId) })),
   );
 
   /** Adaptive calorie target: maintenance from real intake and weight trend, and the on-pace target. */
