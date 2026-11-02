@@ -441,7 +441,7 @@ const insightSchema = z.object({
 });
 
 const SYSTEM = `You are a health coach doing a root-cause analysis for one person. You get evidence mined from their last few weeks of logs, plus earlier experiments and whether they helped.
-Write ONE hypothesis about the main reason they are off track, grounded in the evidence (quote its numbers), and ONE small, specific experiment for the next 7 days that tests it: something concrete they can do daily, not a program change. Don't repeat an experiment that didn't help. Plain words, second person, no hedging, no lists.`;
+Write ONE hypothesis about the main reason they are off track, grounded in the evidence (quote its numbers), and ONE small, specific experiment for the next 7 days that tests it: something concrete they can do daily, not a program change. Don't repeat an experiment that didn't help. Plain words, second person, no hedging, no lists. Answer only by calling the write_rca tool.`;
 
 /** One hypothesis + one experiment from Claude, or a deterministic one if the call fails. */
 export async function writeInsight(
@@ -470,7 +470,8 @@ export async function writeInsight(
           },
         },
       ],
-      tool_choice: { type: "tool", name: "write_rca" },
+      // Current models reject a forced tool_choice ("tool"/"any"); the system prompt asks for the call.
+      tool_choice: { type: "auto" },
       messages: [
         {
           role: "user",

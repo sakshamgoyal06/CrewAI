@@ -77,7 +77,8 @@ const PROMPT = `This is a photo of something the person is about to eat or just 
 - Prefer counts for countable items (2 roti, 3 idli, 2 egg) and grams or a household unit (bowl, cup, tbsp) for the rest.
 - If a label or packet is shown, use its product name and the serving shown.
 - Don't list garnish or condiments unless they're a real portion (a spoon of ghee counts).
-- If the person added a note, it overrides what you see (e.g. "ate half", "no rice").`;
+- If the person added a note, it overrides what you see (e.g. "ate half", "no rice").
+Answer only by calling the report_meal tool, even when it isn't food (is_food false).`;
 
 /** "2 roti, 1 bowl dal" from the model's list; amounts that already start the name aren't repeated. */
 export function foodsToText(foods: PhotoFood[]): string {
@@ -110,7 +111,8 @@ export async function readMealPhoto(
     model: photoMealModel(),
     max_tokens: 1024,
     tools: [REPORT_TOOL],
-    tool_choice: { type: "tool", name: REPORT_TOOL.name },
+    // Current models reject a forced tool_choice ("tool"/"any"), so ask for the call in the prompt.
+    tool_choice: { type: "auto" },
     messages: [{ role: "user", content }],
   });
   const use = msg.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");

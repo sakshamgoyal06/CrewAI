@@ -126,7 +126,7 @@ describe("writeInsight", () => {
     }));
     const r = await writeInsight(signals, ctx, create as never);
     expect(r).toMatchObject({ source: "model", targetCheck: "steps" });
-    expect(create.mock.calls[0]![0]).toMatchObject({ tool_choice: { type: "tool", name: "write_rca" } });
+    expect(create.mock.calls[0]![0]).toMatchObject({ tool_choice: { type: "auto" } });
   });
 
   it("falls back to a deterministic insight when the call fails", async () => {
