@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Magnus privacy</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body { overflow-y: auto; }
+    .policy { max-width: 640px; margin: 0 auto; padding: 32px 16px 64px; line-height: 1.55; }
+    .policy h1 { margin-bottom: 4px; }
+    .policy h2 { font-size: 1rem; margin: 28px 0 6px; }
+    .policy p, .policy li { color: var(--muted); font-size: 0.95rem; }
+    .policy a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main class="policy">
+    <h1 class="display">Privacy</h1>
+    <p class="eyebrow">Last updated 2 November 2026</p>
+
+    <p>Magnus is a health coach app. This page says what it stores, why, who else sees it, and how to take it out or delete it.</p>
+
+    <h2>What Magnus stores</h2>
+    <ul>
+      <li>Your Google account's email and name, used to sign you in.</li>
+      <li>What you tell it during setup: sex, birth year, height, weight, body fat, goal, deadline, training days, diet.</li>
+      <li>What you log: meals (text, and photos while they're being read), weigh-ins, steps and walks, and your chat with the coach.</li>
+      <li>If you connect them: workouts from Hevy, and steps, distance and scale readings from Android Health Connect.</li>
+      <li>Basic app diagnostics (screens opened, request timings, errors), never the text you type, kept for 30 days.</li>
+    </ul>
+
+    <h2>Why</h2>
+    <p>Only to run the coach: estimate meals, set and adjust your targets, track your progress against your goal, and send the reminders you turn on. Magnus doesn't sell your data, show ads, or share it for marketing.</p>
+
+    <h2>Who else processes it</h2>
+    <ul>
+      <li><strong>Supabase</strong> hosts the database.</li>
+      <li><strong>Anthropic</strong> (Claude) reads your messages, meal descriptions and meal photos to write replies and estimates.</li>
+      <li><strong>Google</strong> handles sign-in. <strong>Hevy</strong> is only contacted with the key you give it.</li>
+      <li>Meal estimates may look up food names (never your identity) with nutrition databases.</li>
+    </ul>
+
+    <h2>Not medical advice</h2>
+    <p>Magnus gives general fitness and nutrition guidance. It isn't a doctor, doesn't diagnose anything, and isn't for anyone with an eating disorder or a condition that needs a supervised diet.</p>
+
+    <h2>Your controls</h2>
+    <ul>
+      <li><strong>Download:</strong> Settings → Your data → Download my data gives you everything in one file.</li>
+      <li><strong>Delete:</strong> Settings → Your data → Delete account removes your account and every row of your data at once.</li>
+      <li><strong>Disconnect:</strong> you can remove Hevy, Health Connect tokens and notifications at any time in Settings.</li>
+    </ul>
+
+    <p><a href="/app/">Back to Magnus</a></p>
+  </main>
+</body>
+</html>

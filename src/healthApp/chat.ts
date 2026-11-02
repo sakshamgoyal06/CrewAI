@@ -45,12 +45,34 @@ import {
 } from "./training.js";
 import { cardFromReport, runRca, type RcaCard } from "./rca.js";
 import { loadCalorieReview, type CalorieReview } from "./calorieTarget.js";
+import { loadPersonalDetails } from "./onboarding.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
 
 export function healthChatModel(): string {
   // Sonnet answers a tool-heavy coach turn several times faster than Opus; set the env var to
   // trade speed back for depth.
   return process.env.MAGNUS_HEALTH_CHAT_MODEL?.trim() || "claude-sonnet-5-5";
+}
+
+/** The cheap model for routine logging turns (about 20x cheaper per token than Sonnet). */
+export function healthChatFastModel(): string {
+  return process.env.MAGNUS_HEALTH_CHAT_FAST_MODEL?.trim() || "claude-haiku-5-5";
+}
+
+/** Words that mean the person wants thinking, not just a log: these turns stay on the main model. */
+const COACHING = /\?|\b(why|should|could|would|plan|advice|advise|help|how (am|do|did|can|much|many|should)|what (should|can|do|did|is|are)|routine|program|stall|plateau|progress|review|analy[sz]|explain|recommend|suggest|change|swap|replace|week|goal|target|deadline|maintenance|on track|off track|slip|struggl|craving|tired|sore|injur|pain|sick|sleep|stress|motivat)/i;
+
+/**
+ * Which model answers this turn. Short, plain logs ("2 roti and dal for lunch", "walked 6k steps",
+ * "82.4 this morning") go to the fast model; anything that asks a question or wants coaching goes
+ * to the main one. `MAGNUS_HEALTH_CHAT_ROUTING=off` sends everything to the main model.
+ */
+export function pickChatModel(text: string, env: NodeJS.ProcessEnv = process.env): string {
+  const main = env.MAGNUS_HEALTH_CHAT_MODEL?.trim() || "claude-sonnet-5-5";
+  if (env.MAGNUS_HEALTH_CHAT_ROUTING?.trim().toLowerCase() === "off") return main;
+  const t = text.trim();
+  if (t.length > 160 || COACHING.test(t)) return main;
+  return env.MAGNUS_HEALTH_CHAT_FAST_MODEL?.trim() || "claude-haiku-5-5";
 }
 
 const MAX_TOOL_ROUNDS = 10;
@@ -72,7 +94,7 @@ export type ChatReply = {
   changed: boolean;
 };
 
-const SYSTEM_PROMPT = `You are Magnus, a personal health coach inside a private app used by one person.
+const SYSTEM_PROMPT = `You are Magnus, a personal health coach inside an app. You are talking with one person about their own health.
 
 The person has an outcome goal (body weight, body fat %, muscle mass by a deadline) and tracks daily consistency: meals logged, calories in range, protein, steps, and workouts on training days. The north-star number is on-track days in the last 7.
 
@@ -86,6 +108,7 @@ How to work:
 - Training (Hevy): use get_training_analysis to see what's progressing, stalled or going backwards, and get_routines for their current plan. To change Hevy (swap or add an exercise, change sets/reps/rest, create a routine, log a workout), find exercise ids with search_exercises, then call the matching propose_* tool. It shows a card they apply; nothing changes in Hevy until they do, so never say it's done. Suggest changes from the data: a lift that has stalled for 3+ weeks gets a rep-range change or a close variation, not a whole new program. Keep a routine's other exercises as they are unless asked.
 - When they're off track or ask why, call root_cause_analysis. It mines the last three weeks and returns evidence, one hypothesis and one 7-day experiment, shown as a card they can take up. Explain it in a sentence or two; don't stack extra advice on top.
 - Calorie target: review_calorie_target works out their real maintenance from logged meals and the weight trend, and the target that keeps them on pace for the goal. Call it after a weekly weigh-in, when weight isn't moving the way the goal needs, or when they ask about their calories. When it recommends a change it shows a card they can apply; don't change the target yourself unless they ask. If the deadline needs an unsafe pace, say so plainly and give the date the safe pace reaches it.
+- Respect their diet (vegetarian, Jain and so on) in every food suggestion, and use Indian portions and dishes when that's what they eat.
 - Keep replies short: 1 to 4 sentences, plain text, no headings. Use kg and kcal.`;
 
 const SET_SCHEMA = {
@@ -534,12 +557,15 @@ type CreateFn = (params: Record<string, unknown>) => Promise<Anthropic.Message>;
 
 function defaultCreate(): CreateFn {
   return (params) =>
-    // Server-side fallback re-runs a refused request on another model inside the same call.
-    anthropic.beta.messages.create({
-      ...params,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-    } as never) as unknown as Promise<Anthropic.Message>;
+    String(params.model).startsWith("claude-haiku")
+      ? // Haiku has no server-side fallback; a refusal is handled by the caller.
+        anthropic.messages.create(params as never) as unknown as Promise<Anthropic.Message>
+      : // Server-side fallback re-runs a refused request on another model inside the same call.
+        (anthropic.beta.messages.create({
+          ...params,
+          betas: ["server-side-fallback-2026-07-01"],
+          fallbacks: "default",
+        } as never) as unknown as Promise<Anthropic.Message>);
 }
 
 export async function loadChatHistory(
@@ -617,6 +643,8 @@ export async function runHealthChat(
   await saveChatMessage(ctx.userProfileId, "user", userText);
 
   const today = new Date(ctx.now ?? Date.now()).toISOString();
+  const details = await loadPersonalDetails(ctx.userProfileId).catch(() => null);
+  let model = pickChatModel(userText);
   const messages: Anthropic.MessageParam[] = [
     ...history,
     { role: "user", content: userText },
@@ -627,17 +655,23 @@ export async function runHealthChat(
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const response = await create({
-      model: healthChatModel(),
+      model,
       max_tokens: 16000,
       system: [
         { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
-        { type: "text", text: `Now: ${today}. Person's timezone: ${ctx.timezone}.` },
+        { type: "text", text: `Now: ${today}. Person's timezone: ${ctx.timezone}.${details ? ` About them: ${details}.` : ""}` },
       ],
       tools,
       messages,
     });
 
     if ((response.stop_reason as string) === "refusal") {
+      // The fast model has no server-side fallback: retry the turn once on the main model.
+      if (round === 0 && model !== healthChatModel()) {
+        model = healthChatModel();
+        round -= 1;
+        continue;
+      }
       text = "I can't help with that one. Ask me about your meals, steps, workouts or goal.";
       break;
     }

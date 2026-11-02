@@ -8,6 +8,25 @@ import { logger } from "./logger.js";
 import { loggableError } from "./util/loggableError.js";
 import { redis, supabase } from "./tools/clients.js";
 
+/** MAGNUS_ANDROID_CERT_SHA256: the signing cert fingerprint(s) of the Android app, comma-separated. */
+export function assetLinks(env: NodeJS.ProcessEnv): unknown[] {
+  const fingerprints = (env.MAGNUS_ANDROID_CERT_SHA256 ?? "")
+    .split(",")
+    .map((s) => s.trim().toUpperCase())
+    .filter((s) => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(s));
+  if (!fingerprints.length) return [];
+  return [
+    {
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: {
+        namespace: "android_app",
+        package_name: env.MAGNUS_ANDROID_PACKAGE?.trim() || "app.magnus.health",
+        sha256_cert_fingerprints: fingerprints,
+      },
+    },
+  ];
+}
+
 export type HealthServer = {
   close: () => Promise<void>;
 };
@@ -21,6 +40,8 @@ export function startHealthServer(): Promise<HealthServer> {
   // Meal photos arrive as base64 JPEG, resized on the phone to ~1280 px (usually under 400 KB).
   app.use("/api/health/meals/photo", express.json({ limit: "8mb" }));
   app.use("/api/health/events", express.json({ limit: "128kb" }));
+  // Razorpay signs the exact bytes, so the webhook needs the raw body.
+  app.use("/api/health/billing/razorpay/webhook", express.raw({ type: "*/*", limit: "256kb" }));
   app.use(express.json({ limit: "32kb" }));
 
   app.get("/health", (_req, res) => {
@@ -46,6 +67,11 @@ export function startHealthServer(): Promise<HealthServer> {
     }
   });
 
+  // Digital Asset Links: lets the Android app open the PWA full screen (no browser bar).
+  app.get("/.well-known/assetlinks.json", (_req, res) => {
+    res.json(assetLinks(process.env));
+  });
+
   app.use("/api/health", createHealthAppRouter());
   app.use(
     "/app",
@@ -59,8 +85,12 @@ export function startHealthServer(): Promise<HealthServer> {
       },
     }),
   );
+  // The landing page; the app itself lives at /app.
+  const siteDir = process.env.MAGNUS_SITE_DIR?.trim() || path.resolve("site");
   app.get("/", (_req, res) => {
-    res.redirect(302, "/app/");
+    res.sendFile(path.join(siteDir, "index.html"), (err) => {
+      if (err && !res.headersSent) res.redirect(302, "/app/");
+    });
   });
 
   const port = healthListenPort();

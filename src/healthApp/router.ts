@@ -1,6 +1,6 @@
 /**
  * JSON API behind the health PWA, mounted on the Express server under `/api/health`.
- * Every route needs `Authorization: Bearer <MAGNUS_HEALTH_APP_TOKEN>`.
+ * `/config` is public; every other route needs a bearer (see `accounts.ts`).
  */
 import express from "express";
 import { z } from "zod";
@@ -24,12 +24,38 @@ import {
   targetsInput,
   type ActionContext,
 } from "./actions.js";
-import { authenticateHealthApp, healthAppAuthConfig } from "./auth.js";
+import {
+  createPersonalToken,
+  listPersonalTokens,
+  publicAuthConfig,
+  resolveRequestUser,
+  revokePersonalToken,
+} from "./accounts.js";
+import { connectHevy, disconnectHevy, hevyConnected, hevyKeyInput } from "./integrations.js";
+import { supabase } from "../tools/clients.js";
+import { takeUse } from "./usageLimits.js";
+import { deleteAccount, exportAccount } from "./privacy.js";
+import { completeOnboarding, isOnboarded, onboardingInput, startingPlan } from "./onboarding.js";
 import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from "./events.js";
 import { loadChatHistory, runHealthChat } from "./chat.js";
 import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
 import { listMealsForDate } from "./meals.js";
 import { draftMealFromPhoto } from "./mealCards.js";
+import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
+import { loadWeeklyReview } from "./weeklyReview.js";
+import {
+  applyRazorpayEvent,
+  billingEnabled,
+  cancelRazorpaySubscription,
+  confirmInput,
+  confirmRazorpayCheckout,
+  createRazorpaySubscription,
+  limitFor,
+  loadEntitlement,
+  priceLabels,
+  razorpayConfig,
+  verifyWebhookSignature,
+} from "./billing.js";
 import { getUsualMeals, repeatUsualMeal } from "./frequentMeals.js";
 import { photoMealInput } from "./photoMeal.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
@@ -105,6 +131,7 @@ function fromResult(r: { ok: boolean; error?: string }): { status: number; body:
     "routine_changed_in_hevy",
     "routine_not_found",
     "report_not_found",
+    "hevy_key_invalid",
   ]);
   return { status: clientErrors.has(r.error ?? "") ? 400 : 500, body: r };
 }
@@ -113,15 +140,49 @@ function fromResult(r: { ok: boolean; error?: string }): { status: number; body:
 const TRAINING_CACHE_MS = 10 * 60_000;
 const trainingCache = new Map<string, { at: number; body: unknown }>();
 
+/** Today's cap for an AI route: the free plan's allowance, or the normal cap. */
+async function allowUse(ctx: { userProfileId: string; timezone: string }, action: "chat" | "photo"): Promise<true | "daily_limit" | "free_limit"> {
+  const ent = billingEnabled() ? await loadEntitlement(ctx.userProfileId) : null;
+  const limit = ent ? limitFor(ent.tier, action) : undefined;
+  if (takeUse(ctx.userProfileId, action, localDateKey(new Date(), ctx.timezone), process.env, limit)) return true;
+  return limit !== undefined ? "free_limit" : "daily_limit";
+}
+
 export function createHealthAppRouter(): express.Router {
   const router = express.Router();
 
-  router.use((req, res, next) => {
-    const userProfileId = authenticateHealthApp(req.get("authorization"), healthAppAuthConfig());
-    if (!userProfileId) {
-      res.status(401).json({ error: "unauthorized" });
+  /** What the sign-in screen needs before there is a session. */
+  router.get("/config", (_req, res) => {
+    res.json({ auth: publicAuthConfig() });
+  });
+
+  /** Razorpay subscription webhooks (raw body, signed with the webhook secret). */
+  router.post("/billing/razorpay/webhook", async (req, res) => {
+    const cfg = razorpayConfig();
+    const signature = req.get("x-razorpay-signature") ?? "";
+    const raw = Buffer.isBuffer(req.body) ? req.body : null;
+    if (!cfg?.webhookSecret || !raw || !verifyWebhookSignature(raw, signature, cfg.webhookSecret)) {
+      res.status(400).json({ error: "invalid_signature" });
       return;
     }
+    try {
+      const result = await applyRazorpayEvent(JSON.parse(raw.toString("utf8")), cfg);
+      res.json({ ok: true, result });
+    } catch (err) {
+      logger.error({ err: (err as Error).message }, "razorpay webhook failed");
+      res.status(500).json({ error: "webhook_failed" });
+    }
+  });
+
+  router.use(async (req, res, next) => {
+    const auth = await resolveRequestUser(req.get("authorization"), {
+      timezone: req.get("x-magnus-timezone") ?? undefined,
+    });
+    if ("error" in auth) {
+      res.status(auth.error === "signup_closed" ? 403 : 401).json({ error: auth.error });
+      return;
+    }
+    const { userProfileId } = auth;
     (res.locals as Locals).userProfileId = userProfileId;
     // Server-side timing per route, written to health_app_events next to the client's view of it.
     if (req.path !== "/events") {
@@ -152,6 +213,91 @@ export function createHealthAppRouter(): express.Router {
     enqueueEvents(clientRows((res.locals as Locals).userProfileId, parsed.data, req.get("user-agent")));
     res.status(204).end();
   });
+
+  /** The signed-in account: who it is and what's connected. */
+  router.get(
+    "/account",
+    route("account", async (ctx) => {
+      const [{ data }, hevy, tokens] = await Promise.all([
+        supabase.from("user_profile").select("display_name, email").eq("id", ctx.userProfileId).maybeSingle(),
+        hevyConnected(ctx.userProfileId),
+        listPersonalTokens(ctx.userProfileId),
+      ]);
+      return {
+        body: {
+          onboarded: await isOnboarded(ctx.userProfileId),
+          name: data?.display_name ?? null,
+          email: data?.email ?? null,
+          timezone: ctx.timezone,
+          hevyConnected: hevy,
+          tokens,
+        },
+      };
+    }),
+  );
+
+  /** The plan the interview answers would give, without saving anything (live preview). */
+  router.post(
+    "/onboarding/preview",
+    route("onboarding-preview", async (ctx, req) => {
+      const input = onboardingInput.parse(req.body);
+      return { body: { ok: true, plan: startingPlan(input, localDateKey(new Date(), ctx.timezone)) } };
+    }),
+  );
+
+  /** Saves the interview: profile, first weigh-in, goal, targets, and a welcome in chat. */
+  router.post(
+    "/onboarding",
+    route("onboarding", async (ctx, req) => {
+      const r = await completeOnboarding(ctx, onboardingInput.parse(req.body));
+      return r.ok ? { body: r } : fromResult(r);
+    }),
+  );
+
+  /** Everything Magnus holds about the person, as one JSON download. */
+  router.get(
+    "/account/export",
+    route("account-export", async (ctx) => ({ body: await exportAccount(ctx.userProfileId) })),
+  );
+
+  /** Deletes the account and all its data. The body must say `{ "confirm": "DELETE" }`. */
+  router.delete(
+    "/account",
+    route("account-delete", async (ctx, req) => {
+      z.object({ confirm: z.literal("DELETE") }).parse(req.body ?? {});
+      const r = await deleteAccount(ctx.userProfileId);
+      return r.ok ? { body: r } : { status: r.error === "owner_account" ? 400 : 500, body: r };
+    }),
+  );
+
+  /** A personal token for a phone automation (Health Connect webhook). Shown once. */
+  router.post(
+    "/account/tokens",
+    route("token-create", async (ctx, req) => {
+      const { label } = z.object({ label: z.string().trim().min(1).max(60).optional() }).parse(req.body ?? {});
+      return { body: { ok: true, token: await createPersonalToken(ctx.userProfileId, label) } };
+    }),
+  );
+
+  router.delete(
+    "/account/tokens/:id",
+    route("token-revoke", async (ctx, req) => {
+      const id = z.string().uuid().safeParse(req.params.id);
+      if (!id.success) return { status: 400, body: { ok: false, error: "invalid_id" } };
+      const ok = await revokePersonalToken(ctx.userProfileId, id.data);
+      return ok ? { body: { ok: true } } : { status: 404, body: { ok: false, error: "token_not_found" } };
+    }),
+  );
+
+  router.post(
+    "/integrations/hevy",
+    route("hevy-connect", async (ctx, req) => fromResult(await connectHevy(ctx.userProfileId, hevyKeyInput.parse(req.body)))),
+  );
+
+  router.delete(
+    "/integrations/hevy",
+    route("hevy-disconnect", async (ctx) => fromResult(await disconnectHevy(ctx.userProfileId))),
+  );
 
   router.get(
     "/today",
@@ -212,6 +358,8 @@ export function createHealthAppRouter(): express.Router {
     "/chat",
     route("chat", async (ctx, req) => {
       const { text } = chatInput.parse(req.body);
+      const allowed = await allowUse(ctx, "chat");
+      if (allowed !== true) return { status: 429, body: { error: allowed } };
       return { body: await runHealthChat(ctx, text) };
     }),
   );
@@ -227,8 +375,21 @@ export function createHealthAppRouter(): express.Router {
   router.post(
     "/meals/photo",
     route("meal-photo", async (ctx, req) => {
-      const r = await draftMealFromPhoto(ctx, photoMealInput.parse(req.body));
+      const input = photoMealInput.parse(req.body);
+      const allowed = await allowUse(ctx, "photo");
+      if (allowed !== true) return { status: 429, body: { ok: false, error: allowed } };
+      const r = await draftMealFromPhoto(ctx, input);
       return { status: r.ok ? 200 : 400, body: r };
+    }),
+  );
+
+  /** Barcode on a packet → the label's numbers as a draft card in the chat. */
+  router.post(
+    "/meals/barcode",
+    route("meal-barcode", async (ctx, req) => {
+      const r = await draftMealFromBarcode(ctx, barcodeInput.parse(req.body));
+      const status = r.ok ? 200 : r.error === "barcode_not_found" ? 404 : 502;
+      return { status, body: r };
     }),
   );
 
@@ -302,6 +463,60 @@ export function createHealthAppRouter(): express.Router {
     route("targets", async (ctx, req) =>
       fromResult(await setTargets(ctx, targetsInput.parse(req.body))),
     ),
+  );
+
+  /** Plan, trial and what can be bought. */
+  router.get(
+    "/billing",
+    route("billing", async (ctx) => {
+      const cfg = razorpayConfig();
+      return {
+        body: {
+          enabled: billingEnabled(),
+          entitlement: await loadEntitlement(ctx.userProfileId),
+          prices: priceLabels(),
+          razorpay: cfg ? { keyId: cfg.keyId } : null,
+          freeLimits: { chat: limitFor("free", "chat", { ...process.env, MAGNUS_BILLING: "on" }), photo: limitFor("free", "photo", { ...process.env, MAGNUS_BILLING: "on" }) },
+        },
+      };
+    }),
+  );
+
+  router.post(
+    "/billing/razorpay/subscribe",
+    route("billing-subscribe", async (ctx, req) => {
+      const { plan } = z.object({ plan: z.enum(["monthly", "yearly"]) }).parse(req.body);
+      const cfg = razorpayConfig();
+      if (!cfg) return { status: 503, body: { ok: false, error: "billing_unavailable" } };
+      const r = await createRazorpaySubscription(ctx.userProfileId, plan, cfg);
+      return { status: r.ok ? 200 : 502, body: r };
+    }),
+  );
+
+  router.post(
+    "/billing/razorpay/confirm",
+    route("billing-confirm", async (ctx, req) => {
+      const cfg = razorpayConfig();
+      if (!cfg) return { status: 503, body: { ok: false, error: "billing_unavailable" } };
+      const r = await confirmRazorpayCheckout(ctx.userProfileId, confirmInput.parse(req.body), cfg);
+      return { status: r.ok ? 200 : 400, body: r };
+    }),
+  );
+
+  router.post(
+    "/billing/cancel",
+    route("billing-cancel", async (ctx) => {
+      const cfg = razorpayConfig();
+      if (!cfg) return { status: 503, body: { ok: false, error: "billing_unavailable" } };
+      const r = await cancelRazorpaySubscription(ctx.userProfileId, cfg);
+      return { status: r.ok ? 200 : 400, body: r };
+    }),
+  );
+
+  /** The last 7 days vs targets and goal, compared with the week before, and next week's focus. */
+  router.get(
+    "/review/week",
+    route("review-week", async (ctx) => ({ body: await loadWeeklyReview(ctx.userProfileId) })),
   );
 
   /** Adaptive calorie target: maintenance from real intake and weight trend, and the on-pace target. */

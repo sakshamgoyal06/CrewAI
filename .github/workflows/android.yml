@@ -1,0 +1,45 @@
+name: Android app
+
+on:
+  push:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/android.yml"]
+  pull_request:
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Build debug APK
+        run: gradle -p android assembleDebug
+
+      # Signed release build, only when the signing secrets are set in the repo.
+      - name: Build signed release
+        if: ${{ env.KEYSTORE_B64 != '' }}
+        env:
+          KEYSTORE_B64: ${{ secrets.MAGNUS_KEYSTORE_B64 }}
+          MAGNUS_KEYSTORE_PASSWORD: ${{ secrets.MAGNUS_KEYSTORE_PASSWORD }}
+          MAGNUS_KEY_ALIAS: ${{ secrets.MAGNUS_KEY_ALIAS }}
+          MAGNUS_KEY_PASSWORD: ${{ secrets.MAGNUS_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/magnus.jks"
+          MAGNUS_KEYSTORE_PATH="$RUNNER_TEMP/magnus.jks" gradle -p android assembleRelease bundleRelease
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: magnus-android
+          path: |
+            android/app/build/outputs/apk/**/*.apk
+            android/app/build/outputs/bundle/**/*.aab
+          if-no-files-found: error

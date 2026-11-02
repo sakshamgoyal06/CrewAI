@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
+
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+        <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+
+        <meta-data android:name="asset_statements" android:resource="@string/asset_statements" />
+
+        <!-- The app itself: the PWA in a Trusted Web Activity (full screen once assetlinks.json verifies). -->
+        <activity
+            android:name=".MagnusLauncherActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <meta-data android:name="android.support.customtabs.trusted.DEFAULT_URL" android:value="@string/launch_url" />
+            <meta-data android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR" android:resource="@color/bg" />
+            <meta-data android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR" android:resource="@color/bg" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="${magnusHost}" android:pathPrefix="/app" />
+            </intent-filter>
+        </activity>
+
+        <!-- The PWA hands over a personal token here: magnus://connect?token=mgt_... -->
+        <activity
+            android:name=".ConnectActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:label="@string/connect_title">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="magnus" android:host="connect" />
+            </intent-filter>
+        </activity>
+
+        <!-- Health Connect requires a privacy policy screen. -->
+        <activity
+            android:name=".PrivacyActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
+            android:targetActivity=".PrivacyActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+    </application>
+</manifest>

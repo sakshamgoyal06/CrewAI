@@ -114,9 +114,11 @@ describe("runHealthChat", () => {
   });
 
   it("handles a refusal without crashing", async () => {
-    const create = vi.fn().mockResolvedValueOnce(msg([], "refusal"));
+    const create = vi.fn().mockResolvedValue(msg([], "refusal"));
     const reply = await runHealthChat(ctx, "something", { create, history: [] });
     expect(reply.text).toMatch(/can't help/);
+    // A short message starts on the fast model; its refusal is retried once on the main model.
+    expect(create.mock.calls.map((c) => c[0].model)).toEqual(["claude-haiku-5-5", "claude-sonnet-5-5"]);
   });
 });
 

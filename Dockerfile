@@ -14,6 +14,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY pwa ./pwa
+COPY site ./site
 EXPOSE 8080
 # Pass env at runtime (compose env_file, k8s secrets, etc.); do not bake secrets into the image.
 CMD ["node", "dist/index.js"]

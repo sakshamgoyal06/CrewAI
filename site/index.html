@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Magnus · the coach that gets you to your goal by your date</title>
+  <meta name="description" content="Set a weight or body-fat goal and a date. Magnus sets your calories, protein and steps, learns from what you actually eat, and tells you every week if you're on pace. Built for Indian food.">
+  <meta name="theme-color" content="#0c0c0b">
+  <meta property="og:title" content="Magnus · your goal, by your date">
+  <meta property="og:description" content="A health coach that sets your targets, logs Indian food from a sentence or a photo, and keeps you on pace for your deadline.">
+  <link rel="icon" href="/app/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0c0c0b; --surface: #151513; --raised: #1d1d1a; --hair: rgba(255, 248, 235, 0.08);
+      --text: #f3efe7; --muted: #9b958a; --faint: #6c675f; --accent: #d9b26f; --accent-ink: #1a1408;
+      --accent-soft: rgba(217, 178, 111, 0.14); --good: #9cd3ad;
+      --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+      --sans: "Inter Tight", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+    a { color: inherit; }
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+    nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; }
+    .brand { font: 28px/1 var(--serif); letter-spacing: 0.01em; text-decoration: none; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 22px; border-radius: 999px; font: 600 15px var(--sans); text-decoration: none; border: 1px solid var(--hair); }
+    .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+    .btn.small { min-height: 40px; padding: 0 16px; font-size: 14px; }
+    .eyebrow { color: var(--accent); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; margin: 0 0 12px; }
+    h1, h2 { font-family: var(--serif); font-weight: 400; letter-spacing: -0.01em; margin: 0; }
+    h1 { font-size: clamp(44px, 9vw, 84px); line-height: 0.98; }
+    h1 em, h2 em { color: var(--accent); }
+    h2 { font-size: clamp(32px, 5.5vw, 48px); line-height: 1.05; }
+    .lead { color: var(--muted); font-size: clamp(17px, 2.2vw, 20px); max-width: 560px; margin: 20px 0 28px; }
+    .hero { display: grid; gap: 40px; padding: 48px 0 72px; align-items: center; }
+    @media (min-width: 860px) { .hero { grid-template-columns: 1.15fr 0.85fr; padding-top: 72px; } }
+    .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+    .fine { color: var(--faint); font-size: 13px; margin-top: 14px; }
+
+    /* phone mock: the plan reveal */
+    .phone { justify-self: center; width: min(320px, 100%); border-radius: 36px; padding: 14px; background: var(--surface); border: 1px solid var(--hair); box-shadow: 0 40px 80px -40px rgba(0,0,0,.9); }
+    .screen { border-radius: 26px; background: var(--bg); padding: 22px 18px; display: grid; gap: 14px; }
+    .screen .t { font: 26px/1.1 var(--serif); }
+    .tile { background: var(--raised); border-radius: 16px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: baseline; }
+    .tile small { color: var(--muted); font-size: 12px; }
+    .tile b { font: 28px/1 var(--serif); font-weight: 400; }
+    .tile b span { font: 13px var(--sans); color: var(--muted); margin-left: 4px; }
+    .pace { font-size: 13px; color: var(--muted); line-height: 1.45; }
+    .pace strong { color: var(--good); font-weight: 500; }
+    .bubble { background: var(--accent-soft); border-radius: 16px 16px 16px 4px; padding: 10px 12px; font-size: 13px; }
+
+    section.band { padding: 72px 0; border-top: 1px solid var(--hair); }
+    .grid { display: grid; gap: 14px; margin-top: 36px; }
+    @media (min-width: 720px) { .grid.three { grid-template-columns: repeat(3, 1fr); } .grid.two { grid-template-columns: repeat(2, 1fr); } }
+    .card { background: var(--surface); border: 1px solid var(--hair); border-radius: 22px; padding: 22px; }
+    .card h3 { margin: 0 0 8px; font-size: 17px; font-weight: 600; }
+    .card p { margin: 0; color: var(--muted); }
+    .num { font: 40px/1 var(--serif); color: var(--accent); display: block; margin-bottom: 14px; }
+    .vs { width: 100%; border-collapse: collapse; margin-top: 32px; font-size: 15px; }
+    .vs th, .vs td { text-align: left; padding: 14px 10px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+    .vs th { color: var(--muted); font-weight: 500; font-size: 13px; }
+    .vs td:first-child { color: var(--muted); width: 34%; }
+    .vs td.m { color: var(--text); }
+    .table-scroll { overflow-x: auto; }
+    .price { display: grid; gap: 14px; margin-top: 36px; }
+    @media (min-width: 720px) { .price { grid-template-columns: repeat(3, 1fr); } }
+    .price .card.hi { border-color: var(--accent); }
+    .amount { font: 44px/1 var(--serif); margin: 10px 0 4px; }
+    .price ul { padding-left: 18px; margin: 14px 0 0; color: var(--muted); }
+    .price li { margin: 6px 0; }
+    footer { padding: 40px 0 56px; border-top: 1px solid var(--hair); color: var(--faint); font-size: 14px; display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; }
+    footer a { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="/">Magnus</a>
+      <a class="btn small" href="/app/">Open the app</a>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Health coach · built for Indian food</p>
+        <h1>Your goal.<br><em>By your date.</em></h1>
+        <p class="lead">Tell Magnus where you want to be and when. It sets your calories, protein and steps, logs “2 rotis and dal” from a sentence or a photo, and tells you every week whether you're on pace, and what to change if you're not.</p>
+        <div class="ctas">
+          <a class="btn primary" href="/app/">Start free for 7 days</a>
+          <a class="btn" href="#how">How it works</a>
+        </div>
+        <p class="fine">No card for the trial. Sign in with Google. Android app, or any browser.</p>
+      </div>
+      <div class="phone" aria-hidden="true">
+        <div class="screen">
+          <div class="t">Your plan</div>
+          <div class="tile"><small>Calories</small><b>2,050<span>kcal/day</span></b></div>
+          <div class="tile"><small>Protein</small><b>140<span>g/day</span></b></div>
+          <div class="tile"><small>Steps</small><b>8,000<span>/day</span></b></div>
+          <p class="pace">82 kg → 76 kg by 1 March. That's <strong>0.38 kg a week</strong>, a safe pace.</p>
+          <div class="bubble">Had 2 rotis, dal and a katori of rajma. About 520 kcal and 22 g protein. Confirm?</div>
+        </div>
+      </div>
+    </header>
+  </div>
+
+  <section class="band" id="how">
+    <div class="wrap">
+      <p class="eyebrow">How it works</p>
+      <h2>A plan in two minutes. <em>A coach every day after.</em></h2>
+      <div class="grid three">
+        <div class="card"><span class="num">1</span><h3>Set a goal and a date</h3><p>Weight, body fat or muscle, and a deadline. Magnus works out the targets from your body and week, and tells you straight if the date needs an unsafe pace.</p></div>
+        <div class="card"><span class="num">2</span><h3>Log the way you talk</h3><p>Type “paneer bhurji and 2 parathas”, snap the plate, or scan a packet. Every estimate is a card you can fix before it counts.</p></div>
+        <div class="card"><span class="num">3</span><h3>Stay on pace</h3><p>Steps and weigh-ins sync from Health Connect, workouts from Hevy. Every week you see where you are, and the one thing to fix next week.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <p class="eyebrow">Why it's different</p>
+      <h2>Trackers count. <em>Magnus coaches.</em></h2>
+      <div class="grid two">
+        <div class="card"><h3>Targets that learn</h3><p>Your calorie target starts from a formula, then adjusts to what your real intake and weight trend say your maintenance is.</p></div>
+        <div class="card"><h3>Indian food, first</h3><p>Rotis, dals, sabzis, thalis and street food are in the database with sensible portions, not guessed from American recipes.</p></div>
+        <div class="card"><h3>One number to watch</h3><p>On-track days this week. Five of seven is the target, and a day only counts when meals, protein, calories, steps and training line up.</p></div>
+        <div class="card"><h3>It notices when you slip</h3><p>Two off days in a row, and it looks for the cause in your own data and suggests one small experiment, then checks if it helped.</p></div>
+      </div>
+
+      <div class="table-scroll">
+        <table class="vs">
+          <thead><tr><th></th><th>Magnus</th><th>Calorie trackers</th><th>Fitness bands</th></tr></thead>
+          <tbody>
+            <tr><td>Built around a deadline</td><td class="m">Yes, pace checked weekly</td><td>A daily number</td><td>Activity rings</td></tr>
+            <tr><td>Log by sentence or photo</td><td class="m">Yes, editable before it counts</td><td>Search and pick</td><td>No</td></tr>
+            <tr><td>Indian portions</td><td class="m">Built in</td><td>Varies</td><td>No</td></tr>
+            <tr><td>Adapts your targets</td><td class="m">From intake and weight trend</td><td>Mostly fixed</td><td>No</td></tr>
+            <tr><td>Your data</td><td class="m">Download or delete any time</td><td>Varies</td><td>Varies</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="pricing">
+    <div class="wrap">
+      <p class="eyebrow">Pricing</p>
+      <h2>Start free. <em>Stay if it works.</em></h2>
+      <div class="price">
+        <div class="card"><h3>Free</h3><div class="amount">₹0</div><p>After the trial.</p><ul><li>Tracker and goal</li><li>5 coach messages a day</li><li>1 meal photo a day</li></ul></div>
+        <div class="card hi"><h3>Pro yearly</h3><div class="amount">₹1,999</div><p>a year, about ₹167 a month.</p><ul><li>Unlimited coaching and logging</li><li>Photo and barcode logging</li><li>Weekly review and adaptive targets</li></ul></div>
+        <div class="card"><h3>Pro monthly</h3><div class="amount">₹299</div><p>a month. Cancel any time.</p><ul><li>Everything in Pro</li><li>Keeps Pro to the end of the month you paid for</li></ul></div>
+      </div>
+      <div class="ctas" style="margin-top:32px"><a class="btn primary" href="/app/">Start your 7-day trial</a></div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <footer>
+      <span>Magnus gives general fitness and nutrition guidance. It isn't medical advice.</span>
+      <span><a href="/app/privacy.html">Privacy</a></span>
+    </footer>
+  </div>
+</body>
+</html>

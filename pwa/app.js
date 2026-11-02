@@ -2,8 +2,11 @@
 // the same /api/health endpoints, so anything logged in one shows up in the other.
 
 import { SESSION_ID, trackApi } from "./telemetry.js";
+import { runOnboarding } from "./onboarding.js";
+import { scanView } from "./scan.js";
+import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
-const TOKEN_KEY = "magnus-health-token";
+const TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } })();
 const CONFIRMED_KEY = "magnus-confirmed-drafts";
 const $ = (id) => document.getElementById(id);
 
@@ -25,6 +28,9 @@ const CHAT_CACHE_KEY = "magnus-chat-cache";
 const SNAPSHOT_CACHE_KEY = "magnus-snapshot-cache";
 const HISTORY_CACHE_KEY = "magnus-history-cache";
 const USUAL_CACHE_KEY = "magnus-usual-meals";
+// Set when the PWA is opened from the Android app (its launch URL carries ?src=android).
+const ANDROID_KEY = "magnus-android";
+const ONBOARDED_KEY = "magnus-onboarded";
 
 // ---------- API ----------
 
@@ -32,14 +38,31 @@ const USUAL_CACHE_KEY = "magnus-usual-meals";
 const QUEUE_KEY = "magnus-offline-queue";
 const QUEUEABLE = [/^\/steps$/, /^\/checkins$/, /^\/meals\/confirm$/, /^\/workout-check$/];
 
+async function request(path, options, force = false) {
+  const token = await bearer({ force });
+  return fetch(`/api/health${path}`, {
+    ...options,
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}`, "x-magnus-session": SESSION_ID, "x-magnus-timezone": TIMEZONE },
+  });
+}
+
+function clearLocalData() {
+  for (const k of [USUAL_CACHE_KEY, CHAT_CACHE_KEY, SNAPSHOT_CACHE_KEY, HISTORY_CACHE_KEY, QUEUE_KEY, ONBOARDED_KEY]) store.set(k, null);
+}
+
+function endSession(message) {
+  signOut();
+  clearLocalData();
+  showConnect(message);
+}
+
 async function api(path, options = {}) {
   let res;
   const started = performance.now();
   try {
-    res = await fetch(`/api/health${path}`, {
-      ...options,
-      headers: { "content-type": "application/json", authorization: `Bearer ${store.get(TOKEN_KEY, "")}`, "x-magnus-session": SESSION_ID },
-    });
+    res = await request(path, options);
+    // A Google session can expire between the check and the request: refresh once and retry.
+    if (res.status === 401) res = await request(path, options, true);
   } catch (err) {
     trackApi(path, options.method, 0, performance.now() - started, options.replay ? "network (replay)" : "network");
     if (options.method === "POST" && QUEUEABLE.some((re) => re.test(path)) && !options.replay) {
@@ -52,13 +75,15 @@ async function api(path, options = {}) {
     throw new Error("You're offline.");
   }
   if (res.status === 401) {
-    store.set(TOKEN_KEY, null);
-    store.set(USUAL_CACHE_KEY, null);
-    store.set(CHAT_CACHE_KEY, null);
-    store.set(SNAPSHOT_CACHE_KEY, null);
-    store.set(HISTORY_CACHE_KEY, null);
-    showConnect();
-    throw new Error("This device was disconnected. Paste your token again.");
+    endSession("You were signed out. Sign in again to continue.");
+    throw new Error("Signed out.");
+  }
+  if (res.status === 403) {
+    const body = await res.json().catch(() => ({}));
+    if (body.error === "signup_closed") {
+      endSession("Magnus is invite-only right now. Ask Saksham for an invite.");
+      throw new Error("Invite only.");
+    }
   }
   const body = await res.json().catch(() => ({}));
   trackApi(path, options.method, res.status, performance.now() - started, res.ok ? null : body.error || `http_${res.status}`);
@@ -84,6 +109,14 @@ function friendlyError(code) {
     meal_not_found: "That meal isn't in your usual list any more.",
     not_food: "I don't see a meal in that photo. Try a clearer shot of the plate, or type what you ate.",
     unreadable: "I couldn't read that photo. Try again, or type what you ate.",
+    owner_account: "The owner account can't be deleted from the app.",
+    barcode_not_found: "That barcode isn't in the food database yet. Type what it was instead, or snap a photo of the label.",
+    barcode_lookup_failed: "Couldn't reach the food database just now. Try again in a minute, or type what you had.",
+    free_limit: "That's today's free allowance. Upgrade to Pro in Settings for unlimited coaching, or log from the tracker.",
+    billing_unavailable: "Payments aren't available right now. Try again later.",
+    invalid_signature: "The payment couldn't be verified. If you were charged, it will show up within a few minutes.",
+    daily_limit: "You've hit today's limit for the coach. Log from the tracker, or try again tomorrow.",
+    hevy_key_invalid: "Hevy didn't accept that key. Copy it again from hevy.com → Settings → Developer.",
   }[code] || "Something went wrong. Try again.";
 }
 
@@ -147,9 +180,15 @@ function greeting() {
 
 // ---------- navigation ----------
 
-function showConnect() {
+function showConnect(message) {
   $("connect").hidden = false;
   $("shell").hidden = true;
+  $("connect-error").hidden = !message;
+  $("connect-error").textContent = message || "";
+  authConfig().then((cfg) => {
+    $("google-signin").hidden = !cfg?.google;
+    $("token-details").open = !cfg?.google;
+  });
 }
 
 function showShell() {
@@ -973,6 +1012,62 @@ async function sendPhoto(file) {
   );
 }
 
+// ---------- weekly review ----------
+
+const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
+
+function weeklyReviewView(r) {
+  const w = r.week;
+  const p = r.previous;
+  const delta = (cur, prev, unit = "") => {
+    if (prev == null || cur == null) return null;
+    const d = Math.round(cur - prev);
+    return d === 0 ? "same as last week" : `${d > 0 ? "+" : "−"}${fmt(Math.abs(d))}${unit} vs last week`;
+  };
+  const stat = (label, value, target, sub) => el("div", { class: "review-stat" },
+    el("small", {}, label),
+    el("strong", {}, value),
+    target ? el("span", { class: "hint" }, target) : null,
+    sub ? el("span", { class: "hint" }, sub) : null);
+  const t = r.targets;
+  const out = [
+    el("p", { class: "review-headline" }, r.headline),
+    el("div", { class: "review-days" }, ...r.days.map((d) => el("span", { class: `review-day${d.onTrack ? " on" : ""}`, title: d.date },
+      el("i", {}), el("small", {}, WEEKDAY_LETTERS[d.weekday])))),
+    el("div", { class: "review-grid" },
+      stat("On-track days", `${w.onTrackDays} / 7`, `goal ${r.onTrackGoal}`, p ? delta(w.onTrackDays, p.onTrackDays) : null),
+      stat("Avg calories", w.avgCalories == null ? "–" : fmt(w.avgCalories), t.calorieTarget ? `target ${fmt(t.calorieTarget)}` : null, `${w.daysLogged} of 7 days logged`),
+      stat("Avg protein", w.avgProteinG == null ? "–" : `${w.avgProteinG} g`, t.proteinTarget ? `target ${t.proteinTarget} g` : null, p ? delta(w.avgProteinG, p.avgProteinG, " g") : null),
+      stat("Avg steps", fmt(w.avgSteps), `target ${fmt(t.stepTarget)}`, p ? delta(w.avgSteps, p.avgSteps) : null),
+      stat("Workouts", `${w.workouts}`, w.plannedWorkouts ? `${w.plannedWorkouts} planned` : null, null),
+    ),
+  ];
+  if (r.goal) {
+    out.push(el("p", { class: "section-label" }, `Goal · ${r.goal.weeksLeft} weeks left`));
+    for (const m of r.goal.metrics) {
+      const pace = { ahead: "Ahead of pace", on_pace: "On pace", behind: "Behind pace", reached: "Reached", not_enough_data: "Need more weigh-ins" }[m.pace] || m.pace;
+      const per = (v) => (v == null ? "–" : `${v > 0 ? "+" : ""}${Math.round(v * 100) / 100} ${m.unit}/wk`);
+      out.push(el("div", { class: `review-goal ${m.pace}` },
+        el("div", { class: "row-between" }, el("strong", {}, `${m.label}: ${m.latest ?? "–"} → ${m.target} ${m.unit}`), el("span", { class: "tag" }, pace)),
+        el("span", { class: "hint" }, `Needed ${per(m.requiredPerWeek)} · actual ${per(m.actualPerWeek)}${m.projectedDate ? ` · on this trend you get there ${new Date(m.projectedDate).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}` : ""}`)));
+    }
+    if (r.goal.checkinDue) out.push(el("button", { class: "btn block", type: "button", onclick: () => openSheet("checkin") }, "Log this week's weigh-in"));
+  }
+  out.push(
+    el("p", { class: "section-label" }, "Next week's one thing"),
+    el("p", { class: "review-focus" }, r.focus),
+    el("button", { class: "btn primary block", type: "button", onclick: () => { closeSheet(); setView("coach"); $("input").value = "Let's go over my week. What should I change?"; autosize(); $("input").focus(); } }, "Talk it through with the coach"),
+  );
+  return out;
+}
+
+async function sendBarcode(code, grams) {
+  await coachTurn(
+    () => { addMessage("user", `▥ Scanned barcode ${code}${grams ? ` (${grams} g)` : ""}`); scrollThread(); },
+    () => api("/meals/barcode", { method: "POST", body: JSON.stringify({ code, grams }) }),
+  );
+}
+
 function autosize() {
   const t = $("input");
   t.style.height = "auto";
@@ -1201,6 +1296,188 @@ function notificationsSection() {
     );
     paint();
   }).catch(() => paint());
+  return wrap;
+}
+
+// ---------- account ----------
+
+/** Who's signed in, Hevy, the Health Connect token, and sign-out. */
+// ---------- plan & billing ----------
+
+let razorpayLoad = null;
+function loadRazorpay() {
+  razorpayLoad ??= new Promise((resolve, reject) => {
+    const s = el("script", { src: "https://checkout.razorpay.com/v1/checkout.js" });
+    s.onload = () => resolve(window.Razorpay);
+    s.onerror = () => { razorpayLoad = null; reject(new Error("Couldn't load the payment screen. Check your connection.")); };
+    document.head.append(s);
+  });
+  return razorpayLoad;
+}
+
+async function upgrade(planId) {
+  const [Razorpay, sub] = await Promise.all([
+    loadRazorpay(),
+    api("/billing/razorpay/subscribe", { method: "POST", body: JSON.stringify({ plan: planId }) }),
+  ]);
+  await new Promise((resolve, reject) => {
+    const rzp = new Razorpay({
+      key: sub.keyId,
+      subscription_id: sub.subscriptionId,
+      name: "Magnus Pro",
+      description: planId === "yearly" ? "Yearly plan" : "Monthly plan",
+      theme: { color: "#d9b26f" },
+      handler: async (resp) => {
+        try {
+          await api("/billing/razorpay/confirm", { method: "POST", body: JSON.stringify(resp) });
+          toast("Welcome to Magnus Pro.");
+          resolve();
+        } catch (err) { reject(err); }
+      },
+      modal: { ondismiss: () => resolve() },
+    });
+    rzp.on("payment.failed", (e) => reject(new Error(e?.error?.description || "The payment didn't go through.")));
+    rzp.open();
+  });
+}
+
+function planSection(box) {
+  const daysLeft = (iso) => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 86_400_000));
+  async function paint() {
+    let b;
+    try { b = await api("/billing"); } catch { box.replaceChildren(); return; }
+    if (!b.enabled) { box.replaceChildren(); return; }
+    const e = b.entitlement;
+    const buy = (planId) => el("button", { class: planId === "yearly" ? "btn primary block" : "btn block", type: "button", onclick: async (ev) => {
+      ev.target.disabled = true;
+      try { await upgrade(planId); paint(); } catch (err) { toast(err.message); }
+      ev.target.disabled = false;
+    } }, planId === "yearly" ? `Yearly · ${b.prices.yearly}` : `Monthly · ${b.prices.monthly}`);
+    const rows = [el("p", { class: "section-label" }, "Plan")];
+    if (e.tier === "pro") {
+      const until = e.periodEndsAt ? new Date(e.periodEndsAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : null;
+      rows.push(el("p", { class: "hint" }, e.status === "cancelled" && until ? `Magnus Pro until ${until}. It won't renew.` : until ? `Magnus Pro. Renews ${until}.` : "Magnus Pro."));
+      if (e.provider === "razorpay" && e.status === "active") {
+        rows.push(el("button", { class: "link danger", type: "button", onclick: async () => {
+          if (!confirm("Cancel Magnus Pro? You keep it until the end of the period you paid for.")) return;
+          try { await api("/billing/cancel", { method: "POST" }); toast("Cancelled. Pro stays on until the period ends."); paint(); } catch (err) { toast(err.message); }
+        } }, "Cancel subscription"));
+      }
+    } else {
+      rows.push(el("p", { class: "hint" }, e.tier === "trial"
+        ? `Free trial: ${daysLeft(e.trialEndsAt)} days left of everything. After it, the free plan has ${b.freeLimits.chat} coach messages and ${b.freeLimits.photo} meal photo a day.`
+        : `Free plan: ${b.freeLimits.chat} coach messages and ${b.freeLimits.photo} meal photo a day. Pro has no daily limit worth worrying about, plus the weekly review and adaptive targets.`));
+      if (b.razorpay) rows.push(buy("yearly"), buy("monthly"));
+    }
+    box.replaceChildren(...rows);
+  }
+  paint();
+}
+
+function accountSection() {
+  const wrap = el("div", { class: "stack" }, el("p", { class: "section-label" }, "Account"));
+  const who = el("p", { class: "hint" }, "Loading…");
+  const hevy = el("div", { class: "stack" });
+  const hc = el("div", { class: "stack" });
+  const out = el("button", { class: "link danger", type: "button", onclick: () => { if (confirm("Sign out of Magnus on this phone?")) { closeSheet(); endSession(); } } }, "Sign out");
+  const download = el("button", { class: "link", type: "button", onclick: async () => {
+    try {
+      const data = await api("/account/export");
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+      el("a", { href: url, download: `magnus-export-${new Date().toISOString().slice(0, 10)}.json` }).click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (err) { toast(err.message); }
+  } }, "Download my data");
+  const remove = el("button", { class: "link danger", type: "button", onclick: async () => {
+    const typed = prompt("This deletes your account and every meal, weigh-in and message. It can't be undone. Type DELETE to confirm.");
+    if (typed !== "DELETE") return;
+    try {
+      await api("/account", { method: "DELETE", body: JSON.stringify({ confirm: "DELETE" }) });
+      closeSheet();
+      endSession("Your account and data were deleted.");
+    } catch (err) { toast(err.message); }
+  } }, "Delete account");
+  const plan = el("div", { class: "stack" });
+  planSection(plan);
+  wrap.append(who, plan, el("p", { class: "section-label" }, "Hevy"), hevy, el("p", { class: "section-label" }, "Health Connect"), hc,
+    el("p", { class: "section-label" }, "Your data"), el("p", { class: "hint" }, "Your data is yours: download all of it, or delete it for good."), el("div", { class: "row-between" }, download, remove), out);
+
+  function paintHevy(connected) {
+    if (connected) {
+      hevy.replaceChildren(
+        el("p", { class: "hint" }, "Connected. Workouts and routines come from your Hevy account."),
+        el("button", { class: "link", type: "button", onclick: async () => {
+          try { await api("/integrations/hevy", { method: "DELETE" }); toast("Hevy disconnected."); paintHevy(false); } catch (err) { toast(err.message); }
+        } }, "Disconnect Hevy"),
+      );
+      return;
+    }
+    hevy.replaceChildren(
+      el("form", { class: "stack", onsubmit: submitter(async (fd) => {
+        await api("/integrations/hevy", { method: "POST", body: JSON.stringify({ apiKey: String(fd.get("key") || "").trim() }) });
+        toast("Hevy connected.");
+        state.trainingLoaded = false;
+        paintHevy(true);
+        refresh();
+      }) },
+        el("p", { class: "hint" }, "Paste your Hevy API key (Hevy Pro: hevy.com → Settings → Developer). I read workouts and only change routines when you tap Apply."),
+        el("input", { class: "field", name: "key", type: "password", autocomplete: "off", placeholder: "Hevy API key", required: true }),
+        el("button", { class: "btn block", type: "submit" }, "Connect Hevy"),
+      ),
+    );
+  }
+
+  function paintHc(tokens) {
+    const list = tokens.map((t) => el("div", { class: "row-between" },
+      el("span", { class: "hint" }, `${t.label} · ${t.lastUsedAt ? `last sync ${new Date(t.lastUsedAt).toLocaleDateString()}` : "not used yet"}`),
+      el("button", { class: "link danger", type: "button", onclick: async () => {
+        try { await api(`/account/tokens/${t.id}`, { method: "DELETE" }); toast("Token revoked."); load(); } catch (err) { toast(err.message); }
+      } }, "Revoke")));
+    const inAndroidApp = store.get(ANDROID_KEY, false);
+    if (inAndroidApp) {
+      hc.replaceChildren(
+        el("p", { class: "hint" }, "Steps, walks, workouts' calories and scale readings sync from Health Connect every hour."),
+        ...list,
+        el("button", { class: "btn primary block", type: "button", onclick: async (e) => {
+          e.target.disabled = true;
+          try {
+            const r = await api("/account/tokens", { method: "POST", body: JSON.stringify({ label: "Android app" }) });
+            // Hands the token to the native side, which asks for Health Connect access and syncs.
+            location.href = `intent://connect?token=${encodeURIComponent(r.token)}#Intent;scheme=magnus;package=app.magnus.health;end`;
+          } catch (err) { toast(err.message); }
+          e.target.disabled = false;
+        } }, tokens.some((t) => t.label === "Android app") ? "Reconnect Health Connect" : "Connect Health Connect"),
+      );
+      return;
+    }
+    hc.replaceChildren(
+      el("p", { class: "hint" }, "Steps, walks and scale readings sync from Health Connect through the HC Webhook app. Create a token, then paste it into HC Webhook with this URL:"),
+      el("code", { class: "copyable" }, `${location.origin}/api/health/ingest/health-connect`),
+      ...list,
+      el("button", { class: "btn block", type: "button", onclick: async (e) => {
+        e.target.disabled = true;
+        try {
+          const r = await api("/account/tokens", { method: "POST", body: JSON.stringify({ label: "Health Connect" }) });
+          await navigator.clipboard?.writeText(r.token).catch(() => {});
+          hc.prepend(el("p", { class: "hint" }, "Copied. It's shown only once:"), el("code", { class: "copyable" }, r.token));
+          toast("Token created and copied.");
+        } catch (err) { toast(err.message); }
+        e.target.disabled = false;
+      } }, "Create Health Connect token"),
+    );
+  }
+
+  async function load() {
+    try {
+      const a = await api("/account");
+      who.textContent = a.email ? `Signed in as ${a.email}` : a.name ? `Signed in as ${a.name}` : "Signed in with an app token.";
+      paintHevy(a.hevyConnected);
+      paintHc(a.tokens || []);
+    } catch (err) {
+      who.textContent = err.message;
+    }
+  }
+  load();
   return wrap;
 }
 
@@ -1503,13 +1780,17 @@ function finishedCard(card, draft, status) {
 // ---------- sheets ----------
 
 function closeSheet() {
+  state.sheetCleanup?.();
+  state.sheetCleanup = null;
   $("sheet").hidden = true;
   $("scrim").hidden = true;
 }
 
 function openSheet(kind) {
   const body = $("sheet-body");
-  const titles = { meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", quick: "Quick add" };
+  state.sheetCleanup?.();
+  state.sheetCleanup = null;
+  const titles = { meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", quick: "Quick add", scan: "Scan a packet", review: "Your week" };
   $("sheet-title").textContent = titles[kind];
   body.replaceChildren(SHEETS[kind]());
   $("sheet").hidden = false;
@@ -1533,7 +1814,20 @@ const SHEETS = {
     return el("div", { class: "quick-row two" },
       ...[["meal", "Meal"], ["steps", "Steps"], ["checkin", "Weigh-in"]].map(([k, l]) =>
         el("button", { class: "quick", type: "button", onclick: () => openSheet(k) }, el("span", {}, l))),
-      el("button", { class: "quick", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, el("span", {}, "Photo")));
+      el("button", { class: "quick", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, el("span", {}, "Photo")),
+      el("button", { class: "quick", type: "button", onclick: () => openSheet("scan") }, el("span", {}, "Barcode")));
+  },
+
+  review() {
+    const box = el("div", { class: "stack review" }, el("p", { class: "hint" }, "Putting your week together…"));
+    api("/review/week").then((r) => box.replaceChildren(...weeklyReviewView(r))).catch((err) => box.replaceChildren(el("p", { class: "hint" }, err.message)));
+    return box;
+  },
+
+  scan() {
+    const view = scanView({ el, onCode: ({ code, grams }) => { closeSheet(); sendBarcode(code, grams); } });
+    state.sheetCleanup = view.stop;
+    return view.node;
   },
 
   meal() {
@@ -1565,6 +1859,7 @@ const SHEETS = {
       el("button", { class: "btn primary block", type: "submit" }, "Estimate"),
       el("p", { class: "hint" }, "You'll see the estimate and can fix any line before it's logged."),
       el("button", { class: "link", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, "Or snap a photo of the plate"),
+      el("button", { class: "link", type: "button", onclick: () => openSheet("scan") }, "Or scan a packet's barcode"),
     );
     return el("div", {}, form, holder);
   },
@@ -1654,8 +1949,7 @@ const SHEETS = {
         el("button", { class: "btn block", type: "submit" }, "Save targets"),
       ),
       notificationsSection(),
-      el("p", { class: "section-label" }, "Device"),
-      el("button", { class: "link", type: "button", onclick: () => { store.set(TOKEN_KEY, null); closeSheet(); showConnect(); } }, "Disconnect this device"),
+      accountSection(),
     );
   },
 };
@@ -1664,14 +1958,19 @@ const SHEETS = {
 
 $("connect-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  store.set(TOKEN_KEY, $("token").value.trim());
+  useToken($("token").value);
   $("token").value = "";
   start();
+});
+$("google-signin").addEventListener("click", async () => {
+  $("google-signin").disabled = true;
+  try { await signInWithGoogle(); } catch (err) { showConnect(err.message); $("google-signin").disabled = false; }
 });
 
 for (const t of document.querySelectorAll(".tab")) t.addEventListener("click", () => setView(t.dataset.view));
 $("coach-stat").addEventListener("click", () => setView("tracker"));
 $("settings-btn").addEventListener("click", () => openSheet("settings"));
+$("review-btn").addEventListener("click", () => openSheet("review"));
 $("quick").addEventListener("click", () => openSheet("quick"));
 $("photo").addEventListener("click", () => $("photo-input").click());
 $("photo-input").addEventListener("change", (e) => {
@@ -1705,13 +2004,30 @@ $("composer").addEventListener("submit", (e) => {
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden || !store.get(TOKEN_KEY, "")) return;
+  if (document.hidden || !signedIn()) return;
   refresh();
   // The workout check posts into chat on its own, so pick that up when the app comes back.
   if (!state.sending) loadHistory();
 });
 
-function start() {
+/** A new account goes through the interview before the coach opens. Asked once per device. */
+async function ensureOnboarded() {
+  if (store.get(ONBOARDED_KEY, false)) return true;
+  let account;
+  try { account = await api("/account"); } catch (err) { return !/Signed out|Invite only/.test(err.message); }
+  if (!account.onboarded) {
+    $("connect").hidden = true;
+    $("shell").hidden = true;
+    $("onboarding").hidden = false;
+    await runOnboarding($("onboarding"), { api, el, toast });
+    $("onboarding").hidden = true;
+  }
+  store.set(ONBOARDED_KEY, true);
+  return true;
+}
+
+async function start() {
+  if (!(await ensureOnboarded())) return;
   showShell();
   $("greeting").textContent = greeting();
   setView(location.hash === "#tracker" ? "tracker" : "coach");
@@ -1738,5 +2054,11 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/app/sw.js", { scope: "/app/" }).catch(() => {});
 }
 
-if (store.get(TOKEN_KEY, "")) start();
+if (new URLSearchParams(location.search).get("src") === "android" || document.referrer.startsWith("android-app://app.magnus.health")) {
+  store.set(ANDROID_KEY, true);
+}
+
+const redirectError = captureRedirect();
+if (redirectError) showConnect(redirectError);
+else if (signedIn()) start();
 else showConnect();
