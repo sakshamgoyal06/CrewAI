@@ -28,7 +28,9 @@ Rules:
 After searching, output **nothing except** one raw JSON object: no markdown fences, no preamble ("Here is…"), no trailing commentary, no citation markers — the response body must start with { and end with }.
 
 Shape:
-{"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"serving_assumption":string,"items":[{"name":string,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"portion_note"?:string}]}
+{"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"serving_assumption":string,"items":[{"index"?:number,"name":string,"grams":number,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"portion_note"?:string}]}
+
+grams: your best estimate of the weight of the amount eaten for that item.
 
 serving_assumption: 1–2 short sentences (under 220 characters) on portions assumed and data basis.
 
@@ -138,6 +140,8 @@ function parseEstimateJson(
       carbs_g: numOrNull(o.carbs_g) ?? undefined,
       fat_g: numOrNull(o.fat_g) ?? undefined,
       portion_note,
+      component_index: numOrNull(o.index) ?? undefined,
+      grams: numOrNull(o.grams) ?? undefined,
     };
   });
 
@@ -222,7 +226,7 @@ async function estimateViaAnthropicWebSearch(query: string): Promise<MealNutriti
   }
 }
 
-/** Web-first estimate via the Anthropic `web_search` server tool. */
+/** Web-first whole-meal estimate via the Anthropic `web_search` server tool. */
 export async function estimateViaWebResearch(query: string): Promise<MealNutritionEstimate | null> {
   const q = query.trim();
   if (!q) {

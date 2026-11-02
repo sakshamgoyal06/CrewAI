@@ -4,6 +4,9 @@ const web = vi.hoisted(() => ({ estimateViaWebResearch: vi.fn() }));
 vi.mock("./providers/webResearchEstimate.js", () => web);
 vi.mock("./providers/usdaFdc.js", () => ({ estimateViaUsdaFdc: vi.fn().mockResolvedValue(null) }));
 vi.mock("./providers/calorieNinjas.js", () => ({ estimateViaCalorieNinjas: vi.fn().mockResolvedValue(null) }));
+// Ingredient path covered in foodDbEstimate.test.ts; here it finds nothing and never calls the web.
+vi.mock("./foodDbEstimate.js", () => ({ estimateWithFoodDb: vi.fn().mockResolvedValue(null) }));
+vi.mock("./providers/webBreakdown.js", () => ({ breakdownViaWebResearch: vi.fn() }));
 vi.mock("./providers/llmEstimate.js", () => ({ estimateViaLlm: vi.fn().mockResolvedValue(null) }));
 
 import { clearEstimateCache, estimateCacheKey, estimateMealNutrition } from "./estimateMealNutrition.js";

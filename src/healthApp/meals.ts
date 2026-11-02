@@ -28,6 +28,7 @@ export const ESTIMATE_SOURCES = [
   "calorieninjas",
   "usda_fdc",
   "llm_estimate",
+  "food_db",
   "unavailable",
 ] as const;
 export type EstimateSource = (typeof ESTIMATE_SOURCES)[number];
