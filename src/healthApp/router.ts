@@ -43,6 +43,19 @@ import { listMealsForDate } from "./meals.js";
 import { draftMealFromPhoto } from "./mealCards.js";
 import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
 import { loadWeeklyReview } from "./weeklyReview.js";
+import {
+  applyRazorpayEvent,
+  billingEnabled,
+  cancelRazorpaySubscription,
+  confirmInput,
+  confirmRazorpayCheckout,
+  createRazorpaySubscription,
+  limitFor,
+  loadEntitlement,
+  priceLabels,
+  razorpayConfig,
+  verifyWebhookSignature,
+} from "./billing.js";
 import { getUsualMeals, repeatUsualMeal } from "./frequentMeals.js";
 import { photoMealInput } from "./photoMeal.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
@@ -127,12 +140,38 @@ function fromResult(r: { ok: boolean; error?: string }): { status: number; body:
 const TRAINING_CACHE_MS = 10 * 60_000;
 const trainingCache = new Map<string, { at: number; body: unknown }>();
 
+/** Today's cap for an AI route: the free plan's allowance, or the normal cap. */
+async function allowUse(ctx: { userProfileId: string; timezone: string }, action: "chat" | "photo"): Promise<true | "daily_limit" | "free_limit"> {
+  const ent = billingEnabled() ? await loadEntitlement(ctx.userProfileId) : null;
+  const limit = ent ? limitFor(ent.tier, action) : undefined;
+  if (takeUse(ctx.userProfileId, action, localDateKey(new Date(), ctx.timezone), process.env, limit)) return true;
+  return limit !== undefined ? "free_limit" : "daily_limit";
+}
+
 export function createHealthAppRouter(): express.Router {
   const router = express.Router();
 
   /** What the sign-in screen needs before there is a session. */
   router.get("/config", (_req, res) => {
     res.json({ auth: publicAuthConfig() });
+  });
+
+  /** Razorpay subscription webhooks (raw body, signed with the webhook secret). */
+  router.post("/billing/razorpay/webhook", async (req, res) => {
+    const cfg = razorpayConfig();
+    const signature = req.get("x-razorpay-signature") ?? "";
+    const raw = Buffer.isBuffer(req.body) ? req.body : null;
+    if (!cfg?.webhookSecret || !raw || !verifyWebhookSignature(raw, signature, cfg.webhookSecret)) {
+      res.status(400).json({ error: "invalid_signature" });
+      return;
+    }
+    try {
+      const result = await applyRazorpayEvent(JSON.parse(raw.toString("utf8")), cfg);
+      res.json({ ok: true, result });
+    } catch (err) {
+      logger.error({ err: (err as Error).message }, "razorpay webhook failed");
+      res.status(500).json({ error: "webhook_failed" });
+    }
   });
 
   router.use(async (req, res, next) => {
@@ -319,9 +358,8 @@ export function createHealthAppRouter(): express.Router {
     "/chat",
     route("chat", async (ctx, req) => {
       const { text } = chatInput.parse(req.body);
-      if (!takeUse(ctx.userProfileId, "chat", localDateKey(new Date(), ctx.timezone))) {
-        return { status: 429, body: { error: "daily_limit" } };
-      }
+      const allowed = await allowUse(ctx, "chat");
+      if (allowed !== true) return { status: 429, body: { error: allowed } };
       return { body: await runHealthChat(ctx, text) };
     }),
   );
@@ -338,9 +376,8 @@ export function createHealthAppRouter(): express.Router {
     "/meals/photo",
     route("meal-photo", async (ctx, req) => {
       const input = photoMealInput.parse(req.body);
-      if (!takeUse(ctx.userProfileId, "photo", localDateKey(new Date(), ctx.timezone))) {
-        return { status: 429, body: { ok: false, error: "daily_limit" } };
-      }
+      const allowed = await allowUse(ctx, "photo");
+      if (allowed !== true) return { status: 429, body: { ok: false, error: allowed } };
       const r = await draftMealFromPhoto(ctx, input);
       return { status: r.ok ? 200 : 400, body: r };
     }),
@@ -426,6 +463,54 @@ export function createHealthAppRouter(): express.Router {
     route("targets", async (ctx, req) =>
       fromResult(await setTargets(ctx, targetsInput.parse(req.body))),
     ),
+  );
+
+  /** Plan, trial and what can be bought. */
+  router.get(
+    "/billing",
+    route("billing", async (ctx) => {
+      const cfg = razorpayConfig();
+      return {
+        body: {
+          enabled: billingEnabled(),
+          entitlement: await loadEntitlement(ctx.userProfileId),
+          prices: priceLabels(),
+          razorpay: cfg ? { keyId: cfg.keyId } : null,
+          freeLimits: { chat: limitFor("free", "chat", { ...process.env, MAGNUS_BILLING: "on" }), photo: limitFor("free", "photo", { ...process.env, MAGNUS_BILLING: "on" }) },
+        },
+      };
+    }),
+  );
+
+  router.post(
+    "/billing/razorpay/subscribe",
+    route("billing-subscribe", async (ctx, req) => {
+      const { plan } = z.object({ plan: z.enum(["monthly", "yearly"]) }).parse(req.body);
+      const cfg = razorpayConfig();
+      if (!cfg) return { status: 503, body: { ok: false, error: "billing_unavailable" } };
+      const r = await createRazorpaySubscription(ctx.userProfileId, plan, cfg);
+      return { status: r.ok ? 200 : 502, body: r };
+    }),
+  );
+
+  router.post(
+    "/billing/razorpay/confirm",
+    route("billing-confirm", async (ctx, req) => {
+      const cfg = razorpayConfig();
+      if (!cfg) return { status: 503, body: { ok: false, error: "billing_unavailable" } };
+      const r = await confirmRazorpayCheckout(ctx.userProfileId, confirmInput.parse(req.body), cfg);
+      return { status: r.ok ? 200 : 400, body: r };
+    }),
+  );
+
+  router.post(
+    "/billing/cancel",
+    route("billing-cancel", async (ctx) => {
+      const cfg = razorpayConfig();
+      if (!cfg) return { status: 503, body: { ok: false, error: "billing_unavailable" } };
+      const r = await cancelRazorpaySubscription(ctx.userProfileId, cfg);
+      return { status: r.ok ? 200 : 400, body: r };
+    }),
   );
 
   /** The last 7 days vs targets and goal, compared with the week before, and next week's focus. */

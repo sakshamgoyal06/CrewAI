@@ -40,6 +40,8 @@ export function startHealthServer(): Promise<HealthServer> {
   // Meal photos arrive as base64 JPEG, resized on the phone to ~1280 px (usually under 400 KB).
   app.use("/api/health/meals/photo", express.json({ limit: "8mb" }));
   app.use("/api/health/events", express.json({ limit: "128kb" }));
+  // Razorpay signs the exact bytes, so the webhook needs the raw body.
+  app.use("/api/health/billing/razorpay/webhook", express.raw({ type: "*/*", limit: "256kb" }));
   app.use(express.json({ limit: "32kb" }));
 
   app.get("/health", (_req, res) => {

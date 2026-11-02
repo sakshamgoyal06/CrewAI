@@ -17,9 +17,18 @@ export function dailyLimit(action: LimitedAction, env: NodeJS.ProcessEnv = proce
   return Number.isFinite(n) && n >= 0 ? n : DEFAULTS[action];
 }
 
-/** Counts one use; false when today's cap is already reached. `day` is the person's local date. */
-export function takeUse(userProfileId: string, action: LimitedAction, day: string, env: NodeJS.ProcessEnv = process.env): boolean {
-  const limit = dailyLimit(action, env);
+/**
+ * Counts one use; false when today's cap is already reached. `day` is the person's local date.
+ * `limit` overrides the env cap (the free plan's smaller allowance).
+ */
+export function takeUse(
+  userProfileId: string,
+  action: LimitedAction,
+  day: string,
+  env: NodeJS.ProcessEnv = process.env,
+  limitOverride?: number,
+): boolean {
+  const limit = limitOverride ?? dailyLimit(action, env);
   if (limit === 0) return true;
   // Keep only the newest day's counters; older ones can't matter any more.
   if (day > countsDay) {

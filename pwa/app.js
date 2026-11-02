@@ -112,6 +112,9 @@ function friendlyError(code) {
     owner_account: "The owner account can't be deleted from the app.",
     barcode_not_found: "That barcode isn't in the food database yet. Type what it was instead, or snap a photo of the label.",
     barcode_lookup_failed: "Couldn't reach the food database just now. Try again in a minute, or type what you had.",
+    free_limit: "That's today's free allowance. Upgrade to Pro in Settings for unlimited coaching, or log from the tracker.",
+    billing_unavailable: "Payments aren't available right now. Try again later.",
+    invalid_signature: "The payment couldn't be verified. If you were charged, it will show up within a few minutes.",
     daily_limit: "You've hit today's limit for the coach. Log from the tracker, or try again tomorrow.",
     hevy_key_invalid: "Hevy didn't accept that key. Copy it again from hevy.com → Settings → Developer.",
   }[code] || "Something went wrong. Try again.";
@@ -1299,6 +1302,78 @@ function notificationsSection() {
 // ---------- account ----------
 
 /** Who's signed in, Hevy, the Health Connect token, and sign-out. */
+// ---------- plan & billing ----------
+
+let razorpayLoad = null;
+function loadRazorpay() {
+  razorpayLoad ??= new Promise((resolve, reject) => {
+    const s = el("script", { src: "https://checkout.razorpay.com/v1/checkout.js" });
+    s.onload = () => resolve(window.Razorpay);
+    s.onerror = () => { razorpayLoad = null; reject(new Error("Couldn't load the payment screen. Check your connection.")); };
+    document.head.append(s);
+  });
+  return razorpayLoad;
+}
+
+async function upgrade(planId) {
+  const [Razorpay, sub] = await Promise.all([
+    loadRazorpay(),
+    api("/billing/razorpay/subscribe", { method: "POST", body: JSON.stringify({ plan: planId }) }),
+  ]);
+  await new Promise((resolve, reject) => {
+    const rzp = new Razorpay({
+      key: sub.keyId,
+      subscription_id: sub.subscriptionId,
+      name: "Magnus Pro",
+      description: planId === "yearly" ? "Yearly plan" : "Monthly plan",
+      theme: { color: "#d9b26f" },
+      handler: async (resp) => {
+        try {
+          await api("/billing/razorpay/confirm", { method: "POST", body: JSON.stringify(resp) });
+          toast("Welcome to Magnus Pro.");
+          resolve();
+        } catch (err) { reject(err); }
+      },
+      modal: { ondismiss: () => resolve() },
+    });
+    rzp.on("payment.failed", (e) => reject(new Error(e?.error?.description || "The payment didn't go through.")));
+    rzp.open();
+  });
+}
+
+function planSection(box) {
+  const daysLeft = (iso) => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 86_400_000));
+  async function paint() {
+    let b;
+    try { b = await api("/billing"); } catch { box.replaceChildren(); return; }
+    if (!b.enabled) { box.replaceChildren(); return; }
+    const e = b.entitlement;
+    const buy = (planId) => el("button", { class: planId === "yearly" ? "btn primary block" : "btn block", type: "button", onclick: async (ev) => {
+      ev.target.disabled = true;
+      try { await upgrade(planId); paint(); } catch (err) { toast(err.message); }
+      ev.target.disabled = false;
+    } }, planId === "yearly" ? `Yearly · ${b.prices.yearly}` : `Monthly · ${b.prices.monthly}`);
+    const rows = [el("p", { class: "section-label" }, "Plan")];
+    if (e.tier === "pro") {
+      const until = e.periodEndsAt ? new Date(e.periodEndsAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : null;
+      rows.push(el("p", { class: "hint" }, e.status === "cancelled" && until ? `Magnus Pro until ${until}. It won't renew.` : until ? `Magnus Pro. Renews ${until}.` : "Magnus Pro."));
+      if (e.provider === "razorpay" && e.status === "active") {
+        rows.push(el("button", { class: "link danger", type: "button", onclick: async () => {
+          if (!confirm("Cancel Magnus Pro? You keep it until the end of the period you paid for.")) return;
+          try { await api("/billing/cancel", { method: "POST" }); toast("Cancelled. Pro stays on until the period ends."); paint(); } catch (err) { toast(err.message); }
+        } }, "Cancel subscription"));
+      }
+    } else {
+      rows.push(el("p", { class: "hint" }, e.tier === "trial"
+        ? `Free trial: ${daysLeft(e.trialEndsAt)} days left of everything. After it, the free plan has ${b.freeLimits.chat} coach messages and ${b.freeLimits.photo} meal photo a day.`
+        : `Free plan: ${b.freeLimits.chat} coach messages and ${b.freeLimits.photo} meal photo a day. Pro has no daily limit worth worrying about, plus the weekly review and adaptive targets.`));
+      if (b.razorpay) rows.push(buy("yearly"), buy("monthly"));
+    }
+    box.replaceChildren(...rows);
+  }
+  paint();
+}
+
 function accountSection() {
   const wrap = el("div", { class: "stack" }, el("p", { class: "section-label" }, "Account"));
   const who = el("p", { class: "hint" }, "Loading…");
@@ -1322,7 +1397,9 @@ function accountSection() {
       endSession("Your account and data were deleted.");
     } catch (err) { toast(err.message); }
   } }, "Delete account");
-  wrap.append(who, el("p", { class: "section-label" }, "Hevy"), hevy, el("p", { class: "section-label" }, "Health Connect"), hc,
+  const plan = el("div", { class: "stack" });
+  planSection(plan);
+  wrap.append(who, plan, el("p", { class: "section-label" }, "Hevy"), hevy, el("p", { class: "section-label" }, "Health Connect"), hc,
     el("p", { class: "section-label" }, "Your data"), el("p", { class: "hint" }, "Your data is yours: download all of it, or delete it for good."), el("div", { class: "row-between" }, download, remove), out);
 
   function paintHevy(connected) {
