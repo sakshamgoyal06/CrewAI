@@ -30,6 +30,7 @@ import { loadChatHistory, runHealthChat } from "./chat.js";
 import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
 import { listMealsForDate } from "./meals.js";
 import { draftMealFromPhoto } from "./mealCards.js";
+import { getUsualMeals, repeatUsualMeal } from "./frequentMeals.js";
 import { photoMealInput } from "./photoMeal.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
 import { applyProposal, cardFromRow, discardProposal, getProposals } from "./hevyProposals.js";
@@ -228,6 +229,22 @@ export function createHealthAppRouter(): express.Router {
     route("meal-photo", async (ctx, req) => {
       const r = await draftMealFromPhoto(ctx, photoMealInput.parse(req.body));
       return { status: r.ok ? 200 : 400, body: r };
+    }),
+  );
+
+  /** Meals logged again and again, best match for the time of day first. */
+  router.get(
+    "/meals/usual",
+    route("meals-usual", async (ctx) => ({ body: await getUsualMeals(ctx) })),
+  );
+
+  /** One tap on a usual meal → a fresh draft card in the chat, to confirm. */
+  router.post(
+    "/meals/repeat",
+    route("meal-repeat", async (ctx, req) => {
+      const { key } = z.object({ key: z.string().trim().min(1).max(500) }).parse(req.body);
+      const r = await repeatUsualMeal(ctx, key);
+      return { status: r.ok ? 200 : 404, body: r };
     }),
   );
 

@@ -24,6 +24,7 @@ const state = {
 const CHAT_CACHE_KEY = "magnus-chat-cache";
 const SNAPSHOT_CACHE_KEY = "magnus-snapshot-cache";
 const HISTORY_CACHE_KEY = "magnus-history-cache";
+const USUAL_CACHE_KEY = "magnus-usual-meals";
 
 // ---------- API ----------
 
@@ -52,6 +53,7 @@ async function api(path, options = {}) {
   }
   if (res.status === 401) {
     store.set(TOKEN_KEY, null);
+    store.set(USUAL_CACHE_KEY, null);
     store.set(CHAT_CACHE_KEY, null);
     store.set(SNAPSHOT_CACHE_KEY, null);
     store.set(HISTORY_CACHE_KEY, null);
@@ -79,6 +81,7 @@ function friendlyError(code) {
     push_not_configured: "Push isn't set up on the server yet (VAPID keys).",
     no_devices: "This device isn't subscribed yet.",
     not_enough_data: "Not enough logged days yet to find a pattern.",
+    meal_not_found: "That meal isn't in your usual list any more.",
     not_food: "I don't see a meal in that photo. Try a clearer shot of the plate, or type what you ate.",
     unreadable: "I couldn't read that photo. Try again, or type what you ate.",
   }[code] || "Something went wrong. Try again.";
@@ -175,9 +178,38 @@ async function refresh() {
     state.snapshot = await api("/today");
     renderSnapshot(state.snapshot);
     store.set(SNAPSHOT_CACHE_KEY, state.snapshot);
+    loadUsual();
   } catch (err) {
     toast(err.message);
   }
+}
+
+// ---------- usual meals ----------
+
+/** Meals logged again and again; the chat chips and the meal sheet offer them as one tap. */
+async function loadUsual() {
+  try {
+    const r = await api("/meals/usual");
+    state.usual = r.meals || [];
+    store.set(USUAL_CACHE_KEY, state.usual);
+    renderChips(state.snapshot);
+  } catch { /* chips just stay as they were */ }
+}
+
+const short = (t, n = 24) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
+
+function repeatMeal(m) {
+  return coachTurn(
+    () => addMessage("user", `Usual: ${m.text}`),
+    () => api("/meals/repeat", { method: "POST", body: JSON.stringify({ key: m.key }) }),
+  );
+}
+
+/** A usual meal as a local draft (for the meal sheet): same items, fresh id, confirm as usual. */
+function usualDraft(m) {
+  const h = new Date().getHours();
+  const slot = m.slot === "snack" ? "snack" : h < 11 ? "breakfast" : h < 16 ? "lunch" : h < 18 ? "snack" : "dinner";
+  return { draftId: crypto.randomUUID(), text: m.text, slot, source: m.source, items: m.items.map((i) => ({ ...i })), totals: m.totals, estimated: true, servingAssumption: null };
 }
 
 function renderSnapshot(s) {
@@ -774,7 +806,11 @@ function renderChips(s) {
     ["How am I doing?", "How am I doing this week?"],
     !s?.goal ? ["Set my goal", "I want to reach "] : ["Why am I off track?", "Why am I off track this week, and what should I change?"],
   ].filter(Boolean);
+  // The two best usual meals for this time of day lead, as one-tap repeats.
+  const usual = (state.usual || []).slice(0, 2).map((m) =>
+    el("button", { class: "chip usual", type: "button", title: m.text, onclick: () => repeatMeal(m) }, `↻ ${short(m.text)}`));
   $("chips").replaceChildren(
+    ...usual,
     ...chips.map(([label, text]) =>
       el("button", { class: "chip", type: "button", onclick: () => {
         // Questions send straight away (no keyboard pop-up); the rest pre-fill for the person to finish.
@@ -1514,6 +1550,17 @@ const SHEETS = {
       form.hidden = true;
       holder.replaceChildren(mealDraftCard(draft, { onDone: () => setTimeout(closeSheet, 700) }));
     }) },
+      (state.usual || []).length
+        ? el("div", { class: "usual-list" },
+            el("p", { class: "section-label" }, "Your usual"),
+            ...state.usual.slice(0, 5).map((m) =>
+              el("button", { class: "usual-row", type: "button", onclick: () => {
+                form.hidden = true;
+                holder.replaceChildren(mealDraftCard(usualDraft(m), { onDone: () => setTimeout(closeSheet, 700) }));
+              } },
+                el("span", {}, m.text),
+                el("small", {}, `${fmt(m.totals.calories)} kcal · ${m.count}×`))))
+        : null,
       el("textarea", { class: "field", name: "text", rows: "3", required: true, placeholder: "e.g. 2 rotis, a bowl of dal, 100 g paneer bhurji", minlength: "2" }),
       el("button", { class: "btn primary block", type: "submit" }, "Estimate"),
       el("p", { class: "hint" }, "You'll see the estimate and can fix any line before it's logged."),
@@ -1678,6 +1725,8 @@ function start() {
     try { state.snapshot = cachedSnap; renderSnapshot(cachedSnap); } catch { state.snapshot = null; }
   }
   if (state.history) { try { renderDays(); } catch { state.history = null; } }
+  const cachedUsual = store.get(USUAL_CACHE_KEY, null);
+  if (Array.isArray(cachedUsual)) { state.usual = cachedUsual; renderChips(state.snapshot); }
   loadHistory();
   refresh();
   flushQueue();

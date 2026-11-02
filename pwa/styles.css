@@ -153,6 +153,14 @@ svg { display: block; }
   flex: none; padding: 8px 13px; border-radius: 999px; font-size: 0.88rem;
   background: transparent; border: 1px solid var(--hair-strong); color: var(--text);
 }
+.chip.usual { border-color: color-mix(in srgb, var(--accent) 45%, var(--hair-strong)); color: var(--accent); }
+.usual-list { display: flex; flex-direction: column; gap: 6px; }
+.usual-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; text-align: left;
+  padding: 11px 14px; border-radius: 14px; background: var(--raised); border: 1px solid var(--hair); color: var(--text);
+}
+.usual-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usual-row small { flex: none; color: var(--muted); }
 .composer {
   display: flex; align-items: flex-end; gap: 8px; padding: 6px;
   background: var(--surface); border: 1px solid var(--hair-strong); border-radius: 26px; box-shadow: var(--shadow);
