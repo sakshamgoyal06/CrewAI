@@ -7,6 +7,8 @@ import { z } from "zod";
 
 import { localDateKey } from "../nutrition/localDate.js";
 import type { ActionContext } from "./actions.js";
+import { trainingActivity } from "./activities.js";
+import { FALLBACK_WEIGHT_KG, getActivities, latestWeightKg, loadTrainingContext } from "./activityLog.js";
 import { formatTime, zonedInstant, type GymSlot } from "./gymSlot.js";
 import { loadHealthProfile, loadRecentWorkouts, weekdayOfDate, type WorkoutSummary } from "./snapshot.js";
 import { analyzeTraining, hevyKey, loadWorkoutHistory, workoutReview } from "./training.js";
@@ -78,7 +80,18 @@ type Deps = {
   postMessage: typeof postCoachMessage;
   /** Post-workout note (new bests, stalled lifts) for a workout the check found, or null. */
   review: (userProfileId: string, timezone: string, now: Date, workout: WorkoutSummary) => Promise<string | null>;
+  /** A sport logged that day that stands in for the workout ("Football · 60 min"), or null. */
+  sportOn?: (userProfileId: string, timezone: string, date: string) => Promise<string | null>;
 };
+
+async function sportFromActivities(userProfileId: string, timezone: string, date: string): Promise<string | null> {
+  const acts = await getActivities(userProfileId, date, date);
+  if (!acts.length) return null;
+  const kg = (await latestWeightKg(userProfileId)) ?? FALLBACK_WEIGHT_KG;
+  const ctx = await loadTrainingContext(userProfileId, timezone, date, kg);
+  const a = trainingActivity(acts, ctx.workouts, ctx.typicalBurn);
+  return a ? `${a.label} · ${a.durationMin} min` : null;
+}
 
 async function reviewFromHevy(
   userProfileId: string,
@@ -100,6 +113,7 @@ const defaultDeps: Deps = {
   insertCheck: (id, check) => insertWorkoutCheck(id, check),
   postMessage: (id, content, cards) => postCoachMessage(id, content, cards),
   review: reviewFromHevy,
+  sportOn: sportFromActivities,
 };
 
 /** Runs any due checks once. Safe to call repeatedly: each day is checked at most once. */
@@ -124,13 +138,15 @@ export async function runWorkoutChecks(
   const results: Array<{ date: string; status: WorkoutCheckStatus }> = [];
   for (const { date } of pending) {
     const workout = workoutOn(hevy.workouts, date);
-    const status: WorkoutCheckStatus = workout ? "found" : "missing";
+    // A sport that burned like a gym session already covers the day; no need to ask.
+    const sport = workout ? null : await deps.sportOn?.(userProfileId, timezone, date).catch(() => null) ?? null;
+    const status: WorkoutCheckStatus = workout || sport ? "found" : "missing";
     const inserted = await deps.insertCheck(userProfileId, {
       localDate: date,
       gymTime: gym.time!,
       status,
       hevyWorkoutId: workout?.id ?? null,
-      reason: null,
+      reason: sport,
     });
     if (!inserted) continue;
     results.push({ date, status });

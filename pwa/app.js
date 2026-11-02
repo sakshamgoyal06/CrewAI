@@ -37,7 +37,7 @@ const ONBOARDED_KEY = "magnus-onboarded";
 
 // Logs that are safe to replay (each is an upsert or idempotent) wait here when the phone is offline.
 const QUEUE_KEY = "magnus-offline-queue";
-const QUEUEABLE = [/^\/steps$/, /^\/checkins$/, /^\/meals\/confirm$/, /^\/workout-check$/];
+const QUEUEABLE = [/^\/steps$/, /^\/checkins$/, /^\/meals\/confirm$/, /^\/workout-check$/, /^\/activities$/];
 
 async function request(path, options, force = false) {
   const token = await bearer({ force });
@@ -457,7 +457,7 @@ function snapshotDay() {
     onTrack: s.today.onTrack, score: s.today.score, checks: s.today.checks,
     calories: s.today.calories, proteinG: s.today.proteinG, carbsG: null, fatG: null,
     meals: (s.meals || []).map((m) => ({ ...m, proteinG: m.proteinG, carbsG: null, fatG: null, items: [] })).reverse(),
-    steps: s.today.steps, walkMinutes: s.today.walkMinutes, burn: null, workouts: [], trainedUnlogged: false, partial: true,
+    steps: s.today.steps, walkMinutes: s.today.walkMinutes, burn: null, workouts: [], activities: [], sportCounted: null, trainedUnlogged: false, partial: true,
   };
 }
 
@@ -589,9 +589,11 @@ function renderMove(d, t, isToday) {
   $("move-tiles").replaceChildren(
     tile("Steps", fmt(d.steps), null, `of ${fmt(stepT)}`, d.steps / stepT),
     tile("Burned", d.burn ? fmt(d.burn.kcal) : "–", d.burn ? "kcal" : null, d.burn ? (d.burn.source === "estimate" ? "estimated" : "from phone") : "no data yet", null),
-    tile("Workout", d.workouts.length ? fmt(mins) : d.trainedUnlogged ? "✓" : "–", d.workouts.length ? "min" : null,
-      d.workouts.length ? `${fmt(d.workouts.reduce((a, w) => a + w.volumeKg, 0))} kg lifted` : d.trainedUnlogged ? "not in Hevy" : d.isTrainingDay ? "none logged" : "rest", null),
+    tile("Workout", d.workouts.length ? fmt(mins) : d.trainedUnlogged || d.sportCounted ? "✓" : "–", d.workouts.length ? "min" : null,
+      d.workouts.length ? `${fmt(d.workouts.reduce((a, w) => a + w.volumeKg, 0))} kg lifted` : d.trainedUnlogged ? "not in Hevy" : d.sportCounted ? d.sportCounted.split(" · ")[0] : d.isTrainingDay ? "none logged" : "rest", null),
   );
+  renderBurnBreakdown(d);
+  renderActivities(d);
   const rows = d.workouts.map((w) =>
     expander(`w:${w.id || w.startTime}`,
       [
@@ -617,9 +619,64 @@ function renderMove(d, t, isToday) {
           hevy === "not_connected" ? "Hevy isn't connected for this account."
           : hevy === "unavailable" ? "Couldn't reach Hevy just now."
           : d.trainedUnlogged ? "You trained but didn't log it in Hevy."
+          : d.sportCounted ? `No gym today. ${d.sportCounted.split(" · ")[0]} counted as training.`
           : d.partial ? "Loading workouts…"
           : "No workout logged.")]),
   );
+}
+
+/** Steps + gym + each activity, so the Burned number explains itself. */
+function renderBurnBreakdown(d) {
+  const box = $("burn-breakdown");
+  const b = d.burn;
+  if (!b || (!b.activities?.length && b.source !== "estimate")) { box.hidden = true; return; }
+  const parts = [];
+  if (b.source === "health_connect") parts.push(["Phone", b.kcal - (b.activityKcal || 0)]);
+  else {
+    if (b.stepsKcal) parts.push(["Steps", b.stepsKcal]);
+    if (b.workoutKcal) parts.push(["Gym", b.workoutKcal]);
+  }
+  for (const l of b.activities || []) if (l.counted) parts.push([l.label, b.source === "health_connect" ? null : l.kcal]);
+  if (b.source === "health_connect" && b.activityKcal) parts.push(["not seen by phone", b.activityKcal]);
+  const shown = parts.filter(([, v]) => v !== 0);
+  if (shown.length < 2) { box.hidden = true; return; }
+  box.hidden = false;
+  box.replaceChildren(...shown.flatMap(([k, v], i) => [i ? " · " : "", `${k} `, v == null ? "" : el("b", {}, fmt(v))]), ` = ${fmt(b.kcal)} kcal`);
+}
+
+const ACT_SRC = { health_connect: "Health Connect", chat: "chat", quick_add: "added" };
+
+function renderActivities(d) {
+  const list = d.activities || [];
+  $("activities").replaceChildren(...list.map((a) =>
+    expander(`act:${a.id}`,
+      [
+        el("span", { class: "main" },
+          el("span", { class: "title" }, a.label, a.source === "health_connect" ? el("span", { class: "tag-src" }, "from phone") : null),
+          el("span", { class: "sub" }, [a.startTime ? timeOf(a.startTime) : null, `${a.durationMin} min`, a.intensity !== "moderate" ? a.intensity : null, a.distanceM ? `${fmt(a.distanceM / 1000, 1)} km` : null].filter(Boolean).join(" · ")),
+        ),
+        el("span", { class: "right" }, el("b", {}, a.counted ? fmt(a.kcal) : "–"), el("small", {}, " kcal")),
+      ],
+      () => [
+        el("p", { class: "hint" },
+          !a.counted
+            ? a.why === "duplicate_hevy" ? "Same session as your Hevy workout, so it isn't counted twice." : "Health Connect already has this session, so it isn't counted twice."
+            : a.kcalSource === "device" ? "Calories from your phone or watch." : a.kcalSource === "user" ? "Calories you entered." : "Estimated from the activity, how long and how hard, and your weight.",
+          d.sportCounted && d.sportCounted.startsWith(a.label) ? " Counted as the day's training." : ""),
+        el("div", { class: "row-actions" },
+          el("button", { class: "link danger", type: "button", onclick: () => deleteActivity(a) }, "Remove")),
+      ])));
+  $("activities").querySelectorAll("li.row").forEach((li, i) => { if (list[i] && !list[i].counted) li.classList.add("not-counted"); });
+}
+
+async function deleteActivity(a) {
+  try {
+    await api(`/activities/${a.id}`, { method: "DELETE" });
+    toast(`Removed ${a.label.toLowerCase()}.`);
+    refresh();
+  } catch (err) {
+    toast(err.message);
+  }
 }
 
 function setLabel(st) {
@@ -676,11 +733,11 @@ const TREND = {
     estimated: (d) => d.burn?.source === "estimate",
     summary(days) {
       const withBurn = days.filter((d) => d.burn);
-      if (!withBurn.length) return ["Nothing to show yet.", "Burn comes from steps and workouts."];
+      if (!withBurn.length) return ["Nothing to show yet.", "Burn comes from steps, workouts and activities."];
       const avg = withBurn.reduce((a, d) => a + d.burn.kcal, 0) / withBurn.length;
       return [`${fmt(avg)} kcal`, "active calories, daily average"];
     },
-    tip: (d) => (d.burn ? [`${fmt(d.burn.kcal)} kcal`, d.burn.source === "estimate" ? `est. · steps ${fmt(d.burn.stepsKcal)} + gym ${fmt(d.burn.workoutKcal)}` : "Health Connect"] : ["No data"]),
+    tip: (d) => (d.burn ? [`${fmt(d.burn.kcal)} kcal`, d.burn.source === "estimate" ? `est. · steps ${fmt(d.burn.stepsKcal)} + gym ${fmt(d.burn.workoutKcal)}${d.burn.activityKcal ? ` + sport ${fmt(d.burn.activityKcal)}` : ""}` : `Health Connect${d.burn.activityKcal ? ` + ${fmt(d.burn.activityKcal)} logged` : ""}`] : ["No data"]),
   },
   training: {
     unit: "min",
@@ -1043,6 +1100,7 @@ function weeklyReviewView(r) {
       stat("Workouts", `${w.workouts}`, w.plannedWorkouts ? `${w.plannedWorkouts} planned` : null, null),
     ),
   ];
+  if (r.activityLine) out.push(el("p", { class: "section-label" }, "Outside the gym"), el("p", { class: "hint" }, r.activityLine));
   if (r.goal) {
     out.push(el("p", { class: "section-label" }, `Goal · ${r.goal.weeksLeft} weeks left`));
     for (const m of r.goal.metrics) {
@@ -1077,6 +1135,7 @@ function autosize() {
 
 function appendCard(c) {
   if (c.type === "meal_draft") $("thread").append(mealDraftCard(c.draft));
+  else if (c.type === "activity_draft") $("thread").append(activityDraftCard(c.draft));
   else if (c.type === "workout_check") $("thread").append(workoutCheckCard(c));
   else if (c.type === "hevy_proposal") $("thread").append(hevyProposalCard(c));
   else if (c.type === "rca") $("thread").append(rcaCard(c));
@@ -1640,6 +1699,7 @@ function workoutCheckCard(c) {
     if (cur.status !== "missing") {
       card.className = "draft done";
       const line =
+        cur.status === "found" && cur.reason ? `✓ ${cur.reason} counted as training` :
         cur.status === "found" ? "✓ Workout found in Hevy" :
         cur.status === "trained_unlogged" ? "✓ Trained, not logged in Hevy" :
         `Skipped${cur.reason ? ` · ${cur.reason}` : ""}`;
@@ -1649,30 +1709,134 @@ function workoutCheckCard(c) {
     const recheck = el("button", { class: "btn", type: "button" }, "Check Hevy again");
     const trained = el("button", { class: "btn", type: "button" }, "Trained, didn't log");
     const skipped = el("button", { class: "btn primary", type: "button" }, "Skipped");
-    const buttons = [recheck, trained, skipped];
+    const other = el("button", { class: "btn", type: "button", onclick: () => { state.activityDate = cur.date; openSheet("activity"); } }, "Did something else");
+    const buttons = [recheck, trained, skipped, other];
     recheck.addEventListener("click", () => answer({ answer: "recheck" }, buttons));
     trained.addEventListener("click", () => answer({ answer: "trained_unlogged" }, buttons));
     const reasons = el("div", { class: "reasons", hidden: true });
     skipped.addEventListener("click", () => { reasons.hidden = !reasons.hidden; });
-    const other = el("input", { class: "field", placeholder: "Other reason", maxlength: "300" });
+    const otherReason = el("input", { class: "field", placeholder: "Other reason", maxlength: "300" });
     reasons.append(
       el("p", { class: "draft-note" }, "What got in the way? This feeds the weekly review."),
       el("div", { class: "chips wrap" },
         ...SKIP_REASONS.map((r) => el("button", { class: "chip", type: "button", onclick: (e) => answer({ answer: "skipped", reason: r }, [...buttons, ...reasons.querySelectorAll("button")]) }, r))),
-      el("form", { class: "reason-other", onsubmit: (e) => { e.preventDefault(); answer({ answer: "skipped", reason: other.value.trim() || undefined }, [...buttons, ...reasons.querySelectorAll("button")]); } },
-        other, el("button", { class: "btn", type: "submit" }, "Save")),
+      el("form", { class: "reason-other", onsubmit: (e) => { e.preventDefault(); answer({ answer: "skipped", reason: otherReason.value.trim() || undefined }, [...buttons, ...reasons.querySelectorAll("button")]); } },
+        otherReason, el("button", { class: "btn", type: "submit" }, "Save")),
     );
     card.className = "draft check";
     card.replaceChildren(
       el("p", { class: "eyebrow" }, `Workout check · ${day}`),
       el("p", { class: "check-line" }, `Nothing in Hevy after your ${clock(cur.gymTime)} slot.`),
       el("div", { class: "draft-actions" }, recheck, trained),
-      el("div", { class: "draft-actions" }, skipped),
+      el("div", { class: "draft-actions" }, other, skipped),
       reasons,
     );
   }
 
   render(c);
+  return card;
+}
+
+// ---------- activity draft card ----------
+
+/** An activity's estimate: change minutes or effort and it re-estimates; Save logs it once. */
+function activityDraftCard(draft, { onDone } = {}) {
+  const status = confirmedDrafts()[draft.draftId];
+  const card = el("div", { class: "draft" });
+  const label = draft.label;
+  const finish = (st) => {
+    card.className = "draft done";
+    card.replaceChildren(st.state === "logged"
+      ? el("div", { class: "done-line" }, `✓ Saved · ${label} · ${st.durationMin ?? draft.durationMin} min · ${fmt(st.kcal)} kcal`)
+      : el("div", { class: "muted" }, `Discarded · ${label}`));
+    return card;
+  };
+  if (status) return finish(status);
+
+  let cur = { ...draft };
+  const kcal = el("div", { class: "draft-kcal" });
+  const meta = el("div", { class: "macros" });
+  const note = el("p", { class: "training-note" });
+  const mins = el("input", { class: "field", type: "number", inputmode: "numeric", min: "1", max: "1440", value: String(draft.durationMin), "aria-label": "Minutes" });
+  const seg = el("div", { class: "seg", role: "radiogroup", "aria-label": "How hard" });
+  const save = el("button", { class: "btn primary", type: "button" }, draft.duplicateOf ? "Save as separate session" : "Save");
+
+  function paint() {
+    kcal.replaceChildren(fmt(cur.kcal), el("small", {}, "kcal"));
+    meta.replaceChildren(...[
+      el("span", {}, el("b", {}, label)),
+      el("span", {}, `${cur.durationMin} min`),
+      cur.distanceM ? el("span", {}, `${fmt(cur.distanceM / 1000, 1)} km`) : null,
+      el("span", {}, cur.kcalSource === "user" ? "your number" : "estimated"),
+    ].filter(Boolean));
+    const t = cur.training || {};
+    note.hidden = !t.note && !cur.duplicateOf;
+    note.className = `training-note${t.short ? " warn" : t.countsAsTraining ? " ok" : ""}`;
+    note.textContent = cur.duplicateOf
+      ? `Health Connect already has ${cur.duplicateOf.label.toLowerCase()} that day (${cur.duplicateOf.durationMin} min, ${fmt(cur.duplicateOf.kcal)} kcal). Only save this if it was a different session.`
+      : t.note || "";
+    seg.replaceChildren(...[["easy", "Easy"], ["moderate", "Moderate"], ["hard", "Hard"]].map(([k, l]) =>
+      el("button", { type: "button", class: k === cur.intensity ? "on" : "", role: "radio", "aria-checked": String(k === cur.intensity), onclick: () => { cur.intensity = k; reestimate(); } }, l)));
+  }
+
+  let timer = null;
+  function reestimate() {
+    paint();
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      try {
+        const r = await api("/activities/draft", { method: "POST", body: JSON.stringify({
+          activity: cur.key === "other" ? label : cur.key, durationMin: cur.durationMin, intensity: cur.intensity,
+          distanceKm: cur.distanceM ? cur.distanceM / 1000 : undefined, kcal: cur.kcalSource === "user" ? cur.kcal : undefined,
+          date: cur.date, source: cur.source,
+        }) });
+        cur = { ...cur, kcal: r.kcal, met: r.met, training: r.training, duplicateOf: r.duplicateOf };
+        paint();
+      } catch { /* keep the last estimate */ }
+    }, 300);
+  }
+  mins.addEventListener("input", () => {
+    const v = parseInt(mins.value, 10);
+    if (v >= 1 && v <= 1440) { cur.durationMin = v; reestimate(); }
+  });
+
+  save.addEventListener("click", async () => {
+    save.disabled = true;
+    save.textContent = "Saving…";
+    try {
+      const r = await api("/activities", { method: "POST", body: JSON.stringify({
+        draftId: draft.draftId, date: cur.date, startTime: cur.startTime, durationMin: cur.durationMin, key: cur.key, label,
+        intensity: cur.intensity, distanceM: cur.distanceM, kcal: cur.kcalSource === "user" ? cur.kcal : undefined,
+        kcalSource: cur.kcalSource === "user" ? "user" : "estimate", source: cur.source, separateSession: Boolean(cur.duplicateOf),
+      }) });
+      const done = { state: "logged", kcal: r.activity?.kcal ?? cur.kcal, durationMin: cur.durationMin };
+      markDraft(draft.draftId, done);
+      finish(done);
+      toast(r.alreadySaved ? "Already saved." : `Saved ${fmt(done.kcal)} kcal burned.`);
+      refresh();
+      if (r.training?.note && cur.source !== "chat") setTimeout(loadHistory, 600);
+      onDone?.();
+    } catch (err) {
+      save.disabled = false;
+      save.textContent = "Save";
+      toast(err.message);
+    }
+  });
+  const discard = el("button", { class: "btn", type: "button", onclick: () => { markDraft(draft.draftId, { state: "discarded" }); finish({ state: "discarded" }); onDone?.(); } }, "Discard");
+
+  card.append(
+    el("p", { class: "eyebrow" }, `Activity · ${draft.date === todayKey() ? "today" : shortDate(draft.date)} · check and save`),
+    kcal, meta,
+    el("div", { class: "stepper" },
+      el("button", { type: "button", "aria-label": "5 minutes less", onclick: () => { cur.durationMin = Math.max(5, cur.durationMin - 5); mins.value = String(cur.durationMin); reestimate(); } }, "−"),
+      mins,
+      el("button", { type: "button", "aria-label": "5 minutes more", onclick: () => { cur.durationMin = Math.min(1440, cur.durationMin + 5); mins.value = String(cur.durationMin); reestimate(); } }, "+"),
+      el("small", { class: "muted" }, "min")),
+    seg,
+    note,
+    el("div", { class: "draft-actions" }, discard, save),
+  );
+  paint();
   return card;
 }
 
@@ -1807,7 +1971,7 @@ function openSheet(kind) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", quick: "Quick add", scan: "Scan a packet", review: "Your week" };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", quick: "Quick add", scan: "Scan a packet", review: "Your week" };
   $("sheet-title").textContent = titles[kind];
   body.replaceChildren(SHEETS[kind]());
   $("sheet").hidden = false;
@@ -1827,9 +1991,65 @@ function submitter(fn) {
 const num = (v) => (v === "" || v == null ? undefined : Number(v));
 
 const SHEETS = {
+  activity() {
+    const date = state.activityDate || null;
+    state.activityDate = null;
+    const holder = el("div");
+    const pick = el("select", { class: "field activity-pick", name: "activity", required: true },
+      el("option", { value: "" }, "Loading…"));
+    const mins = el("input", { class: "field", name: "mins", type: "number", inputmode: "numeric", min: "1", max: "1440", value: "45", required: true });
+    let intensity = "moderate";
+    const seg = el("div", { class: "seg", role: "radiogroup", "aria-label": "How hard" });
+    const paintSeg = () => seg.replaceChildren(...[["easy", "Easy"], ["moderate", "Moderate"], ["hard", "Hard"]].map(([k, l]) =>
+      el("button", { type: "button", class: k === intensity ? "on" : "", role: "radio", "aria-checked": String(k === intensity), onclick: () => { intensity = k; paintSeg(); } }, l)));
+    paintSeg();
+    const step = (d) => { mins.value = String(Math.max(5, (parseInt(mins.value, 10) || 0) + d)); };
+    const recent = el("div", { class: "chips wrap" });
+    const form = el("form", { class: "stack", onsubmit: submitter(async (fd) => {
+      const body = {
+        activity: fd.get("activity"),
+        durationMin: num(fd.get("mins")),
+        intensity,
+        distanceKm: num(fd.get("km")),
+        kcal: num(fd.get("kcal")),
+        date: date || undefined,
+        source: "quick_add",
+      };
+      const draft = await api("/activities/draft", { method: "POST", body: JSON.stringify(body) });
+      form.hidden = true;
+      holder.replaceChildren(activityDraftCard(draft, { onDone: () => setTimeout(closeSheet, 700) }));
+    }) },
+      date ? el("p", { class: "hint" }, `For ${shortDate(date)}`) : null,
+      recent,
+      el("label", {}, "Activity", pick),
+      el("label", {}, "Minutes",
+        el("div", { class: "stepper" },
+          el("button", { type: "button", "aria-label": "5 minutes less", onclick: () => step(-5) }, "−"),
+          mins,
+          el("button", { type: "button", "aria-label": "5 minutes more", onclick: () => step(5) }, "+"))),
+      el("label", {}, "How hard", seg),
+      el("div", { class: "grid2" },
+        el("label", {}, "Distance km (optional)", el("input", { class: "field", name: "km", type: "number", step: "0.1", min: "0", inputmode: "decimal" })),
+        el("label", {}, "Watch kcal (optional)", el("input", { class: "field", name: "kcal", type: "number", min: "0", inputmode: "numeric" }))),
+      el("button", { class: "btn primary block", type: "submit" }, "Estimate"),
+      el("p", { class: "hint" }, "Burn shows on the tracker. Your calorie target stays the same: it already allows for your usual activity."),
+    );
+    api("/activities/catalog").then((c) => {
+      pick.replaceChildren(el("option", { value: "" }, "Choose…"), ...c.activities.map((a) => el("option", { value: a.key }, a.label)));
+      recent.replaceChildren(...c.recent.map((r) => el("button", { class: "chip usual", type: "button", onclick: () => {
+        pick.value = r.key === "other" ? "" : r.key;
+        if (r.key === "other") { pick.append(el("option", { value: r.label, selected: true }, r.label)); }
+        mins.value = String(r.durationMin);
+        intensity = r.intensity;
+        paintSeg();
+      } }, `${r.label} · ${r.durationMin} min`)));
+    }).catch((err) => toast(err.message));
+    return el("div", {}, form, holder);
+  },
+
   quick() {
     return el("div", { class: "quick-row two" },
-      ...[["meal", "Meal"], ["steps", "Steps"], ["checkin", "Weigh-in"]].map(([k, l]) =>
+      ...[["meal", "Meal"], ["activity", "Activity"], ["steps", "Steps"], ["checkin", "Weigh-in"]].map(([k, l]) =>
         el("button", { class: "quick", type: "button", onclick: () => openSheet(k) }, el("span", {}, l))),
       el("button", { class: "quick", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, el("span", {}, "Photo")),
       el("button", { class: "quick", type: "button", onclick: () => openSheet("scan") }, el("span", {}, "Barcode")));

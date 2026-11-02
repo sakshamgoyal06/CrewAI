@@ -11,6 +11,7 @@ import { z } from "zod";
 import { logger } from "../logger.js";
 import { localDateKey } from "../nutrition/localDate.js";
 import { supabase } from "../tools/clients.js";
+import { syncHealthConnectActivities } from "./activityLog.js";
 import { upsertDailyActivity } from "./activityStore.js";
 import type { ActionContext } from "./actions.js";
 
@@ -172,6 +173,14 @@ export async function ingestHealthConnect(
       .from("health_activity_samples")
       .upsert(toRows(calories), { onConflict: "user_profile_id,kind,start_time" });
     if (error) logger.warn({ err: error.message }, "health connect: active calories not stored");
+  }
+
+  // Swims, runs, sports... recorded by the phone or a watch become activities in the tracker.
+  const sessions = samples.filter((s) => s.kind === "exercise" && s.localDate <= today);
+  if (sessions.length) {
+    await syncHealthConnectActivities(ctx, sessions).catch((err) =>
+      logger.warn({ err: err instanceof Error ? err.message : String(err) }, "health connect: activity sync failed"),
+    );
   }
 
   const dates = [...new Set(samples.map((s) => s.localDate))].filter((d) => d <= today).sort();

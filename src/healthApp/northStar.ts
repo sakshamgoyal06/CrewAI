@@ -15,6 +15,8 @@ export type DayInputs = {
   proteinG: number;
   steps: number;
   workoutsLogged: number;
+  /** A sport that stood in for the day's training (see activities.ts), e.g. "Football · 60 min". */
+  sportLabel?: string | null;
 };
 
 export type HealthTargets = {
@@ -104,12 +106,14 @@ export function scoreDay(day: DayInputs, targets: HealthTargets): DayScore {
   });
 
   if (targets.trainingDays.includes(day.weekday)) {
+    const sport = day.workoutsLogged > 0 ? null : day.sportLabel ?? null;
+    const met = day.workoutsLogged > 0 || sport !== null;
     checks.push({
       id: "workout",
       label: "Workout",
-      met: day.workoutsLogged > 0,
-      progress: day.workoutsLogged > 0 ? 1 : 0,
-      detail: day.workoutsLogged > 0 ? "Logged in Hevy" : "Planned, not logged yet",
+      met,
+      progress: met ? 1 : 0,
+      detail: day.workoutsLogged > 0 ? "Logged in Hevy" : sport ? `${sport} counted` : "Planned, not logged yet",
     });
   }
 

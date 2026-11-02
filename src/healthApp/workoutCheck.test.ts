@@ -116,6 +116,14 @@ describe("runWorkoutChecks", () => {
     expect(posted[0]!.cards[0]).toMatchObject({ type: "workout_check", date: "2026-10-28", status: "missing" });
   });
 
+  it("doesn't ask when a sport already stood in for the workout", async () => {
+    const { d, posted, inserts } = deps();
+    const out = await runWorkoutChecks("u1", DUE_NOW, { ...d, sportOn: async () => "Football · 75 min" });
+    expect(out).toEqual([{ date: "2026-10-28", status: "found" }]);
+    expect(inserts[0]).toMatchObject({ status: "found", hevyWorkoutId: null, reason: "Football · 75 min" });
+    expect(posted).toHaveLength(0);
+  });
+
   it("records a found workout without messaging", async () => {
     const { d, posted, inserts } = deps({
       hevy: { connected: true, fetched: true, workouts: [{ localDate: "2026-10-28", id: "w9" }] },

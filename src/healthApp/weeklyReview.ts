@@ -2,6 +2,7 @@
  * The weekly review screen: the last 7 days against the targets and the goal, compared with the
  * week before, and the one thing to fix next week. Pure summary over the tracker's history.
  */
+import { MIN_LIFTING_DAYS } from "./activities.js";
 import type { GoalProgress, MetricProgress } from "./goalProgress.js";
 import { buildHealthHistory, type HistoryDay } from "./history.js";
 import type { CheckId, HealthTargets } from "./northStar.js";
@@ -18,6 +19,12 @@ export type WeekStats = {
   avgSteps: number;
   workouts: number;
   plannedWorkouts: number;
+  /** Lifting sessions (Hevy, or trained but not logged). */
+  liftingSessions: number;
+  /** Non-Hevy activities counted toward burn. */
+  activities: number;
+  activityKcal: number;
+  topActivity: string | null;
 };
 
 export type WeeklyReview = {
@@ -36,6 +43,8 @@ export type WeeklyReview = {
   } | null;
   headline: string;
   focus: string;
+  /** Swims, runs, sports this week, and what they meant for the strength plan; null when none. */
+  activityLine: string | null;
 };
 
 const avg = (xs: number[]): number | null => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
@@ -52,9 +61,35 @@ export function weekStats(days: HistoryDay[], trainingDays: number[]): WeekStats
     avgCalories: c === null ? null : Math.round(c),
     avgProteinG: p === null ? null : Math.round(p),
     avgSteps: Math.round(avg(days.map((d) => d.steps)) ?? 0),
-    workouts: days.reduce((s, d) => s + d.workouts.length + (d.trainedUnlogged && !d.workouts.length ? 1 : 0), 0),
+    workouts: days.reduce((s, d) => s + d.workouts.length + (d.trainedUnlogged && !d.workouts.length ? 1 : 0) + (d.sportCounted ? 1 : 0), 0),
     plannedWorkouts: days.filter((d) => trainingDays.includes(d.weekday)).length,
+    ...activityStats(days),
   };
+}
+
+function activityStats(days: HistoryDay[]): Pick<WeekStats, "liftingSessions" | "activities" | "activityKcal" | "topActivity"> {
+  const acts = days.flatMap((d) => (d.activities ?? []).filter((a) => a.counted));
+  const byLabel = new Map<string, number>();
+  for (const a of acts) byLabel.set(a.label, (byLabel.get(a.label) ?? 0) + a.kcal);
+  const top = [...byLabel.entries()].sort((a, b) => b[1] - a[1])[0];
+  return {
+    liftingSessions: days.reduce((s, d) => s + (d.workouts.length || d.trainedUnlogged ? 1 : 0), 0),
+    activities: acts.length,
+    activityKcal: acts.reduce((s, a) => s + a.kcal, 0),
+    topActivity: top ? top[0] : null,
+  };
+}
+
+export function activityLine(stats: WeekStats, days: HistoryDay[], trainingDays: number[]): string | null {
+  if (!stats.activities) return null;
+  const parts = [`${stats.activities} activit${stats.activities === 1 ? "y" : "ies"} outside the gym, about ${stats.activityKcal.toLocaleString("en-US")} kcal${stats.topActivity ? `, mostly ${stats.topActivity.toLowerCase()}` : ""}.`];
+  const stoodIn = days.filter((d) => d.sportCounted).length;
+  const need = Math.min(MIN_LIFTING_DAYS, trainingDays.length);
+  if (stoodIn) parts.push(`${stoodIn} counted as training day${stoodIn === 1 ? "" : "s"}.`);
+  if (stoodIn && need && stats.liftingSessions < need) {
+    parts.push(`That left ${stats.liftingSessions} strength session${stats.liftingSessions === 1 ? "" : "s"} against the ${need} your plan needs, so keep enough training days for lifting.`);
+  }
+  return parts.join(" ");
 }
 
 const FOCUS: Record<CheckId, string> = {
@@ -128,6 +163,7 @@ export function summarizeWeek(
       : null,
     headline,
     focus,
+    activityLine: activityLine(stats, week, targets.trainingDays),
   };
 }
 

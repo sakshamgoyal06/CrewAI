@@ -46,6 +46,14 @@ import {
 } from "./onboarding.js";
 import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from "./events.js";
 import { loadChatHistory, runHealthChat } from "./chat.js";
+import {
+  activityDraftInput,
+  activitySaveInput,
+  buildActivityDraft,
+  deleteActivity,
+  loadActivityCatalog,
+  saveActivity,
+} from "./activityLog.js";
 import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
 import { listMealsForDate } from "./meals.js";
 import { draftMealFromPhoto } from "./mealCards.js";
@@ -140,6 +148,7 @@ function fromResult(r: { ok: boolean; error?: string }): { status: number; body:
     "routine_not_found",
     "report_not_found",
     "hevy_key_invalid",
+    "activity_not_found",
   ]);
   return { status: clientErrors.has(r.error ?? "") ? 400 : 500, body: r };
 }
@@ -379,6 +388,33 @@ export function createHealthAppRouter(): express.Router {
       const allowed = await allowUse(ctx, "chat");
       if (allowed !== true) return { status: 429, body: { error: allowed } };
       return { body: await runHealthChat(ctx, text) };
+    }),
+  );
+
+  /** Activities outside Hevy (swim, run, sports): the quick-add list, estimates, save and delete. */
+  router.get(
+    "/activities/catalog",
+    route("activities-catalog", async (ctx) => ({ body: await loadActivityCatalog(ctx) })),
+  );
+
+  router.post(
+    "/activities/draft",
+    route("activity-draft", async (ctx, req) => {
+      const r = await buildActivityDraft(ctx, activityDraftInput.parse({ source: "quick_add", ...req.body }));
+      return "ok" in r ? fromResult(r) : { body: r };
+    }),
+  );
+
+  router.post(
+    "/activities",
+    route("activity-save", async (ctx, req) => fromResult(await saveActivity(ctx, activitySaveInput.parse(req.body)))),
+  );
+
+  router.delete(
+    "/activities/:id",
+    route("activity-delete", async (ctx, req) => {
+      const r = await deleteActivity(ctx, String(req.params.id));
+      return r.ok ? { body: r } : r.error === "activity_not_found" ? { status: 404, body: r } : fromResult(r);
     }),
   );
 

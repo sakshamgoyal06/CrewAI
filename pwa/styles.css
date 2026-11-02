@@ -269,7 +269,7 @@ svg { display: block; }
 .checks li:not(.met) .bar > i { background: var(--warn); }
 .checks li.met .bar > i { background: var(--good); }
 
-.quick-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.quick-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 8px; margin-top: 14px; }
 .quick-row.two { grid-template-columns: repeat(2, 1fr); }
 .quick { padding: 12px 8px; border-radius: 14px; background: var(--raised); border: 1px solid var(--hair); font-weight: 500; font-size: 0.9rem; }
 .quick span::before { content: "+ "; color: var(--accent); }
@@ -565,3 +565,17 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .avoid.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .avoid-add { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .food-prefs .section-label { margin-top: 8px; }
+
+/* Activities outside Hevy: burn breakdown, quick add, draft card */
+.burn-breakdown { margin: 10px 2px 0; font-size: 0.8rem; color: var(--muted); line-height: 1.45; }
+.burn-breakdown b { color: var(--text); font-weight: 600; }
+.add-activity { display: block; margin: 10px auto 0; }
+.row.not-counted .title { color: var(--muted); }
+.tag-src { font-size: 0.7rem; color: var(--muted); border: 1px solid var(--hair-strong); border-radius: 999px; padding: 1px 7px; margin-left: 6px; white-space: nowrap; }
+.stepper { display: flex; align-items: center; gap: 8px; }
+.stepper .field { text-align: center; width: 5.5em; }
+.stepper button { width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--hair-strong); background: var(--raised); color: var(--text); font-size: 1.2rem; }
+.activity-pick { width: 100%; }
+.draft .training-note { margin: 8px 0 0; font-size: 0.84rem; line-height: 1.45; }
+.draft .training-note.warn { color: var(--warn, #d08a2b); }
+.draft .training-note.ok { color: var(--accent); }
