@@ -28,6 +28,8 @@ const CHAT_CACHE_KEY = "magnus-chat-cache";
 const SNAPSHOT_CACHE_KEY = "magnus-snapshot-cache";
 const HISTORY_CACHE_KEY = "magnus-history-cache";
 const USUAL_CACHE_KEY = "magnus-usual-meals";
+// Set when the PWA is opened from the Android app (its launch URL carries ?src=android).
+const ANDROID_KEY = "magnus-android";
 const ONBOARDED_KEY = "magnus-onboarded";
 
 // ---------- API ----------
@@ -1305,6 +1307,23 @@ function accountSection() {
       el("button", { class: "link danger", type: "button", onclick: async () => {
         try { await api(`/account/tokens/${t.id}`, { method: "DELETE" }); toast("Token revoked."); load(); } catch (err) { toast(err.message); }
       } }, "Revoke")));
+    const inAndroidApp = store.get(ANDROID_KEY, false);
+    if (inAndroidApp) {
+      hc.replaceChildren(
+        el("p", { class: "hint" }, "Steps, walks, workouts' calories and scale readings sync from Health Connect every hour."),
+        ...list,
+        el("button", { class: "btn primary block", type: "button", onclick: async (e) => {
+          e.target.disabled = true;
+          try {
+            const r = await api("/account/tokens", { method: "POST", body: JSON.stringify({ label: "Android app" }) });
+            // Hands the token to the native side, which asks for Health Connect access and syncs.
+            location.href = `intent://connect?token=${encodeURIComponent(r.token)}#Intent;scheme=magnus;package=app.magnus.health;end`;
+          } catch (err) { toast(err.message); }
+          e.target.disabled = false;
+        } }, tokens.some((t) => t.label === "Android app") ? "Reconnect Health Connect" : "Connect Health Connect"),
+      );
+      return;
+    }
     hc.replaceChildren(
       el("p", { class: "hint" }, "Steps, walks and scale readings sync from Health Connect through the HC Webhook app. Create a token, then paste it into HC Webhook with this URL:"),
       el("code", { class: "copyable" }, `${location.origin}/api/health/ingest/health-connect`),
@@ -1900,6 +1919,10 @@ window.addEventListener("online", flushQueue);
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/app/sw.js", { scope: "/app/" }).catch(() => {});
+}
+
+if (new URLSearchParams(location.search).get("src") === "android" || document.referrer.startsWith("android-app://app.magnus.health")) {
+  store.set(ANDROID_KEY, true);
 }
 
 const redirectError = captureRedirect();

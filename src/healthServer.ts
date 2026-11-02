@@ -8,6 +8,25 @@ import { logger } from "./logger.js";
 import { loggableError } from "./util/loggableError.js";
 import { redis, supabase } from "./tools/clients.js";
 
+/** MAGNUS_ANDROID_CERT_SHA256: the signing cert fingerprint(s) of the Android app, comma-separated. */
+export function assetLinks(env: NodeJS.ProcessEnv): unknown[] {
+  const fingerprints = (env.MAGNUS_ANDROID_CERT_SHA256 ?? "")
+    .split(",")
+    .map((s) => s.trim().toUpperCase())
+    .filter((s) => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(s));
+  if (!fingerprints.length) return [];
+  return [
+    {
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: {
+        namespace: "android_app",
+        package_name: env.MAGNUS_ANDROID_PACKAGE?.trim() || "app.magnus.health",
+        sha256_cert_fingerprints: fingerprints,
+      },
+    },
+  ];
+}
+
 export type HealthServer = {
   close: () => Promise<void>;
 };
@@ -44,6 +63,11 @@ export function startHealthServer(): Promise<HealthServer> {
       logger.warn({ err: loggableError(err) }, "readiness check failed");
       res.status(503).json({ status: "not_ready" });
     }
+  });
+
+  // Digital Asset Links: lets the Android app open the PWA full screen (no browser bar).
+  app.get("/.well-known/assetlinks.json", (_req, res) => {
+    res.json(assetLinks(process.env));
   });
 
   app.use("/api/health", createHealthAppRouter());
