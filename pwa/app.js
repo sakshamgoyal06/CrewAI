@@ -162,7 +162,7 @@ function setView(view) {
   if (view === "tracker") {
     window.scrollTo(0, 0);
     // Hevy history is several slow calls; only fetch it once the tracker is actually opened.
-    if (!state.trainingLoaded) { state.trainingLoaded = true; loadTraining(); loadDays(); }
+    if (!state.trainingLoaded) { state.trainingLoaded = true; loadTraining(); loadDays(); loadReview(); }
     else if (state.history) requestAnimationFrame(renderTrend);
   }
 }
@@ -202,6 +202,7 @@ function renderSnapshot(s) {
   );
 
   renderGoal(s);
+  if (state.review) renderReview();
 
   // Day cards: from the history once it's loaded; until then today's numbers from this snapshot.
   if (!state.history) renderDay();
@@ -947,6 +948,7 @@ function appendCard(c) {
   else if (c.type === "workout_check") $("thread").append(workoutCheckCard(c));
   else if (c.type === "hevy_proposal") $("thread").append(hevyProposalCard(c));
   else if (c.type === "rca") $("thread").append(rcaCard(c));
+  else if (c.type === "calorie_review") $("thread").append(calorieReviewCard(c.review));
 }
 
 // ---------- root-cause card ----------
@@ -986,6 +988,81 @@ function rcaCard(c) {
     );
   }
   render(c);
+  return card;
+}
+
+// ---------- calorie target review ----------
+
+const REVIEW_KEY = "magnus-calorie-reviews";
+const reviewId = (r) => `${r.suggestedTarget}|${r.maintenanceKcal}|${r.avgIntakeKcal}`;
+
+async function loadReview() {
+  try {
+    state.review = await api("/targets/review");
+  } catch {
+    state.review = null;
+  }
+  renderReview();
+}
+
+function renderReview() {
+  const host = $("target-review");
+  const r = state.review;
+  if (!r) return host.replaceChildren();
+  if (r.status !== "ok") {
+    return host.replaceChildren(el("p", { class: "section-label" }, "Calorie target"), el("p", { class: "hint" }, r.summary));
+  }
+  host.replaceChildren(reviewPanel(r, () => renderReview()));
+}
+
+/** Maintenance from real intake + weight trend, the on-pace target, and one tap to apply it. */
+function reviewPanel(r, rerender) {
+  const current = state.snapshot?.targets?.calorieTarget ?? r.currentTarget;
+  const applied = current === r.suggestedTarget;
+  const kept = store.get(REVIEW_KEY, {})[reviewId(r)] === "kept";
+  const signed = (v) => `${v > 0 ? "+" : ""}${fmt(v, 2)}`;
+  const apply = el("button", { class: "btn primary", type: "button" }, `Set ${fmt(r.suggestedTarget)} kcal`);
+  apply.addEventListener("click", async () => {
+    apply.disabled = true;
+    try {
+      await api("/targets", { method: "POST", body: JSON.stringify({ calorieTarget: r.suggestedTarget }) });
+      if (state.snapshot?.targets) state.snapshot.targets.calorieTarget = r.suggestedTarget;
+      toast(`Calorie target set to ${fmt(r.suggestedTarget)} kcal.`);
+      rerender();
+      refresh();
+    } catch (err) {
+      apply.disabled = false;
+      toast(err.message);
+    }
+  });
+  const keep = el("button", { class: "btn", type: "button", onclick: () => {
+    const all = store.get(REVIEW_KEY, {});
+    all[reviewId(r)] = "kept";
+    store.set(REVIEW_KEY, all);
+    rerender();
+  } }, current ? `Keep ${fmt(current)}` : "Not now");
+  const offer = r.recommend && !applied && !kept;
+  return el("div", { class: "review" },
+    el("p", { class: "eyebrow" }, `Calorie target · last 4 weeks · ${r.confidence} confidence`),
+    el("div", { class: "review-top" },
+      el("div", { class: "draft-kcal" }, fmt(offer || applied ? r.suggestedTarget : current ?? r.suggestedTarget), el("small", {}, "kcal / day")),
+      el("span", { class: `tag ${r.cappedForSafety ? "behind" : "on_pace"}` }, `${signed(r.plannedKgPerWeek)} kg/wk`),
+    ),
+    el("div", { class: "review-stats" },
+      el("span", {}, el("b", {}, fmt(r.maintenanceKcal)), " maintenance"),
+      el("span", {}, el("b", {}, fmt(r.avgIntakeKcal)), " avg logged"),
+      el("span", {}, el("b", {}, signed(r.actualKgPerWeek)), " kg/wk now"),
+    ),
+    el("p", { class: "review-line" }, r.summary),
+    offer ? el("div", { class: "draft-actions" }, keep, apply)
+      : el("p", { class: "rca-status trying" }, applied ? `✓ Target is ${fmt(r.suggestedTarget)} kcal` : kept ? `Kept ${fmt(current)} kcal` : "✓ Your target is on pace"),
+  );
+}
+
+function calorieReviewCard(review) {
+  const card = el("div", { class: "draft" });
+  const paint = () => card.replaceChildren(reviewPanel(review, paint));
+  paint();
   return card;
 }
 
@@ -1469,6 +1546,7 @@ const SHEETS = {
       toast("Weigh-in saved.");
       closeSheet();
       refresh();
+      loadReview();
     }) },
       el("div", { class: "grid3" },
         el("label", {}, "Weight kg", el("input", { class: "field", name: "w", type: "number", step: "0.1", inputmode: "decimal", placeholder: last?.weight_kg ?? "" })),

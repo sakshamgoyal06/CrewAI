@@ -44,6 +44,7 @@ import {
   searchTemplates,
 } from "./training.js";
 import { cardFromReport, runRca, type RcaCard } from "./rca.js";
+import { loadCalorieReview, type CalorieReview } from "./calorieTarget.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
 
 export function healthChatModel(): string {
@@ -55,7 +56,14 @@ export function healthChatModel(): string {
 const MAX_TOOL_ROUNDS = 10;
 const HISTORY_MESSAGES = 20;
 
-export type ChatCard = { type: "meal_draft"; draft: MealDraft } | WorkoutCheckCard | HevyProposalCard | RcaCard;
+export type CalorieReviewCard = { type: "calorie_review"; review: Extract<CalorieReview, { status: "ok" }> };
+
+export type ChatCard =
+  | { type: "meal_draft"; draft: MealDraft }
+  | WorkoutCheckCard
+  | HevyProposalCard
+  | RcaCard
+  | CalorieReviewCard;
 
 export type ChatReply = {
   text: string;
@@ -77,6 +85,7 @@ How to work:
 - Workouts: on training days the app checks Hevy a few hours after the gym slot and asks in chat if nothing is logged. When they answer (skipped and why, or trained but didn't log it), record it with answer_workout_check. If they skipped, ask why in one short question if they didn't say.
 - Training (Hevy): use get_training_analysis to see what's progressing, stalled or going backwards, and get_routines for their current plan. To change Hevy (swap or add an exercise, change sets/reps/rest, create a routine, log a workout), find exercise ids with search_exercises, then call the matching propose_* tool. It shows a card they apply; nothing changes in Hevy until they do, so never say it's done. Suggest changes from the data: a lift that has stalled for 3+ weeks gets a rep-range change or a close variation, not a whole new program. Keep a routine's other exercises as they are unless asked.
 - When they're off track or ask why, call root_cause_analysis. It mines the last three weeks and returns evidence, one hypothesis and one 7-day experiment, shown as a card they can take up. Explain it in a sentence or two; don't stack extra advice on top.
+- Calorie target: review_calorie_target works out their real maintenance from logged meals and the weight trend, and the target that keeps them on pace for the goal. Call it after a weekly weigh-in, when weight isn't moving the way the goal needs, or when they ask about their calories. When it recommends a change it shows a card they can apply; don't change the target yourself unless they ask. If the deadline needs an unsafe pace, say so plainly and give the date the safe pace reaches it.
 - Keep replies short: 1 to 4 sentences, plain text, no headings. Use kg and kcal.`;
 
 const SET_SCHEMA = {
@@ -315,6 +324,12 @@ const tools: Anthropic.Tool[] = [
     input_schema: { type: "object", properties: {} },
   },
   {
+    name: "review_calorie_target",
+    description:
+      "Work out maintenance calories from the last 4 weeks of logged meals and weigh-ins, and the daily calorie target that keeps them on pace for their weight goal (capped at a safe pace). Shows a card with an Apply button when the target should change.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
     name: "answer_workout_check",
     description:
       "Record the answer to the post-gym-slot workout check: recheck (look in Hevy again), skipped (with reason), or trained_unlogged (trained but didn't log in Hevy; counts as the day's workout).",
@@ -477,6 +492,11 @@ export async function runTool(
         result: { shownToUserAsCard: true, evidence: r.report.signals.map((x) => x.text), hypothesis: r.report.hypothesis, experiment: r.report.experiment },
         card: cardFromReport(r.report),
       };
+    }
+    case "review_calorie_target": {
+      const review = await loadCalorieReview(ctx.userProfileId, ctx.now);
+      if (review.status !== "ok" || !review.recommend) return { result: review };
+      return { result: { ...review, shownToUserAsCard: true }, card: { type: "calorie_review", review } };
     }
     case "answer_workout_check": {
       const p = workoutCheckAnswerInput.safeParse(input);

@@ -48,6 +48,7 @@ import {
 } from "./push.js";
 import { cardFromReport, getReports, rcaResponseInput, respondToRca, runRca } from "./rca.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
+import { loadCalorieReview } from "./calorieTarget.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
 
 const chatInput = z.object({ text: z.string().trim().min(1).max(2000) });
@@ -284,6 +285,12 @@ export function createHealthAppRouter(): express.Router {
     route("targets", async (ctx, req) =>
       fromResult(await setTargets(ctx, targetsInput.parse(req.body))),
     ),
+  );
+
+  /** Adaptive calorie target: maintenance from real intake and weight trend, and the on-pace target. */
+  router.get(
+    "/targets/review",
+    route("targets-review", async (ctx) => ({ body: await loadCalorieReview(ctx.userProfileId) })),
   );
 
   /** Answer to the post-gym-slot check: recheck Hevy, skipped (with reason), or trained but unlogged. */

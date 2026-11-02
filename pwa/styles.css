@@ -495,3 +495,10 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 }
 .chart .selmark { fill: var(--text); }
 .key-target { display: inline-block; width: 14px; border-top: 1px dashed var(--muted); }
+
+/* Calorie target review (tracker goal card + chat card) */
+.target-review:not(:empty) { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--hair); }
+.review-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.review-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 6px 0 10px; color: var(--muted); font-size: 0.86rem; }
+.review-stats b { color: var(--text); font-weight: 600; }
+.review-line { color: var(--muted); font-size: 0.92rem; line-height: 1.5; margin: 0 0 12px; }
