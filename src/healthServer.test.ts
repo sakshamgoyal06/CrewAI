@@ -35,7 +35,7 @@ describe("health server", () => {
     expect(await (await fetch(`${b}/ready`)).json()).toEqual({ status: "ready" });
   });
 
-  it("serves the app shell and redirects / to it", async () => {
+  it("serves the app shell, and the landing page at /", async () => {
     const b = await base();
     const page = await fetch(`${b}/app/`);
     expect(page.status).toBe(200);
@@ -44,8 +44,8 @@ describe("health server", () => {
     expect(sw.headers.get("service-worker-allowed")).toBe("/app/");
     await sw.text();
     const root = await fetch(`${b}/`, { redirect: "manual" });
-    expect(root.headers.get("location")).toBe("/app/");
-    await root.text();
+    expect(root.status).toBe(200);
+    expect(await root.text()).toContain('href="/app/"');
   });
 
   it("guards the API with the app token", async () => {
