@@ -7,11 +7,14 @@ import { healthAppAuthConfig } from "./healthApp/auth.js";
 import { flushEvents } from "./healthApp/events.js";
 import { startProactiveScheduler } from "./healthApp/proactive.js";
 import { startHealthServer } from "./healthServer.js";
+import { ensureFoodSeed } from "./meals/indianFoodSeed.js";
 
 async function main(): Promise<void> {
   const server = await startHealthServer();
   const owner = healthAppAuthConfig()?.userProfileId;
   const stopProactive = startProactiveScheduler(owner ? [owner] : []);
+  // Everyday Indian foods, so a new account's first meals resolve from our own table.
+  void ensureFoodSeed().catch(() => {});
 
   let shuttingDown = false;
   const shutdown = (signal: string): void => {
