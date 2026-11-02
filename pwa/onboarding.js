@@ -1,6 +1,8 @@
 // First run: four short screens (you, your goal, your week, how you eat), then the plan reveal.
 // Nothing is saved until "Start"; the reveal is a live preview from /onboarding/preview.
 
+import { foodPrefsEditor } from "./foodprefs.js";
+
 const WD = ["S", "M", "T", "W", "T", "F", "S"];
 const WD_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -18,7 +20,7 @@ export function runOnboarding(root, { api, el, toast }) {
   const a = {
     sex: null, birthYear: "", heightCm: "", weightKg: "", bodyFatPct: "",
     goalType: "lose", targetWeightKg: "", targetBodyFatPct: "", deadline: plusMonths(4),
-    activity: "desk", trainingDays: [1, 3, 5], gymTime: "", diet: null,
+    activity: "desk", trainingDays: [1, 3, 5], gymTime: "", diet: null, dietNote: "", foodAvoid: [],
   };
   let step = 0;
 
@@ -29,6 +31,7 @@ export function runOnboarding(root, { api, el, toast }) {
     targetWeightKg: a.goalType === "recomp" ? undefined : num(a.targetWeightKg),
     targetBodyFatPct: num(a.targetBodyFatPct), deadline: a.deadline, activity: a.activity,
     trainingDays: a.trainingDays, gymTime: a.gymTime || null, diet: a.diet,
+    dietNote: a.diet === "custom" ? a.dietNote.trim() : undefined, foodAvoid: a.foodAvoid,
   });
 
   const choice = (options, key, onPick) =>
@@ -102,13 +105,8 @@ export function runOnboarding(root, { api, el, toast }) {
     {
       title: "How you eat",
       lead: "I'll only suggest food that fits.",
-      body: () => [
-        choice([
-          ["vegetarian", "Vegetarian"], ["eggetarian", "Vegetarian + eggs"], ["non_vegetarian", "Non-vegetarian"],
-          ["vegan", "Vegan"], ["jain", "Jain"],
-        ], "diet"),
-      ],
-      valid: () => (a.diet ? null : "Pick one."),
+      body: () => [foodPrefsEditor(el, a)],
+      valid: () => (!a.diet ? "Pick one." : a.diet === "custom" && !a.dietNote.trim() ? "Describe how you eat." : null),
     },
   ];
 

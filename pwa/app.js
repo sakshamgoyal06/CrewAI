@@ -4,6 +4,7 @@
 import { SESSION_ID, trackApi } from "./telemetry.js";
 import { runOnboarding } from "./onboarding.js";
 import { scanView } from "./scan.js";
+import { foodPrefsEditor } from "./foodprefs.js";
 import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
 const TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } })();
@@ -1399,8 +1400,23 @@ function accountSection() {
   } }, "Delete account");
   const plan = el("div", { class: "stack" });
   planSection(plan);
-  wrap.append(who, plan, el("p", { class: "section-label" }, "Hevy"), hevy, el("p", { class: "section-label" }, "Health Connect"), hc,
+  const food = el("div", { class: "stack" });
+  wrap.append(who, plan, el("p", { class: "section-label" }, "Food"), food, el("p", { class: "section-label" }, "Hevy"), hevy, el("p", { class: "section-label" }, "Health Connect"), hc,
     el("p", { class: "section-label" }, "Your data"), el("p", { class: "hint" }, "Your data is yours: download all of it, or delete it for good."), el("div", { class: "row-between" }, download, remove), out);
+
+  function paintFood(prefs) {
+    if (!prefs) { food.replaceChildren(); return; }
+    const value = { diet: prefs.diet, dietNote: prefs.dietNote || "", foodAvoid: [...(prefs.foodAvoid || [])] };
+    const save = el("button", { class: "btn block", type: "button", disabled: true, onclick: async () => {
+      if (value.diet === "custom" && !value.dietNote.trim()) { toast("Describe how you eat."); return; }
+      save.disabled = true;
+      try {
+        await api("/account/food", { method: "PUT", body: JSON.stringify({ diet: value.diet || "non_vegetarian", dietNote: value.diet === "custom" ? value.dietNote.trim() : null, foodAvoid: value.foodAvoid }) });
+        toast("Saved. The coach will stick to it.");
+      } catch (err) { toast(err.message); save.disabled = false; }
+    } }, "Save food preferences");
+    food.replaceChildren(foodPrefsEditor(el, value, () => { save.disabled = false; }), save);
+  }
 
   function paintHevy(connected) {
     if (connected) {
@@ -1473,6 +1489,7 @@ function accountSection() {
       who.textContent = a.email ? `Signed in as ${a.email}` : a.name ? `Signed in as ${a.name}` : "Signed in with an app token.";
       paintHevy(a.hevyConnected);
       paintHc(a.tokens || []);
+      paintFood(a.food);
     } catch (err) {
       who.textContent = err.message;
     }
