@@ -4,7 +4,8 @@
 // hidden. Never records typed text, chat content or the token.
 
 export const APP_VERSION = "v7";
-const TOKEN_KEY = "magnus-health-token";
+import { currentBearer } from "./session.js";
+
 const ENDPOINT = "/api/health/events";
 const FLUSH_MS = 15_000;
 const BATCH = 40;
@@ -15,9 +16,7 @@ export const SESSION_ID = (crypto.randomUUID?.() ?? `${Date.now().toString(36)}-
 let buffer = [];
 let timer = null;
 
-function token() {
-  try { return JSON.parse(localStorage.getItem(TOKEN_KEY) || "null") || ""; } catch { return ""; }
-}
+const token = currentBearer;
 
 /** Queue one event. `extra` may carry durationMs and status. */
 export function track(kind, name, props, extra = {}) {

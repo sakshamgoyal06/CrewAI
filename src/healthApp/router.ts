@@ -1,6 +1,6 @@
 /**
  * JSON API behind the health PWA, mounted on the Express server under `/api/health`.
- * Every route needs `Authorization: Bearer <MAGNUS_HEALTH_APP_TOKEN>`.
+ * `/config` is public; every other route needs a bearer (see `accounts.ts`).
  */
 import express from "express";
 import { z } from "zod";
@@ -24,7 +24,15 @@ import {
   targetsInput,
   type ActionContext,
 } from "./actions.js";
-import { authenticateHealthApp, healthAppAuthConfig } from "./auth.js";
+import {
+  createPersonalToken,
+  listPersonalTokens,
+  publicAuthConfig,
+  resolveRequestUser,
+  revokePersonalToken,
+} from "./accounts.js";
+import { connectHevy, disconnectHevy, hevyConnected, hevyKeyInput } from "./integrations.js";
+import { supabase } from "../tools/clients.js";
 import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from "./events.js";
 import { loadChatHistory, runHealthChat } from "./chat.js";
 import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
@@ -105,6 +113,7 @@ function fromResult(r: { ok: boolean; error?: string }): { status: number; body:
     "routine_changed_in_hevy",
     "routine_not_found",
     "report_not_found",
+    "hevy_key_invalid",
   ]);
   return { status: clientErrors.has(r.error ?? "") ? 400 : 500, body: r };
 }
@@ -116,12 +125,20 @@ const trainingCache = new Map<string, { at: number; body: unknown }>();
 export function createHealthAppRouter(): express.Router {
   const router = express.Router();
 
-  router.use((req, res, next) => {
-    const userProfileId = authenticateHealthApp(req.get("authorization"), healthAppAuthConfig());
-    if (!userProfileId) {
-      res.status(401).json({ error: "unauthorized" });
+  /** What the sign-in screen needs before there is a session. */
+  router.get("/config", (_req, res) => {
+    res.json({ auth: publicAuthConfig() });
+  });
+
+  router.use(async (req, res, next) => {
+    const auth = await resolveRequestUser(req.get("authorization"), {
+      timezone: req.get("x-magnus-timezone") ?? undefined,
+    });
+    if ("error" in auth) {
+      res.status(auth.error === "signup_closed" ? 403 : 401).json({ error: auth.error });
       return;
     }
+    const { userProfileId } = auth;
     (res.locals as Locals).userProfileId = userProfileId;
     // Server-side timing per route, written to health_app_events next to the client's view of it.
     if (req.path !== "/events") {
@@ -152,6 +169,56 @@ export function createHealthAppRouter(): express.Router {
     enqueueEvents(clientRows((res.locals as Locals).userProfileId, parsed.data, req.get("user-agent")));
     res.status(204).end();
   });
+
+  /** The signed-in account: who it is and what's connected. */
+  router.get(
+    "/account",
+    route("account", async (ctx) => {
+      const [{ data }, hevy, tokens] = await Promise.all([
+        supabase.from("user_profile").select("display_name, email").eq("id", ctx.userProfileId).maybeSingle(),
+        hevyConnected(ctx.userProfileId),
+        listPersonalTokens(ctx.userProfileId),
+      ]);
+      return {
+        body: {
+          name: data?.display_name ?? null,
+          email: data?.email ?? null,
+          timezone: ctx.timezone,
+          hevyConnected: hevy,
+          tokens,
+        },
+      };
+    }),
+  );
+
+  /** A personal token for a phone automation (Health Connect webhook). Shown once. */
+  router.post(
+    "/account/tokens",
+    route("token-create", async (ctx, req) => {
+      const { label } = z.object({ label: z.string().trim().min(1).max(60).optional() }).parse(req.body ?? {});
+      return { body: { ok: true, token: await createPersonalToken(ctx.userProfileId, label) } };
+    }),
+  );
+
+  router.delete(
+    "/account/tokens/:id",
+    route("token-revoke", async (ctx, req) => {
+      const id = z.string().uuid().safeParse(req.params.id);
+      if (!id.success) return { status: 400, body: { ok: false, error: "invalid_id" } };
+      const ok = await revokePersonalToken(ctx.userProfileId, id.data);
+      return ok ? { body: { ok: true } } : { status: 404, body: { ok: false, error: "token_not_found" } };
+    }),
+  );
+
+  router.post(
+    "/integrations/hevy",
+    route("hevy-connect", async (ctx, req) => fromResult(await connectHevy(ctx.userProfileId, hevyKeyInput.parse(req.body)))),
+  );
+
+  router.delete(
+    "/integrations/hevy",
+    route("hevy-disconnect", async (ctx) => fromResult(await disconnectHevy(ctx.userProfileId))),
+  );
 
   router.get(
     "/today",

@@ -2,8 +2,9 @@
 // the same /api/health endpoints, so anything logged in one shows up in the other.
 
 import { SESSION_ID, trackApi } from "./telemetry.js";
+import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
-const TOKEN_KEY = "magnus-health-token";
+const TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } })();
 const CONFIRMED_KEY = "magnus-confirmed-drafts";
 const $ = (id) => document.getElementById(id);
 
@@ -32,14 +33,31 @@ const USUAL_CACHE_KEY = "magnus-usual-meals";
 const QUEUE_KEY = "magnus-offline-queue";
 const QUEUEABLE = [/^\/steps$/, /^\/checkins$/, /^\/meals\/confirm$/, /^\/workout-check$/];
 
+async function request(path, options, force = false) {
+  const token = await bearer({ force });
+  return fetch(`/api/health${path}`, {
+    ...options,
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}`, "x-magnus-session": SESSION_ID, "x-magnus-timezone": TIMEZONE },
+  });
+}
+
+function clearLocalData() {
+  for (const k of [USUAL_CACHE_KEY, CHAT_CACHE_KEY, SNAPSHOT_CACHE_KEY, HISTORY_CACHE_KEY, QUEUE_KEY]) store.set(k, null);
+}
+
+function endSession(message) {
+  signOut();
+  clearLocalData();
+  showConnect(message);
+}
+
 async function api(path, options = {}) {
   let res;
   const started = performance.now();
   try {
-    res = await fetch(`/api/health${path}`, {
-      ...options,
-      headers: { "content-type": "application/json", authorization: `Bearer ${store.get(TOKEN_KEY, "")}`, "x-magnus-session": SESSION_ID },
-    });
+    res = await request(path, options);
+    // A Google session can expire between the check and the request: refresh once and retry.
+    if (res.status === 401) res = await request(path, options, true);
   } catch (err) {
     trackApi(path, options.method, 0, performance.now() - started, options.replay ? "network (replay)" : "network");
     if (options.method === "POST" && QUEUEABLE.some((re) => re.test(path)) && !options.replay) {
@@ -52,13 +70,15 @@ async function api(path, options = {}) {
     throw new Error("You're offline.");
   }
   if (res.status === 401) {
-    store.set(TOKEN_KEY, null);
-    store.set(USUAL_CACHE_KEY, null);
-    store.set(CHAT_CACHE_KEY, null);
-    store.set(SNAPSHOT_CACHE_KEY, null);
-    store.set(HISTORY_CACHE_KEY, null);
-    showConnect();
-    throw new Error("This device was disconnected. Paste your token again.");
+    endSession("You were signed out. Sign in again to continue.");
+    throw new Error("Signed out.");
+  }
+  if (res.status === 403) {
+    const body = await res.json().catch(() => ({}));
+    if (body.error === "signup_closed") {
+      endSession("Magnus is invite-only right now. Ask Saksham for an invite.");
+      throw new Error("Invite only.");
+    }
   }
   const body = await res.json().catch(() => ({}));
   trackApi(path, options.method, res.status, performance.now() - started, res.ok ? null : body.error || `http_${res.status}`);
@@ -147,9 +167,15 @@ function greeting() {
 
 // ---------- navigation ----------
 
-function showConnect() {
+function showConnect(message) {
   $("connect").hidden = false;
   $("shell").hidden = true;
+  $("connect-error").hidden = !message;
+  $("connect-error").textContent = message || "";
+  authConfig().then((cfg) => {
+    $("google-signin").hidden = !cfg?.google;
+    $("token-details").open = !cfg?.google;
+  });
 }
 
 function showShell() {
@@ -1204,6 +1230,79 @@ function notificationsSection() {
   return wrap;
 }
 
+// ---------- account ----------
+
+/** Who's signed in, Hevy, the Health Connect token, and sign-out. */
+function accountSection() {
+  const wrap = el("div", { class: "stack" }, el("p", { class: "section-label" }, "Account"));
+  const who = el("p", { class: "hint" }, "Loading…");
+  const hevy = el("div", { class: "stack" });
+  const hc = el("div", { class: "stack" });
+  const out = el("button", { class: "link danger", type: "button", onclick: () => { if (confirm("Sign out of Magnus on this phone?")) { closeSheet(); endSession(); } } }, "Sign out");
+  wrap.append(who, el("p", { class: "section-label" }, "Hevy"), hevy, el("p", { class: "section-label" }, "Health Connect"), hc, out);
+
+  function paintHevy(connected) {
+    if (connected) {
+      hevy.replaceChildren(
+        el("p", { class: "hint" }, "Connected. Workouts and routines come from your Hevy account."),
+        el("button", { class: "link", type: "button", onclick: async () => {
+          try { await api("/integrations/hevy", { method: "DELETE" }); toast("Hevy disconnected."); paintHevy(false); } catch (err) { toast(err.message); }
+        } }, "Disconnect Hevy"),
+      );
+      return;
+    }
+    hevy.replaceChildren(
+      el("form", { class: "stack", onsubmit: submitter(async (fd) => {
+        await api("/integrations/hevy", { method: "POST", body: JSON.stringify({ apiKey: String(fd.get("key") || "").trim() }) });
+        toast("Hevy connected.");
+        state.trainingLoaded = false;
+        paintHevy(true);
+        refresh();
+      }) },
+        el("p", { class: "hint" }, "Paste your Hevy API key (Hevy Pro: hevy.com → Settings → Developer). I read workouts and only change routines when you tap Apply."),
+        el("input", { class: "field", name: "key", type: "password", autocomplete: "off", placeholder: "Hevy API key", required: true }),
+        el("button", { class: "btn block", type: "submit" }, "Connect Hevy"),
+      ),
+    );
+  }
+
+  function paintHc(tokens) {
+    const list = tokens.map((t) => el("div", { class: "row-between" },
+      el("span", { class: "hint" }, `${t.label} · ${t.lastUsedAt ? `last sync ${new Date(t.lastUsedAt).toLocaleDateString()}` : "not used yet"}`),
+      el("button", { class: "link danger", type: "button", onclick: async () => {
+        try { await api(`/account/tokens/${t.id}`, { method: "DELETE" }); toast("Token revoked."); load(); } catch (err) { toast(err.message); }
+      } }, "Revoke")));
+    hc.replaceChildren(
+      el("p", { class: "hint" }, "Steps, walks and scale readings sync from Health Connect through the HC Webhook app. Create a token, then paste it into HC Webhook with this URL:"),
+      el("code", { class: "copyable" }, `${location.origin}/api/health/ingest/health-connect`),
+      ...list,
+      el("button", { class: "btn block", type: "button", onclick: async (e) => {
+        e.target.disabled = true;
+        try {
+          const r = await api("/account/tokens", { method: "POST", body: JSON.stringify({ label: "Health Connect" }) });
+          await navigator.clipboard?.writeText(r.token).catch(() => {});
+          hc.prepend(el("p", { class: "hint" }, "Copied. It's shown only once:"), el("code", { class: "copyable" }, r.token));
+          toast("Token created and copied.");
+        } catch (err) { toast(err.message); }
+        e.target.disabled = false;
+      } }, "Create Health Connect token"),
+    );
+  }
+
+  async function load() {
+    try {
+      const a = await api("/account");
+      who.textContent = a.email ? `Signed in as ${a.email}` : a.name ? `Signed in as ${a.name}` : "Signed in with an app token.";
+      paintHevy(a.hevyConnected);
+      paintHc(a.tokens || []);
+    } catch (err) {
+      who.textContent = err.message;
+    }
+  }
+  load();
+  return wrap;
+}
+
 // ---------- Hevy proposal card ----------
 
 const PROPOSAL_LABEL = { routine_update: "Routine change", routine_create: "New routine", workout_log: "Log workout" };
@@ -1654,8 +1753,7 @@ const SHEETS = {
         el("button", { class: "btn block", type: "submit" }, "Save targets"),
       ),
       notificationsSection(),
-      el("p", { class: "section-label" }, "Device"),
-      el("button", { class: "link", type: "button", onclick: () => { store.set(TOKEN_KEY, null); closeSheet(); showConnect(); } }, "Disconnect this device"),
+      accountSection(),
     );
   },
 };
@@ -1664,9 +1762,13 @@ const SHEETS = {
 
 $("connect-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  store.set(TOKEN_KEY, $("token").value.trim());
+  useToken($("token").value);
   $("token").value = "";
   start();
+});
+$("google-signin").addEventListener("click", async () => {
+  $("google-signin").disabled = true;
+  try { await signInWithGoogle(); } catch (err) { showConnect(err.message); $("google-signin").disabled = false; }
 });
 
 for (const t of document.querySelectorAll(".tab")) t.addEventListener("click", () => setView(t.dataset.view));
@@ -1705,7 +1807,7 @@ $("composer").addEventListener("submit", (e) => {
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden || !store.get(TOKEN_KEY, "")) return;
+  if (document.hidden || !signedIn()) return;
   refresh();
   // The workout check posts into chat on its own, so pick that up when the app comes back.
   if (!state.sending) loadHistory();
@@ -1738,5 +1840,7 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/app/sw.js", { scope: "/app/" }).catch(() => {});
 }
 
-if (store.get(TOKEN_KEY, "")) start();
+const redirectError = captureRedirect();
+if (redirectError) showConnect(redirectError);
+else if (signedIn()) start();
 else showConnect();

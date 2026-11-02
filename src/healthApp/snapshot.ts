@@ -6,10 +6,10 @@ import { localDateKey, resolveTimezone } from "../nutrition/localDate.js";
 import {
   fetchHevyWorkoutsPage,
   hevyApiKeyForUser,
-  hevyApiKeyFromEnv,
   type HevyWorkout,
 } from "../pillars/health/workouts/hevy/index.js";
 import { supabase } from "../tools/clients.js";
+import { ownerHevyFallback } from "./auth.js";
 import { getActivityRange, type DailyActivity } from "./activityStore.js";
 import { getActiveGoal, getBodyCheckins } from "./bodyStore.js";
 import { computeGoalProgress, type BodyCheckin, type GoalProgress } from "./goalProgress.js";
@@ -183,7 +183,7 @@ export async function loadRecentWorkouts(
   userProfileId: string,
   timezone: string,
 ): Promise<{ connected: boolean; fetched: boolean; workouts: WorkoutSummary[] }> {
-  const apiKey = (await hevyApiKeyForUser(userProfileId)) ?? hevyApiKeyFromEnv();
+  const apiKey = (await hevyApiKeyForUser(userProfileId)) ?? ownerHevyFallback(userProfileId);
   if (!apiKey) {
     return { connected: false, fetched: false, workouts: [] };
   }

@@ -10,8 +10,8 @@ import { startHealthServer } from "./healthServer.js";
 
 async function main(): Promise<void> {
   const server = await startHealthServer();
-  const appUser = healthAppAuthConfig()?.userProfileId;
-  const stopProactive = appUser ? startProactiveScheduler(appUser) : () => {};
+  const owner = healthAppAuthConfig()?.userProfileId;
+  const stopProactive = startProactiveScheduler(owner ? [owner] : []);
 
   let shuttingDown = false;
   const shutdown = (signal: string): void => {

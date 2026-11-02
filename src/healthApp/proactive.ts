@@ -5,6 +5,7 @@
  */
 import { logger } from "../logger.js";
 import { localDateKey } from "../nutrition/localDate.js";
+import { supabase } from "../tools/clients.js";
 import { loggableError } from "../util/loggableError.js";
 import { formatTime } from "./gymSlot.js";
 import { getPrefs, isQuiet, sendNotification, type Notification, type NotificationPrefs } from "./push.js";
@@ -184,13 +185,47 @@ export async function proactiveTick(userProfileId: string, now = new Date()): Pr
   }
 }
 
-export function startProactiveScheduler(userProfileId: string, intervalMs = SCHEDULER_INTERVAL_MS): () => void {
+/** People who used the app in the last two weeks; the proactive loop only runs for them. */
+const ACTIVE_DAYS = 14;
+const ACTIVE_REFRESH_MS = 15 * 60_000;
+
+export async function listActiveUsers(now = new Date()): Promise<string[]> {
+  const since = new Date(now.getTime() - ACTIVE_DAYS * 86_400_000).toISOString();
+  const { data, error } = await supabase
+    .from("health_chat_messages")
+    .select("user_profile_id")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(10_000);
+  if (error) throw new Error(`active users: ${error.message}`);
+  return [...new Set((data ?? []).map((r) => String(r.user_profile_id)))];
+}
+
+/**
+ * Runs `proactiveTick` for every active user (plus `alwaysInclude`, the deploy owner) on an
+ * interval. Users run one after another so a slow Hevy call for one never overlaps the next tick.
+ */
+export function startProactiveScheduler(
+  alwaysInclude: string[] = [],
+  intervalMs = SCHEDULER_INTERVAL_MS,
+  loadUsers: () => Promise<string[]> = () => listActiveUsers(),
+): () => void {
   let running = false;
+  let users: string[] = [...alwaysInclude];
+  let usersAt = 0;
   const tick = async (): Promise<void> => {
     if (running) return;
     running = true;
     try {
-      await proactiveTick(userProfileId);
+      if (Date.now() - usersAt > ACTIVE_REFRESH_MS) {
+        try {
+          users = [...new Set([...alwaysInclude, ...(await loadUsers())])];
+          usersAt = Date.now();
+        } catch (err) {
+          logger.warn({ err: loggableError(err) }, "proactive: could not list active users");
+        }
+      }
+      for (const id of users) await proactiveTick(id);
     } finally {
       running = false;
     }

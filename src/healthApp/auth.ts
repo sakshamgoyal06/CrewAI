@@ -39,3 +39,13 @@ export function authenticateHealthApp(
   }
   return timingSafeEqual(digest(m[1]!.trim()), digest(config.token)) ? config.userProfileId : null;
 }
+
+/**
+ * The deploy-level Hevy key (`HEVY_API_KEY`) belongs to the deploy owner. Only the owner's profile
+ * may fall back to it; everyone else connects their own key.
+ */
+export function ownerHevyFallback(userProfileId: string): string | undefined {
+  if (healthAppAuthConfig()?.userProfileId !== userProfileId) return undefined;
+  const k = process.env.HEVY_API_KEY?.trim() || process.env.MAGNUS_HEVY_API_KEY?.trim() || "";
+  return k || undefined;
+}
