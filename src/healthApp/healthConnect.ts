@@ -8,6 +8,7 @@
  */
 import { z } from "zod";
 
+import { logger } from "../logger.js";
 import { localDateKey } from "../nutrition/localDate.js";
 import { supabase } from "../tools/clients.js";
 import { upsertDailyActivity } from "./activityStore.js";
@@ -33,6 +34,7 @@ export const healthConnectPayload = z
           .passthrough(),
       )
       .optional(),
+    active_calories: z.array(z.object({ calories: z.coerce.number().min(0), ...interval }).passthrough()).optional(),
     weight: z.array(z.object({ kilograms: z.coerce.number().positive(), time: iso }).passthrough()).optional(),
     body_fat: z.array(z.object({ percentage: z.coerce.number().positive(), time: iso }).passthrough()).optional(),
   })
@@ -41,7 +43,7 @@ export const healthConnectPayload = z
 export type HealthConnectPayload = z.infer<typeof healthConnectPayload>;
 
 export type ActivitySample = {
-  kind: "steps" | "distance" | "exercise";
+  kind: "steps" | "distance" | "exercise" | "active_calories";
   startTime: string;
   endTime: string;
   localDate: string;
@@ -72,6 +74,9 @@ export function parseHealthConnect(payload: HealthConnectPayload, timezone: stri
   }
   for (const d of payload.distance ?? []) {
     samples.push({ kind: "distance", startTime: toIso(d.start_time), endTime: toIso(d.end_time), localDate: day(d.start_time), value: d.meters, detail: {} });
+  }
+  for (const c of payload.active_calories ?? []) {
+    samples.push({ kind: "active_calories", startTime: toIso(c.start_time), endTime: toIso(c.end_time), localDate: day(c.start_time), value: Math.round(c.calories * 10) / 10, detail: {} });
   }
   for (const e of payload.exercise ?? []) {
     const seconds =
@@ -108,7 +113,8 @@ export function parseHealthConnect(payload: HealthConnectPayload, timezone: stri
   return { samples, scale };
 }
 
-export type DayTotals = { steps: number; distanceM: number; walkMinutes: number };
+/** activeKcal is null when the phone sent no active-calories buckets for the day. */
+export type DayTotals = { steps: number; distanceM: number; walkMinutes: number; activeKcal: number | null };
 
 export function totalsFromSamples(
   rows: Array<{ kind: string; value: number; detail: Record<string, unknown> | null }>,
@@ -116,12 +122,14 @@ export function totalsFromSamples(
   let steps = 0;
   let distanceM = 0;
   let walkSeconds = 0;
+  let activeKcal: number | null = null;
   for (const r of rows) {
+    if (r.kind === "active_calories") activeKcal = (activeKcal ?? 0) + r.value;
     if (r.kind === "steps") steps += r.value;
     else if (r.kind === "distance") distanceM += r.value;
     else if (r.kind === "exercise" && isWalkType(String(r.detail?.type ?? ""))) walkSeconds += r.value;
   }
-  return { steps: Math.round(steps), distanceM: Math.round(distanceM), walkMinutes: Math.round(walkSeconds / 60) };
+  return { steps: Math.round(steps), distanceM: Math.round(distanceM), walkMinutes: Math.round(walkSeconds / 60), activeKcal: activeKcal === null ? null : Math.round(activeKcal) };
 }
 
 export type IngestResult = {
@@ -138,9 +146,8 @@ export async function ingestHealthConnect(
   const { samples, scale } = parseHealthConnect(payload, ctx.timezone);
   const today = localDateKey(ctx.now ?? new Date(), ctx.timezone);
 
-  if (samples.length > 0) {
-    const { error } = await supabase.from("health_activity_samples").upsert(
-      samples.map((s) => ({
+  const toRows = (list: ActivitySample[]) =>
+    list.map((s) => ({
         user_profile_id: ctx.userProfileId,
         kind: s.kind,
         start_time: s.startTime,
@@ -150,10 +157,21 @@ export async function ingestHealthConnect(
         detail: s.detail,
         source: "health_connect",
         updated_at: new Date().toISOString(),
-      })),
-      { onConflict: "user_profile_id,kind,start_time" },
-    );
+      }));
+  const core = samples.filter((s) => s.kind !== "active_calories");
+  const calories = samples.filter((s) => s.kind === "active_calories");
+  if (core.length > 0) {
+    const { error } = await supabase
+      .from("health_activity_samples")
+      .upsert(toRows(core), { onConflict: "user_profile_id,kind,start_time" });
     if (error) return { ok: false, error: error.message };
+  }
+  // Calories burned is extra: if the database predates it, steps and walks still go through.
+  if (calories.length > 0) {
+    const { error } = await supabase
+      .from("health_activity_samples")
+      .upsert(toRows(calories), { onConflict: "user_profile_id,kind,start_time" });
+    if (error) logger.warn({ err: error.message }, "health connect: active calories not stored");
   }
 
   const dates = [...new Set(samples.map((s) => s.localDate))].filter((d) => d <= today).sort();
@@ -177,6 +195,7 @@ export async function ingestHealthConnect(
       steps: totals.steps,
       walkMinutes: totals.walkMinutes,
       walkDistanceM: totals.distanceM,
+      activeKcal: totals.activeKcal,
       source: "health_connect",
     });
     if (!saved.ok) return saved;

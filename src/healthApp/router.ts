@@ -31,7 +31,9 @@ import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
 import { listMealsForDate } from "./meals.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
 import { applyProposal, cardFromRow, discardProposal, getProposals } from "./hevyProposals.js";
-import { analyzeTraining, hevyKey, loadWorkoutHistory } from "./training.js";
+import { analyzeTraining } from "./training.js";
+import { HEVY_HISTORY_WEEKS, hevyHistoryCached, invalidateHevyHistory } from "./hevyHistory.js";
+import { buildHealthHistory, clampDays } from "./history.js";
 import {
   deleteSubscription,
   getPrefs,
@@ -150,6 +152,14 @@ export function createHealthAppRouter(): express.Router {
   router.get(
     "/today",
     route("today", async (ctx) => ({ body: await buildHealthSnapshot(ctx.userProfileId) })),
+  );
+
+  /** Day-by-day meals (with items), steps, burn and Hevy workouts (with sets) for the tracker. */
+  router.get(
+    "/history",
+    route("history", async (ctx, req) => ({
+      body: await buildHealthHistory(ctx.userProfileId, { days: clampDays(req.query.days) }),
+    })),
   );
 
   router.get(
@@ -278,7 +288,10 @@ export function createHealthAppRouter(): express.Router {
     "/hevy/proposals/:id/apply",
     route("hevy-apply", async (ctx, req) => {
       const r = await applyProposal(ctx, String(req.params.id));
-      if (r.ok) trainingCache.delete(ctx.userProfileId);
+      if (r.ok) {
+        trainingCache.delete(ctx.userProfileId);
+        invalidateHevyHistory(ctx.userProfileId);
+      }
       return fromResult(r);
     }),
   );
@@ -346,12 +359,11 @@ export function createHealthAppRouter(): express.Router {
     route("training", async (ctx, req) => {
       const cached = trainingCache.get(ctx.userProfileId);
       if (cached && Date.now() - cached.at < TRAINING_CACHE_MS && req.query.fresh !== "1") return { body: cached.body };
-      const apiKey = await hevyKey(ctx.userProfileId);
-      if (!apiKey) return { body: { connected: false, analysis: null } };
       const now = new Date();
-      const h = await loadWorkoutHistory(apiKey, now, 8);
+      const h = await hevyHistoryCached(ctx.userProfileId, { fresh: req.query.fresh === "1", now });
+      if (!h.connected) return { body: { connected: false, analysis: null } };
       if (!h.ok) return { status: 502, body: { error: "hevy_unavailable" } };
-      const body = { connected: true, analysis: analyzeTraining(h.workouts, now, ctx.timezone, 8) };
+      const body = { connected: true, analysis: analyzeTraining(h.workouts, now, ctx.timezone, HEVY_HISTORY_WEEKS) };
       trainingCache.set(ctx.userProfileId, { at: Date.now(), body });
       return { body };
     }),

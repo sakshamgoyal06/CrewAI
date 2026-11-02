@@ -94,7 +94,7 @@ describe("totalsFromSamples", () => {
         { kind: "exercise", value: 3600, detail: { type: "STRENGTH_TRAINING" } },
         { kind: "exercise", value: 600, detail: { type: "EXERCISE_TYPE_HIKING" } },
       ]),
-    ).toEqual({ steps: 6500, distanceM: 3200, walkMinutes: 40 });
+    ).toEqual({ steps: 6500, distanceM: 3200, walkMinutes: 40, activeKcal: null });
     expect(isWalkType("running")).toBe(false);
   });
 });
@@ -120,6 +120,16 @@ describe("ingestHealthConnect", () => {
     db.checkins.set("2026-10-27", { local_date: "2026-10-27", weight_kg: 85, body_fat_pct: null, muscle_mass_kg: 37.5, note: "manual" });
     await ingestHealthConnect(ctx, healthConnectPayload.parse({ weight: [{ kilograms: 84.2, time: "2026-10-27T02:00:00Z" }] }));
     expect(db.checkins.get("2026-10-27")).toMatchObject({ weight_kg: 84.2, muscle_mass_kg: 37.5, note: "manual" });
+  });
+
+  it("sums active calories into the day and passes them to the daily row", async () => {
+    const kcal = (h: number, calories: number) => ({ calories, start_time: `2026-10-27T0${h}:00:00Z`, end_time: `2026-10-27T0${h + 1}:00:00Z` });
+    const r = await ingestHealthConnect(
+      ctx,
+      healthConnectPayload.parse({ steps: [bucket(3, 1000)], active_calories: [kcal(3, 120.4), kcal(4, 80)] }),
+    );
+    expect(r).toMatchObject({ ok: true, days: [{ date: "2026-10-27", steps: 1000, activeKcal: 200 }] });
+    expect(activityMock).toHaveBeenLastCalledWith("p1", expect.objectContaining({ activeKcal: 200 }));
   });
 
   it("ignores future days", async () => {
