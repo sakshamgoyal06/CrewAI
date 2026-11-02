@@ -8,7 +8,7 @@ val magnusHost = (project.findProperty("magnusHost") as String?) ?: "crewai-prod
 
 android {
     namespace = "app.magnus.health"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "app.magnus.health"

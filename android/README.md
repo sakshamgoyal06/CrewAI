@@ -15,7 +15,7 @@ A thin native shell around the PWA:
 
 GitHub Actions (`.github/workflows/android.yml`) builds a debug APK on every change under
 `android/` and uploads it as the `magnus-android` artifact. Locally: `gradle -p android assembleDebug`
-with the Android SDK installed (compileSdk 35, JDK 17).
+with the Android SDK installed (compileSdk 36, JDK 17).
 
 Another deploy: `gradle -p android assembleDebug -PmagnusHost=your.domain`.
 
