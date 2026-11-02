@@ -24,6 +24,7 @@ const state = {
 const CHAT_CACHE_KEY = "magnus-chat-cache";
 const SNAPSHOT_CACHE_KEY = "magnus-snapshot-cache";
 const HISTORY_CACHE_KEY = "magnus-history-cache";
+const USUAL_CACHE_KEY = "magnus-usual-meals";
 
 // ---------- API ----------
 
@@ -52,6 +53,7 @@ async function api(path, options = {}) {
   }
   if (res.status === 401) {
     store.set(TOKEN_KEY, null);
+    store.set(USUAL_CACHE_KEY, null);
     store.set(CHAT_CACHE_KEY, null);
     store.set(SNAPSHOT_CACHE_KEY, null);
     store.set(HISTORY_CACHE_KEY, null);
@@ -79,6 +81,9 @@ function friendlyError(code) {
     push_not_configured: "Push isn't set up on the server yet (VAPID keys).",
     no_devices: "This device isn't subscribed yet.",
     not_enough_data: "Not enough logged days yet to find a pattern.",
+    meal_not_found: "That meal isn't in your usual list any more.",
+    not_food: "I don't see a meal in that photo. Try a clearer shot of the plate, or type what you ate.",
+    unreadable: "I couldn't read that photo. Try again, or type what you ate.",
   }[code] || "Something went wrong. Try again.";
 }
 
@@ -160,7 +165,7 @@ function setView(view) {
   if (view === "tracker") {
     window.scrollTo(0, 0);
     // Hevy history is several slow calls; only fetch it once the tracker is actually opened.
-    if (!state.trainingLoaded) { state.trainingLoaded = true; loadTraining(); loadDays(); }
+    if (!state.trainingLoaded) { state.trainingLoaded = true; loadTraining(); loadDays(); loadReview(); }
     else if (state.history) requestAnimationFrame(renderTrend);
   }
 }
@@ -173,9 +178,38 @@ async function refresh() {
     state.snapshot = await api("/today");
     renderSnapshot(state.snapshot);
     store.set(SNAPSHOT_CACHE_KEY, state.snapshot);
+    loadUsual();
   } catch (err) {
     toast(err.message);
   }
+}
+
+// ---------- usual meals ----------
+
+/** Meals logged again and again; the chat chips and the meal sheet offer them as one tap. */
+async function loadUsual() {
+  try {
+    const r = await api("/meals/usual");
+    state.usual = r.meals || [];
+    store.set(USUAL_CACHE_KEY, state.usual);
+    renderChips(state.snapshot);
+  } catch { /* chips just stay as they were */ }
+}
+
+const short = (t, n = 24) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
+
+function repeatMeal(m) {
+  return coachTurn(
+    () => addMessage("user", `Usual: ${m.text}`),
+    () => api("/meals/repeat", { method: "POST", body: JSON.stringify({ key: m.key }) }),
+  );
+}
+
+/** A usual meal as a local draft (for the meal sheet): same items, fresh id, confirm as usual. */
+function usualDraft(m) {
+  const h = new Date().getHours();
+  const slot = m.slot === "snack" ? "snack" : h < 11 ? "breakfast" : h < 16 ? "lunch" : h < 18 ? "snack" : "dinner";
+  return { draftId: crypto.randomUUID(), text: m.text, slot, source: m.source, items: m.items.map((i) => ({ ...i })), totals: m.totals, estimated: true, servingAssumption: null };
 }
 
 function renderSnapshot(s) {
@@ -200,6 +234,7 @@ function renderSnapshot(s) {
   );
 
   renderGoal(s);
+  if (state.review) renderReview();
 
   // Day cards: from the history once it's loaded; until then today's numbers from this snapshot.
   if (!state.history) renderDay();
@@ -771,7 +806,11 @@ function renderChips(s) {
     ["How am I doing?", "How am I doing this week?"],
     !s?.goal ? ["Set my goal", "I want to reach "] : ["Why am I off track?", "Why am I off track this week, and what should I change?"],
   ].filter(Boolean);
+  // The two best usual meals for this time of day lead, as one-tap repeats.
+  const usual = (state.usual || []).slice(0, 2).map((m) =>
+    el("button", { class: "chip usual", type: "button", title: m.text, onclick: () => repeatMeal(m) }, `↻ ${short(m.text)}`));
   $("chips").replaceChildren(
+    ...usual,
     ...chips.map(([label, text]) =>
       el("button", { class: "chip", type: "button", onclick: () => {
         // Questions send straight away (no keyboard pop-up); the rest pre-fill for the person to finish.
@@ -846,6 +885,14 @@ const CHAT_TIMEOUT_MS = 90_000;
 /** Returns false when the message wasn't sent, so the caller keeps the text. */
 async function send(text) {
   if (!text.trim()) return false;
+  return coachTurn(addMessage.bind(null, "user", text), () => api("/chat", { method: "POST", body: JSON.stringify({ text }) }));
+}
+
+/**
+ * One exchange in the thread: the person's bubble, a typing indicator, then the reply and its
+ * cards. Shared by typed messages, meal photos and repeat meals.
+ */
+async function coachTurn(showUser, request) {
   if (state.sending) {
     toast("Still answering your last message. One moment.");
     return false;
@@ -854,19 +901,19 @@ async function send(text) {
   state.historySig = null;
   $("send").disabled = true;
   if ($("thread").querySelector(".empty")) $("thread").replaceChildren();
-  addMessage("user", text);
+  showUser();
   const typing = el("div", { class: "msg coach typing" }, el("i"), el("i"), el("i"));
   $("thread").append(typing);
   scrollThread();
   try {
     let timer;
     const reply = await Promise.race([
-      api("/chat", { method: "POST", body: JSON.stringify({ text }) }),
+      request(),
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("That's taking too long. The answer will show when you reopen the app, or try again.")), CHAT_TIMEOUT_MS); }),
     ]).finally(() => clearTimeout(timer));
     typing.remove();
     addMessage("coach", reply.text);
-    for (const c of reply.cards) appendCard(c);
+    for (const c of reply.cards || []) appendCard(c);
     scrollThread();
     if (reply.changed) refresh();
   } catch (err) {
@@ -877,6 +924,53 @@ async function send(text) {
     $("send").disabled = false;
   }
   return true;
+}
+
+// ---------- meal photos ----------
+
+const PHOTO_MAX_PX = 1280;
+
+/** Shrinks a camera photo to ~1280 px JPEG (a few hundred KB) before upload; returns base64. */
+async function photoToJpeg(file) {
+  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(() => null);
+  if (!bmp) throw new Error("Couldn't open that image. Try a JPEG or PNG photo.");
+  const scale = Math.min(1, PHOTO_MAX_PX / Math.max(bmp.width, bmp.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bmp.width * scale);
+  canvas.height = Math.round(bmp.height * scale);
+  canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  bmp.close?.();
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+  if (!blob) throw new Error("Couldn't prepare that photo.");
+  const dataUrl = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error("Couldn't read that photo."));
+    r.readAsDataURL(blob);
+  });
+  return String(dataUrl).split(",")[1];
+}
+
+/** Photo of the plate → draft card in the thread. Text in the composer goes along as a note. */
+async function sendPhoto(file) {
+  if (!file) return;
+  if (state.sending) { toast("Still answering your last message. One moment."); return; }
+  const note = $("input").value.trim();
+  $("input").value = "";
+  autosize();
+  const preview = URL.createObjectURL(file);
+  await coachTurn(
+    () => {
+      $("thread").append(el("div", { class: "msg user photo" },
+        el("img", { src: preview, alt: "Meal photo", onload: () => scrollThread() }),
+        note ? el("span", {}, note) : null));
+      scrollThread();
+    },
+    async () => {
+      const image = await photoToJpeg(file);
+      return api("/meals/photo", { method: "POST", body: JSON.stringify({ image, mediaType: "image/jpeg", note: note || undefined }) });
+    },
+  );
 }
 
 function autosize() {
@@ -890,6 +984,7 @@ function appendCard(c) {
   else if (c.type === "workout_check") $("thread").append(workoutCheckCard(c));
   else if (c.type === "hevy_proposal") $("thread").append(hevyProposalCard(c));
   else if (c.type === "rca") $("thread").append(rcaCard(c));
+  else if (c.type === "calorie_review") $("thread").append(calorieReviewCard(c.review));
 }
 
 // ---------- root-cause card ----------
@@ -929,6 +1024,81 @@ function rcaCard(c) {
     );
   }
   render(c);
+  return card;
+}
+
+// ---------- calorie target review ----------
+
+const REVIEW_KEY = "magnus-calorie-reviews";
+const reviewId = (r) => `${r.suggestedTarget}|${r.maintenanceKcal}|${r.avgIntakeKcal}`;
+
+async function loadReview() {
+  try {
+    state.review = await api("/targets/review");
+  } catch {
+    state.review = null;
+  }
+  renderReview();
+}
+
+function renderReview() {
+  const host = $("target-review");
+  const r = state.review;
+  if (!r) return host.replaceChildren();
+  if (r.status !== "ok") {
+    return host.replaceChildren(el("p", { class: "section-label" }, "Calorie target"), el("p", { class: "hint" }, r.summary));
+  }
+  host.replaceChildren(reviewPanel(r, () => renderReview()));
+}
+
+/** Maintenance from real intake + weight trend, the on-pace target, and one tap to apply it. */
+function reviewPanel(r, rerender) {
+  const current = state.snapshot?.targets?.calorieTarget ?? r.currentTarget;
+  const applied = current === r.suggestedTarget;
+  const kept = store.get(REVIEW_KEY, {})[reviewId(r)] === "kept";
+  const signed = (v) => `${v > 0 ? "+" : ""}${fmt(v, 2)}`;
+  const apply = el("button", { class: "btn primary", type: "button" }, `Set ${fmt(r.suggestedTarget)} kcal`);
+  apply.addEventListener("click", async () => {
+    apply.disabled = true;
+    try {
+      await api("/targets", { method: "POST", body: JSON.stringify({ calorieTarget: r.suggestedTarget }) });
+      if (state.snapshot?.targets) state.snapshot.targets.calorieTarget = r.suggestedTarget;
+      toast(`Calorie target set to ${fmt(r.suggestedTarget)} kcal.`);
+      rerender();
+      refresh();
+    } catch (err) {
+      apply.disabled = false;
+      toast(err.message);
+    }
+  });
+  const keep = el("button", { class: "btn", type: "button", onclick: () => {
+    const all = store.get(REVIEW_KEY, {});
+    all[reviewId(r)] = "kept";
+    store.set(REVIEW_KEY, all);
+    rerender();
+  } }, current ? `Keep ${fmt(current)}` : "Not now");
+  const offer = r.recommend && !applied && !kept;
+  return el("div", { class: "review" },
+    el("p", { class: "eyebrow" }, `Calorie target · last 4 weeks · ${r.confidence} confidence`),
+    el("div", { class: "review-top" },
+      el("div", { class: "draft-kcal" }, fmt(offer || applied ? r.suggestedTarget : current ?? r.suggestedTarget), el("small", {}, "kcal / day")),
+      el("span", { class: `tag ${r.cappedForSafety ? "behind" : "on_pace"}` }, `${signed(r.plannedKgPerWeek)} kg/wk`),
+    ),
+    el("div", { class: "review-stats" },
+      el("span", {}, el("b", {}, fmt(r.maintenanceKcal)), " maintenance"),
+      el("span", {}, el("b", {}, fmt(r.avgIntakeKcal)), " avg logged"),
+      el("span", {}, el("b", {}, signed(r.actualKgPerWeek)), " kg/wk now"),
+    ),
+    el("p", { class: "review-line" }, r.summary),
+    offer ? el("div", { class: "draft-actions" }, keep, apply)
+      : el("p", { class: "rca-status trying" }, applied ? `✓ Target is ${fmt(r.suggestedTarget)} kcal` : kept ? `Kept ${fmt(current)} kcal` : "✓ Your target is on pace"),
+  );
+}
+
+function calorieReviewCard(review) {
+  const card = el("div", { class: "draft" });
+  const paint = () => card.replaceChildren(reviewPanel(review, paint));
+  paint();
   return card;
 }
 
@@ -1360,9 +1530,10 @@ const num = (v) => (v === "" || v == null ? undefined : Number(v));
 
 const SHEETS = {
   quick() {
-    return el("div", { class: "quick-row" },
+    return el("div", { class: "quick-row two" },
       ...[["meal", "Meal"], ["steps", "Steps"], ["checkin", "Weigh-in"]].map(([k, l]) =>
-        el("button", { class: "quick", type: "button", onclick: () => openSheet(k) }, el("span", {}, l))));
+        el("button", { class: "quick", type: "button", onclick: () => openSheet(k) }, el("span", {}, l))),
+      el("button", { class: "quick", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, el("span", {}, "Photo")));
   },
 
   meal() {
@@ -1379,9 +1550,21 @@ const SHEETS = {
       form.hidden = true;
       holder.replaceChildren(mealDraftCard(draft, { onDone: () => setTimeout(closeSheet, 700) }));
     }) },
+      (state.usual || []).length
+        ? el("div", { class: "usual-list" },
+            el("p", { class: "section-label" }, "Your usual"),
+            ...state.usual.slice(0, 5).map((m) =>
+              el("button", { class: "usual-row", type: "button", onclick: () => {
+                form.hidden = true;
+                holder.replaceChildren(mealDraftCard(usualDraft(m), { onDone: () => setTimeout(closeSheet, 700) }));
+              } },
+                el("span", {}, m.text),
+                el("small", {}, `${fmt(m.totals.calories)} kcal · ${m.count}×`))))
+        : null,
       el("textarea", { class: "field", name: "text", rows: "3", required: true, placeholder: "e.g. 2 rotis, a bowl of dal, 100 g paneer bhurji", minlength: "2" }),
       el("button", { class: "btn primary block", type: "submit" }, "Estimate"),
       el("p", { class: "hint" }, "You'll see the estimate and can fix any line before it's logged."),
+      el("button", { class: "link", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, "Or snap a photo of the plate"),
     );
     return el("div", {}, form, holder);
   },
@@ -1410,6 +1593,7 @@ const SHEETS = {
       toast("Weigh-in saved.");
       closeSheet();
       refresh();
+      loadReview();
     }) },
       el("div", { class: "grid3" },
         el("label", {}, "Weight kg", el("input", { class: "field", name: "w", type: "number", step: "0.1", inputmode: "decimal", placeholder: last?.weight_kg ?? "" })),
@@ -1489,6 +1673,13 @@ for (const t of document.querySelectorAll(".tab")) t.addEventListener("click", (
 $("coach-stat").addEventListener("click", () => setView("tracker"));
 $("settings-btn").addEventListener("click", () => openSheet("settings"));
 $("quick").addEventListener("click", () => openSheet("quick"));
+$("photo").addEventListener("click", () => $("photo-input").click());
+$("photo-input").addEventListener("change", (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if ($("view-coach").hidden) setView("coach");
+  sendPhoto(file);
+});
 $("sheet-close").addEventListener("click", closeSheet);
 $("scrim").addEventListener("click", closeSheet);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
@@ -1534,6 +1725,8 @@ function start() {
     try { state.snapshot = cachedSnap; renderSnapshot(cachedSnap); } catch { state.snapshot = null; }
   }
   if (state.history) { try { renderDays(); } catch { state.history = null; } }
+  const cachedUsual = store.get(USUAL_CACHE_KEY, null);
+  if (Array.isArray(cachedUsual)) { state.usual = cachedUsual; renderChips(state.snapshot); }
   loadHistory();
   refresh();
   flushQueue();

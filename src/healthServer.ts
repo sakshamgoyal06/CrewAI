@@ -18,6 +18,8 @@ export function startHealthServer(): Promise<HealthServer> {
   app.disable("x-powered-by");
   // Health Connect syncs can carry a day or two of buckets; everything else is tiny.
   app.use("/api/health/ingest", express.json({ limit: "2mb" }));
+  // Meal photos arrive as base64 JPEG, resized on the phone to ~1280 px (usually under 400 KB).
+  app.use("/api/health/meals/photo", express.json({ limit: "8mb" }));
   app.use("/api/health/events", express.json({ limit: "128kb" }));
   app.use(express.json({ limit: "32kb" }));
 

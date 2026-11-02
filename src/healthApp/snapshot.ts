@@ -126,7 +126,7 @@ export async function loadHealthProfile(
 
 type MealDay = { sessions: Set<string>; calories: number; proteinG: number };
 
-async function loadMealDays(
+export async function loadMealDays(
   userProfileId: string,
   fromDate: string,
   toDate: string,

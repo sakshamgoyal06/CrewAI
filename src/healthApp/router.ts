@@ -29,6 +29,9 @@ import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from 
 import { loadChatHistory, runHealthChat } from "./chat.js";
 import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
 import { listMealsForDate } from "./meals.js";
+import { draftMealFromPhoto } from "./mealCards.js";
+import { getUsualMeals, repeatUsualMeal } from "./frequentMeals.js";
+import { photoMealInput } from "./photoMeal.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
 import { applyProposal, cardFromRow, discardProposal, getProposals } from "./hevyProposals.js";
 import { analyzeTraining } from "./training.js";
@@ -46,6 +49,7 @@ import {
 } from "./push.js";
 import { cardFromReport, getReports, rcaResponseInput, respondToRca, runRca } from "./rca.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
+import { loadCalorieReview } from "./calorieTarget.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
 
 const chatInput = z.object({ text: z.string().trim().min(1).max(2000) });
@@ -219,6 +223,31 @@ export function createHealthAppRouter(): express.Router {
     })),
   );
 
+  /** Photo of the plate → the same editable draft card, posted into the chat. */
+  router.post(
+    "/meals/photo",
+    route("meal-photo", async (ctx, req) => {
+      const r = await draftMealFromPhoto(ctx, photoMealInput.parse(req.body));
+      return { status: r.ok ? 200 : 400, body: r };
+    }),
+  );
+
+  /** Meals logged again and again, best match for the time of day first. */
+  router.get(
+    "/meals/usual",
+    route("meals-usual", async (ctx) => ({ body: await getUsualMeals(ctx) })),
+  );
+
+  /** One tap on a usual meal → a fresh draft card in the chat, to confirm. */
+  router.post(
+    "/meals/repeat",
+    route("meal-repeat", async (ctx, req) => {
+      const { key } = z.object({ key: z.string().trim().min(1).max(500) }).parse(req.body);
+      const r = await repeatUsualMeal(ctx, key);
+      return { status: r.ok ? 200 : 404, body: r };
+    }),
+  );
+
   router.post(
     "/meals/confirm",
     route("meal-confirm", async (ctx, req) =>
@@ -273,6 +302,12 @@ export function createHealthAppRouter(): express.Router {
     route("targets", async (ctx, req) =>
       fromResult(await setTargets(ctx, targetsInput.parse(req.body))),
     ),
+  );
+
+  /** Adaptive calorie target: maintenance from real intake and weight trend, and the on-pace target. */
+  router.get(
+    "/targets/review",
+    route("targets-review", async (ctx) => ({ body: await loadCalorieReview(ctx.userProfileId) })),
   );
 
   /** Answer to the post-gym-slot check: recheck Hevy, skipped (with reason), or trained but unlogged. */
