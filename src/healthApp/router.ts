@@ -35,7 +35,15 @@ import { connectHevy, disconnectHevy, hevyConnected, hevyKeyInput } from "./inte
 import { supabase } from "../tools/clients.js";
 import { takeUse } from "./usageLimits.js";
 import { deleteAccount, exportAccount } from "./privacy.js";
-import { completeOnboarding, isOnboarded, onboardingInput, startingPlan } from "./onboarding.js";
+import {
+  completeOnboarding,
+  foodPrefsInput,
+  isOnboarded,
+  loadFoodPrefs,
+  onboardingInput,
+  saveFoodPrefs,
+  startingPlan,
+} from "./onboarding.js";
 import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from "./events.js";
 import { loadChatHistory, runHealthChat } from "./chat.js";
 import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
@@ -231,8 +239,18 @@ export function createHealthAppRouter(): express.Router {
           timezone: ctx.timezone,
           hevyConnected: hevy,
           tokens,
+          food: await loadFoodPrefs(ctx.userProfileId).catch(() => null),
         },
       };
+    }),
+  );
+
+  /** Diet and foods to avoid, editable any time from Settings. */
+  router.put(
+    "/account/food",
+    route("account-food", async (ctx, req) => {
+      const r = await saveFoodPrefs(ctx.userProfileId, foodPrefsInput.parse(req.body));
+      return r.ok ? { body: r } : { status: 500, body: r };
     }),
   );
 

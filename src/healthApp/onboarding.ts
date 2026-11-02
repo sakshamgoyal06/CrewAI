@@ -13,6 +13,7 @@
  * When the deadline needs more than that, the plan says so and gives the date the safe pace hits.
  */
 import { z } from "zod";
+import { logger } from "../logger.js";
 
 import { localDateKey } from "../nutrition/localDate.js";
 import { supabase } from "../tools/clients.js";
@@ -40,7 +41,33 @@ const RECOMP_DEFICIT = 250;
 const LEAN_GAIN_SURPLUS = 250;
 const FLOOR = { male: 1500, female: 1200 } as const;
 
-export const DIETS = ["vegetarian", "eggetarian", "non_vegetarian", "vegan", "jain"] as const;
+export const DIETS = ["vegetarian", "eggetarian", "non_vegetarian", "vegan", "jain", "custom"] as const;
+
+/** A custom diet in their own words, and foods to avoid (allergies, intolerances, dislikes). */
+export const foodPrefsShape = {
+  diet: z.enum(DIETS),
+  dietNote: z.string().trim().max(200).optional().nullable(),
+  foodAvoid: z.array(z.string().trim().min(1).max(40)).max(25).default([]),
+};
+
+export const foodPrefsInput = z
+  .object(foodPrefsShape)
+  .refine((v) => v.diet !== "custom" || !!v.dietNote, { message: "describe your diet", path: ["dietNote"] });
+
+/** De-duplicated, trimmed avoid list as stored. */
+export function cleanAvoidList(items: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of items) {
+    const item = raw.trim().replace(/\s+/g, " ");
+    const key = item.toLowerCase();
+    if (item && !seen.has(key)) {
+      seen.add(key);
+      out.push(item);
+    }
+  }
+  return out;
+}
 
 export const onboardingInput = z
   .object({
@@ -60,8 +87,9 @@ export const onboardingInput = z
       .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
       .nullable()
       .optional(),
-    diet: z.enum(DIETS),
+    ...foodPrefsShape,
   })
+  .refine((v) => v.diet !== "custom" || !!v.dietNote, { message: "describe your diet", path: ["dietNote"] })
   .refine((v) => v.goalType === "recomp" || v.targetWeightKg !== undefined || v.targetBodyFatPct !== undefined, {
     message: "need a target weight or body fat",
     path: ["targetWeightKg"],
@@ -181,7 +209,21 @@ const DIET_LABEL: Record<(typeof DIETS)[number], string> = {
   non_vegetarian: "non-vegetarian",
   vegan: "vegan",
   jain: "Jain (no root vegetables, no eggs or meat)",
+  custom: "custom",
 };
+
+/** One line for the coach: the diet, and what never to suggest. */
+export function foodPrefsLine(d: { diet?: unknown; diet_note?: unknown; food_avoid?: unknown }): string | null {
+  const diet = d.diet === "custom"
+    ? (d.diet_note ? `diet (their words): ${String(d.diet_note)}` : null)
+    : d.diet
+      ? `diet: ${DIET_LABEL[d.diet as (typeof DIETS)[number]] ?? String(d.diet)}${d.diet_note ? ` (${String(d.diet_note)})` : ""}`
+      : null;
+  const avoid = Array.isArray(d.food_avoid) && d.food_avoid.length
+    ? `must avoid (allergy, intolerance or won't eat; never suggest these or dishes containing them): ${d.food_avoid.map(String).join(", ")}`
+    : null;
+  return [diet, avoid].filter(Boolean).join("; ") || null;
+}
 
 export async function isOnboarded(userProfileId: string): Promise<boolean> {
   const [hp, goal] = await Promise.all([
@@ -196,7 +238,7 @@ export async function isOnboarded(userProfileId: string): Promise<boolean> {
 export async function loadPersonalDetails(userProfileId: string): Promise<string | null> {
   const { data } = await supabase
     .from("user_health_profile")
-    .select("sex, birth_year, height_cm, activity_level, diet, goal_type")
+    .select("sex, birth_year, height_cm, activity_level, diet, diet_note, food_avoid, goal_type")
     .eq("user_profile_id", userProfileId)
     .maybeSingle();
   const d = (data ?? null) as Record<string, unknown> | null;
@@ -206,7 +248,7 @@ export async function loadPersonalDetails(userProfileId: string): Promise<string
     d.birth_year ? `born ${String(d.birth_year)}` : null,
     d.height_cm ? `${String(d.height_cm)} cm` : null,
     d.activity_level ? `${String(d.activity_level)} job/day` : null,
-    d.diet ? `diet: ${DIET_LABEL[d.diet as (typeof DIETS)[number]] ?? String(d.diet)}` : null,
+    foodPrefsLine(d),
     d.goal_type ? `goal type: ${String(d.goal_type)}` : null,
   ];
   return parts.filter(Boolean).join(", ");
@@ -222,21 +264,27 @@ export async function completeOnboarding(
   if (dayNumber(input.deadline) <= dayNumber(today)) return { ok: false, error: "deadline_must_be_after_start" };
   const plan = startingPlan(input, today);
 
-  const profile = await supabase
-    .from("user_health_profile")
-    .upsert(
-      {
-        user_profile_id: ctx.userProfileId,
-        sex: input.sex,
-        birth_year: input.birthYear,
-        height_cm: input.heightCm,
-        activity_level: input.activity,
-        diet: input.diet,
-        goal_type: input.goalType,
-        onboarded_at: now.toISOString(),
-      },
-      { onConflict: "user_profile_id" },
-    );
+  const row = {
+    user_profile_id: ctx.userProfileId,
+    sex: input.sex,
+    birth_year: input.birthYear,
+    height_cm: input.heightCm,
+    activity_level: input.activity,
+    diet: input.diet,
+    diet_note: input.dietNote?.trim() || null,
+    food_avoid: cleanAvoidList(input.foodAvoid),
+    goal_type: input.goalType,
+    onboarded_at: now.toISOString(),
+  };
+  let profile = await supabase.from("user_health_profile").upsert(row, { onConflict: "user_profile_id" });
+  if (profile.error && /diet_note|food_avoid|diet_check/.test(profile.error.message)) {
+    // The food-preferences migration isn't applied yet: save the rest rather than block sign-up.
+    logger.warn({ err: profile.error.message }, "food preferences not saved (migration pending)");
+    const { diet_note: _n, food_avoid: _a, ...legacy } = row;
+    profile = await supabase
+      .from("user_health_profile")
+      .upsert({ ...legacy, diet: input.diet === "custom" ? null : input.diet }, { onConflict: "user_profile_id" });
+  }
   if (profile.error) return { ok: false, error: profile.error.message };
 
   const checkin = await logCheckin(ctx, { date: today, weightKg: input.weightKg, bodyFatPct: input.bodyFatPct });
@@ -270,4 +318,31 @@ export async function completeOnboarding(
     [],
   );
   return { ok: true, plan };
+}
+
+export type FoodPrefs = { diet: (typeof DIETS)[number] | null; dietNote: string | null; foodAvoid: string[] };
+
+export async function loadFoodPrefs(userProfileId: string): Promise<FoodPrefs> {
+  const { data } = await supabase
+    .from("user_health_profile")
+    .select("diet, diet_note, food_avoid")
+    .eq("user_profile_id", userProfileId)
+    .maybeSingle();
+  const d = (data ?? {}) as { diet?: FoodPrefs["diet"]; diet_note?: string | null; food_avoid?: string[] | null };
+  return { diet: d.diet ?? null, dietNote: d.diet_note ?? null, foodAvoid: d.food_avoid ?? [] };
+}
+
+export async function saveFoodPrefs(userProfileId: string, input: z.infer<typeof foodPrefsInput>): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase
+    .from("user_health_profile")
+    .upsert(
+      {
+        user_profile_id: userProfileId,
+        diet: input.diet,
+        diet_note: input.dietNote?.trim() || null,
+        food_avoid: cleanAvoidList(input.foodAvoid),
+      },
+      { onConflict: "user_profile_id" },
+    );
+  return error ? { ok: false, error: error.message } : { ok: true };
 }

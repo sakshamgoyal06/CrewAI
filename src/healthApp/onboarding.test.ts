@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../tools/clients.js", () => ({ supabase: {}, redis: {}, anthropic: {} }));
 
-import { onboardingInput, startingPlan, type OnboardingInput } from "./onboarding.js";
+import { cleanAvoidList, foodPrefsLine, onboardingInput, startingPlan, type OnboardingInput } from "./onboarding.js";
 
 const TODAY = "2026-11-02";
 const base: OnboardingInput = {
@@ -16,6 +16,7 @@ const base: OnboardingInput = {
   activity: "desk",
   trainingDays: [1, 2, 4, 5],
   diet: "vegetarian",
+  foodAvoid: [],
 };
 
 describe("startingPlan", () => {
@@ -81,5 +82,24 @@ describe("onboardingInput", () => {
     expect(onboardingInput.safeParse(noTarget).success).toBe(false);
     expect(onboardingInput.safeParse({ ...noTarget, goalType: "recomp" }).success).toBe(true);
     expect(onboardingInput.safeParse({ ...base, diet: "keto" }).success).toBe(false);
+  });
+});
+
+describe("food preferences", () => {
+  it("needs a description for a custom diet", () => {
+    expect(onboardingInput.safeParse({ ...base, diet: "custom" }).success).toBe(false);
+    expect(onboardingInput.safeParse({ ...base, diet: "custom", dietNote: "pescatarian, no beef" }).success).toBe(true);
+  });
+
+  it("cleans the avoid list", () => {
+    expect(cleanAvoidList([" Peanuts ", "peanuts", "tree  nuts", ""])).toEqual(["Peanuts", "tree nuts"]);
+  });
+
+  it("tells the coach the diet and what never to suggest", () => {
+    expect(foodPrefsLine({ diet: "custom", diet_note: "pescatarian", food_avoid: ["Peanuts", "Dairy"] })).toBe(
+      "diet (their words): pescatarian; must avoid (allergy, intolerance or won't eat; never suggest these or dishes containing them): Peanuts, Dairy",
+    );
+    expect(foodPrefsLine({ diet: "jain", food_avoid: [] })).toBe("diet: Jain (no root vegetables, no eggs or meat)");
+    expect(foodPrefsLine({})).toBeNull();
   });
 });
