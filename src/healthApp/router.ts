@@ -41,6 +41,7 @@ import { loadChatHistory, runHealthChat } from "./chat.js";
 import { healthConnectPayload, ingestHealthConnect } from "./healthConnect.js";
 import { listMealsForDate } from "./meals.js";
 import { draftMealFromPhoto } from "./mealCards.js";
+import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
 import { getUsualMeals, repeatUsualMeal } from "./frequentMeals.js";
 import { photoMealInput } from "./photoMeal.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
@@ -341,6 +342,16 @@ export function createHealthAppRouter(): express.Router {
       }
       const r = await draftMealFromPhoto(ctx, input);
       return { status: r.ok ? 200 : 400, body: r };
+    }),
+  );
+
+  /** Barcode on a packet → the label's numbers as a draft card in the chat. */
+  router.post(
+    "/meals/barcode",
+    route("meal-barcode", async (ctx, req) => {
+      const r = await draftMealFromBarcode(ctx, barcodeInput.parse(req.body));
+      const status = r.ok ? 200 : r.error === "barcode_not_found" ? 404 : 502;
+      return { status, body: r };
     }),
   );
 

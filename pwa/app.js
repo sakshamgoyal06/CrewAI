@@ -3,6 +3,7 @@
 
 import { SESSION_ID, trackApi } from "./telemetry.js";
 import { runOnboarding } from "./onboarding.js";
+import { scanView } from "./scan.js";
 import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
 const TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } })();
@@ -107,6 +108,8 @@ function friendlyError(code) {
     not_food: "I don't see a meal in that photo. Try a clearer shot of the plate, or type what you ate.",
     unreadable: "I couldn't read that photo. Try again, or type what you ate.",
     owner_account: "The owner account can't be deleted from the app.",
+    barcode_not_found: "That barcode isn't in the food database yet. Type what it was instead, or snap a photo of the label.",
+    barcode_lookup_failed: "Couldn't reach the food database just now. Try again in a minute, or type what you had.",
     daily_limit: "You've hit today's limit for the coach. Log from the tracker, or try again tomorrow.",
     hevy_key_invalid: "Hevy didn't accept that key. Copy it again from hevy.com → Settings → Developer.",
   }[code] || "Something went wrong. Try again.";
@@ -1004,6 +1007,13 @@ async function sendPhoto(file) {
   );
 }
 
+async function sendBarcode(code, grams) {
+  await coachTurn(
+    () => { addMessage("user", `▥ Scanned barcode ${code}${grams ? ` (${grams} g)` : ""}`); scrollThread(); },
+    () => api("/meals/barcode", { method: "POST", body: JSON.stringify({ code, grams }) }),
+  );
+}
+
 function autosize() {
   const t = $("input");
   t.style.height = "auto";
@@ -1625,13 +1635,17 @@ function finishedCard(card, draft, status) {
 // ---------- sheets ----------
 
 function closeSheet() {
+  state.sheetCleanup?.();
+  state.sheetCleanup = null;
   $("sheet").hidden = true;
   $("scrim").hidden = true;
 }
 
 function openSheet(kind) {
   const body = $("sheet-body");
-  const titles = { meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", quick: "Quick add" };
+  state.sheetCleanup?.();
+  state.sheetCleanup = null;
+  const titles = { meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", quick: "Quick add", scan: "Scan a packet" };
   $("sheet-title").textContent = titles[kind];
   body.replaceChildren(SHEETS[kind]());
   $("sheet").hidden = false;
@@ -1655,7 +1669,14 @@ const SHEETS = {
     return el("div", { class: "quick-row two" },
       ...[["meal", "Meal"], ["steps", "Steps"], ["checkin", "Weigh-in"]].map(([k, l]) =>
         el("button", { class: "quick", type: "button", onclick: () => openSheet(k) }, el("span", {}, l))),
-      el("button", { class: "quick", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, el("span", {}, "Photo")));
+      el("button", { class: "quick", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, el("span", {}, "Photo")),
+      el("button", { class: "quick", type: "button", onclick: () => openSheet("scan") }, el("span", {}, "Barcode")));
+  },
+
+  scan() {
+    const view = scanView({ el, onCode: ({ code, grams }) => { closeSheet(); sendBarcode(code, grams); } });
+    state.sheetCleanup = view.stop;
+    return view.node;
   },
 
   meal() {
@@ -1687,6 +1708,7 @@ const SHEETS = {
       el("button", { class: "btn primary block", type: "submit" }, "Estimate"),
       el("p", { class: "hint" }, "You'll see the estimate and can fix any line before it's logged."),
       el("button", { class: "link", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, "Or snap a photo of the plate"),
+      el("button", { class: "link", type: "button", onclick: () => openSheet("scan") }, "Or scan a packet's barcode"),
     );
     return el("div", {}, form, holder);
   },

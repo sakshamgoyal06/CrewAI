@@ -538,3 +538,6 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .plan-nums small { color: var(--muted); font-size: 0.75rem; }
 .plan-warn { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); font-size: 0.9rem; }
 .plan-lines p { margin: 0 0 10px; color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
+
+/* barcode scan */
+.scan-video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 14px; background: #000; }
