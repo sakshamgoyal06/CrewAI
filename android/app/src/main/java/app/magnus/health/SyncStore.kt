@@ -27,5 +27,10 @@ class SyncStore(context: Context) {
         get() = prefs.getBoolean("buckets_aligned", false)
         set(value) = prefs.edit().putBoolean("buckets_aligned", value).apply()
 
+    /** HealthSync.PERMISSIONS_VERSION last asked for; lower means new data types to ask about. */
+    var permissionsAsked: Int
+        get() = prefs.getInt("permissions_asked", 1)
+        set(value) = prefs.edit().putInt("permissions_asked", value).apply()
+
     fun clear() = prefs.edit().clear().apply()
 }

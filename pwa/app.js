@@ -698,6 +698,9 @@ function renderRecovery(d) {
   const parts = [];
   if (d.sleepMinutes != null) parts.push(["Slept ", el("b", {}, `${Math.floor(d.sleepMinutes / 60)} h ${String(d.sleepMinutes % 60).padStart(2, "0")} min`)]);
   if (d.restingHr != null) parts.push(["Resting heart rate ", el("b", {}, `${fmt(d.restingHr)} bpm`)]);
+  if (d.hrvMs != null) parts.push(["HRV ", el("b", {}, `${fmt(d.hrvMs)} ms`)]);
+  // Health Connect's total includes resting metabolism; "Burned" above is activity only.
+  if (d.totalKcal != null) parts.push(["Total burn with resting ", el("b", {}, `${fmt(d.totalKcal)} kcal`)]);
   line.hidden = !parts.length;
   line.replaceChildren(...parts.flatMap((p, i) => (i ? [" · ", ...p] : p)));
 }
@@ -990,8 +993,6 @@ function barChart(host, days, cfg, target, onPick) {
 }
 
 for (const b of document.querySelectorAll("#trend-tabs button")) b.addEventListener("click", () => { state.trend.metric = b.dataset.metric; renderTrend(); });
-$("hc-prompt-go")?.addEventListener("click", (e) => connectHealthConnect(e.currentTarget));
-$("hc-prompt-later")?.addEventListener("click", () => { store.set(HC_DISMISSED_KEY, true); $("hc-prompt").hidden = true; });
 
 /** The range buttons: days for daily metrics, months for weight and body fat. */
 function renderRange(options, current, set) {
@@ -1706,10 +1707,16 @@ async function connectHealthConnect(button) {
   if (button) setTimeout(() => { button.disabled = false; }, 1500);
 }
 
+/** Already linked: the app asks Health Connect for the data types a newer version reads. */
+function askNewHealthConnectData() {
+  $("hc-prompt").hidden = true;
+  location.href = `intent://connect#Intent;scheme=magnus;package=app.magnus.health;S.browser_fallback_url=${encodeURIComponent(ANDROID_APK_URL)};end`;
+}
+
 /** In the Android app and not linked yet: a one-tap prompt on Today. */
 async function checkHealthConnectPrompt() {
   const box = $("hc-prompt");
-  if (!box || !inAndroidApp() || store.get(HC_LINKED_KEY, false) || store.get(HC_DISMISSED_KEY, false)) return;
+  if (!box || box.dataset.mode === "upgrade" || !inAndroidApp() || store.get(HC_LINKED_KEY, false) || store.get(HC_DISMISSED_KEY, false)) return;
   try {
     const a = await api("/account");
     if ((a.tokens || []).some((t) => t.label === "Android app" && t.lastUsedAt)) { store.set(HC_LINKED_KEY, true); return; }
@@ -2736,6 +2743,15 @@ if (new URLSearchParams(location.search).get("src") === "android" || document.re
   try { sessionStorage.setItem(ANDROID_KEY, "1"); } catch { /* private mode */ }
 }
 store.set(ANDROID_KEY, null); // the old, shared flag
+$("hc-prompt-go")?.addEventListener("click", (e) => {
+  // ?hc=upgrade: already linked, the app only needs to ask for the new data types.
+  if ($("hc-prompt").dataset.mode === "upgrade") askNewHealthConnectData();
+  else connectHealthConnect(e.currentTarget);
+});
+$("hc-prompt-later")?.addEventListener("click", () => {
+  if ($("hc-prompt").dataset.mode !== "upgrade") store.set(HC_DISMISSED_KEY, true);
+  $("hc-prompt").hidden = true;
+});
 const hcReturn = new URLSearchParams(location.search).get("hc");
 if (hcReturn) {
   // Back from the Android app's Health Connect screen.
@@ -2745,7 +2761,15 @@ if (hcReturn) {
   if (hcReturn === "connected") {
     store.set(HC_LINKED_KEY, true);
     store.set(HC_DISMISSED_KEY, null);
-    setTimeout(() => toast("Health Connect is connected. Steps, sleep and heart rate sync every hour."), 800);
+    setTimeout(() => toast("Health Connect is connected. Steps, calories, sleep and heart rate sync every hour."), 800);
+  } else if (hcReturn === "upgrade") {
+    const box = $("hc-prompt");
+    if (box) {
+      box.dataset.mode = "upgrade";
+      box.querySelector("span").textContent = "Magnus can now also read total calories burned and heart rate variability";
+      $("hc-prompt-go").textContent = "Allow";
+      box.hidden = false;
+    }
   }
 }
 

@@ -37,6 +37,11 @@ export const healthConnectPayload = z
       )
       .optional(),
     active_calories: z.array(z.object({ calories: z.coerce.number().min(0), ...interval }).passthrough()).optional(),
+    /** Everything burned, resting metabolism included (Health Connect "Total calories burned"). */
+    total_calories: z.array(z.object({ calories: z.coerce.number().min(0), ...interval }).passthrough()).optional(),
+    /** Heart rate variability (RMSSD, milliseconds). */
+    hrv: z.array(z.object({ rmssd_ms: z.coerce.number().min(1).max(500), time: iso }).passthrough()).optional(),
+    lean_body_mass: z.array(z.object({ kilograms: z.coerce.number().positive(), time: iso }).passthrough()).optional(),
     weight: z.array(z.object({ kilograms: z.coerce.number().positive(), time: iso }).passthrough()).optional(),
     body_fat: z.array(z.object({ percentage: z.coerce.number().positive(), time: iso }).passthrough()).optional(),
     /** Sleep sessions; asleep_seconds leaves out awake stages when the tracker records them. */
@@ -58,7 +63,7 @@ export const healthConnectPayload = z
 export type HealthConnectPayload = z.infer<typeof healthConnectPayload>;
 
 export type ActivitySample = {
-  kind: "steps" | "distance" | "exercise" | "active_calories" | "sleep" | "resting_hr";
+  kind: "steps" | "distance" | "exercise" | "active_calories" | "total_calories" | "sleep" | "resting_hr" | "hrv";
   startTime: string;
   endTime: string;
   localDate: string;
@@ -71,12 +76,13 @@ export type ScaleReading = {
   time: string;
   weightKg?: number;
   bodyFatPct?: number;
+  leanMassKg?: number;
 };
 
 const toIso = (s: string): string => new Date(s).toISOString();
 
 /** Kinds the Android app sends as hourly aggregates (the rest are individual records). */
-const AGGREGATED = ["steps", "distance", "active_calories"] as const;
+const AGGREGATED = ["steps", "distance", "active_calories", "total_calories"] as const;
 
 /** Walk-like sessions count toward walk minutes. */
 export function isWalkType(type: string): boolean {
@@ -92,6 +98,12 @@ export function parseHealthConnect(payload: HealthConnectPayload, timezone: stri
   }
   for (const d of payload.distance ?? []) {
     samples.push({ kind: "distance", startTime: toIso(d.start_time), endTime: toIso(d.end_time), localDate: day(d.start_time), value: d.meters, detail: {} });
+  }
+  for (const c of payload.total_calories ?? []) {
+    samples.push({ kind: "total_calories", startTime: toIso(c.start_time), endTime: toIso(c.end_time), localDate: day(c.start_time), value: Math.round(c.calories * 10) / 10, detail: {} });
+  }
+  for (const v of payload.hrv ?? []) {
+    samples.push({ kind: "hrv", startTime: toIso(v.time), endTime: toIso(v.time), localDate: day(v.time), value: Math.round(v.rmssd_ms * 10) / 10, detail: {} });
   }
   for (const c of payload.active_calories ?? []) {
     samples.push({ kind: "active_calories", startTime: toIso(c.start_time), endTime: toIso(c.end_time), localDate: day(c.start_time), value: Math.round(c.calories * 10) / 10, detail: {} });
@@ -122,16 +134,17 @@ export function parseHealthConnect(payload: HealthConnectPayload, timezone: stri
 
   // Several scale readings on one day: keep the latest of each metric.
   const latest = new Map<string, { time: string; value: number }>();
-  const keep = (metric: "weightKg" | "bodyFatPct", time: string, value: number) => {
+  const keep = (metric: "weightKg" | "bodyFatPct" | "leanMassKg", time: string, value: number) => {
     const key = `${day(time)}|${metric}`;
     const prev = latest.get(key);
     if (!prev || Date.parse(time) >= Date.parse(prev.time)) latest.set(key, { time, value });
   };
   for (const w of payload.weight ?? []) keep("weightKg", w.time, w.kilograms);
   for (const b of payload.body_fat ?? []) keep("bodyFatPct", b.time, b.percentage);
+  for (const l of payload.lean_body_mass ?? []) keep("leanMassKg", l.time, l.kilograms);
   const byDay = new Map<string, ScaleReading>();
   for (const [key, { time, value }] of latest) {
-    const [localDate, metric] = key.split("|") as [string, "weightKg" | "bodyFatPct"];
+    const [localDate, metric] = key.split("|") as [string, "weightKg" | "bodyFatPct" | "leanMassKg"];
     const r = byDay.get(localDate) ?? { localDate, time };
     r[metric] = Math.round(value * 10) / 10;
     if (Date.parse(time) > Date.parse(r.time)) r.time = time;
@@ -142,14 +155,16 @@ export function parseHealthConnect(payload: HealthConnectPayload, timezone: stri
   return { samples, scale };
 }
 
-/** activeKcal, sleepMinutes and restingHr are null when the phone sent none for the day. */
+/** Everything after walkMinutes is null when the phone sent none of it for the day. */
 export type DayTotals = {
   steps: number;
   distanceM: number;
   walkMinutes: number;
   activeKcal: number | null;
+  totalKcal: number | null;
   sleepMinutes: number | null;
   restingHr: number | null;
+  hrvMs: number | null;
 };
 
 type SampleRow = { kind: string; value: number; detail: Record<string, unknown> | null; start_time?: string; end_time?: string };
@@ -175,8 +190,12 @@ export function totalsFromSamples(rows: SampleRow[]): DayTotals {
   let activeKcal: number | null = null;
   const asleep = sleepSeconds(rows);
   let restingHr: number | null = null;
+  let totalKcal: number | null = null;
+  const hrv: number[] = [];
   for (const r of rows) {
     if (r.kind === "active_calories") activeKcal = (activeKcal ?? 0) + r.value;
+    if (r.kind === "total_calories") totalKcal = (totalKcal ?? 0) + r.value;
+    if (r.kind === "hrv" && r.value > 0) hrv.push(r.value);
     // Several readings in a day: the lowest is the resting rate.
     if (r.kind === "resting_hr" && r.value > 0) restingHr = restingHr === null ? r.value : Math.min(restingHr, r.value);
     if (r.kind === "steps") steps += r.value;
@@ -190,6 +209,8 @@ export function totalsFromSamples(rows: SampleRow[]): DayTotals {
     activeKcal: activeKcal === null ? null : Math.round(activeKcal),
     sleepMinutes: asleep === null ? null : Math.min(1440, Math.round(asleep / 60)),
     restingHr: restingHr === null ? null : Math.round(restingHr),
+    totalKcal: totalKcal === null ? null : Math.round(totalKcal),
+    hrvMs: hrv.length ? Math.round(hrv.reduce((a, b) => a + b, 0) / hrv.length) : null,
   };
 }
 
@@ -221,7 +242,7 @@ export async function ingestHealthConnect(
       }));
   // Calories, sleep and heart rate are extra: if the database predates them, steps and walks
   // still go through.
-  const EXTRA = new Set<ActivitySample["kind"]>(["active_calories", "sleep", "resting_hr"]);
+  const EXTRA = new Set<ActivitySample["kind"]>(["active_calories", "total_calories", "sleep", "resting_hr", "hrv"]);
   const core = samples.filter((s) => !EXTRA.has(s.kind));
   const extra = samples.filter((s) => EXTRA.has(s.kind));
   if (payload.synced_range) {
@@ -292,6 +313,8 @@ export async function ingestHealthConnect(
       activeKcal: totals.activeKcal,
       sleepMinutes: totals.sleepMinutes,
       restingHr: totals.restingHr,
+      totalKcal: totals.totalKcal,
+      hrvMs: totals.hrvMs,
       source: "health_connect",
     });
     if (!saved.ok) return saved;
@@ -308,18 +331,26 @@ export async function ingestHealthConnect(
       .eq("user_profile_id", ctx.userProfileId)
       .eq("local_date", r.localDate)
       .maybeSingle();
-    const { error } = await supabase.from("health_body_checkins").upsert(
-      {
-        user_profile_id: ctx.userProfileId,
-        local_date: r.localDate,
-        weight_kg: r.weightKg ?? existing?.weight_kg ?? null,
-        body_fat_pct: r.bodyFatPct ?? existing?.body_fat_pct ?? null,
-        muscle_mass_kg: existing?.muscle_mass_kg ?? null,
-        note: existing?.note ?? "Health Connect",
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_profile_id,local_date" },
-    );
+    // A lean-mass-only reading doesn't start a check-in on its own.
+    if (r.weightKg == null && r.bodyFatPct == null && !existing) continue;
+    const row: Record<string, unknown> = {
+      user_profile_id: ctx.userProfileId,
+      local_date: r.localDate,
+      weight_kg: r.weightKg ?? existing?.weight_kg ?? null,
+      body_fat_pct: r.bodyFatPct ?? existing?.body_fat_pct ?? null,
+      muscle_mass_kg: existing?.muscle_mass_kg ?? null,
+      note: existing?.note ?? "Health Connect",
+      updated_at: new Date().toISOString(),
+    };
+    if (r.leanMassKg != null) row.lean_mass_kg = r.leanMassKg;
+    const write = (v: Record<string, unknown>) =>
+      supabase.from("health_body_checkins").upsert(v, { onConflict: "user_profile_id,local_date" });
+    let { error } = await write(row);
+    // Before the lean_mass_kg migration the column doesn't exist; keep weight and body fat.
+    if (error && "lean_mass_kg" in row && error.message.includes("lean_mass_kg")) {
+      delete row.lean_mass_kg;
+      ({ error } = await write(row));
+    }
     if (error) return { ok: false, error: error.message };
     weighIns += 1;
   }

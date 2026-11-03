@@ -9,8 +9,8 @@ A thin native shell around the PWA:
   account → *Connect Health Connect*) creates a token for this phone, revokes the phone's previous
   one, and hands it to `ConnectActivity` (`magnus://connect?token=…`). That shows Android's Health
   Connect permission screen, runs a first sync, and returns to the PWA (`?hc=connected`).
-  `SyncWorker` then posts steps, distance and active calories (hourly aggregates, de-duplicated by
-  Health Connect), exercise sessions, sleep sessions, resting heart rate, weight and body fat to
+  `SyncWorker` then posts steps, distance, active and total calories (hourly aggregates on whole local hours, de-duplicated by
+  Health Connect), exercise sessions, sleep sessions, resting heart rate, HRV, weight, body fat and lean body mass to
   `POST /api/health/ingest/health-connect` every hour and whenever the app opens. Re-sending the
   last 3 days each run is safe: the server upserts samples by start time.
 - **Background sync** needs *Access data in the background* (Android 14+). It's requested with the

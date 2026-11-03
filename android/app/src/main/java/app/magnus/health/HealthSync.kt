@@ -8,6 +8,9 @@ import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
+import androidx.health.connect.client.records.LeanBodyMassRecord
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
@@ -40,7 +43,13 @@ object HealthSync {
         HealthPermission.getReadPermission(BodyFatRecord::class),
         HealthPermission.getReadPermission(SleepSessionRecord::class),
         HealthPermission.getReadPermission(RestingHeartRateRecord::class),
+        HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
+        HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
+        HealthPermission.getReadPermission(LeanBodyMassRecord::class),
     )
+
+    /** Bump when PERMISSIONS grows: the app then asks once more for the new ones. */
+    const val PERMISSIONS_VERSION = 2
 
     /** Lets the hourly sync read while the app is closed (Android 14+; ignored where unsupported). */
     const val BACKGROUND_PERMISSION = "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
@@ -111,6 +120,9 @@ object HealthSync {
             if (HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class) in granted) {
                 add(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL)
             }
+            if (HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class) in granted) {
+                add(TotalCaloriesBurnedRecord.ENERGY_TOTAL)
+            }
         }
         val buckets = if (metrics.isEmpty()) emptyList() else client.aggregateGroupByDuration(
             AggregateGroupByDurationRequest(
@@ -122,6 +134,7 @@ object HealthSync {
         val steps = JSONArray()
         val distance = JSONArray()
         val calories = JSONArray()
+        val totalCalories = JSONArray()
         for (b in buckets) {
             val start = b.startTime.toString()
             val end = b.endTime.toString()
@@ -135,8 +148,11 @@ object HealthSync {
             b.result[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.let {
                 calories.put(JSONObject().put("calories", it.inKilocalories).put("start_time", start).put("end_time", end))
             }
+            b.result[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.let {
+                totalCalories.put(JSONObject().put("calories", it.inKilocalories).put("start_time", start).put("end_time", end))
+            }
         }
-        payload.put("steps", steps).put("distance", distance).put("active_calories", calories)
+        payload.put("steps", steps).put("distance", distance).put("active_calories", calories).put("total_calories", totalCalories)
 
         val exercise = JSONArray()
         for (s in readAll(client, ExerciseSessionRecord::class, range)) {
@@ -178,7 +194,15 @@ object HealthSync {
         for (h in readAll(client, RestingHeartRateRecord::class, range)) {
             resting.put(JSONObject().put("bpm", h.beatsPerMinute).put("time", h.time.toString()))
         }
-        payload.put("sleep", sleep).put("resting_heart_rate", resting)
+        val hrv = JSONArray()
+        for (v in readAll(client, HeartRateVariabilityRmssdRecord::class, range)) {
+            hrv.put(JSONObject().put("rmssd_ms", v.heartRateVariabilityMillis).put("time", v.time.toString()))
+        }
+        val lean = JSONArray()
+        for (l in readAll(client, LeanBodyMassRecord::class, range)) {
+            lean.put(JSONObject().put("kilograms", l.mass.inKilograms).put("time", l.time.toString()))
+        }
+        payload.put("sleep", sleep).put("resting_heart_rate", resting).put("hrv", hrv).put("lean_body_mass", lean)
         payload.put("_steps", totalSteps)
         return payload
     }

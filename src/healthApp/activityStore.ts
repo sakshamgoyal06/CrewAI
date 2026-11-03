@@ -20,11 +20,14 @@ export type DailyActivity = {
   sleepMinutes?: number | null;
   /** Resting heart rate in bpm (Health Connect); left out when unknown. */
   restingHr?: number | null;
+  /** Total calories burned incl. resting metabolism, and average HRV (ms); left out when unknown. */
+  totalKcal?: number | null;
+  hrvMs?: number | null;
   source: ActivitySource;
 };
 
 /** Columns added by later migrations: a database without them still takes the steps. */
-const OPTIONAL_COLUMNS = ["active_kcal", "sleep_minutes", "resting_hr"] as const;
+const OPTIONAL_COLUMNS = ["active_kcal", "sleep_minutes", "resting_hr", "total_kcal", "hrv_ms"] as const;
 
 /** Upsert one day. Device pushes send the day's running total, so the latest value wins. */
 export async function upsertDailyActivity(
@@ -43,6 +46,8 @@ export async function upsertDailyActivity(
   if (activity.activeKcal != null) row.active_kcal = Math.round(activity.activeKcal);
   if (activity.sleepMinutes != null) row.sleep_minutes = Math.round(activity.sleepMinutes);
   if (activity.restingHr != null) row.resting_hr = Math.round(activity.restingHr);
+  if (activity.totalKcal != null) row.total_kcal = Math.round(activity.totalKcal);
+  if (activity.hrvMs != null) row.hrv_ms = Math.round(activity.hrvMs);
   const write = (r: Record<string, unknown>) =>
     supabase.from("health_daily_activity").upsert(r, { onConflict: "user_profile_id,local_date" });
   let { error } = await write(row);
@@ -80,6 +85,8 @@ export async function getActivityRange(
       walkDistanceM: r.walk_distance_m === null ? null : Number(r.walk_distance_m),
       sleepMinutes: r.sleep_minutes == null ? null : Number(r.sleep_minutes),
       restingHr: r.resting_hr == null ? null : Number(r.resting_hr),
+      totalKcal: r.total_kcal == null ? null : Number(r.total_kcal),
+      hrvMs: r.hrv_ms == null ? null : Number(r.hrv_ms),
       source: r.source as ActivitySource,
     });
   }

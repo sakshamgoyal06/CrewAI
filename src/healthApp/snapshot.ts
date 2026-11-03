@@ -52,6 +52,9 @@ export type HealthSnapshot = {
     /** Last night's sleep and today's resting heart rate, when Health Connect has them. */
     sleepMinutes: number | null;
     restingHr: number | null;
+    /** Total calories burned today incl. resting metabolism, and HRV, when Health Connect has them. */
+    totalKcal: number | null;
+    hrvMs: number | null;
     isTrainingDay: boolean;
     /** Today's routine items, in time order, with done / skipped / pending. */
     routine: RoutineItemStatus[];
@@ -317,6 +320,8 @@ export async function buildHealthSnapshot(
       walkMinutes: todayActivity?.walkMinutes ?? null,
       sleepMinutes: todayActivity?.sleepMinutes ?? null,
       restingHr: todayActivity?.restingHr ?? null,
+      totalKcal: todayActivity?.totalKcal ?? null,
+      hrvMs: todayActivity?.hrvMs ?? null,
       isTrainingDay: targets.trainingDays.includes(weekdayOfDate(to)),
       routine: routineByDate.get(to) ?? [],
     },
