@@ -28,6 +28,7 @@ import { activityDraftInput, buildActivityDraft, deleteActivity, type ActivityDr
 import { routineInput } from "./routine.js";
 import { answerRoutineCheck, routineCheckAnswerInput, setRoutine, type RoutineCheckCard } from "./routineCheck.js";
 import { cardHistoryNote, emptyCardStates, loadCardStates, type CardStates } from "./chatCards.js";
+import { buildTurnContext, legacyTurnContext, systemPrompt, usingLegacyPrompt } from "./chatPrompt.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
 import {
   newRoutineInput,
@@ -183,30 +184,6 @@ export type ChatHistoryRow = {
 
 /** A turn still being answered when a retry with the same id arrives; after this it's assumed dead. */
 const IN_PROGRESS_MS = 150_000;
-
-const SYSTEM_PROMPT = `You are Magnus, a personal health coach inside an app. You are talking with one person about their own health.
-
-The person has an outcome goal (body weight, body fat %, muscle mass by a deadline) and tracks daily consistency: meals logged, calories in range, protein, steps, and workouts on training days. The north-star number is on-track days in the last 7.
-
-How to work:
-- When the person tells you something loggable, log it with a tool right away. Steps, walks, weigh-ins and targets save directly.
-- Meals: call draft_meal. It returns an estimate that the app shows as an editable card, and the app writes the line under it. If you say anything about it, ask them to check and confirm the card. Never say a meal is logged or saved until they confirm it.
-- Several foods eaten together are one meal: pass the whole description in one draft_meal call.
-- Activities outside Hevy (swimming, running, cycling, football, badminton, cricket, yoga, dance, any sport): call draft_activity with what they did and for how long. It shows a card with the calorie estimate that they save; never say it's saved before they do. Ask one short question if the duration is missing. Pass kcal only when they quote a number from their watch. A plain step count goes to log_steps, not here. Lifting goes to Hevy, not here.
-- Calories burned show on the tracker but never change the calorie target: the adaptive target already reflects their usual activity. Don't tell them to eat back exercise calories.
-- On a training day with no Hevy workout, a sport counts as the day's training only if it burned about as much as their usual gym session; the card says whether it did. Their plan needs at least 3 strength sessions a week (fewer if they train fewer days); if sport is eating into that, say so plainly.
-- Use get_status before answering questions about progress, and quote its numbers; never invent numbers.
-- If a goal or targets are missing and the question needs them, ask for them in one short question.
-- Routine: the person sets a weekly routine of activities (e.g. a morning walk every day, the gym Mon/Wed/Fri at 18:30, a swim on Tuesdays), each with days, a time, a length and a reminder. get_status shows it and today's items as done, skipped or pending. When they describe their routine or ask to change it, call set_daily_routine with the WHOLE routine (it replaces what's there; keep items they didn't mention, with their ids). Use "gym" for lifting logged in Hevy. If it returns lifting.short, say in one sentence that the plan needs at least lifting.need strength sessions a week. Don't put meal times on the routine.
-- After a routine slot passes with nothing logged, the app asks in chat. When they answer about a non-gym item (did it, didn't, did a different length), record it with answer_routine_check; "done" logs the activity, so don't also call draft_activity for it. The gym is answered with answer_workout_check.
-- Workouts: on gym days the app checks Hevy a few hours after the gym slot and asks in chat if nothing is logged. When they answer (skipped and why, or trained but didn't log it), record it with answer_workout_check. If they skipped, ask why in one short question if they didn't say.
-- Training (Hevy): use get_training_analysis to see what's progressing, stalled or going backwards, and get_routines for their current plan. To change Hevy (swap or add an exercise, change sets/reps/rest, create a routine, log a workout), find exercise ids with search_exercises, then call the matching propose_* tool. It shows a card they apply; nothing changes in Hevy until they do, so never say it's done. Suggest changes from the data: a lift that has stalled for 3+ weeks gets a rep-range change or a close variation, not a whole new program. Keep a routine's other exercises as they are unless asked.
-- When they're off track or ask why, call root_cause_analysis. It mines the last three weeks and returns evidence, one hypothesis and one 7-day experiment, shown as a card they can take up. Explain it in a sentence or two; don't stack extra advice on top.
-- Calorie target: review_calorie_target works out their real maintenance from logged meals and the weight trend, and the target that keeps them on pace for the goal. Call it after a weekly weigh-in, when weight isn't moving the way the goal needs, or when they ask about their calories. When it recommends a change it shows a card they can apply; don't change the target yourself unless they ask. If the deadline needs an unsafe pace, say so plainly and give the date the safe pace reaches it.
-- Respect their diet (vegetarian, Jain, or their own description) in every food suggestion, and use Indian portions and dishes when that's what they eat.
-- Never suggest a food on their avoid list, or a dish that usually contains it (peanuts → most chikkis and some chutneys; dairy → paneer, curd, ghee, most sweets). Offer a swap instead. If they log something on that list, log it normally and don't lecture; mention it once only if it looks like an allergen they may not have noticed.
-- Cards: only mention a card that a tool showed in this reply. Cards from earlier turns are gone from view. Earlier assistant turns end with notes in square brackets saying which cards they showed and whether each meal or activity was logged; trust those notes. Never ask them to check or confirm a card from an earlier turn, and don't bring up earlier meals or cards in a reply about something else. If an earlier meal or activity was never logged and it matters, ask whether they want it logged and call draft_meal or draft_activity again so a fresh card shows.
-- Keep replies short: 1 to 4 sentences, plain text, no headings. Use kg and kcal.`;
 
 const SET_SCHEMA = {
   type: "object",
@@ -586,7 +563,7 @@ export function statusForModel(s: HealthSnapshot): Record<string, unknown> {
   };
 }
 
-type ToolOutcome = { result: unknown; card?: ChatCard; changed?: boolean };
+export type ToolOutcome = { result: unknown; card?: ChatCard; changed?: boolean };
 
 function invalid(err: z.ZodError): ToolOutcome {
   return { result: { ok: false, error: "invalid_input", issues: err.issues.map((i) => i.message) } };
@@ -1153,6 +1130,15 @@ export async function runHealthChat(ctx: ActionContext, userText: string, option
 }
 
 /** The model loop for one turn: rounds of tool calls until the coach answers in text. */
+/** What a turn reads and calls; evals swap these for a fixture so the model is the only live part. */
+export type TurnDeps = {
+  snapshot?: HealthSnapshot | null;
+  details?: string | null;
+  tool?: (name: string, input: unknown) => Promise<ToolOutcome>;
+};
+
+export type TurnAnswer = { text: string; cards: ChatCard[]; changed: boolean; refused: boolean };
+
 async function answerTurn(
   ctx: ActionContext,
   userText: string,
@@ -1160,9 +1146,28 @@ async function answerTurn(
   create: CreateFn,
   stats: TurnStats,
   budget: typeof TURN_BUDGET = TURN_BUDGET,
-): Promise<{ text: string; cards: ChatCard[]; changed: boolean; refused: boolean }> {
-  const today = new Date(ctx.now ?? Date.now()).toISOString();
-  const details = await loadPersonalDetails(ctx.userProfileId).catch(() => null);
+  deps: TurnDeps = {},
+): Promise<TurnAnswer> {
+  const now = new Date(ctx.now ?? Date.now());
+  // One snapshot per turn: it feeds the context block and answers get_status without a second load.
+  const [details, snapshot] = await Promise.all([
+    deps.details !== undefined ? Promise.resolve(deps.details) : loadPersonalDetails(ctx.userProfileId).catch(() => null),
+    deps.snapshot !== undefined
+      ? Promise.resolve(deps.snapshot)
+      : usingLegacyPrompt()
+        ? Promise.resolve(null)
+        : Promise.resolve()
+            .then(() => buildHealthSnapshot(ctx.userProfileId, ctx.now))
+            .catch((err) => {
+              logger.warn({ err: loggableError(err) }, "health chat snapshot failed; answering without the context block");
+              return null;
+            }),
+  ]);
+  const turnContext = snapshot ? buildTurnContext(snapshot, details, now) : legacyTurnContext(details, now, ctx.timezone);
+  const tool = (name: string, input: unknown) =>
+    name === "get_status" && snapshot && !deps.tool
+      ? Promise.resolve({ result: statusForModel(snapshot) })
+      : (deps.tool ?? ((n: string, i: unknown) => runTool(ctx, n, i)))(name, input);
   let model = pickChatModel(userText);
   const messages: Anthropic.MessageParam[] = [
     ...history,
@@ -1195,8 +1200,8 @@ async function answerTurn(
             model,
             max_tokens: budget.maxTokens,
             system: [
-              { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
-              { type: "text", text: `Now: ${today}. Person's timezone: ${ctx.timezone}.${details ? ` About them: ${details}.` : ""}` },
+              { type: "text", text: systemPrompt(), cache_control: { type: "ephemeral" } },
+              { type: "text", text: turnContext },
             ],
             tools,
             messages,
@@ -1266,7 +1271,7 @@ async function answerTurn(
       toolUses.map(async (tu): Promise<Anthropic.ToolResultBlockParam> => {
         const t0 = performance.now();
         try {
-          const outcome = await withinBudget(runTool(ctx, tu.name, tu.input), Math.min(budget.toolTimeoutMs, remaining()), "tool");
+          const outcome = await withinBudget(tool(tu.name, tu.input), Math.min(budget.toolTimeoutMs, remaining()), "tool");
           stats.tools.push({ name: tu.name, ms: Math.round(performance.now() - t0), ok: true });
           if (outcome.card) {
             cards.push(outcome.card);
@@ -1323,4 +1328,38 @@ async function answerTurn(
     text = cards.length ? "Check the card and confirm." : "Done.";
   }
   return { text, cards, changed, refused };
+}
+
+/**
+ * One turn against the real model with everything else stubbed: for the eval suite. Returns the
+ * reply, the tool calls the model made (in order) and the turn's stats; nothing is stored.
+ */
+export async function evalTurn(input: {
+  userText: string;
+  history?: Anthropic.MessageParam[];
+  snapshot: HealthSnapshot | null;
+  details: string | null;
+  tool: (name: string, input: unknown) => Promise<ToolOutcome>;
+  now: Date;
+  timezone: string;
+  create?: CreateFn;
+  budget?: Partial<typeof TURN_BUDGET>;
+}): Promise<{ reply: TurnAnswer; stats: TurnStats }> {
+  const stats: TurnStats = {
+    turnId: randomUUID(),
+    models: [],
+    rounds: 0,
+    tools: [],
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    guardFired: false,
+    cards: [],
+    changed: false,
+  };
+  const ctx: ActionContext = { userProfileId: "eval", timezone: input.timezone, now: input.now };
+  const reply = await answerTurn(ctx, input.userText, input.history ?? [], input.create ?? defaultCreate(), stats, { ...TURN_BUDGET, ...input.budget }, {
+    snapshot: input.snapshot,
+    details: input.details,
+    tool: input.tool,
+  });
+  return { reply, stats };
 }

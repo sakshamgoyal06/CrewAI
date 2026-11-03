@@ -1,0 +1,32 @@
+name: Chat evals
+
+# Runs the coach eval suite against the real model nightly (and on demand), not on every PR:
+# it costs tokens and takes minutes. Needs the ANTHROPIC_API_KEY repository secret.
+on:
+  schedule:
+    - cron: "30 21 * * *" # 03:00 IST
+  workflow_dispatch:
+    inputs:
+      category:
+        description: "Only this category (logging, coaching, state_honesty, failure, safety)"
+        required: false
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      SUPABASE_URL: https://ci-test.supabase.co
+      SUPABASE_ANON_KEY: ci-test-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-test-service-role-key
+      UPSTASH_REDIS_REST_URL: https://ci-test.upstash.io
+      UPSTASH_REDIS_REST_TOKEN: ci-test-redis-token
+      MAGNUS_HEALTH_EVENTS_OFF: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run evals -- ${{ inputs.category && format('--category {0}', inputs.category) || '' }}
