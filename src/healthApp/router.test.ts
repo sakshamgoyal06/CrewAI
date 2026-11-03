@@ -27,7 +27,12 @@ vi.mock("./snapshot.js", () => ({
 }));
 vi.mock("./chat.js", () => ({
   loadChatHistory: async () => [],
-  runHealthChat: async (_ctx: unknown, text: string) => ({ text: `echo ${text}`, cards: [], changed: false }),
+  runHealthChat: async (_ctx: unknown, text: string, options?: { onEvent?: (e: unknown) => void }) => {
+    options?.onEvent?.({ type: "progress", text: "Checking your week…" });
+    options?.onEvent?.({ type: "delta", text: "echo " });
+    options?.onEvent?.({ type: "delta", text });
+    return { text: `echo ${text}`, cards: [], changed: false };
+  },
 }));
 
 import { createHealthAppRouter } from "./router.js";
@@ -79,6 +84,24 @@ describe("health app router", () => {
   it("runs a chat turn", async () => {
     const res = await post("/chat", { text: "hi" });
     expect(await res.json()).toEqual({ text: "echo hi", cards: [], changed: false });
+  });
+
+  it("streams a chat turn as server-sent events", async () => {
+    const res = await fetch(`${base}/chat/stream`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify({ text: "hi", turnId: "0f6d5c3e-8b1a-4c2d-9e7f-123456789abc" }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/event-stream");
+    const body = await res.text();
+    const events = body.split("\n\n").filter((c) => c.startsWith("event:")).map((c) => JSON.parse(c.split("\n")[1]!.slice(5)));
+    expect(events).toEqual([
+      { type: "progress", text: "Checking your week…" },
+      { type: "delta", text: "echo " },
+      { type: "delta", text: "hi" },
+      { type: "done", reply: { text: "echo hi", cards: [], changed: false } },
+    ]);
   });
 
   it("validates the steps body", async () => {

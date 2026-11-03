@@ -768,20 +768,65 @@ export function mealDraftReply(drafts: MealDraft[]): string {
   return parts.join(" ");
 }
 
-export type CreateOptions = { signal?: AbortSignal; timeout?: number; maxRetries?: number };
+export type CreateOptions = {
+  signal?: AbortSignal;
+  timeout?: number;
+  maxRetries?: number;
+  /** When given, the call streams and each text delta is passed here as it arrives. */
+  onText?: (delta: string) => void;
+};
 type CreateFn = (params: Record<string, unknown>, options?: CreateOptions) => Promise<Anthropic.Message>;
 
 function defaultCreate(): CreateFn {
-  return (params, options) =>
-    String(params.model).startsWith("claude-haiku")
-      ? // Haiku has no server-side fallback; a refusal is handled by the caller.
-        anthropic.messages.create(params as never, options) as unknown as Promise<Anthropic.Message>
-      : // Server-side fallback re-runs a refused request on another model inside the same call.
-        (anthropic.beta.messages.create({
-          ...params,
-          betas: ["server-side-fallback-2026-07-01"],
-          fallbacks: "default",
-        } as never, options) as unknown as Promise<Anthropic.Message>);
+  return ({ ...params }, options = {}) => {
+    const { onText, ...request } = options;
+    const fast = String(params.model).startsWith("claude-haiku");
+    // Server-side fallback re-runs a refused request on another model inside the same call;
+    // Haiku has none, so a refusal there is handled by the caller.
+    const body = fast ? params : { ...params, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" };
+    if (!onText) {
+      return (fast ? anthropic.messages.create(body as never, request) : anthropic.beta.messages.create(body as never, request)) as unknown as Promise<Anthropic.Message>;
+    }
+    const stream = fast ? anthropic.messages.stream(body as never, request) : anthropic.beta.messages.stream(body as never, request);
+    stream.on("text", onText);
+    return stream.finalMessage() as unknown as Promise<Anthropic.Message>;
+  };
+}
+
+/** What a streaming client hears while the turn runs. */
+export type ChatStreamEvent =
+  | { type: "progress"; text: string }
+  | { type: "delta"; text: string }
+  | { type: "done"; reply: ChatReply }
+  | { type: "error"; error: string; message: string };
+
+const TOOL_PROGRESS: Record<string, string> = {
+  get_status: "Checking your week",
+  draft_meal: "Working out the meal",
+  draft_activity: "Estimating the burn",
+  log_steps: "Saving your steps",
+  log_body_checkin: "Saving your weigh-in",
+  set_goal: "Setting your goal",
+  set_daily_targets: "Updating your targets",
+  set_daily_routine: "Updating your routine",
+  answer_routine_check: "Noting that",
+  answer_workout_check: "Noting that",
+  get_training_analysis: "Reading your Hevy history",
+  get_routines: "Reading your Hevy routines",
+  search_exercises: "Finding the exercise",
+  propose_routine_change: "Drafting the change",
+  propose_new_routine: "Drafting the routine",
+  propose_workout_log: "Drafting the workout",
+  root_cause_analysis: "Looking at the last three weeks",
+  review_calorie_target: "Reviewing your calories",
+  delete_meal: "Removing that",
+  delete_activity: "Removing that",
+};
+
+/** One line for the typing indicator while tools run. */
+export function progressLine(toolNames: string[]): string {
+  const labels = [...new Set(toolNames.map((n) => TOOL_PROGRESS[n] ?? "Working on it"))];
+  return `${labels.slice(0, 2).join(" and ")}…`;
 }
 
 export class TurnBudgetExceeded extends Error {
@@ -1078,6 +1123,8 @@ export type RunChatOptions = {
   sessionId?: string;
   /** Overrides for tests. */
   budget?: Partial<typeof TURN_BUDGET>;
+  /** Streaming: progress lines and text deltas as the turn runs. The final reply is still returned. */
+  onEvent?: (event: ChatStreamEvent) => void;
 };
 
 export type RunChatResult = ChatReply | { error: "in_progress"; turnId: string };
@@ -1116,7 +1163,7 @@ export async function runHealthChat(ctx: ActionContext, userText: string, option
   }
 
   try {
-    const reply = await answerTurn(ctx, userText, history, options.create ?? defaultCreate(), stats, { ...TURN_BUDGET, ...options.budget });
+    const reply = await answerTurn(ctx, userText, history, options.create ?? defaultCreate(), stats, { ...TURN_BUDGET, ...options.budget }, { onEvent: options.onEvent });
     await saveChatMessage(ctx.userProfileId, "assistant", reply.text, reply.cards, { turnId, status: "ok" });
     await setTurnStatus(ctx.userProfileId, turnId, "ok");
     logTurn(ctx.userProfileId, stats, reply.refused ? "refusal" : stats.budgetHit ? "budget" : "ok", performance.now() - startedAt);
@@ -1135,6 +1182,7 @@ export type TurnDeps = {
   snapshot?: HealthSnapshot | null;
   details?: string | null;
   tool?: (name: string, input: unknown) => Promise<ToolOutcome>;
+  onEvent?: (event: ChatStreamEvent) => void;
 };
 
 export type TurnAnswer = { text: string; cards: ChatCard[]; changed: boolean; refused: boolean };
@@ -1206,7 +1254,12 @@ async function answerTurn(
             tools,
             messages,
           },
-          { signal: abort.signal, timeout: Math.min(budget.callTimeoutMs, Math.max(1_000, remaining())), maxRetries: 1 },
+          {
+            signal: abort.signal,
+            timeout: Math.min(budget.callTimeoutMs, Math.max(1_000, remaining())),
+            maxRetries: 1,
+            ...(deps.onEvent ? { onText: (delta: string) => deps.onEvent!({ type: "delta", text: delta }) } : {}),
+          },
         ),
         remaining(),
         "model",
@@ -1267,6 +1320,7 @@ async function answerTurn(
       model = healthChatModel();
     }
 
+    deps.onEvent?.({ type: "progress", text: progressLine(toolUses.map((tu) => tu.name)) });
     const results = await Promise.all(
       toolUses.map(async (tu): Promise<Anthropic.ToolResultBlockParam> => {
         const t0 = performance.now();

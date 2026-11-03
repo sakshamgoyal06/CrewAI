@@ -431,3 +431,25 @@ describe("escalation from the fast model", () => {
     expect(events.at(-1)).toMatchObject({ props: { escalated: "coaching_tool" } });
   });
 });
+
+describe("streaming events", () => {
+  it("reports tool progress and text deltas while the turn runs, and still returns the full reply", async () => {
+    const events: unknown[] = [];
+    const create = vi
+      .fn()
+      .mockResolvedValueOnce(msg([{ type: "tool_use", id: "t1", name: "log_steps", input: { steps: 9000 } } as Anthropic.ToolUseBlock], "tool_use"))
+      .mockImplementationOnce(async (_params: unknown, opts: { onText?: (t: string) => void }) => {
+        opts.onText?.("Saved ");
+        opts.onText?.("9,000 steps.");
+        return msg([{ type: "text", text: "Saved 9,000 steps.", citations: null } as Anthropic.TextBlock], "end_turn");
+      });
+    const reply = await runHealthChat(ctx, "9000 steps today", { create, history: [], turnId: TURN, onEvent: (e) => events.push(e) });
+    expect(events).toEqual([
+      { type: "progress", text: "Saving your steps…" },
+      { type: "delta", text: "Saved " },
+      { type: "delta", text: "9,000 steps." },
+    ]);
+    expect(reply).toMatchObject({ text: "Saved 9,000 steps." });
+    expect(create.mock.calls[0]![1].onText).toBeTypeOf("function");
+  });
+});
