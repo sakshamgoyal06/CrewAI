@@ -84,7 +84,10 @@ export function findSignals(records: DayRecord[], targets: HealthTargets): Signa
       out.push({
         id: `miss:${check}`,
         check,
-        text: `${CHECK_LABEL[check]} missed on ${misses.length} of ${applicable.length} days.`,
+        text:
+          check === "meals_logged"
+            ? `Meals not logged on ${misses.length} of ${applicable.length} days.`
+            : `${CHECK_LABEL[check]} missed on ${misses.length} of ${applicable.length} days.`,
         weight: misses.length,
       });
     }
@@ -417,7 +420,7 @@ function fromRow(r: Record<string, unknown>): RcaReport {
 }
 
 export function cardFromReport(r: RcaReport): RcaCard {
-  return { type: "rca", reportId: r.id, hypothesis: r.hypothesis, experiment: r.experiment, evidence: r.signals.slice(0, 3).map((s) => s.text), status: r.status };
+  return { type: "rca", reportId: r.id, hypothesis: r.hypothesis, experiment: r.experiment, evidence: r.signals.map((s) => s.text).filter((t) => t !== r.hypothesis).slice(0, 3), status: r.status };
 }
 
 export async function listReports(userProfileId: string, limit = 6): Promise<RcaReport[]> {

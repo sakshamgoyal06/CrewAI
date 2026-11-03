@@ -1182,6 +1182,8 @@ const RCA_STATUS = { trying: "Trying it this week", declined: "Skipped", helped:
 function rcaCard(c) {
   const card = el("div", { class: "draft rca" });
   function render(cur) {
+    // Older reports stored the hypothesis as their first piece of evidence too.
+    const evidence = (cur.evidence || []).filter((t) => t !== cur.hypothesis);
     const actions = cur.status === "proposed"
       ? (() => {
           const yes = el("button", { class: "btn primary", type: "button" }, "I'll try it");
@@ -1205,7 +1207,7 @@ function rcaCard(c) {
     card.replaceChildren(
       el("p", { class: "eyebrow" }, "Root cause · last 3 weeks"),
       el("p", { class: "rca-hypothesis" }, cur.hypothesis),
-      cur.evidence?.length ? el("ul", { class: "changes evidence" }, ...cur.evidence.map((t) => el("li", { class: "info" }, el("span", { class: "sign" }, "·"), el("span", {}, t)))) : null,
+      evidence.length ? el("ul", { class: "changes evidence" }, ...evidence.map((t) => el("li", { class: "info" }, el("span", { class: "sign" }, "·"), el("span", {}, t)))) : null,
       el("div", { class: "experiment" }, el("p", { class: "section-label" }, "Experiment · 7 days"), el("p", {}, cur.experiment)),
       actions,
     );
@@ -2331,6 +2333,14 @@ $("google-signin").addEventListener("click", async () => {
 });
 
 for (const t of document.querySelectorAll(".tab")) t.addEventListener("click", () => setView(t.dataset.view));
+// The tab bar floats over the bottom of each view, so the views reserve its real height. A fixed
+// 68px guess was too small once Android's font size setting made the tabs taller.
+{
+  const bar = document.querySelector(".tabbar");
+  const fit = () => { if (bar.offsetHeight) document.documentElement.style.setProperty("--tabbar-h", `${bar.offsetHeight + 10}px`); };
+  if ("ResizeObserver" in window) new ResizeObserver(fit).observe(bar);
+  fit();
+}
 $("coach-stat").addEventListener("click", () => setView("tracker"));
 $("settings-btn").addEventListener("click", () => openSheet("settings"));
 $("review-btn").addEventListener("click", () => openSheet("review"));

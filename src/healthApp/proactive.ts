@@ -166,7 +166,8 @@ async function maybeRunRca(userProfileId: string, now: Date): Promise<void> {
     trigger === "weekly_review"
       ? `Weekly review: ${snapshot.northStar.onTrackDays}/7 days on track.`
       : "Two days off track in a row, so I looked for the pattern.";
-  const text = [intro, ...verdicts, result ? result.report.hypothesis : null].filter(Boolean).join(" ");
+  // The card already leads with the hypothesis, so the message itself doesn't repeat it.
+  const text = [intro, ...verdicts].join(" ");
   await postCoachMessage(userProfileId, text, result ? [cardFromReport(result.report)] : []);
   const prefs = await getPrefs(userProfileId);
   if (!prefs.off.includes("rca")) {
