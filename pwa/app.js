@@ -993,8 +993,6 @@ function barChart(host, days, cfg, target, onPick) {
 }
 
 for (const b of document.querySelectorAll("#trend-tabs button")) b.addEventListener("click", () => { state.trend.metric = b.dataset.metric; renderTrend(); });
-$("hc-prompt-go")?.addEventListener("click", (e) => connectHealthConnect(e.currentTarget));
-$("hc-prompt-later")?.addEventListener("click", () => { store.set(HC_DISMISSED_KEY, true); $("hc-prompt").hidden = true; });
 
 /** The range buttons: days for daily metrics, months for weight and body fat. */
 function renderRange(options, current, set) {
