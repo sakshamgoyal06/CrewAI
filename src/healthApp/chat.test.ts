@@ -369,3 +369,33 @@ describe("turn budgets", () => {
     expect(JSON.parse(toolResult.content)).toMatchObject({ reason: "couldn't reach Hevy" });
   });
 });
+
+describe("escalation from the fast model", () => {
+  const text = (t: string) => msg([{ type: "text", text: t, citations: null } as Anthropic.TextBlock], "end_turn");
+  const stepsCall = () => msg([{ type: "tool_use", id: "t1", name: "log_steps", input: { steps: 9000 } } as Anthropic.ToolUseBlock], "tool_use");
+
+  it("retries once on the main model when the fast model answers a log with words only", async () => {
+    const create = vi.fn().mockResolvedValueOnce(text("Nice, 9000 steps!")).mockResolvedValueOnce(stepsCall()).mockResolvedValueOnce(text("Saved 9,000 steps."));
+    const reply = await runHealthChat(ctx, "9000 steps today", { create, history: [], turnId: TURN });
+    expect(create.mock.calls.map((c) => c[0].model)).toEqual(["claude-haiku-5-5", "claude-sonnet-5-5", "claude-sonnet-5-5"]);
+    expect(reply).toMatchObject({ text: "Saved 9,000 steps.", changed: true });
+    expect(actions.logSteps).toHaveBeenCalledTimes(1);
+    expect(events.at(-1)).toMatchObject({ props: { escalated: "no_tool", models: ["claude-haiku-5-5", "claude-sonnet-5-5"] } });
+  });
+
+  it("does not retry a plain chat answer that has nothing to log", async () => {
+    const create = vi.fn().mockResolvedValueOnce(text("Hello!"));
+    await runHealthChat(ctx, "hello", { create, history: [], turnId: TURN });
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("finishes the turn on the main model once the fast model reaches for a coaching tool", async () => {
+    const create = vi
+      .fn()
+      .mockResolvedValueOnce(msg([{ type: "tool_use", id: "t1", name: "get_routines", input: {} } as Anthropic.ToolUseBlock], "tool_use"))
+      .mockResolvedValueOnce(text("Your push day has 5 exercises."));
+    await runHealthChat(ctx, "push day", { create, history: [], turnId: TURN });
+    expect(create.mock.calls.map((c) => c[0].model)).toEqual(["claude-haiku-5-5", "claude-sonnet-5-5"]);
+    expect(events.at(-1)).toMatchObject({ props: { escalated: "coaching_tool" } });
+  });
+});
