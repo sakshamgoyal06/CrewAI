@@ -80,8 +80,28 @@ export function pickChatModel(text: string, env: NodeJS.ProcessEnv = process.env
   return env.MAGNUS_HEALTH_CHAT_FAST_MODEL?.trim() || "claude-haiku-5-5";
 }
 
-const MAX_TOOL_ROUNDS = 10;
 const HISTORY_MESSAGES = 20;
+
+/**
+ * Budgets for one turn. The app stops waiting at 90 s, so the server must be done well before
+ * that: a hard wall clock for the whole turn, a timeout per model call and per tool, a cap on
+ * rounds, and an output cap (a coach reply is 1 to 4 sentences; tool inputs are the only thing
+ * that ever needs room). When a budget runs out the coach says what it managed, never "Done.".
+ */
+export const TURN_BUDGET = {
+  wallMs: envInt("MAGNUS_CHAT_WALL_MS", 70_000),
+  callTimeoutMs: envInt("MAGNUS_CHAT_CALL_TIMEOUT_MS", 40_000),
+  toolTimeoutMs: envInt("MAGNUS_CHAT_TOOL_TIMEOUT_MS", 45_000),
+  maxRounds: envInt("MAGNUS_CHAT_MAX_ROUNDS", 6),
+  maxTokens: envInt("MAGNUS_CHAT_MAX_TOKENS", 4096),
+  /** Below this much time left, don't start another model call. */
+  minCallMs: 3_000,
+};
+
+function envInt(name: string, fallback: number): number {
+  const n = Number.parseInt(process.env[name]?.trim() || "", 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
 
 export type CalorieReviewCard = { type: "calorie_review"; review: Extract<CalorieReview, { status: "ok" }> };
 
@@ -170,7 +190,7 @@ const EXERCISE_SCHEMA = {
   required: ["exerciseTemplateId", "sets"],
 };
 
-const tools: Anthropic.Tool[] = [
+const toolDefinitions: Anthropic.Tool[] = [
   {
     name: "get_status",
     description:
@@ -467,6 +487,14 @@ const tools: Anthropic.Tool[] = [
   },
 ];
 
+/**
+ * The tool schema is about 12 KB and goes with every call; a cache marker on the last tool caches
+ * the whole prefix (system prompt + tools) so later rounds and turns pay a fraction for it.
+ */
+const tools: Anthropic.Tool[] = toolDefinitions.map((t, i) =>
+  i === toolDefinitions.length - 1 ? { ...t, cache_control: { type: "ephemeral" as const } } : t,
+);
+
 /** Compact status for the model: enough to coach from, without raw arrays it doesn't need. */
 export function statusForModel(s: HealthSnapshot): Record<string, unknown> {
   return {
@@ -719,19 +747,73 @@ export function mealDraftReply(drafts: MealDraft[]): string {
   return parts.join(" ");
 }
 
-type CreateFn = (params: Record<string, unknown>) => Promise<Anthropic.Message>;
+export type CreateOptions = { signal?: AbortSignal; timeout?: number; maxRetries?: number };
+type CreateFn = (params: Record<string, unknown>, options?: CreateOptions) => Promise<Anthropic.Message>;
 
 function defaultCreate(): CreateFn {
-  return (params) =>
+  return (params, options) =>
     String(params.model).startsWith("claude-haiku")
       ? // Haiku has no server-side fallback; a refusal is handled by the caller.
-        anthropic.messages.create(params as never) as unknown as Promise<Anthropic.Message>
+        anthropic.messages.create(params as never, options) as unknown as Promise<Anthropic.Message>
       : // Server-side fallback re-runs a refused request on another model inside the same call.
         (anthropic.beta.messages.create({
           ...params,
           betas: ["server-side-fallback-2026-07-01"],
           fallbacks: "default",
-        } as never) as unknown as Promise<Anthropic.Message>);
+        } as never, options) as unknown as Promise<Anthropic.Message>);
+}
+
+export class TurnBudgetExceeded extends Error {
+  constructor(public readonly where: "model" | "tool") {
+    super(`turn budget exceeded (${where})`);
+  }
+}
+
+/** Runs a promise against what's left of the turn; a loser throws TurnBudgetExceeded. */
+async function withinBudget<T>(p: Promise<T>, remainingMs: number, where: "model" | "tool"): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new TurnBudgetExceeded(where)), Math.max(0, remainingMs));
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/** What a failed tool tells the model, so the coach can tell the person in one plain sentence. */
+export function toolFailureResult(name: string, err: unknown): Record<string, unknown> {
+  const timedOut = err instanceof TurnBudgetExceeded;
+  const raw = err instanceof Error ? err.message : String(err);
+  const reason = timedOut
+    ? "took too long"
+    : /hevy/i.test(raw) || /hevy/i.test(name)
+      ? "couldn't reach Hevy"
+      : /fetch failed|ECONN|ENOTFOUND|network|timeout|timed out/i.test(raw)
+        ? "a network call failed"
+        : "an internal error";
+  return {
+    ok: false,
+    error: "tool_failed",
+    tool: name,
+    reason,
+    detail: raw.slice(0, 200),
+    tellThePerson: `Say in one plain sentence that this part couldn't be done because it ${reason}, and that they can try again in a minute. Do not claim it was done.`,
+  };
+}
+
+/** The coach's line when the turn ran out of time: what got done, and what to do next. */
+export function budgetReply(stats: Pick<TurnStats, "cards" | "changed" | "tools">): string {
+  const did = stats.tools.filter((t) => t.ok).map((t) => t.name);
+  const done = stats.changed || stats.cards.length > 0;
+  if (done) {
+    const what = stats.cards.length ? "the card above" : did.includes("log_steps") ? "your steps" : did.includes("log_body_checkin") ? "your weigh-in" : "part of it";
+    return `I got ${what} done but ran out of time before finishing the rest. Ask me again for what's left.`;
+  }
+  return "That took too long and I couldn't finish it. Try again in a moment, or ask it in a smaller piece.";
 }
 
 export async function loadChatHistory(userProfileId: string, limit = HISTORY_MESSAGES): Promise<ChatHistoryRow[]> {
@@ -854,6 +936,8 @@ type TurnStats = {
   guardFired: boolean;
   cards: string[];
   changed: boolean;
+  /** Which budget ended the turn early, if any. */
+  budgetHit?: "wall" | "rounds" | "tokens";
 };
 
 function addUsage(stats: TurnStats, usage: Anthropic.Usage | undefined): void {
@@ -866,7 +950,7 @@ function addUsage(stats: TurnStats, usage: Anthropic.Usage | undefined): void {
 }
 
 /** One row per coach turn in health_app_events, plus a log line: what it cost and how it went. */
-function logTurn(userProfileId: string, stats: TurnStats, outcome: "ok" | "refusal" | "error" | "replay" | "in_progress", wallMs: number, error?: string): void {
+function logTurn(userProfileId: string, stats: TurnStats, outcome: "ok" | "refusal" | "error" | "replay" | "in_progress" | "budget", wallMs: number, error?: string): void {
   const props = {
     turnId: stats.turnId,
     outcome,
@@ -877,6 +961,7 @@ function logTurn(userProfileId: string, stats: TurnStats, outcome: "ok" | "refus
     cards: stats.cards,
     changed: stats.changed,
     guardFired: stats.guardFired,
+    ...(stats.budgetHit ? { budgetHit: stats.budgetHit } : {}),
     ...(error ? { error: error.slice(0, 300) } : {}),
   };
   logger.info({ userProfileId, wallMs: Math.round(wallMs), ...props }, "health chat turn");
@@ -1005,6 +1090,8 @@ export type RunChatOptions = {
   turnId?: string;
   /** The client's page-load id, so the turn lines up with its telemetry. */
   sessionId?: string;
+  /** Overrides for tests. */
+  budget?: Partial<typeof TURN_BUDGET>;
 };
 
 export type RunChatResult = ChatReply | { error: "in_progress"; turnId: string };
@@ -1043,10 +1130,10 @@ export async function runHealthChat(ctx: ActionContext, userText: string, option
   }
 
   try {
-    const reply = await answerTurn(ctx, userText, history, options.create ?? defaultCreate(), stats);
+    const reply = await answerTurn(ctx, userText, history, options.create ?? defaultCreate(), stats, { ...TURN_BUDGET, ...options.budget });
     await saveChatMessage(ctx.userProfileId, "assistant", reply.text, reply.cards, { turnId, status: "ok" });
     await setTurnStatus(ctx.userProfileId, turnId, "ok");
-    logTurn(ctx.userProfileId, stats, reply.refused ? "refusal" : "ok", performance.now() - startedAt);
+    logTurn(ctx.userProfileId, stats, reply.refused ? "refusal" : stats.budgetHit ? "budget" : "ok", performance.now() - startedAt);
     return { text: reply.text, cards: reply.cards, changed: reply.changed, turnId };
   } catch (err) {
     // The person's message stays in the thread marked failed (with a retry); the model never sees it.
@@ -1063,6 +1150,7 @@ async function answerTurn(
   history: Anthropic.MessageParam[],
   create: CreateFn,
   stats: TurnStats,
+  budget: typeof TURN_BUDGET = TURN_BUDGET,
 ): Promise<{ text: string; cards: ChatCard[]; changed: boolean; refused: boolean }> {
   const today = new Date(ctx.now ?? Date.now()).toISOString();
   const details = await loadPersonalDetails(ctx.userProfileId).catch(() => null);
@@ -1075,20 +1163,48 @@ async function answerTurn(
   let changed = false;
   let text = "";
   let refused = false;
+  let done = false;
+  const deadline = performance.now() + budget.wallMs;
+  const remaining = () => deadline - performance.now();
+  const abort = new AbortController();
+  const abortTimer = setTimeout(() => abort.abort(), budget.wallMs);
+  abortTimer.unref?.();
 
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+  try {
+  for (let round = 0; round < budget.maxRounds; round++) {
+    if (remaining() < budget.minCallMs) {
+      stats.budgetHit = "wall";
+      break;
+    }
     stats.rounds += 1;
     if (stats.models.at(-1) !== model) stats.models.push(model);
-    const response = await create({
-      model,
-      max_tokens: 16000,
-      system: [
-        { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
-        { type: "text", text: `Now: ${today}. Person's timezone: ${ctx.timezone}.${details ? ` About them: ${details}.` : ""}` },
-      ],
-      tools,
-      messages,
-    });
+    let response: Anthropic.Message;
+    try {
+      response = await withinBudget(
+        create(
+          {
+            model,
+            max_tokens: budget.maxTokens,
+            system: [
+              { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+              { type: "text", text: `Now: ${today}. Person's timezone: ${ctx.timezone}.${details ? ` About them: ${details}.` : ""}` },
+            ],
+            tools,
+            messages,
+          },
+          { signal: abort.signal, timeout: Math.min(budget.callTimeoutMs, Math.max(1_000, remaining())), maxRetries: 1 },
+        ),
+        remaining(),
+        "model",
+      );
+    } catch (err) {
+      // Out of time mid-call: answer with what's done so far rather than failing the whole turn.
+      if (err instanceof TurnBudgetExceeded || abort.signal.aborted) {
+        stats.budgetHit = "wall";
+        break;
+      }
+      throw err;
+    }
 
     addUsage(stats, response.usage);
 
@@ -1101,6 +1217,7 @@ async function answerTurn(
       }
       text = "I can't help with that one. Ask me about your meals, steps, workouts or goal.";
       refused = true;
+      done = true;
       break;
     }
 
@@ -1116,6 +1233,8 @@ async function answerTurn(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
     );
     if (response.stop_reason !== "tool_use" || toolUses.length === 0) {
+      if (response.stop_reason === "max_tokens") stats.budgetHit = "tokens";
+      done = true;
       break;
     }
 
@@ -1123,7 +1242,7 @@ async function answerTurn(
       toolUses.map(async (tu): Promise<Anthropic.ToolResultBlockParam> => {
         const t0 = performance.now();
         try {
-          const outcome = await runTool(ctx, tu.name, tu.input);
+          const outcome = await withinBudget(runTool(ctx, tu.name, tu.input), Math.min(budget.toolTimeoutMs, remaining()), "tool");
           stats.tools.push({ name: tu.name, ms: Math.round(performance.now() - t0), ok: true });
           if (outcome.card) {
             cards.push(outcome.card);
@@ -1134,7 +1253,7 @@ async function answerTurn(
         } catch (err) {
           stats.tools.push({ name: tu.name, ms: Math.round(performance.now() - t0), ok: false });
           logger.warn({ err: loggableError(err), tool: tu.name }, "health chat tool failed");
-          return { type: "tool_result", tool_use_id: tu.id, content: "Tool failed.", is_error: true };
+          return { type: "tool_result", tool_use_id: tu.id, content: JSON.stringify(toolFailureResult(tu.name, err)), is_error: true };
         }
       }),
     );
@@ -1146,6 +1265,7 @@ async function answerTurn(
       const card = cards.find((c): c is ActivityDraftCard => c.type === "activity_draft");
       if (card) {
         text = activityDraftReply(card.draft);
+        done = true;
         break;
       }
     }
@@ -1153,17 +1273,30 @@ async function answerTurn(
       const drafts = cards.filter((c): c is Extract<ChatCard, { type: "meal_draft" }> => c.type === "meal_draft");
       if (drafts.length === toolUses.length) {
         text = mealDraftReply(drafts.map((c) => c.draft));
+        done = true;
         break;
       }
     }
   }
 
+  } finally {
+    clearTimeout(abortTimer);
+  }
+
+  stats.changed = changed;
+  // The loop ended without the coach's closing reply: it ran out of rounds or time. Say so
+  // plainly instead of showing a stale "let me check" line or "Done.".
+  if (!done) {
+    if (!stats.budgetHit) stats.budgetHit = "rounds";
+    text = budgetReply(stats);
+  } else if (stats.budgetHit === "tokens" && !text) {
+    text = budgetReply(stats);
+  }
   const guarded = dropPhantomCardMentions(text, cards);
   stats.guardFired = guarded !== text;
   text = guarded;
   if (!text) {
     text = cards.length ? "Check the card and confirm." : "Done.";
   }
-  stats.changed = changed;
   return { text, cards, changed, refused };
 }

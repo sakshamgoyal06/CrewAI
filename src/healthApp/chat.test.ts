@@ -48,7 +48,7 @@ vi.mock("./actions.js", async (orig) => {
   return { ...real, startMealDraft: actions.startMealDraft, logSteps: actions.logSteps };
 });
 
-import { completedTurns, dropPhantomCardMentions, historyToMessages, mealDraftReply, runHealthChat } from "./chat.js";
+import { completedTurns, dropPhantomCardMentions, historyToMessages, mealDraftReply, runHealthChat, TURN_BUDGET } from "./chat.js";
 
 const ctx = { userProfileId: "profile-1", timezone: "UTC", now: new Date("2026-10-27T08:00:00Z") };
 
@@ -294,5 +294,78 @@ describe("dropPhantomCardMentions", () => {
   it("leaves a reply with a meal card alone", () => {
     const meal = { type: "meal_draft" } as unknown as Parameters<typeof dropPhantomCardMentions>[1][number];
     expect(dropPhantomCardMentions("Check the card and confirm.", [meal])).toBe("Check the card and confirm.");
+  });
+});
+
+/** The messages array is shared across calls, so look for the tool result rather than the last entry. */
+function lastToolResult(create: ReturnType<typeof vi.fn>): unknown {
+  const messages = create.mock.calls[1]![0].messages as Array<{ content: unknown }>;
+  const m = [...messages].reverse().find((x) => Array.isArray(x.content) && (x.content[0] as { type?: string })?.type === "tool_result");
+  return (m!.content as unknown[])[0];
+}
+
+describe("turn budgets", () => {
+  const text = (t: string) => msg([{ type: "text", text: t, citations: null } as Anthropic.TextBlock], "end_turn");
+  const stepsCall = () => msg([{ type: "tool_use", id: "t1", name: "log_steps", input: { steps: 9000 } } as Anthropic.ToolUseBlock], "tool_use");
+
+  it("caps output tokens, caches the tool schema and passes a timeout and abort signal to each call", async () => {
+    const create = vi.fn().mockResolvedValueOnce(text("Hi."));
+    await runHealthChat(ctx, "hi", { create, history: [], turnId: TURN });
+    const [params, opts] = create.mock.calls[0]!;
+    expect(params.max_tokens).toBe(4096);
+    expect(TURN_BUDGET.maxRounds).toBe(6);
+    expect(params.tools.at(-1).cache_control).toEqual({ type: "ephemeral" });
+    expect(params.tools.slice(0, -1).every((t: { cache_control?: unknown }) => !t.cache_control)).toBe(true);
+    expect(opts.signal).toBeInstanceOf(AbortSignal);
+    expect(opts.timeout).toBeLessThanOrEqual(TURN_BUDGET.callTimeoutMs);
+    expect(opts.maxRetries).toBe(1);
+  });
+
+  it("answers with what it managed when the wall clock runs out mid-call, and keeps the turn ok", async () => {
+    const create = vi.fn().mockResolvedValueOnce(stepsCall()).mockImplementationOnce(() => new Promise(() => {}));
+    const reply = await runHealthChat(ctx, "9000 steps and plan my week", {
+      create,
+      history: [],
+      turnId: TURN,
+      budget: { wallMs: 80, minCallMs: 1 },
+    });
+    expect(reply).toMatchObject({ text: "I got your steps done but ran out of time before finishing the rest. Ask me again for what's left.", changed: true });
+    expect(saved.map((r) => [r.role, r.status])).toEqual([
+      ["user", "ok"],
+      ["assistant", "ok"],
+    ]);
+    expect(events.at(-1)).toMatchObject({ props: { outcome: "budget", budgetHit: "wall" } });
+  });
+
+  it("stops after the round cap and says so instead of 'Done.'", async () => {
+    const create = vi.fn().mockResolvedValue(stepsCall());
+    const reply = await runHealthChat(ctx, "loop", { create, history: [], turnId: TURN, budget: { maxRounds: 2 } });
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(reply.text).toMatch(/ran out of time/);
+    expect(events.at(-1)).toMatchObject({ props: { outcome: "budget", budgetHit: "rounds", rounds: 2 } });
+  });
+
+  it("gives up on a tool that takes too long and tells the model why, so the coach can say it plainly", async () => {
+    actions.startMealDraft.mockImplementation(() => new Promise(() => {}));
+    const create = vi
+      .fn()
+      .mockResolvedValueOnce(msg([{ type: "tool_use", id: "t1", name: "draft_meal", input: { text: "2 eggs" } } as Anthropic.ToolUseBlock], "tool_use"))
+      .mockResolvedValueOnce(text("I couldn't work out that meal just now because it took too long. Try again in a minute."));
+    const reply = await runHealthChat(ctx, "had 2 eggs", { create, history: [], turnId: TURN, budget: { toolTimeoutMs: 20 } });
+    const toolResult = lastToolResult(create) as { content: string; is_error: boolean };
+    expect(toolResult.is_error).toBe(true);
+    expect(JSON.parse(toolResult.content)).toMatchObject({ ok: false, error: "tool_failed", tool: "draft_meal", reason: "took too long" });
+    expect(JSON.parse(toolResult.content).tellThePerson).toMatch(/Do not claim it was done/);
+    expect(reply.text).toMatch(/took too long/);
+    expect(reply.cards).toEqual([]);
+    expect(events.at(-1)).toMatchObject({ props: { outcome: "ok" } });
+  });
+
+  it("names the failure when a tool throws", async () => {
+    actions.logSteps.mockRejectedValueOnce(new Error("fetch failed: ENOTFOUND api.hevy.com"));
+    const create = vi.fn().mockResolvedValueOnce(stepsCall()).mockResolvedValueOnce(text("Couldn't save that: a network call failed."));
+    await runHealthChat(ctx, "9000 steps", { create, history: [], turnId: TURN });
+    const toolResult = lastToolResult(create) as { content: string };
+    expect(JSON.parse(toolResult.content)).toMatchObject({ reason: "couldn't reach Hevy" });
   });
 });
