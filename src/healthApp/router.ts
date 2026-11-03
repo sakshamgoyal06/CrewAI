@@ -31,7 +31,9 @@ import {
   publicAuthConfig,
   resolveRequestUser,
   revokePersonalToken,
+  scopeAllows,
 } from "./accounts.js";
+import { failedAuthLimiter, userRequestLimiter } from "./rateLimit.js";
 import { connectHevy, disconnectHevy, hevyConnected, hevyKeyInput } from "./integrations.js";
 import { supabase } from "../tools/clients.js";
 import { takeUse } from "./usageLimits.js";
@@ -200,14 +202,29 @@ export function createHealthAppRouter(): express.Router {
   });
 
   router.use(async (req, res, next) => {
+    const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
+    if (failedAuthLimiter.blocked(ip)) {
+      res.status(429).json({ error: "too_many_requests" });
+      return;
+    }
     const auth = await resolveRequestUser(req.get("authorization"), {
       timezone: req.get("x-magnus-timezone") ?? undefined,
     });
     if ("error" in auth) {
+      if (auth.error === "unauthorized") failedAuthLimiter.take(ip);
       res.status(auth.error === "signup_closed" ? 403 : 401).json({ error: auth.error });
       return;
     }
     const { userProfileId } = auth;
+    // Device tokens only send data in; everything else needs the signed-in person.
+    if (!scopeAllows(auth.scope, req.method, req.path)) {
+      res.status(403).json({ error: "token_scope" });
+      return;
+    }
+    if (!userRequestLimiter.take(userProfileId)) {
+      res.status(429).json({ error: "too_many_requests" });
+      return;
+    }
     (res.locals as Locals).userProfileId = userProfileId;
     // Server-side timing per route, written to health_app_events next to the client's view of it.
     if (req.path !== "/events") {
@@ -238,6 +255,15 @@ export function createHealthAppRouter(): express.Router {
     enqueueEvents(clientRows((res.locals as Locals).userProfileId, parsed.data, req.get("user-agent")));
     res.status(204).end();
   });
+
+  /** Whose account a token belongs to: the Android app asks before it starts syncing to it. */
+  router.get(
+    "/whoami",
+    route("whoami", async (ctx) => {
+      const { data } = await supabase.from("user_profile").select("display_name, email").eq("id", ctx.userProfileId).maybeSingle();
+      return { body: { name: data?.display_name ?? null, email: data?.email ?? null } };
+    }),
+  );
 
   /** The signed-in account: who it is and what's connected. */
   router.get(

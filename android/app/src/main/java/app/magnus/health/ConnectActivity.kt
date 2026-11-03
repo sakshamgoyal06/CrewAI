@@ -12,12 +12,19 @@ import androidx.activity.ComponentActivity
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
- * Opened by the PWA with magnus://connect?token=mgt_... (one tap, no copy/paste): keeps the token,
- * asks for Health Connect read access, syncs, then returns to the PWA and syncs every hour.
- * The token only ever goes to BuildConfig.MAGNUS_ORIGIN.
+ * Opened by the PWA with magnus://connect?token=mgt_... (one tap, no copy/paste): shows whose
+ * account the token belongs to and keeps it only once the person confirms, asks for Health Connect
+ * read access, syncs, then returns to the PWA and syncs every hour. The confirmation matters: any
+ * app or web page can open this link, and without it a stranger's token would quietly send this
+ * phone's health data to their account. The token only ever goes to BuildConfig.MAGNUS_ORIGIN.
  */
 class ConnectActivity : ComponentActivity() {
     private lateinit var status: TextView
@@ -55,9 +62,62 @@ class ConnectActivity : ComponentActivity() {
 
     private fun handle(intent: Intent?) {
         val token = intent?.data?.getQueryParameter("token")
-        if (token != null && token.startsWith("mgt_") && token.length in 20..200) {
-            SyncStore(this).token = token
+        if (token != null && token.startsWith("mgt_") && token.length in 20..200 && token != SyncStore(this).token) {
+            confirmAccount(token)
+            return
         }
+        continueConnect()
+    }
+
+    /** Asks the server whose token this is and lets the person say yes before anything syncs. */
+    private fun confirmAccount(token: String) {
+        show("Checking your Magnus account…", null, null)
+        lifecycleScope.launch {
+            val (status, who) = withContext(Dispatchers.IO) { whoami(token) }
+            when {
+                status == 200 && who != null ->
+                    show(
+                        "Sync this phone's Health Connect data (steps, sleep, heart rate, workouts, weight) to the Magnus account $who?",
+                        "Connect",
+                        {
+                            SyncStore(this@ConnectActivity).token = token
+                            continueConnect()
+                        },
+                        "Cancel",
+                        { backToApp() },
+                    )
+                status == 401 || status == 403 ->
+                    show("That link has expired. Open Magnus and tap Connect Health Connect again.", "Open Magnus", { backToApp() })
+                else ->
+                    show("Couldn't reach Magnus to check the account. Check your connection and try again.", "Try again", { confirmAccount(token) }, "Cancel", { backToApp() })
+            }
+        }
+    }
+
+    /** HTTP status and a label for the token's account (email, else name). */
+    private fun whoami(token: String): Pair<Int, String?> {
+        val conn = URL("${BuildConfig.MAGNUS_ORIGIN}/api/health/whoami").openConnection() as HttpURLConnection
+        return try {
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 15_000
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            val code = conn.responseCode
+            if (code != 200) return Pair(code, null)
+            val body = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+            val label = body.optString("email").takeIf { it.isNotBlank() && it != "null" }
+                ?: body.optString("name").takeIf { it.isNotBlank() && it != "null" }
+                ?: "you're signed in to"
+            Pair(code, label)
+        } catch (e: java.io.IOException) {
+            Pair(-1, null)
+        } catch (e: org.json.JSONException) {
+            Pair(-1, null)
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun continueConnect() {
         if (SyncStore(this).token == null) {
             show("Open Magnus and tap Connect Health Connect to link this phone.", "Open Magnus", { backToApp() })
             return

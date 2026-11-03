@@ -70,6 +70,7 @@ import {
   isOwnerEmail,
   publicAuthConfig,
   resolveRequestUser,
+  scopeAllows,
   signupAllowed,
   validTimezone,
 } from "./accounts.js";
@@ -121,7 +122,7 @@ describe("sign-up rules", () => {
 
 describe("resolveRequestUser", () => {
   it("keeps the legacy owner token working", async () => {
-    expect(await resolveRequestUser(`Bearer ${LEGACY}`)).toEqual({ userProfileId: OWNER });
+    expect(await resolveRequestUser(`Bearer ${LEGACY}`)).toEqual({ userProfileId: OWNER, scope: "full" });
   });
 
   it("rejects missing and unknown bearers", async () => {
@@ -132,18 +133,18 @@ describe("resolveRequestUser", () => {
 
   it("links the owner's Google account to the existing owner profile", async () => {
     users.set(jwt("owner"), { id: "auth-owner", email: "owner@example.com", user_metadata: {} });
-    expect(await resolveRequestUser(`Bearer ${jwt("owner")}`)).toEqual({ userProfileId: OWNER });
+    expect(await resolveRequestUser(`Bearer ${jwt("owner")}`)).toEqual({ userProfileId: OWNER, scope: "full" });
     expect(tables.user_profile![0]!.auth_user_id).toBe("auth-owner");
   });
 
   it("creates a fresh profile for a new Google user, once", async () => {
     users.set(jwt("new"), { id: "auth-new", email: "new@example.com", user_metadata: { full_name: "New Person" } });
     const first = await resolveRequestUser(`Bearer ${jwt("new")}`, { timezone: "Europe/London" });
-    expect(first).toEqual({ userProfileId: "p-2" });
+    expect(first).toEqual({ userProfileId: "p-2", scope: "full" });
     expect(tables.user_profile![1]).toMatchObject({ auth_user_id: "auth-new", display_name: "New Person", timezone: "Europe/London" });
     // A second token for the same account maps to the same profile.
     users.set(jwt("new2"), { id: "auth-new", email: "new@example.com", user_metadata: {} });
-    expect(await resolveRequestUser(`Bearer ${jwt("new2")}`)).toEqual({ userProfileId: "p-2" });
+    expect(await resolveRequestUser(`Bearer ${jwt("new2")}`)).toEqual({ userProfileId: "p-2", scope: "full" });
     expect(tables.user_profile).toHaveLength(2);
   });
 
@@ -159,7 +160,26 @@ describe("resolveRequestUser", () => {
     const stored = tables.health_app_tokens![0]!;
     expect(stored.token_hash).toBe(createHash("sha256").update(token).digest("hex"));
     expect(JSON.stringify(stored)).not.toContain(token);
-    expect(await resolveRequestUser(`Bearer ${token}`)).toEqual({ userProfileId: OWNER });
+    expect(await resolveRequestUser(`Bearer ${token}`)).toEqual({ userProfileId: OWNER, scope: "ingest" });
     expect(await resolveRequestUser("Bearer mgt_wrong")).toEqual({ error: "unauthorized" });
+  });
+
+  it("keeps tokens made before scopes existed at full access", async () => {
+    const token = "mgt_legacy-token-made-before-scopes";
+    (tables.health_app_tokens ??= []).push({ id: "t-old", user_profile_id: OWNER, token_hash: createHash("sha256").update(token).digest("hex"), scope: "full" });
+    expect(await resolveRequestUser(`Bearer ${token}`)).toEqual({ userProfileId: OWNER, scope: "full" });
+  });
+});
+
+describe("scopeAllows", () => {
+  it("lets device tokens only send data in and ask whose account it is", () => {
+    expect(scopeAllows("ingest", "POST", "/ingest/health-connect")).toBe(true);
+    expect(scopeAllows("ingest", "POST", "/steps")).toBe(true);
+    expect(scopeAllows("ingest", "GET", "/whoami")).toBe(true);
+    expect(scopeAllows("ingest", "GET", "/account/export")).toBe(false);
+    expect(scopeAllows("ingest", "DELETE", "/account")).toBe(false);
+    expect(scopeAllows("ingest", "GET", "/chat")).toBe(false);
+    expect(scopeAllows("ingest", "POST", "/account/tokens")).toBe(false);
+    expect(scopeAllows("full", "DELETE", "/account")).toBe(true);
   });
 });

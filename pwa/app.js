@@ -93,6 +93,11 @@ async function api(path, options = {}) {
       endSession("Magnus is invite-only right now. Ask Saksham for an invite.");
       throw new Error("Invite only.");
     }
+    if (body.error === "token_scope") {
+      // A device token (Android app, HC Webhook) only sends data in; it can't open the app.
+      endSession("That token is for syncing Health Connect only. Sign in with Google instead.");
+      throw new Error("Sync-only token.");
+    }
   }
   const body = await res.json().catch(() => ({}));
   trackApi(path, options.method, res.status, performance.now() - started, res.ok ? null : body.error || `http_${res.status}`);

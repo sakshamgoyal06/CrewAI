@@ -5,6 +5,7 @@ import express from "express";
 import { healthListenPort } from "./env.js";
 import { createHealthAppRouter } from "./healthApp/router.js";
 import { logger } from "./logger.js";
+import { securityHeaders } from "./securityHeaders.js";
 import { loggableError } from "./util/loggableError.js";
 import { redis, supabase } from "./tools/clients.js";
 
@@ -48,6 +49,10 @@ export type HealthServer = {
 export function startHealthServer(): Promise<HealthServer> {
   const app = express();
   app.disable("x-powered-by");
+  // Railway's edge is the one proxy in front of us: req.ip is then the caller, for rate limits.
+  app.set("trust proxy", 1);
+  const appDir = process.env.MAGNUS_HEALTH_APP_DIR?.trim() || path.resolve("pwa");
+  app.use(securityHeaders(appDir));
   // Health Connect syncs can carry a day or two of buckets; everything else is tiny.
   app.use("/api/health/ingest", express.json({ limit: "2mb" }));
   // Meal photos arrive as base64 JPEG, resized on the phone to ~1280 px (usually under 400 KB).
@@ -88,7 +93,7 @@ export function startHealthServer(): Promise<HealthServer> {
   app.use("/api/health", createHealthAppRouter());
   app.use(
     "/app",
-    express.static(process.env.MAGNUS_HEALTH_APP_DIR?.trim() || path.resolve("pwa"), {
+    express.static(appDir, {
       index: "index.html",
       setHeaders: (res, filePath) => {
         if (filePath.endsWith("sw.js")) {
