@@ -78,6 +78,21 @@ describe("parseHealthConnect", () => {
     expect(scale).toEqual([{ localDate: "2026-10-27", time: "2026-10-27T02:00:00Z", weightKg: 84.1, bodyFatPct: 20 }]);
   });
 
+  it("credits sleep to the wake-up day and leaves out awake time", () => {
+    const { samples } = parseHealthConnect(
+      healthConnectPayload.parse({
+        // 23:30 IST on the 26th to 07:00 IST on the 27th, 30 min awake.
+        sleep: [{ start_time: "2026-10-26T18:00:00Z", end_time: "2026-10-27T01:30:00Z", asleep_seconds: 25200 }],
+        resting_heart_rate: [{ bpm: 58.4, time: "2026-10-27T02:00:00Z" }],
+      }),
+      "Asia/Kolkata",
+    );
+    expect(samples.map((s) => [s.kind, s.localDate, s.value])).toEqual([
+      ["sleep", "2026-10-27", 25200],
+      ["resting_hr", "2026-10-27", 58],
+    ]);
+  });
+
   it("rejects malformed records", () => {
     expect(healthConnectPayload.safeParse({ steps: [{ count: 5, start_time: "nope", end_time: "x" }] }).success).toBe(false);
   });
@@ -94,7 +109,7 @@ describe("totalsFromSamples", () => {
         { kind: "exercise", value: 3600, detail: { type: "STRENGTH_TRAINING" } },
         { kind: "exercise", value: 600, detail: { type: "EXERCISE_TYPE_HIKING" } },
       ]),
-    ).toEqual({ steps: 6500, distanceM: 3200, walkMinutes: 40, activeKcal: null });
+    ).toEqual({ steps: 6500, distanceM: 3200, walkMinutes: 40, activeKcal: null, sleepMinutes: null, restingHr: null });
     expect(isWalkType("running")).toBe(false);
   });
 });
@@ -130,6 +145,26 @@ describe("ingestHealthConnect", () => {
     );
     expect(r).toMatchObject({ ok: true, days: [{ date: "2026-10-27", steps: 1000, activeKcal: 200 }] });
     expect(activityMock).toHaveBeenLastCalledWith("p1", expect.objectContaining({ activeKcal: 200 }));
+  });
+
+  it("passes sleep minutes and the lowest resting heart rate to the daily row", async () => {
+    const r = await ingestHealthConnect(
+      ctx,
+      healthConnectPayload.parse({
+        sleep: [
+          { start_time: "2026-10-26T18:00:00Z", end_time: "2026-10-27T01:30:00Z", asleep_seconds: 25200 },
+          { start_time: "2026-10-27T08:30:00Z", end_time: "2026-10-27T09:00:00Z" }, // a 30 min nap
+          // The watch recorded the same night, a bit shorter: not counted twice.
+          { start_time: "2026-10-26T18:10:00Z", end_time: "2026-10-27T01:20:00Z", asleep_seconds: 24000 },
+        ],
+        resting_heart_rate: [
+          { bpm: 61, time: "2026-10-27T02:00:00Z" },
+          { bpm: 57, time: "2026-10-27T10:00:00Z" },
+        ],
+      }),
+    );
+    expect(r).toMatchObject({ ok: true, days: [{ date: "2026-10-27", sleepMinutes: 450, restingHr: 57 }] });
+    expect(activityMock).toHaveBeenLastCalledWith("p1", expect.objectContaining({ sleepMinutes: 450, restingHr: 57 }));
   });
 
   it("ignores future days", async () => {

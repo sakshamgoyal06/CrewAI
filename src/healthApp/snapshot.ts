@@ -49,6 +49,9 @@ export type HealthSnapshot = {
     proteinG: number;
     steps: number;
     walkMinutes: number | null;
+    /** Last night's sleep and today's resting heart rate, when Health Connect has them. */
+    sleepMinutes: number | null;
+    restingHr: number | null;
     isTrainingDay: boolean;
     /** Today's routine items, in time order, with done / skipped / pending. */
     routine: RoutineItemStatus[];
@@ -312,6 +315,8 @@ export async function buildHealthSnapshot(
       proteinG: Math.round(todayMeals?.proteinG ?? 0),
       steps: todayActivity?.steps ?? 0,
       walkMinutes: todayActivity?.walkMinutes ?? null,
+      sleepMinutes: todayActivity?.sleepMinutes ?? null,
+      restingHr: todayActivity?.restingHr ?? null,
       isTrainingDay: targets.trainingDays.includes(weekdayOfDate(to)),
       routine: routineByDate.get(to) ?? [],
     },

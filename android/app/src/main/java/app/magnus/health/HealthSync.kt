@@ -2,11 +2,14 @@ package app.magnus.health
 
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.aggregate.AggregateMetric
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.RestingHeartRateRecord
+import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.AggregateGroupByDurationRequest
@@ -22,7 +25,7 @@ import java.time.ZoneId
 
 /**
  * Reads Health Connect and posts it to the Magnus ingest in the same JSON shape the server
- * already takes from HC Webhook. Steps, distance and active calories go as hourly aggregates
+ * already takes from HC Webhook, plus sleep and resting heart rate. Steps, distance and active calories go as hourly aggregates
  * (Health Connect de-duplicates phone + watch); the server upserts buckets by start time, so
  * re-sending the last few days on every run is safe.
  */
@@ -34,6 +37,8 @@ object HealthSync {
         HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
         HealthPermission.getReadPermission(WeightRecord::class),
         HealthPermission.getReadPermission(BodyFatRecord::class),
+        HealthPermission.getReadPermission(SleepSessionRecord::class),
+        HealthPermission.getReadPermission(RestingHeartRateRecord::class),
     )
 
     /** Lets the hourly sync read while the app is closed (Android 14+; ignored where unsupported). */
@@ -55,21 +60,54 @@ object HealthSync {
         }
         val client = HealthConnectClient.getOrCreate(context)
         val granted = client.permissionController.getGrantedPermissions()
-        if (granted.isEmpty()) return Result.Failed("no Health Connect permissions", retry = false)
+        if (granted.none { it in PERMISSIONS }) return Result.Failed("no Health Connect permissions", retry = false)
+        val payload = try {
+            read(client, store, granted, now)
+        } catch (e: SecurityException) {
+            // Android 14+ blocks reads while the app is closed unless background access is allowed.
+            store.lastError = "Allow background access for Magnus in Health Connect to sync while it's closed."
+            return Result.Failed("background read not allowed", retry = false)
+        }
+        val totalSteps = payload.optLong("_steps")
+        payload.remove("_steps")
 
+        val status = post(token, payload)
+        return when {
+            status in 200..299 -> {
+                store.lastSync = now
+                store.lastError = null
+                Result.Ok(totalSteps)
+            }
+            status == 401 -> {
+                // Token revoked in the app's settings: stop syncing until reconnected.
+                store.lastError = "Disconnected. Reconnect from Magnus settings."
+                Result.Failed("token revoked", retry = false)
+            }
+            else -> {
+                store.lastError = "Sync failed (HTTP $status). Retrying."
+                Result.Failed("http $status", retry = true)
+            }
+        }
+    }
+
+    private suspend fun read(client: HealthConnectClient, store: SyncStore, granted: Set<String>, now: Instant): JSONObject {
         val last = store.lastSync
         val from = if (last == null) now.minus(FIRST_SYNC) else minOf(last, now).minus(RESEND)
         val range = TimeRangeFilter.between(from, now)
         val payload = JSONObject()
         var totalSteps = 0L
 
-        val buckets = client.aggregateGroupByDuration(
+        // Aggregate only what was granted: asking for a denied metric fails the whole request.
+        val metrics = buildSet<AggregateMetric<*>> {
+            if (HealthPermission.getReadPermission(StepsRecord::class) in granted) add(StepsRecord.COUNT_TOTAL)
+            if (HealthPermission.getReadPermission(DistanceRecord::class) in granted) add(DistanceRecord.DISTANCE_TOTAL)
+            if (HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class) in granted) {
+                add(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL)
+            }
+        }
+        val buckets = if (metrics.isEmpty()) emptyList() else client.aggregateGroupByDuration(
             AggregateGroupByDurationRequest(
-                metrics = setOf(
-                    StepsRecord.COUNT_TOTAL,
-                    DistanceRecord.DISTANCE_TOTAL,
-                    ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL,
-                ),
+                metrics = metrics,
                 timeRangeFilter = range,
                 timeRangeSlicer = Duration.ofHours(1),
             ),
@@ -115,24 +153,34 @@ object HealthSync {
         }
         payload.put("weight", weight).put("body_fat", bodyFat)
 
-        val status = post(token, payload)
-        return when {
-            status in 200..299 -> {
-                store.lastSync = now
-                store.lastError = null
-                Result.Ok(totalSteps)
-            }
-            status == 401 -> {
-                // Token revoked in the app's settings: stop syncing until reconnected.
-                store.lastError = "Disconnected. Reconnect from Magnus settings."
-                Result.Failed("token revoked", retry = false)
-            }
-            else -> {
-                store.lastError = "Sync failed (HTTP $status). Retrying."
-                Result.Failed("http $status", retry = true)
-            }
+        // Sleep: asleep time leaves out awake / out-of-bed stages when the tracker records them.
+        val sleep = JSONArray()
+        for (s in readAll(client, SleepSessionRecord::class, range)) {
+            val total = Duration.between(s.startTime, s.endTime).seconds
+            val awake = s.stages
+                .filter { it.stage in AWAKE_STAGES }
+                .sumOf { Duration.between(it.startTime, it.endTime).seconds }
+            sleep.put(
+                JSONObject()
+                    .put("start_time", s.startTime.toString())
+                    .put("end_time", s.endTime.toString())
+                    .put("asleep_seconds", (total - awake).coerceAtLeast(0)),
+            )
         }
+        val resting = JSONArray()
+        for (h in readAll(client, RestingHeartRateRecord::class, range)) {
+            resting.put(JSONObject().put("bpm", h.beatsPerMinute).put("time", h.time.toString()))
+        }
+        payload.put("sleep", sleep).put("resting_heart_rate", resting)
+        payload.put("_steps", totalSteps)
+        return payload
     }
+
+    private val AWAKE_STAGES = setOf(
+        SleepSessionRecord.STAGE_TYPE_AWAKE,
+        SleepSessionRecord.STAGE_TYPE_AWAKE_IN_BED,
+        SleepSessionRecord.STAGE_TYPE_OUT_OF_BED,
+    )
 
     private suspend fun <T : androidx.health.connect.client.records.Record> readAll(
         client: HealthConnectClient,

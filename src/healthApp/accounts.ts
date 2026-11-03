@@ -168,6 +168,23 @@ export async function createPersonalToken(userProfileId: string, label = "Health
   return token;
 }
 
+/**
+ * A new token for a device that replaces the one it had: tokens with the same label are revoked,
+ * so reconnecting the Android app doesn't pile up live tokens.
+ */
+export async function replacePersonalToken(userProfileId: string, label: string): Promise<string> {
+  const token = await createPersonalToken(userProfileId, label);
+  const { error } = await supabase
+    .from("health_app_tokens")
+    .delete()
+    .eq("user_profile_id", userProfileId)
+    .eq("label", label.slice(0, 60))
+    .neq("token_hash", sha256(token));
+  if (error) throw new Error(`replace token: ${error.message}`);
+  tokenCache.clear();
+  return token;
+}
+
 export async function listPersonalTokens(
   userProfileId: string,
 ): Promise<{ id: string; label: string; createdAt: string; lastUsedAt: string | null }[]> {

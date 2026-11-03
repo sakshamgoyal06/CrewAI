@@ -7,6 +7,9 @@ import com.google.androidbrowserhelper.trusted.LauncherActivity
 class MagnusLauncherActivity : LauncherActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (SyncStore(this).token != null) SyncWorker.runNow(this)
+        if (SyncStore(this).token != null) {
+            SyncWorker.schedule(this) // keeps the hourly sync alive (KEEP: never resets its timer)
+            SyncWorker.runNow(this)
+        }
     }
 }

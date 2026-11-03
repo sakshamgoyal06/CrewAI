@@ -30,8 +30,15 @@ const CHAT_CACHE_KEY = "magnus-chat-cache";
 const SNAPSHOT_CACHE_KEY = "magnus-snapshot-cache";
 const HISTORY_CACHE_KEY = "magnus-history-cache";
 const USUAL_CACHE_KEY = "magnus-usual-meals";
-// Set when the PWA is opened from the Android app (its launch URL carries ?src=android).
+// Set when the PWA is opened from the Android app (its launch URL carries ?src=android). Per tab
+// (sessionStorage): the app shares Chrome's storage, so a localStorage flag would leak into Chrome.
 const ANDROID_KEY = "magnus-android";
+const inAndroidApp = () => { try { return sessionStorage.getItem(ANDROID_KEY) === "1"; } catch { return false; } };
+// Health Connect linked from this phone (the Android app synced at least once), or the prompt dismissed.
+const HC_LINKED_KEY = "magnus-hc-linked";
+const HC_DISMISSED_KEY = "magnus-hc-prompt-dismissed";
+// Built by CI from main (.github/workflows/android.yml) and kept on the android-latest release.
+const ANDROID_APK_URL = "https://github.com/sakshamgoyal06/crewai/releases/download/android-latest/magnus.apk";
 const ONBOARDED_KEY = "magnus-onboarded";
 
 // ---------- API ----------
@@ -648,6 +655,7 @@ function renderMove(d, t, isToday) {
     tile("Workout", d.workouts.length ? fmt(mins) : d.trainedUnlogged || d.sportCounted ? "✓" : "–", d.workouts.length ? "min" : null,
       d.workouts.length ? `${fmt(d.workouts.reduce((a, w) => a + w.volumeKg, 0))} kg lifted` : d.trainedUnlogged ? "not in Hevy" : d.sportCounted ? d.sportCounted.split(" · ")[0] : d.isTrainingDay ? "none logged" : "rest", null),
   );
+  renderRecovery(d);
   renderRoutineToday(d);
   renderBurnBreakdown(d);
   renderActivities(d);
@@ -680,6 +688,17 @@ function renderMove(d, t, isToday) {
           : d.partial ? "Loading workouts…"
           : "No workout logged.")]),
   );
+}
+
+/** Sleep and resting heart rate from Health Connect, when the phone has them. */
+function renderRecovery(d) {
+  const line = $("recovery");
+  if (!line) return;
+  const parts = [];
+  if (d.sleepMinutes != null) parts.push(["Slept ", el("b", {}, `${Math.floor(d.sleepMinutes / 60)} h ${String(d.sleepMinutes % 60).padStart(2, "0")} min`)]);
+  if (d.restingHr != null) parts.push(["Resting heart rate ", el("b", {}, `${fmt(d.restingHr)} bpm`)]);
+  line.hidden = !parts.length;
+  line.replaceChildren(...parts.flatMap((p, i) => (i ? [" · ", ...p] : p)));
 }
 
 /** The routine items planned that day, ticked off as they're logged; non-gym ones can be marked done here. */
@@ -849,7 +868,9 @@ function renderTrend() {
   const h = state.history;
   if (!h) return;
   const { metric, range } = state.trend;
-  for (const b of document.querySelectorAll("#trend-tabs button")) b.classList.toggle("on", b.dataset.metric === metric);
+  $("hc-prompt-go")?.addEventListener("click", (e) => connectHealthConnect(e.currentTarget));
+$("hc-prompt-later")?.addEventListener("click", () => { store.set(HC_DISMISSED_KEY, true); $("hc-prompt").hidden = true; });
+for (const b of document.querySelectorAll("#trend-tabs button")) b.classList.toggle("on", b.dataset.metric === metric);
   for (const b of document.querySelectorAll("#trend-range button")) b.classList.toggle("on", Number(b.dataset.range) === range);
   const cfg = TREND[metric];
   const days = h.days.slice(-range);
@@ -1556,6 +1577,30 @@ function planSection(box) {
   paint();
 }
 
+/**
+ * One tap, no token to copy: a fresh token for this phone (the old one is revoked) goes straight to
+ * the Android app, which asks for Health Connect access, syncs and comes back here (?hc=connected).
+ */
+async function connectHealthConnect(button) {
+  if (button) button.disabled = true;
+  try {
+    const r = await api("/account/tokens", { method: "POST", body: JSON.stringify({ label: "Android app", replace: true }) });
+    location.href = `intent://connect?token=${encodeURIComponent(r.token)}#Intent;scheme=magnus;package=app.magnus.health;S.browser_fallback_url=${encodeURIComponent(ANDROID_APK_URL)};end`;
+  } catch (err) { toast(err.message); }
+  if (button) setTimeout(() => { button.disabled = false; }, 1500);
+}
+
+/** In the Android app and not linked yet: a one-tap prompt on Today. */
+async function checkHealthConnectPrompt() {
+  const box = $("hc-prompt");
+  if (!box || !inAndroidApp() || store.get(HC_LINKED_KEY, false) || store.get(HC_DISMISSED_KEY, false)) return;
+  try {
+    const a = await api("/account");
+    if ((a.tokens || []).some((t) => t.label === "Android app" && t.lastUsedAt)) { store.set(HC_LINKED_KEY, true); return; }
+    box.hidden = false;
+  } catch { /* offline: ask next time */ }
+}
+
 function accountSection() {
   const wrap = el("div", { class: "stack" }, el("p", { class: "section-label" }, "Account"));
   const who = el("p", { class: "hint" }, "Loading…");
@@ -1626,41 +1671,41 @@ function accountSection() {
 
   function paintHc(tokens) {
     const list = tokens.map((t) => el("div", { class: "row-between" },
-      el("span", { class: "hint" }, `${t.label} · ${t.lastUsedAt ? `last sync ${new Date(t.lastUsedAt).toLocaleDateString()}` : "not used yet"}`),
+      el("span", { class: "hint" }, `${t.label} · ${t.lastUsedAt ? `last sync ${new Date(t.lastUsedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}` : "not used yet"}`),
       el("button", { class: "link danger", type: "button", onclick: async () => {
-        try { await api(`/account/tokens/${t.id}`, { method: "DELETE" }); toast("Token revoked."); load(); } catch (err) { toast(err.message); }
-      } }, "Revoke")));
-    const inAndroidApp = store.get(ANDROID_KEY, false);
-    if (inAndroidApp) {
+        try { await api(`/account/tokens/${t.id}`, { method: "DELETE" }); toast("Disconnected."); if (t.label === "Android app") store.set(HC_LINKED_KEY, null); load(); } catch (err) { toast(err.message); }
+      } }, t.label === "Android app" ? "Disconnect" : "Revoke")));
+    const phone = tokens.some((t) => t.label === "Android app");
+    if (inAndroidApp()) {
       hc.replaceChildren(
-        el("p", { class: "hint" }, "Steps, walks, workouts' calories and scale readings sync from Health Connect every hour."),
+        el("p", { class: "hint" }, "Steps, walks, sleep, resting heart rate, workouts' calories and scale readings sync from Health Connect every hour. One tap, then allow access on the next screen."),
         ...list,
-        el("button", { class: "btn primary block", type: "button", onclick: async (e) => {
-          e.target.disabled = true;
-          try {
-            const r = await api("/account/tokens", { method: "POST", body: JSON.stringify({ label: "Android app" }) });
-            // Hands the token to the native side, which asks for Health Connect access and syncs.
-            location.href = `intent://connect?token=${encodeURIComponent(r.token)}#Intent;scheme=magnus;package=app.magnus.health;end`;
-          } catch (err) { toast(err.message); }
-          e.target.disabled = false;
-        } }, tokens.some((t) => t.label === "Android app") ? "Reconnect Health Connect" : "Connect Health Connect"),
+        el("button", { class: "btn primary block", type: "button", onclick: (e) => connectHealthConnect(e.currentTarget) }, phone ? "Reconnect Health Connect" : "Connect Health Connect"),
       );
       return;
     }
-    hc.replaceChildren(
-      el("p", { class: "hint" }, "Steps, walks and scale readings sync from Health Connect through the HC Webhook app. Create a token, then paste it into HC Webhook with this URL:"),
+    const webhook = el("details", { class: "stack" },
+      el("summary", { class: "hint" }, "No Android app? Use HC Webhook with a token instead"),
+      el("p", { class: "hint" }, "Create a token, then paste it into the HC Webhook app with this URL:"),
       el("code", { class: "copyable" }, `${location.origin}/api/health/ingest/health-connect`),
-      ...list,
       el("button", { class: "btn block", type: "button", onclick: async (e) => {
         e.target.disabled = true;
         try {
           const r = await api("/account/tokens", { method: "POST", body: JSON.stringify({ label: "Health Connect" }) });
           await navigator.clipboard?.writeText(r.token).catch(() => {});
-          hc.prepend(el("p", { class: "hint" }, "Copied. It's shown only once:"), el("code", { class: "copyable" }, r.token));
+          webhook.append(el("p", { class: "hint" }, "Copied. It's shown only once:"), el("code", { class: "copyable" }, r.token));
           toast("Token created and copied.");
         } catch (err) { toast(err.message); }
         e.target.disabled = false;
       } }, "Create Health Connect token"),
+    );
+    hc.replaceChildren(
+      el("p", { class: "hint" }, phone
+        ? "This account syncs from the Magnus Android app. Open Magnus from the app icon to manage it."
+        : "On Android, install the Magnus app: open it, tap Connect Health Connect and allow access. Steps, sleep, heart rate, workouts and weigh-ins then sync on their own, no token needed."),
+      ...list,
+      phone ? null : el("a", { class: "btn primary block", href: ANDROID_APK_URL, rel: "noopener" }, "Download the Android app"),
+      webhook,
     );
   }
 
@@ -2522,6 +2567,7 @@ async function start() {
   loadHistory();
   refresh();
   flushQueue();
+  checkHealthConnectPrompt();
 }
 
 window.addEventListener("online", flushQueue);
@@ -2531,7 +2577,20 @@ if ("serviceWorker" in navigator) {
 }
 
 if (new URLSearchParams(location.search).get("src") === "android" || document.referrer.startsWith("android-app://app.magnus.health")) {
-  store.set(ANDROID_KEY, true);
+  try { sessionStorage.setItem(ANDROID_KEY, "1"); } catch { /* private mode */ }
+}
+store.set(ANDROID_KEY, null); // the old, shared flag
+const hcReturn = new URLSearchParams(location.search).get("hc");
+if (hcReturn) {
+  // Back from the Android app's Health Connect screen.
+  const u = new URL(location.href);
+  u.searchParams.delete("hc");
+  history.replaceState(null, "", u.pathname + u.search + u.hash);
+  if (hcReturn === "connected") {
+    store.set(HC_LINKED_KEY, true);
+    store.set(HC_DISMISSED_KEY, null);
+    setTimeout(() => toast("Health Connect is connected. Steps, sleep and heart rate sync every hour."), 800);
+  }
 }
 
 const redirectError = captureRedirect();

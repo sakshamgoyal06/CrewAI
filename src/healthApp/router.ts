@@ -26,6 +26,7 @@ import {
 } from "./actions.js";
 import {
   createPersonalToken,
+  replacePersonalToken,
   listPersonalTokens,
   publicAuthConfig,
   resolveRequestUser,
@@ -303,8 +304,14 @@ export function createHealthAppRouter(): express.Router {
   router.post(
     "/account/tokens",
     route("token-create", async (ctx, req) => {
-      const { label } = z.object({ label: z.string().trim().min(1).max(60).optional() }).parse(req.body ?? {});
-      return { body: { ok: true, token: await createPersonalToken(ctx.userProfileId, label) } };
+      const { label, replace } = z
+        .object({ label: z.string().trim().min(1).max(60).optional(), replace: z.boolean().optional() })
+        .parse(req.body ?? {});
+      // replace: a device reconnecting (the Android app) swaps its old token for the new one.
+      const token = replace && label
+        ? await replacePersonalToken(ctx.userProfileId, label)
+        : await createPersonalToken(ctx.userProfileId, label);
+      return { body: { ok: true, token } };
     }),
   );
 
