@@ -95,7 +95,7 @@ export async function saveRoutine(
   return { ok: true, items: saved, trainingDays };
 }
 
-const checkKey = (itemId: string, date: string) => `${itemId}|${date}`;
+export const checkKey = (itemId: string, date: string): string => `${itemId}|${date}`;
 
 /** Follow-ups in the range, keyed "itemId|date". Empty when the table isn't there yet. */
 export async function getRoutineChecks(userProfileId: string, from: string, to: string): Promise<Map<string, RoutineCheck>> {

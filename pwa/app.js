@@ -1171,7 +1171,7 @@ function renderEmpty() {
 
 function historySig(messages) {
   const last = messages.at(-1);
-  return `${messages.length}|${last?.createdAt ?? ""}|${JSON.stringify(messages.flatMap((m) => [m.status ?? "", ...(m.cards || []).map((c) => c.status ?? "")]))}`;
+  return `${messages.length}|${last?.createdAt ?? ""}|${JSON.stringify(messages.flatMap((m) => [m.status ?? "", ...(m.cards || []).map((c) => c.status ?? (c.saved ? "saved" : ""))]))}`;
 }
 
 // A turn still marked pending this long after it was sent died with the server; treat it as failed.
@@ -1390,8 +1390,8 @@ function autosize() {
 }
 
 function appendCard(c) {
-  if (c.type === "meal_draft") $("thread").append(mealDraftCard(c.draft));
-  else if (c.type === "activity_draft") $("thread").append(activityDraftCard(c.draft));
+  if (c.type === "meal_draft") $("thread").append(mealDraftCard(c.draft, { saved: c.saved }));
+  else if (c.type === "activity_draft") $("thread").append(activityDraftCard(c.draft, { saved: c.saved }));
   else if (c.type === "workout_check") $("thread").append(workoutCheckCard(c));
   else if (c.type === "routine_check") $("thread").append(routineCheckCard(c));
   else if (c.type === "hevy_proposal") $("thread").append(hevyProposalCard(c));
@@ -2143,8 +2143,9 @@ function routineCheckCard(c) {
 // ---------- activity draft card ----------
 
 /** An activity's estimate: change minutes or effort and it re-estimates; Save logs it once. */
-function activityDraftCard(draft, { onDone } = {}) {
-  const status = confirmedDrafts()[draft.draftId];
+function activityDraftCard(draft, { onDone, saved } = {}) {
+  // The server knows what was saved (on any phone); this phone also remembers a discard.
+  const status = saved ? { state: "logged", durationMin: saved.durationMin, kcal: saved.kcal } : confirmedDrafts()[draft.draftId];
   const card = el("div", { class: "draft" });
   const label = draft.label;
   const finish = (st) => {
@@ -2255,8 +2256,8 @@ function markDraft(id, status) {
 }
 
 /** Editable estimate. Saves exactly what's on the card; re-confirming the same card never double-logs. */
-function mealDraftCard(draft, { onDone } = {}) {
-  const status = confirmedDrafts()[draft.draftId];
+function mealDraftCard(draft, { onDone, saved } = {}) {
+  const status = saved ? { state: "logged", calories: saved.calories } : confirmedDrafts()[draft.draftId];
   const card = el("div", { class: "draft" });
   if (status) return finishedCard(card, draft, status);
 

@@ -26,7 +26,8 @@ import {
 import type { MealDraft } from "./meals.js";
 import { activityDraftInput, buildActivityDraft, deleteActivity, type ActivityDraft } from "./activityLog.js";
 import { routineInput } from "./routine.js";
-import { answerRoutineCheck, routineCheckAnswerInput, setRoutine } from "./routineCheck.js";
+import { answerRoutineCheck, routineCheckAnswerInput, setRoutine, type RoutineCheckCard } from "./routineCheck.js";
+import { cardHistoryNote, emptyCardStates, loadCardStates, type CardStates } from "./chatCards.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
 import {
   newRoutineInput,
@@ -145,12 +146,15 @@ function envInt(name: string, fallback: number): number {
 
 export type CalorieReviewCard = { type: "calorie_review"; review: Extract<CalorieReview, { status: "ok" }> };
 
-export type ActivityDraftCard = { type: "activity_draft"; draft: ActivityDraft };
+export type ActivityDraftCard = { type: "activity_draft"; draft: ActivityDraft; saved?: { durationMin: number; kcal: number } };
+
+export type MealDraftCard = { type: "meal_draft"; draft: MealDraft; saved?: { calories: number } };
 
 export type ChatCard =
-  | { type: "meal_draft"; draft: MealDraft }
+  | MealDraftCard
   | ActivityDraftCard
   | WorkoutCheckCard
+  | RoutineCheckCard
   | HevyProposalCard
   | RcaCard
   | CalorieReviewCard;
@@ -1039,67 +1043,29 @@ export async function recordChatTurn(
   await saveChatMessage(userProfileId, "assistant", replyText, cards);
 }
 
-/** One line per card, so later turns know what was shown and whether it was acted on. */
-export function cardHistoryNote(card: ChatCard, savedDraftIds: ReadonlySet<string>): string {
-  switch (card.type) {
-    case "meal_draft": {
-      const d = card.draft;
-      const state = savedDraftIds.has(d.draftId) ? "logged" : "never confirmed, not logged";
-      return `[Meal card "${d.text.slice(0, 80)}", about ${d.totals.calories} kcal: ${state}]`;
-    }
-    case "activity_draft": {
-      const d = card.draft;
-      const state = savedDraftIds.has(d.draftId) ? "saved" : "never saved";
-      return `[Activity card ${d.label}, ${d.durationMin} min, about ${d.kcal} kcal: ${state}]`;
-    }
-    case "hevy_proposal":
-      return "[Hevy change card]";
-    case "calorie_review":
-      return "[Calorie target card]";
-    case "workout_check":
-      return "[Workout check card]";
-    default:
-      return "[Card]";
-  }
-}
-
-/** History as API messages: must start with a user turn and alternate cleanly. */
+/**
+ * History as API messages. Starts with a user turn; each past assistant turn ends with one note
+ * per card giving its live state; messages the app posted on its own (routine and gym checks,
+ * the weekly root-cause card) are marked as such; and consecutive turns of one role (an answer,
+ * then a check posted by the scheduler) are merged, so the thread alternates cleanly.
+ */
 export function historyToMessages(
-  history: Array<{ role: "user" | "assistant"; content: string; cards?: ChatCard[] }>,
-  savedDraftIds: ReadonlySet<string> = new Set(),
+  history: Array<{ role: "user" | "assistant"; content: string; cards?: ChatCard[]; turnId?: string | null }>,
+  states: CardStates = emptyCardStates(),
 ): Anthropic.MessageParam[] {
-  const out: Anthropic.MessageParam[] = [];
+  const out: Array<{ role: "user" | "assistant"; content: string }> = [];
   for (const h of history) {
     if (!h.content.trim()) continue;
     if (out.length === 0 && h.role !== "user") continue;
-    const notes = h.role === "assistant" ? (h.cards ?? []).map((c) => cardHistoryNote(c, savedDraftIds)) : [];
-    out.push({ role: h.role, content: notes.length ? `${h.content}\n${notes.join("\n")}` : h.content });
+    const cards = h.cards ?? [];
+    const notes = h.role === "assistant" ? cards.map((c) => cardHistoryNote(c, states)) : [];
+    const automatic = h.role === "assistant" && h.turnId === null && cards.some((c) => c.type === "workout_check" || c.type === "routine_check" || c.type === "rca");
+    const body = [automatic ? "[Posted by the app on its own, not in reply to the person]" : "", h.content, ...notes].filter(Boolean).join("\n");
+    const last = out.at(-1);
+    if (last && last.role === h.role) last.content = `${last.content}\n\n${body}`;
+    else out.push({ role: h.role, content: body });
   }
   return out;
-}
-
-/** Draft ids from history cards that have since been logged (meals) or saved (activities). */
-export async function loadSavedDraftIds(userProfileId: string, history: Array<{ cards?: ChatCard[] }>): Promise<Set<string>> {
-  const mealIds: string[] = [];
-  const activityIds: string[] = [];
-  for (const h of history) {
-    for (const c of h.cards ?? []) {
-      if (c.type === "meal_draft") mealIds.push(c.draft.draftId);
-      if (c.type === "activity_draft") activityIds.push(c.draft.draftId);
-    }
-  }
-  const saved = new Set<string>();
-  const [meals, activities] = await Promise.all([
-    mealIds.length
-      ? supabase.from("meal_logs").select("meal_session_id").eq("user_profile_id", userProfileId).in("meal_session_id", mealIds)
-      : Promise.resolve({ data: [] as Array<{ meal_session_id: string }> }),
-    activityIds.length
-      ? supabase.from("health_activities").select("draft_id").eq("user_profile_id", userProfileId).in("draft_id", activityIds)
-      : Promise.resolve({ data: [] as Array<{ draft_id: string }> }),
-  ]);
-  for (const r of (meals.data ?? []) as Array<{ meal_session_id: string }>) saved.add(r.meal_session_id);
-  for (const r of (activities.data ?? []) as Array<{ draft_id: string }>) saved.add(r.draft_id);
-  return saved;
 }
 
 const CARD_WORD = /\bcards?\b/i;
@@ -1158,8 +1124,8 @@ export async function runHealthChat(ctx: ActionContext, userText: string, option
   let history = options.history;
   if (!history) {
     const past = completedTurns(await loadChatHistory(ctx.userProfileId));
-    const saved = await loadSavedDraftIds(ctx.userProfileId, past).catch(() => new Set<string>());
-    history = historyToMessages(past, saved);
+    const states = await loadCardStates(ctx.userProfileId, past.flatMap((h) => h.cards)).catch(() => emptyCardStates());
+    history = historyToMessages(past, states);
   }
 
   const start = await beginTurn(ctx.userProfileId, turnId, userText, now);
