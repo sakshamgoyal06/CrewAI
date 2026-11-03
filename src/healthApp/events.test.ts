@@ -4,7 +4,6 @@ const insert = vi.fn(async () => ({ error: null }));
 const lt = vi.fn(async () => ({ error: null }));
 vi.mock("../tools/clients.js", () => ({
   supabase: { from: () => ({ insert, delete: () => ({ lt }) }) },
-  redis: {},
   anthropic: {},
 }));
 

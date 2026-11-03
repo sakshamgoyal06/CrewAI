@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../tools/clients.js", () => ({ supabase: {}, redis: {}, anthropic: {} }));
+vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 
 import { cleanAvoidList, foodPrefsLine, onboardingInput, startingPlan, weekFrom, type OnboardingInput } from "./onboarding.js";
 

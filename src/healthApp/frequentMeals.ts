@@ -8,7 +8,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { getLocalTimeParts } from "../jobs/morningBriefTime.js";
+import { getLocalTimeParts } from "../nutrition/localDate.js";
 import { estimateCacheKey } from "../meals/estimateMealNutrition.js";
 import { localDateKey, resolveTimezone } from "../nutrition/localDate.js";
 import { supabase } from "../tools/clients.js";

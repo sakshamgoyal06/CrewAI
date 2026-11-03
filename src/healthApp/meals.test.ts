@@ -5,7 +5,6 @@ const db = vi.hoisted(() => ({
   inserted: [] as Array<Record<string, unknown>>,
   insertError: null as null | { message: string },
 }));
-const rollupMock = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
 
 vi.mock("../tools/clients.js", () => {
   const select = () => {
@@ -26,11 +25,9 @@ vi.mock("../tools/clients.js", () => {
         },
       }),
     },
-    redis: {},
     anthropic: {},
   };
 });
-vi.mock("../nutrition/store/mealRollupStore.js", () => ({ recomputeDailyRollup: rollupMock }));
 
 import type { MealNutritionEstimate } from "../meals/types.js";
 import { draftMeal, estimateToItems, saveConfirmedMeal, slotForLocalHour, sumItems } from "./meals.js";
@@ -52,7 +49,6 @@ beforeEach(() => {
   db.existing = [];
   db.inserted = [];
   db.insertError = null;
-  rollupMock.mockClear();
 });
 
 describe("estimateToItems", () => {
@@ -141,7 +137,7 @@ describe("saveConfirmedMeal", () => {
     localDate: "2026-10-27",
   };
 
-  it("saves exactly the confirmed items under the draft id and refreshes the rollup", async () => {
+  it("saves exactly the confirmed items under the draft id", async () => {
     const r = await saveConfirmedMeal("profile-1", input, new Date("2026-10-27T03:00:00Z"));
     expect(r).toEqual({
       ok: true,
@@ -160,7 +156,6 @@ describe("saveConfirmedMeal", () => {
       source_channel: "api",
       provider_raw: { app_confirmed: true, user_edited: true },
     });
-    expect(rollupMock).toHaveBeenCalledWith("profile-1", "2026-10-27");
   });
 
   it("does not insert again when the same draft is confirmed twice", async () => {
@@ -168,7 +163,6 @@ describe("saveConfirmedMeal", () => {
     const r = await saveConfirmedMeal("profile-1", input);
     expect(r).toMatchObject({ ok: true, alreadySaved: true });
     expect(db.inserted).toHaveLength(0);
-    expect(rollupMock).not.toHaveBeenCalled();
   });
 
   it("rejects an empty meal and reports insert errors", async () => {

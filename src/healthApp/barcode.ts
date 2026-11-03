@@ -4,7 +4,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { getLocalTimeParts } from "../jobs/morningBriefTime.js";
+import { getLocalTimeParts } from "../nutrition/localDate.js";
 import { logger } from "../logger.js";
 import { resolveTimezone } from "../nutrition/localDate.js";
 import type { ActionContext } from "./actions.js";

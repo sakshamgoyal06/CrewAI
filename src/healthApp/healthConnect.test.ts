@@ -50,7 +50,7 @@ vi.mock("../tools/clients.js", () => {
       return chain;
     },
   });
-  return { supabase: { from }, redis: {}, anthropic: {} };
+  return { supabase: { from }, anthropic: {} };
 });
 vi.mock("./activityStore.js", () => ({ upsertDailyActivity: activityMock, ACTIVITY_SOURCES: [] }));
 

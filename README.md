@@ -15,7 +15,7 @@ The older Telegram assistant is parked in [`archive/`](archive/README.md). The p
 
 ## Stack
 
-Node 20 + TypeScript, Express, Anthropic SDK (coach chat and meal estimates), Supabase Postgres, Upstash Redis, Hevy API. The front end in `pwa/` is plain HTML/CSS/JS with no build step, served at `/app`. Deploys to Railway from the `Dockerfile`.
+Node 20 + TypeScript, Express, Anthropic SDK (coach chat and meal estimates), Supabase Postgres, Hevy API. The front end in `pwa/` is plain HTML/CSS/JS with no build step, served at `/app`. Deploys to Railway from the `Dockerfile`.
 
 ```
 src/index.ts            starts the HTTP server

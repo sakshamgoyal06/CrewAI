@@ -7,7 +7,7 @@ const upsertMock = vi.hoisted(() => vi.fn(async () => ({ ok: true as const })));
 const checkinMock = vi.hoisted(() => vi.fn(async () => ({ ok: true as const })));
 const confirmMock = vi.hoisted(() => vi.fn());
 
-vi.mock("../tools/clients.js", () => ({ supabase: {}, redis: {}, anthropic: {} }));
+vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 vi.mock("./activityStore.js", () => ({
   ACTIVITY_SOURCES: ["manual", "ios_shortcut", "health_auto_export", "health_connect", "api"],
   upsertDailyActivity: upsertMock,

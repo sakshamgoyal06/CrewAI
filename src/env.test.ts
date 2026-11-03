@@ -1,21 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { healthListenPort, rateLimitPerMinute } from "./env.js";
+import { healthListenPort } from "./env.js";
 
 describe("env helpers", () => {
   afterEach(() => {
-    delete process.env.MAGNUS_RATE_LIMIT_PER_MINUTE;
     delete process.env.HEALTH_PORT;
     delete process.env.PORT;
-  });
-
-  it("rateLimitPerMinute defaults to 30", () => {
-    expect(rateLimitPerMinute()).toBe(30);
-  });
-
-  it("rateLimitPerMinute respects 0", () => {
-    process.env.MAGNUS_RATE_LIMIT_PER_MINUTE = "0";
-    expect(rateLimitPerMinute()).toBe(0);
   });
 
   it("healthListenPort defaults to 8080", () => {

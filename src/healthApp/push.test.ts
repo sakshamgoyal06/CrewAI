@@ -35,7 +35,7 @@ vi.mock("../tools/clients.js", () => {
     });
     return chain;
   };
-  return { supabase: { from }, redis: {}, anthropic: {} };
+  return { supabase: { from }, anthropic: {} };
 });
 
 import { isQuiet, parsePrefs, sendNotification } from "./push.js";

@@ -7,9 +7,6 @@ const defaults: Record<string, string> = {
   SUPABASE_ANON_KEY: "ci-test-anon-key",
   SUPABASE_SERVICE_ROLE_KEY: "ci-test-service-role-key",
   ANTHROPIC_API_KEY: "ci-test-anthropic-key",
-  UPSTASH_REDIS_REST_URL: "https://ci-test.upstash.io",
-  UPSTASH_REDIS_REST_TOKEN: "ci-test-redis-token",
-  TELEGRAM_BOT_TOKEN: "ci-test-telegram-token",
 };
 
 for (const [key, value] of Object.entries(defaults)) {

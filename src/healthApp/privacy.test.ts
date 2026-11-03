@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {}, redis: {} }));
+vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 
 const { EXPORT_TABLES, NOT_EXPORTED } = await import("./privacy.js");
 

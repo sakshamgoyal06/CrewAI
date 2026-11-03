@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../tools/clients.js", () => ({ supabase: {}, redis: {}, anthropic: {} }));
+vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 
 import {
   _clearBarcodeCache,

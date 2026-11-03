@@ -35,7 +35,6 @@ vi.mock("../tools/clients.js", () => {
         },
       }),
     },
-    redis: {},
     anthropic: {},
   };
 });

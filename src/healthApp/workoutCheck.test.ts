@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../tools/clients.js", () => ({ supabase: {}, redis: {}, anthropic: {} }));
+vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 
 import { checkTime, formatTime, zonedInstant } from "./gymSlot.js";
 import { answerWorkoutCheck, dueWorkoutChecks, missedWorkoutMessage, runWorkoutChecks } from "./workoutCheck.js";

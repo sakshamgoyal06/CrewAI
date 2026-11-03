@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../tools/clients.js", () => ({ supabase: {}, redis: {}, anthropic: {} }));
+vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 
 import { draftMealFromPhoto, photoReplyText } from "./mealCards.js";
 import type { MealDraft } from "./meals.js";

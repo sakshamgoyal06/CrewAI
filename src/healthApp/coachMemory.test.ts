@@ -46,7 +46,6 @@ vi.mock("../tools/clients.js", () => {
         update: (patch: Record<string, unknown>) => build("update", patch),
       }),
     },
-    redis: {},
     anthropic: {},
   };
 });
