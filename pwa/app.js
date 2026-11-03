@@ -136,6 +136,8 @@ function friendlyError(code) {
     billing_unavailable: "Payments aren't available right now. Try again later.",
     invalid_signature: "The payment couldn't be verified. If you were charged, it will show up within a few minutes.",
     daily_limit: "You've hit today's limit for the coach. Log from Today, or try again tomorrow.",
+    draft_limit: "That's a lot of meal estimates for one day. Pick a usual meal or scan a barcode, or try again tomorrow.",
+    rca_limit: "I've already looked into this a few times today. Ask again tomorrow.",
     hevy_key_invalid: "Hevy didn't accept that key. Copy it again from hevy.com/settings?developer.",
   }[code] || "Something went wrong. Try again.";
 }

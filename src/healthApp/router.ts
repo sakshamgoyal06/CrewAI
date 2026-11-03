@@ -36,7 +36,8 @@ import {
 import { failedAuthLimiter, userRequestLimiter } from "./rateLimit.js";
 import { connectHevy, disconnectHevy, hevyConnected, hevyKeyInput } from "./integrations.js";
 import { supabase } from "../tools/clients.js";
-import { takeUse } from "./usageLimits.js";
+import { needsSeed, seedUse, takeUse, type LimitedAction } from "./usageLimits.js";
+import { usedSince } from "./usageSeed.js";
 import { deleteAccount, exportAccount } from "./privacy.js";
 import {
   completeOnboarding,
@@ -168,10 +169,14 @@ const TRAINING_CACHE_MS = 10 * 60_000;
 const trainingCache = new Map<string, { at: number; body: unknown }>();
 
 /** Today's cap for an AI route: the free plan's allowance, or the normal cap. */
-async function allowUse(ctx: { userProfileId: string; timezone: string }, action: "chat" | "photo"): Promise<true | "daily_limit" | "free_limit"> {
-  const ent = billingEnabled() ? await loadEntitlement(ctx.userProfileId) : null;
-  const limit = ent ? limitFor(ent.tier, action) : undefined;
-  if (takeUse(ctx.userProfileId, action, localDateKey(new Date(), ctx.timezone), process.env, limit)) return true;
+async function allowUse(ctx: { userProfileId: string; timezone: string }, action: LimitedAction): Promise<true | "daily_limit" | "free_limit"> {
+  const ent = billingEnabled() && (action === "chat" || action === "photo") ? await loadEntitlement(ctx.userProfileId) : null;
+  const limit = ent && (action === "chat" || action === "photo") ? limitFor(ent.tier, action) : undefined;
+  const day = localDateKey(new Date(), ctx.timezone);
+  if (needsSeed(ctx.userProfileId, action, day)) {
+    seedUse(ctx.userProfileId, action, day, await usedSince(ctx.userProfileId, action, localDayRange(day, ctx.timezone).from));
+  }
+  if (takeUse(ctx.userProfileId, action, day, process.env, limit)) return true;
   return limit !== undefined ? "free_limit" : "daily_limit";
 }
 
@@ -493,9 +498,12 @@ export function createHealthAppRouter(): express.Router {
 
   router.post(
     "/meals/draft",
-    route("meal-draft", async (ctx, req) => ({
-      body: await startMealDraft(ctx, mealDraftInput.parse(req.body)),
-    })),
+    route("meal-draft", async (ctx, req) => {
+      const input = mealDraftInput.parse(req.body);
+      // Unseen foods are looked up with a paid web search, so drafts have a daily cap too.
+      if ((await allowUse(ctx, "draft")) !== true) return { status: 429, body: { ok: false, error: "draft_limit" } };
+      return { body: await startMealDraft(ctx, input) };
+    }),
   );
 
   /** Photo of the plate → the same editable draft card, posted into the chat. */
@@ -824,6 +832,7 @@ export function createHealthAppRouter(): express.Router {
   router.post(
     "/rca",
     route("rca", async (ctx) => {
+      if ((await allowUse(ctx, "rca")) !== true) return { status: 429, body: { ok: false, error: "rca_limit" } };
       const r = await runRca(ctx.userProfileId, "manual");
       return r ? { body: { ok: true, card: cardFromReport(r.report) } } : { status: 400, body: { ok: false, error: "not_enough_data" } };
     }),
