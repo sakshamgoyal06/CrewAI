@@ -11,6 +11,7 @@ import type { HealthTargets } from "../northStar.js";
 import type { DayRecord } from "../rca.js";
 import { isGym, type RoutineItem } from "../routine.js";
 import type { CauseId, Finding, ReasonChoice } from "./types.js";
+import { DAY_MS } from "../../util/time.js";
 
 export const T = {
   /** P1: misses among the last planned occurrences. */
@@ -48,7 +49,6 @@ export const T = {
   firstWeekDays: 7,
 };
 
-const DAY_MS = 86_400_000;
 const WD = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export type SessionRow = { key: string; localDate: string; startHour: number | null; durationMin: number | null };

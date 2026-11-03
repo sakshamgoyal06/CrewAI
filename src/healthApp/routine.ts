@@ -16,6 +16,7 @@ import { z } from "zod";
 import { localDateKey } from "../nutrition/localDate.js";
 import { ACTIVITY_CATALOG, catalogEntry, matchActivity, MIN_LIFTING_DAYS, type Activity } from "./activities.js";
 import { zonedInstant } from "./gymSlot.js";
+import { DAY_MS } from "../util/time.js";
 
 export const GYM_KEY = "gym";
 export const MAX_ROUTINE_ITEMS = 12;
@@ -27,7 +28,6 @@ const REMINDER_GRACE_MS = 15 * 60_000;
 const MAX_LATE_MS = 12 * 3_600_000;
 /** Items with no set time are followed up at this local time. */
 export const UNTIMED_CHECK_AT = "21:00";
-const DAY_MS = 86_400_000;
 
 export type RoutineItem = {
   id: string;

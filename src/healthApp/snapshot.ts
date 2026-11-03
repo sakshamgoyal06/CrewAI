@@ -28,9 +28,9 @@ import {
   type HealthTargets,
   type NorthStar,
 } from "./northStar.js";
+import { DAY_MS } from "../util/time.js";
 
 const WINDOW_DAYS = 7;
-const DAY_MS = 86_400_000;
 
 export type WorkoutSummary = {
   id: string | null;

@@ -22,10 +22,8 @@ import { KCAL_PER_KG } from "./calorieTarget.js";
 import { postCoachMessage } from "./workoutCheckStore.js";
 import { gymTimeOf, liftingGap, MAX_ROUTINE_ITEMS, normalizeRoutine, routineItemInput, trainingDaysOf } from "./routine.js";
 import { saveRoutine } from "./routineStore.js";
+import { dateOf, dayNumber } from "../util/time.js";
 
-const DAY_MS = 86_400_000;
-const dayNumber = (date: string): number => Math.round(Date.parse(`${date}T00:00:00Z`) / DAY_MS);
-const dateOf = (n: number): string => new Date(n * DAY_MS).toISOString().slice(0, 10);
 const to50 = (n: number): number => Math.round(n / 50) * 50;
 const to5 = (n: number): number => Math.round(n / 5) * 5;
 const r2 = (n: number): number => Math.round(n * 100) / 100;

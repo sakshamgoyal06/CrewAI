@@ -19,8 +19,8 @@ import { scoreDay, type CheckId, type DayScore, type HealthTargets } from "./nor
 import { loadHealthProfile, summarizeWorkout, weekdayOfDate, windowDates, type WorkoutSummary } from "./snapshot.js";
 import { hevyKey, loadWorkoutHistory } from "./training.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
+import { DAY_MS, localHourOf } from "../util/time.js";
 
-const DAY_MS = 86_400_000;
 export const RCA_WINDOW_DAYS = 21;
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -288,11 +288,7 @@ export function buildDayRecords(input: {
   workoutDates: Set<string>;
   checks: Map<string, { status: string; reason: string | null }>;
 }): DayRecord[] {
-  const hourOf = (iso: string) => {
-    const p = new Intl.DateTimeFormat("en-GB", { timeZone: input.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
-    const [h, m] = p.split(":").map(Number) as [number, number];
-    return h + m / 60;
-  };
+  const hourOf = (iso: string) => localHourOf(iso, input.timezone);
   return input.dates.map((date) => {
     const rows = input.meals.filter((m) => String(m.local_date) === date);
     const sessions = new Set(rows.map((m) => m.meal_session_id).filter(Boolean));

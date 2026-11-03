@@ -17,20 +17,13 @@ import { runRoutineTick } from "./routineCheck.js";
 import { runInterventionTick } from "./interventions/engine.js";
 import { runWorkoutChecks, SCHEDULER_INTERVAL_MS } from "./workoutCheck.js";
 import { postCoachMessage } from "./workoutCheckStore.js";
+import { localClock } from "../util/time.js";
 
 /** A nudge only fires within this long after its time, so a late restart doesn't send stale ones. */
 const NUDGE_WINDOW_MIN = 90;
 const STEPS_PER_MIN = 110;
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
-
-function localClock(now: Date, timezone: string): { hhmm: string; minutes: number; weekday: number } {
-  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", weekday: "short", hourCycle: "h23" }).formatToParts(now);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  const hhmm = `${get("hour")}:${get("minute")}`;
-  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(get("weekday"));
-  return { hhmm, minutes: Number(get("hour")) * 60 + Number(get("minute")), weekday };
-}
 
 const at = (hhmm: string) => {
   const [h, m] = hhmm.split(":").map(Number) as [number, number];

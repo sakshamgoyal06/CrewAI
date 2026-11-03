@@ -14,6 +14,7 @@ import { localDateKey } from "../nutrition/localDate.js";
 import { getActiveGoal, getBodyCheckins } from "./bodyStore.js";
 import { slopePerDay, type BodyCheckin, type HealthGoal } from "./goalProgress.js";
 import { loadHealthProfile, loadMealDays } from "./snapshot.js";
+import { dateOf, dayNumber } from "../util/time.js";
 
 export const KCAL_PER_KG = 7700;
 export const REVIEW_WINDOW_DAYS = 28;
@@ -31,9 +32,6 @@ const FLOOR_KCAL = 1200;
 /** Smaller changes than this aren't worth asking about. */
 const MIN_CHANGE_KCAL = 100;
 
-const DAY_MS = 86_400_000;
-const dayNumber = (date: string): number => Math.round(Date.parse(`${date}T00:00:00Z`) / DAY_MS);
-const dateOf = (n: number): string => new Date(n * DAY_MS).toISOString().slice(0, 10);
 const r2 = (n: number): number => Math.round(n * 100) / 100;
 const to50 = (n: number): number => Math.round(n / 50) * 50;
 

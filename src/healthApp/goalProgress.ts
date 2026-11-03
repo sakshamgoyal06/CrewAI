@@ -2,6 +2,7 @@
  * Outcome goal progress: where each body metric is vs. its target and deadline, from weekly
  * check-ins. Pure, so the tracker and the coach read the same numbers.
  */
+import { dateOf, dayNumber } from "../util/time.js";
 
 export type BodyMetric = "weight_kg" | "body_fat_pct" | "muscle_mass_kg";
 
@@ -55,19 +56,12 @@ const META: Record<BodyMetric, { label: string; unit: string }> = {
   muscle_mass_kg: { label: "Muscle mass", unit: "kg" },
 };
 
-const DAY_MS = 86_400_000;
 const TREND_WINDOW_DAYS = 28;
 /** Within this share of the required pace counts as on pace. */
 const PACE_TOLERANCE = 0.15;
 export const CHECKIN_INTERVAL_DAYS = 7;
 
-function dayNumber(date: string): number {
-  return Math.round(Date.parse(`${date}T00:00:00Z`) / DAY_MS);
-}
-
-function dateFromDayNumber(n: number): string {
-  return new Date(n * DAY_MS).toISOString().slice(0, 10);
-}
+const dateFromDayNumber = dateOf;
 
 function round(n: number, dp = 2): number {
   const f = 10 ** dp;

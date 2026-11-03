@@ -21,8 +21,8 @@ import {
   saveWorkoutCheckAnswer,
   type WorkoutCheckStatus,
 } from "./workoutCheckStore.js";
+import { DAY_MS } from "../util/time.js";
 
-const DAY_MS = 86_400_000;
 /** A check that comes due while the server is down still runs if it's at most this late. */
 const MAX_LATE_MS = 12 * 3_600_000;
 export const SCHEDULER_INTERVAL_MS = 5 * 60_000;

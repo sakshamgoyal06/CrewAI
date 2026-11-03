@@ -24,11 +24,11 @@ import {
   type MealItem,
   type MealTotals,
 } from "./meals.js";
+import { DAY_MS } from "../util/time.js";
 
 export const FREQUENT_WINDOW_DAYS = 60;
 export const MIN_REPEATS = 2;
 const MAX_ROWS = 2000;
-const DAY_MS = 86_400_000;
 
 export type LoggedSession = {
   mealSessionId: string;
