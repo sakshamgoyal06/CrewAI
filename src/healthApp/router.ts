@@ -46,7 +46,7 @@ import {
   startingPlan,
 } from "./onboarding.js";
 import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from "./events.js";
-import { loadChatHistory, runHealthChat } from "./chat.js";
+import { loadChatHistory, runHealthChat, type ChatStreamEvent } from "./chat.js";
 import { hydrateCard, loadCardStates } from "./chatCards.js";
 import {
   activityDraftInput,
@@ -370,6 +370,51 @@ export function createHealthAppRouter(): express.Router {
       return { body: r };
     }),
   );
+
+  /**
+   * The same turn as POST /chat, streamed as server-sent events: `progress` lines while tools run,
+   * `delta` text as the coach writes, then one `done` with the full reply (or `error`). A comment
+   * line every few seconds keeps proxies and the phone from giving up on a long turn.
+   */
+  router.post("/chat/stream", async (req, res) => {
+    const { userProfileId } = res.locals as Locals;
+    let parsed: { text: string; turnId?: string };
+    try {
+      parsed = chatInput.parse(req.body);
+    } catch (err) {
+      res.status(400).json({ error: "invalid_body", issues: err instanceof z.ZodError ? err.issues : [] });
+      return;
+    }
+    const ctx = { userProfileId, timezone: await cachedTimezone(userProfileId) };
+    const allowed = await allowUse(ctx, "chat");
+    if (allowed !== true) {
+      res.status(429).json({ error: allowed });
+      return;
+    }
+    res.status(200);
+    res.setHeader("content-type", "text/event-stream; charset=utf-8");
+    res.setHeader("cache-control", "no-cache, no-transform");
+    res.setHeader("x-accel-buffering", "no");
+    res.flushHeaders();
+    const send = (event: ChatStreamEvent) => {
+      if (!res.writableEnded) res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    };
+    const heartbeat = setInterval(() => {
+      if (!res.writableEnded) res.write(": keepalive\n\n");
+    }, 5_000);
+    try {
+      const r = await runHealthChat(ctx, parsed.text, { turnId: parsed.turnId, sessionId: req.get("x-magnus-session") ?? undefined, onEvent: send });
+      if ("error" in r) send({ type: "error", error: r.error, message: "Still working on that one. The answer will show here in a moment." });
+      else send({ type: "done", reply: r });
+    } catch (err) {
+      logger.error({ err: loggableError(err), route: "chat-stream" }, "health app route failed");
+      res.locals.routeError = err instanceof Error ? err.message : String(err);
+      send({ type: "error", error: "server_error", message: "Something went wrong on my side. Tap Retry." });
+    } finally {
+      clearInterval(heartbeat);
+      res.end();
+    }
+  });
 
   /** Activities outside Hevy (swim, run, sports): the quick-add list, estimates, save and delete. */
   router.get(

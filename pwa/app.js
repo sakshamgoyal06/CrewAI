@@ -1224,8 +1224,66 @@ function newTurnId() {
 /** Returns false when the message wasn't sent, so the caller keeps the text. */
 async function send(text, turnId = newTurnId(), showUser = addMessage.bind(null, "user", text)) {
   if (!text.trim()) return false;
-  const request = () => api("/chat", { method: "POST", body: JSON.stringify({ text, turnId }) });
+  const request = (live) => streamChat({ text, turnId }, live);
   return coachTurn(showUser, request, () => send(text, turnId, () => {}));
+}
+
+// Nothing from the server for this long mid-turn means the connection died (it sends a keepalive every 5 s).
+const STREAM_IDLE_MS = 30_000;
+
+/**
+ * POST /chat/stream: progress lines while tools run, text as the coach writes it, then the full
+ * reply. Falls back to the plain endpoint when the browser can't read a streamed body.
+ */
+async function streamChat(body, live = {}) {
+  let res = await request("/chat/stream", { method: "POST", body: JSON.stringify(body) });
+  if (res.status === 401) res = await request("/chat/stream", { method: "POST", body: JSON.stringify(body) }, true);
+  if (res.status === 401) {
+    endSession("You were signed out. Sign in again to continue.");
+    throw new Error("Signed out.");
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(friendlyError(err.error)), { inProgress: err.error === "in_progress" });
+  }
+  if (!res.body?.getReader) return api("/chat", { method: "POST", body: JSON.stringify(body) });
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let idle;
+  const resetIdle = (reject) => {
+    clearTimeout(idle);
+    idle = setTimeout(() => { reader.cancel().catch(() => {}); reject(new Error("Lost the connection mid-answer. Tap Retry.")); }, STREAM_IDLE_MS);
+  };
+  return new Promise(async (resolve, reject) => {
+    resetIdle(reject);
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        resetIdle(reject);
+        buffer += decoder.decode(value, { stream: true });
+        let cut;
+        while ((cut = buffer.indexOf("\n\n")) >= 0) {
+          const chunk = buffer.slice(0, cut);
+          buffer = buffer.slice(cut + 2);
+          const data = chunk.split("\n").find((l) => l.startsWith("data:"));
+          if (!data) continue;
+          const event = JSON.parse(data.slice(5));
+          if (event.type === "progress") live.onProgress?.(event.text);
+          else if (event.type === "delta") live.onDelta?.(event.text);
+          else if (event.type === "done") { clearTimeout(idle); resolve(event.reply); return; }
+          else if (event.type === "error") { clearTimeout(idle); reject(Object.assign(new Error(event.message), { inProgress: event.error === "in_progress" })); return; }
+        }
+      }
+      clearTimeout(idle);
+      reject(new Error("The answer was cut off. Tap Retry."));
+    } catch (err) {
+      clearTimeout(idle);
+      reject(err instanceof Error ? err : new Error("Lost the connection mid-answer. Tap Retry."));
+    }
+  });
 }
 
 /**
@@ -1242,22 +1300,35 @@ async function coachTurn(showUser, request, retry) {
   $("send").disabled = true;
   if ($("thread").querySelector(".empty")) $("thread").replaceChildren();
   showUser();
-  const typing = el("div", { class: "msg coach typing" }, el("i"), el("i"), el("i"));
+  const progress = el("span", { class: "progress" });
+  const typing = el("div", { class: "msg coach typing" }, el("i"), el("i"), el("i"), progress);
   $("thread").append(typing);
   scrollThread();
+  // While the coach writes, its words land in a live bubble that the final reply then replaces.
+  let bubble = null;
+  const live = {
+    onProgress: (text) => { if (!bubble) progress.textContent = text; },
+    onDelta: (text) => {
+      if (!bubble) { bubble = addMessage("coach", ""); typing.remove(); }
+      bubble.textContent += text;
+      scrollThread();
+    },
+  };
   try {
     let timer;
     const reply = await Promise.race([
-      request(),
+      request(live),
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("That's taking too long. The answer will show when you reopen the app, or try again.")), CHAT_TIMEOUT_MS); }),
     ]).finally(() => clearTimeout(timer));
     typing.remove();
-    addMessage("coach", reply.text);
+    if (bubble) bubble.textContent = reply.text;
+    else addMessage("coach", reply.text);
     for (const c of reply.cards || []) appendCard(c);
     scrollThread();
     if (reply.changed) refresh();
   } catch (err) {
     typing.remove();
+    bubble?.remove();
     failedTurn(err.message, retry);
     // The server may still be answering: pick the reply up from history shortly.
     if (err.inProgress) setTimeout(() => { if (!state.sending) loadHistory(); }, 8000);
