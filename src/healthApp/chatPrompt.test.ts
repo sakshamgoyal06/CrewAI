@@ -48,7 +48,8 @@ describe("buildTurnContext", () => {
     const ctx = buildTurnContext(fixtureSnapshot({ goal: null, hevyConnected: false, workouts: [] }), null, FIXTURE_NOW);
     expect(ctx).toContain("Phase: no_goal.");
     expect(ctx).toContain("Goal: none set yet.");
-    expect(ctx).toContain("Hevy: not connected.");
+    expect(ctx).toContain("Hevy: not connected");
+    expect(ctx).toContain("https://hevy.com/settings?developer");
     expect(ctx).not.toContain("About them");
   });
 });
