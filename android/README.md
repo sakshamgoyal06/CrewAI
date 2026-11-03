@@ -15,29 +15,30 @@ A thin native shell around the PWA:
   last 3 days each run is safe: the server upserts samples by start time.
 - **Background sync** needs *Access data in the background* (Android 14+). It's requested with the
   rest; if it isn't granted the app says so and syncs on every open instead.
-- **Download:** every build on `main` refreshes the `android-latest` release with `magnus.apk`
-  (`releases/download/android-latest/magnus.apk`), linked from the PWA's settings outside the app.
+- **Download:** every build on `main` refreshes the `android-latest` release with the
+  release-signed `magnus.apk` (`releases/download/android-latest/magnus.apk`), linked from the
+  PWA's settings outside the app. Without the signing secrets nothing is published.
 
 ## Build
 
 GitHub Actions (`.github/workflows/android.yml`) builds a debug APK on every change under
-`android/` and uploads it as the `magnus-android` artifact. Locally: `gradle -p android assembleDebug`
-with the Android SDK installed (compileSdk 36, JDK 17).
+`android/` and, when the signing secrets are set, a signed release APK and AAB. Only the release
+APK is published. Locally: `gradle -p android assembleDebug` with the Android SDK installed
+(compileSdk 36, JDK 17). Another deploy: `gradle -p android assembleDebug -PmagnusHost=your.domain`.
 
-Another deploy: `gradle -p android assembleDebug -PmagnusHost=your.domain`.
-
-Debug builds are signed with the committed `app/magnus-debug.keystore` (password `android`) so each
-build installs over the previous one and keeps its Health Connect access. Its SHA-256 is
-`8E:67:88:10:B2:47:88:B6:F5:97:DD:93:6B:AD:00:FB:C5:5D:8B:25:B7:FF:39:D2:6A:08:A0:94:67:37:8C:D2`.
+Debug builds are signed with the committed `app/magnus-debug.keystore` (password `android`) so
+test builds install over each other. That key is public, so it is never published and never
+vouched for in assetlinks.
 
 ## Full screen (no browser bar)
 
 The TWA shows a URL bar until the site vouches for the app at `/.well-known/assetlinks.json`.
-The server always vouches for the CI-built APK's key (`BUILT_APK_CERT_SHA256` in
-`src/healthServer.ts`). For another key (e.g. Play App Signing: Play Console → App integrity),
-add its SHA-256 to `MAGNUS_ANDROID_CERT_SHA256` (comma-separate several; `none` drops the built-in one).
+The server vouches for the release key (`BUILT_APK_CERT_SHA256` in `src/healthServer.ts`). For
+another key (e.g. Play App Signing: Play Console → App integrity), add its SHA-256 to
+`MAGNUS_ANDROID_CERT_SHA256` (comma-separate several; `none` drops the built-in one).
 
 ## Signed release
 
-Add repo secrets `MAGNUS_KEYSTORE_B64` (base64 of the .jks), `MAGNUS_KEYSTORE_PASSWORD`,
-`MAGNUS_KEY_ALIAS`, `MAGNUS_KEY_PASSWORD`; the workflow then also builds a signed APK and AAB.
+Repo secrets `MAGNUS_KEYSTORE_B64` (base64 of the .jks), `MAGNUS_KEYSTORE_PASSWORD`,
+`MAGNUS_KEY_ALIAS`, `MAGNUS_KEY_PASSWORD`. Keep a backup of the keystore outside GitHub: an app
+signed with a lost key can never be updated, only reinstalled.

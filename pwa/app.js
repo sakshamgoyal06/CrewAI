@@ -138,7 +138,7 @@ function friendlyError(code) {
     daily_limit: "You've hit today's limit for the coach. Log from Today, or try again tomorrow.",
     draft_limit: "That's a lot of meal estimates for one day. Pick a usual meal or scan a barcode, or try again tomorrow.",
     rca_limit: "I've already looked into this a few times today. Ask again tomorrow.",
-    hevy_key_invalid: "Hevy didn't accept that key. Copy it again from hevy.com/settings?developer.",
+    hevy_key_invalid: "Hevy didn't accept that key. Copy it again from the link above (hevy.com/settings?developer).",
   }[code] || "Something went wrong. Try again.";
 }
 
@@ -1203,8 +1203,28 @@ function scrollThread() {
   requestAnimationFrame(() => { t.scrollTop = t.scrollHeight; });
 }
 
+/**
+ * Coach text with its web links made tappable (https only; opens outside the app, so on Android
+ * the Hevy link goes to the browser or the Hevy app). Everything else stays plain text.
+ */
+function linkified(text) {
+  const out = document.createDocumentFragment();
+  let at = 0;
+  for (const m of String(text ?? "").matchAll(/https:\/\/[^\s<>"')\]]+/g)) {
+    const url = m[0].replace(/[.,;:!?]+$/, "");
+    out.append(text.slice(at, m.index), el("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, url));
+    at = m.index + url.length;
+  }
+  out.append(String(text ?? "").slice(at));
+  return out;
+}
+
+function setCoachText(node, text) {
+  node.replaceChildren(linkified(text));
+}
+
 function addMessage(role, text, into = $("thread")) {
-  const node = el("div", { class: `msg ${role}` }, text);
+  const node = el("div", { class: `msg ${role}` }, role === "coach" ? linkified(text) : text);
   into.append(node);
   if (into.id === "thread") scrollThread();
   return node;
@@ -1388,7 +1408,7 @@ async function coachTurn(showUser, request, retry) {
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("That's taking too long. The answer will show when you reopen the app, or try again.")), CHAT_TIMEOUT_MS); }),
     ]).finally(() => clearTimeout(timer));
     typing.remove();
-    if (bubble) bubble.textContent = reply.text;
+    if (bubble) setCoachText(bubble, reply.text);
     else addMessage("coach", reply.text);
     for (const c of reply.cards || []) appendCard(c);
     scrollThread();
@@ -2259,7 +2279,7 @@ function accountSection() {
         refresh();
       }) },
         el("p", { class: "hint" }, "Paste your Hevy API key (needs Hevy Pro). I read workouts and only change routines when you tap Apply."),
-        el("a", { class: "link", href: HEVY_KEY_URL, target: "_blank", rel: "noopener" }, "Get your key from Hevy →"),
+        el("p", { class: "hint" }, "Get your key here: ", el("a", { class: "ext", href: HEVY_KEY_URL, target: "_blank", rel: "noopener noreferrer" }, HEVY_KEY_URL)),
         el("input", { class: "field", name: "key", type: "password", autocomplete: "off", placeholder: "Hevy API key", required: true }),
         el("button", { class: "btn block", type: "submit" }, "Connect Hevy"),
       ),

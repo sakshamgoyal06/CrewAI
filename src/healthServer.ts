@@ -10,14 +10,15 @@ import { loggableError } from "./util/loggableError.js";
 import { redis, supabase } from "./tools/clients.js";
 
 /**
- * The signing cert of the APK that CI builds (android/app/magnus-debug.keystore, committed, so the
- * fingerprint is public). Vouching for it lets that APK open full screen with no browser bar.
+ * The signing cert of the published APK: the private release key held in GitHub secrets
+ * (MAGNUS_KEYSTORE_*). A fingerprint is public by nature; only the key itself is secret. The
+ * committed debug key is deliberately not vouched for, since anyone can sign with it.
  */
 export const BUILT_APK_CERT_SHA256 =
-  "8E:67:88:10:B2:47:88:B6:F5:97:DD:93:6B:AD:00:FB:C5:5D:8B:25:B7:FF:39:D2:6A:08:A0:94:67:37:8C:D2";
+  "8B:F8:2F:D8:38:70:07:FF:94:A8:84:4F:E9:98:52:9C:77:CF:07:8E:C3:51:51:48:93:A9:2F:D3:07:74:42:D7";
 
 /**
- * Digital Asset Links for the Android app: the CI-built APK's cert, plus any in
+ * Digital Asset Links for the Android app: the release APK's cert, plus any in
  * MAGNUS_ANDROID_CERT_SHA256 (comma-separated, e.g. a Play signing key).
  * MAGNUS_ANDROID_CERT_SHA256=none turns the built-in one off.
  */
