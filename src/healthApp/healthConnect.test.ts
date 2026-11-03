@@ -8,6 +8,22 @@ const activityMock = vi.hoisted(() => vi.fn(async () => ({ ok: true as const }))
 
 vi.mock("../tools/clients.js", () => {
   const from = (table: string) => ({
+    delete: () => {
+      const f: { kinds?: unknown[]; gte?: string; lt?: string } = {};
+      const chain = {
+        eq: () => chain,
+        in: (_k: string, v: unknown[]) => ((f.kinds = v), chain),
+        gte: (_k: string, v: string) => ((f.gte = v), chain),
+        lt: (_k: string, v: string) => ((f.lt = v), chain),
+        then: (resolve: (v: unknown) => void) => {
+          db.samples = db.samples.filter(
+            (s) => !(f.kinds!.includes(s.kind) && String(s.start_time) >= f.gte! && String(s.start_time) < f.lt!),
+          );
+          resolve({ error: null });
+        },
+      };
+      return chain;
+    },
     upsert: async (rows: Record<string, unknown> | Array<Record<string, unknown>>) => {
       for (const row of Array.isArray(rows) ? rows : [rows]) {
         if (table === "health_activity_samples") {
@@ -165,6 +181,24 @@ describe("ingestHealthConnect", () => {
     );
     expect(r).toMatchObject({ ok: true, days: [{ date: "2026-10-27", sleepMinutes: 450, restingHr: 57 }] });
     expect(activityMock).toHaveBeenLastCalledWith("p1", expect.objectContaining({ sleepMinutes: 450, restingHr: 57 }));
+  });
+
+  it("replaces the synced span so buckets at a different minute offset don't stack", async () => {
+    const at = (h: number, m: string, count: number) => ({
+      count,
+      start_time: `2026-10-27T0${h}:${m}:00.000Z`,
+      end_time: `2026-10-27T0${h + 1}:${m}:00.000Z`,
+    });
+    // An older app build bucketed from 13:22 past the hour.
+    await ingestHealthConnect(ctx, healthConnectPayload.parse({ steps: [at(3, "22", 1000), at(4, "22", 2000)] }));
+    const r = await ingestHealthConnect(
+      ctx,
+      healthConnectPayload.parse({
+        synced_range: { start_time: "2026-10-27T03:00:00.000Z", end_time: "2026-10-27T06:00:00.000Z" },
+        steps: [at(3, "00", 900), at(4, "00", 2100)],
+      }),
+    );
+    expect(r).toMatchObject({ ok: true, days: [{ date: "2026-10-27", steps: 3000 }] });
   });
 
   it("ignores future days", async () => {

@@ -22,5 +22,10 @@ class SyncStore(context: Context) {
         get() = prefs.getString("last_error", null)
         set(value) = prefs.edit().putString("last_error", value).apply()
 
+    /** False until a sync with hour-aligned buckets has gone through (builds before 0.3.0 didn't align). */
+    var bucketsAligned: Boolean
+        get() = prefs.getBoolean("buckets_aligned", false)
+        set(value) = prefs.edit().putBoolean("buckets_aligned", value).apply()
+
     fun clear() = prefs.edit().clear().apply()
 }

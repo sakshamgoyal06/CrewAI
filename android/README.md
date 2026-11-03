@@ -32,12 +32,10 @@ build installs over the previous one and keeps its Health Connect access. Its SH
 
 ## Full screen (no browser bar)
 
-The TWA shows a URL bar until the site vouches for the app:
-
-1. Get the signing certificate's SHA-256 (`keytool -list -v -keystore magnus.jks`, or Play
-   Console → App integrity for Play-signed builds; the debug key works for sideloaded debug APKs).
-2. Set `MAGNUS_ANDROID_CERT_SHA256` on the server (comma-separate several). The server then serves
-   it at `/.well-known/assetlinks.json`.
+The TWA shows a URL bar until the site vouches for the app at `/.well-known/assetlinks.json`.
+The server always vouches for the CI-built APK's key (`BUILT_APK_CERT_SHA256` in
+`src/healthServer.ts`). For another key (e.g. Play App Signing: Play Console → App integrity),
+add its SHA-256 to `MAGNUS_ANDROID_CERT_SHA256` (comma-separate several; `none` drops the built-in one).
 
 ## Signed release
 

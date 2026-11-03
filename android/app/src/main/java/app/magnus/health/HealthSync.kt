@@ -22,6 +22,7 @@ import java.net.URL
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 
 /**
  * Reads Health Connect and posts it to the Magnus ingest in the same JSON shape the server
@@ -75,6 +76,7 @@ object HealthSync {
         return when {
             status in 200..299 -> {
                 store.lastSync = now
+                store.bucketsAligned = true
                 store.lastError = null
                 Result.Ok(totalSteps)
             }
@@ -91,10 +93,15 @@ object HealthSync {
     }
 
     private suspend fun read(client: HealthConnectClient, store: SyncStore, granted: Set<String>, now: Instant): JSONObject {
-        val last = store.lastSync
-        val from = if (last == null) now.minus(FIRST_SYNC) else minOf(last, now).minus(RESEND)
+        // Bucket on whole local hours so every sync's buckets line up with the last one's; the
+        // server also replaces whatever it holds in synced_range. A build that bucketed from the
+        // sync time re-sends the full 30 days once to overwrite those buckets.
+        val last = if (store.bucketsAligned) store.lastSync else null
+        val start = if (last == null) now.minus(FIRST_SYNC) else minOf(last, now).minus(RESEND)
+        val from = start.atZone(ZoneId.systemDefault()).truncatedTo(ChronoUnit.HOURS).toInstant()
         val range = TimeRangeFilter.between(from, now)
         val payload = JSONObject()
+            .put("synced_range", JSONObject().put("start_time", from.toString()).put("end_time", now.toString()))
         var totalSteps = 0L
 
         // Aggregate only what was granted: asking for a denied metric fails the whole request.
