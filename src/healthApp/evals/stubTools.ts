@@ -70,6 +70,10 @@ export function stubTools(snapshot: HealthSnapshot | null, options: { failing?: 
       case "delete_meal":
       case "delete_activity":
         return { result: { ok: true, ...input }, changed: true };
+      case "remember":
+        return { result: { ok: true, remembered: String(input.text ?? ""), alreadyKnown: false, lines: 1 } };
+      case "forget":
+        return { result: { ok: true, forgot: String(input.text ?? ""), lines: 0 } };
       case "set_daily_routine":
         return { result: { ok: true, items: input.items, trainingDays: [1, 3, 5], lifting: { short: false, need: 3 } }, changed: true };
       case "get_training_analysis":

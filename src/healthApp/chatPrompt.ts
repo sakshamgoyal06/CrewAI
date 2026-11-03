@@ -9,6 +9,7 @@
  * `MAGNUS_CHAT_PROMPT=legacy` restores the previous prompt and context with a redeploy.
  */
 import type { HealthSnapshot } from "./snapshot.js";
+import { memoryContextLine, type MemoryLine } from "./coachMemory.js";
 import { localDateKey } from "../nutrition/localDate.js";
 
 export const SYSTEM_PROMPT = `You are Magnus, a personal health coach inside an app, talking with one person about their own health. You are warm, direct and specific. You sound like a knowledgeable friend who has their numbers in front of them, not like an app.
@@ -40,6 +41,11 @@ They have an outcome goal (target weight, body fat % or muscle mass by a deadlin
 - Routine: set_daily_routine replaces the whole routine, so include items they didn't mention, with their ids. "gym" is lifting in Hevy. No meal times on the routine. If the result says lifting.short, say in one sentence the plan needs lifting.need strength sessions a week.
 - A sport on a training day counts as training only if it burned about what their gym session does; the card says. Three strength sessions a week is the floor (fewer if they train fewer days); if sport is eating into that, say so.
 - Don't repeat advice you gave in the last few days; refer back to it instead. Don't restate what they just told you.
+
+# Memory
+- The context block lists what you've been asked to remember. Use it without announcing it, and never contradict it (a remembered injury or schedule beats a generic suggestion).
+- When they tell you something durable that changes how to coach them (a travel pattern, an injury, a food they hate, a working-hours constraint, "don't talk about weight on Mondays"), call remember with one short line in the third person, in the same turn as the log or answer. Not for a meal, a number the app already tracks, or a one-off.
+- When they say something no longer applies or ask you to forget it, call forget with that line's words. Say once that they can see and edit the list under You, then Coach memory, the first time you remember something.
 
 # Phases (the context block names the current one)
 - no_goal: get a goal and a deadline in one short question before coaching; log whatever they give you meanwhile.
@@ -103,10 +109,12 @@ export function chatPhase(s: HealthSnapshot, now: Date): ChatPhase {
  * The uncached system block for this turn: the date, who they are, where the week stands, what
  * is open. Short and factual; every number here is one the coach may quote.
  */
-export function buildTurnContext(s: HealthSnapshot, details: string | null, now: Date): string {
+export function buildTurnContext(s: HealthSnapshot, details: string | null, now: Date, memory: Array<Pick<MemoryLine, "text">> = []): string {
   const lines: string[] = [];
   lines.push(`Now: ${now.toISOString()} (${s.timezone}, local date ${s.today.date}). Phase: ${chatPhase(s, now)}.`);
   if (details) lines.push(`About them: ${details}.`);
+  const remembered = memoryContextLine(memory);
+  if (remembered) lines.push(remembered);
 
   if (s.goal) {
     const g = s.goal;
@@ -155,6 +163,7 @@ export function buildTurnContext(s: HealthSnapshot, details: string | null, now:
 }
 
 /** The old one-line context, kept for `MAGNUS_CHAT_PROMPT=legacy`. */
-export function legacyTurnContext(details: string | null, now: Date, timezone: string): string {
-  return `Now: ${now.toISOString()}. Person's timezone: ${timezone}.${details ? ` About them: ${details}.` : ""}`;
+export function legacyTurnContext(details: string | null, now: Date, timezone: string, memory: Array<Pick<MemoryLine, "text">> = []): string {
+  const remembered = memoryContextLine(memory);
+  return `Now: ${now.toISOString()}. Person's timezone: ${timezone}.${details ? ` About them: ${details}.` : ""}${remembered ? ` ${remembered}` : ""}`;
 }

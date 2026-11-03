@@ -48,6 +48,7 @@ import {
 import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from "./events.js";
 import { loadChatHistory, runHealthChat, type ChatStreamEvent } from "./chat.js";
 import { hydrateCard, loadCardStates } from "./chatCards.js";
+import { editLine, forgetLine, loadCoachMemory, MEMORY_MAX_CHARS, MEMORY_MAX_LINES, rememberLine } from "./coachMemory.js";
 import {
   activityDraftInput,
   activitySaveInput,
@@ -692,6 +693,34 @@ export function createHealthAppRouter(): express.Router {
   router.post(
     "/push/prefs",
     route("push-prefs", async (ctx, req) => fromResult(await savePrefs(ctx.userProfileId, prefsInput.parse(req.body)))),
+  );
+
+  /** Coach memory: the lines the coach keeps about the person, editable on the You tab. */
+  const memoryText = z.object({ text: z.string().trim().min(1).max(MEMORY_MAX_CHARS) });
+  router.get(
+    "/memory",
+    route("memory", async (ctx) => ({ body: { ok: true, lines: await loadCoachMemory(ctx.userProfileId), max: MEMORY_MAX_LINES } })),
+  );
+  router.post(
+    "/memory",
+    route("memory-add", async (ctx, req) => {
+      const r = await rememberLine(ctx.userProfileId, memoryText.parse(req.body).text, "person");
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  router.put(
+    "/memory/:id",
+    route("memory-edit", async (ctx, req) => {
+      const r = await editLine(ctx.userProfileId, String(req.params.id), memoryText.parse(req.body).text);
+      return r.ok ? { body: r } : { status: r.error === "not_found" ? 404 : 400, body: r };
+    }),
+  );
+  router.delete(
+    "/memory/:id",
+    route("memory-forget", async (ctx, req) => {
+      const r = await forgetLine(ctx.userProfileId, String(req.params.id));
+      return r.ok ? { body: r } : { status: 404, body: r };
+    }),
   );
 
   /** Root-cause analysis on demand, and the person's answer to its experiment. */

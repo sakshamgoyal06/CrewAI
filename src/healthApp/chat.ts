@@ -51,6 +51,7 @@ import {
 import { cardFromReport, runRca, type RcaCard } from "./rca.js";
 import { loadCalorieReview, type CalorieReview } from "./calorieTarget.js";
 import { loadPersonalDetails } from "./onboarding.js";
+import { forgetLine, loadCoachMemory, rememberLine, type MemoryLine } from "./coachMemory.js";
 import { enqueueEvents } from "./events.js";
 import { randomUUID } from "node:crypto";
 import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
@@ -506,6 +507,21 @@ const toolDefinitions: Anthropic.Tool[] = [
       required: ["answer"],
     },
   },
+  {
+    name: "remember",
+    description:
+      "Keep one short fact about the person for future turns (a schedule, an injury, a food they can't stand, how they like to be coached). They see and edit the list on the You tab. Not for meals, numbers the app already has, or anything you'd log instead.",
+    input_schema: {
+      type: "object",
+      properties: { text: { type: "string", description: "One line, third person, under 200 characters, e.g. 'Travels Mon-Wed most weeks; hotel breakfasts.'" } },
+      required: ["text"],
+    },
+  },
+  {
+    name: "forget",
+    description: "Drop a remembered line when they say it no longer applies or ask you to forget it. Pass the line's words from the context block.",
+    input_schema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] },
+  },
 ];
 
 /**
@@ -621,6 +637,15 @@ export async function runTool(
         },
         card: { type: "activity_draft", draft },
       };
+    }
+    case "remember": {
+      const r = await rememberLine(ctx.userProfileId, (input as { text?: unknown })?.text, "coach");
+      return { result: r.ok ? { ok: true, remembered: r.line.text, alreadyKnown: r.duplicate, lines: r.count } : { ok: false, error: r.error, lines: r.count, hint: r.error === "memory_full" ? "Forget something first; the list is capped." : "Nothing to remember." } };
+    }
+    case "forget": {
+      const text = (input as { text?: unknown })?.text;
+      const r = await forgetLine(ctx.userProfileId, typeof text === "string" ? text : "");
+      return { result: r.ok ? { ok: true, forgot: r.forgotten.text, lines: r.count } : { ok: false, error: r.error, candidates: r.candidates } };
     }
     case "delete_activity": {
       const id = (input as { id?: unknown })?.id;
@@ -1181,6 +1206,7 @@ export async function runHealthChat(ctx: ActionContext, userText: string, option
 export type TurnDeps = {
   snapshot?: HealthSnapshot | null;
   details?: string | null;
+  memory?: MemoryLine[];
   tool?: (name: string, input: unknown) => Promise<ToolOutcome>;
   onEvent?: (event: ChatStreamEvent) => void;
 };
@@ -1198,8 +1224,16 @@ async function answerTurn(
 ): Promise<TurnAnswer> {
   const now = new Date(ctx.now ?? Date.now());
   // One snapshot per turn: it feeds the context block and answers get_status without a second load.
-  const [details, snapshot] = await Promise.all([
+  const [details, memory, snapshot] = await Promise.all([
     deps.details !== undefined ? Promise.resolve(deps.details) : loadPersonalDetails(ctx.userProfileId).catch(() => null),
+    deps.memory !== undefined
+      ? Promise.resolve(deps.memory)
+      : Promise.resolve()
+          .then(() => loadCoachMemory(ctx.userProfileId))
+          .catch((err) => {
+            logger.warn({ err: loggableError(err) }, "health chat memory load failed; answering without it");
+            return [] as MemoryLine[];
+          }),
     deps.snapshot !== undefined
       ? Promise.resolve(deps.snapshot)
       : usingLegacyPrompt()
@@ -1211,7 +1245,7 @@ async function answerTurn(
               return null;
             }),
   ]);
-  const turnContext = snapshot ? buildTurnContext(snapshot, details, now) : legacyTurnContext(details, now, ctx.timezone);
+  const turnContext = snapshot ? buildTurnContext(snapshot, details, now, memory) : legacyTurnContext(details, now, ctx.timezone, memory);
   const tool = (name: string, input: unknown) =>
     name === "get_status" && snapshot && !deps.tool
       ? Promise.resolve({ result: statusForModel(snapshot) })
@@ -1393,6 +1427,7 @@ export async function evalTurn(input: {
   history?: Anthropic.MessageParam[];
   snapshot: HealthSnapshot | null;
   details: string | null;
+  memory?: MemoryLine[];
   tool: (name: string, input: unknown) => Promise<ToolOutcome>;
   now: Date;
   timezone: string;
@@ -1413,6 +1448,7 @@ export async function evalTurn(input: {
   const reply = await answerTurn(ctx, input.userText, input.history ?? [], input.create ?? defaultCreate(), stats, { ...TURN_BUDGET, ...input.budget }, {
     snapshot: input.snapshot,
     details: input.details,
+    memory: input.memory ?? [],
     tool: input.tool,
   });
   return { reply, stats };

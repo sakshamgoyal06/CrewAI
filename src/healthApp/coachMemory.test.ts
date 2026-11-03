@@ -1,0 +1,105 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+/** A small in-memory stand-in for the one table this module touches. */
+type Row = { id: string; user_profile_id: string; text: string; source: string; created_at: string; updated_at: string; forgotten_at: string | null };
+const rows: Row[] = [];
+let nextId = 1;
+
+vi.mock("../tools/clients.js", () => {
+  const build = (op: "select" | "insert" | "update", payload?: Record<string, unknown>) => {
+    const filters: Array<(r: Row) => boolean> = [];
+    let limitN = Infinity;
+    let inserted: Row | null = null;
+    const run = () => {
+      if (op === "insert") {
+        inserted = { id: `id-${nextId++}`, created_at: new Date(2026, 9, 27, 8, nextId).toISOString(), updated_at: "", forgotten_at: null, ...(payload as object) } as Row;
+        rows.push(inserted);
+        return [inserted];
+      }
+      const hit = rows.filter((r) => filters.every((f) => f(r))).sort((a, b) => a.created_at.localeCompare(b.created_at)).slice(0, limitN);
+      if (op === "update") for (const r of hit) Object.assign(r, payload);
+      return hit;
+    };
+    const q = {
+      eq: (k: keyof Row, v: unknown) => { filters.push((r) => r[k] === v); return q; },
+      is: (k: keyof Row, v: unknown) => { filters.push((r) => r[k] === v); return q; },
+      order: () => q,
+      limit: (n: number) => { limitN = n; return q; },
+      select: () => q,
+      single: async () => ({ data: run()[0] ?? null, error: null }),
+      maybeSingle: async () => ({ data: run()[0] ?? null, error: null }),
+      then: (resolve: (v: unknown) => void) => resolve({ data: run(), error: null }),
+    };
+    return q;
+  };
+  return {
+    supabase: {
+      from: () => ({
+        select: () => build("select"),
+        insert: (row: Record<string, unknown>) => build("insert", row),
+        update: (patch: Record<string, unknown>) => build("update", patch),
+      }),
+    },
+    redis: {},
+    anthropic: {},
+  };
+});
+
+import { editLine, forgetLine, loadCoachMemory, MEMORY_MAX_LINES, memoryContextLine, normalizeMemoryText, rememberLine } from "./coachMemory.js";
+
+const U = "profile-1";
+
+beforeEach(() => {
+  rows.length = 0;
+  nextId = 1;
+});
+
+describe("coach memory", () => {
+  it("normalizes a line: one space, no trailing stop, capped length", () => {
+    expect(normalizeMemoryText("  Travels   Mon-Wed. ")).toBe("Travels Mon-Wed");
+    expect(normalizeMemoryText("")).toBeNull();
+    expect(normalizeMemoryText(42)).toBeNull();
+    expect(normalizeMemoryText("x".repeat(400))!.length).toBe(200);
+  });
+
+  it("remembers once, reports a duplicate instead of adding it twice, and lists oldest first", async () => {
+    const a = await rememberLine(U, "Hates karela.", "coach");
+    expect(a).toMatchObject({ ok: true, duplicate: false, count: 1, line: { text: "Hates karela", source: "coach" } });
+    const b = await rememberLine(U, "hates KARELA", "person");
+    expect(b).toMatchObject({ ok: true, duplicate: true, count: 1 });
+    await rememberLine(U, "Travels Mon-Wed most weeks", "coach");
+    expect((await loadCoachMemory(U)).map((l) => l.text)).toEqual(["Hates karela", "Travels Mon-Wed most weeks"]);
+    expect(await loadCoachMemory("someone-else")).toEqual([]);
+  });
+
+  it("refuses an empty line and stops at the cap", async () => {
+    expect(await rememberLine(U, "   ", "coach")).toMatchObject({ ok: false, error: "empty" });
+    for (let i = 0; i < MEMORY_MAX_LINES; i += 1) await rememberLine(U, `fact ${i}`, "coach");
+    expect(await rememberLine(U, "one more", "coach")).toMatchObject({ ok: false, error: "memory_full", count: MEMORY_MAX_LINES });
+  });
+
+  it("forgets by id, by the exact line, or by the only line containing the words", async () => {
+    const knee = await rememberLine(U, "Knee hurts on stairs; no lunges", "coach");
+    await rememberLine(U, "Prefers evening workouts", "coach");
+    await rememberLine(U, "Evening calls on Thursdays", "coach");
+    expect(await forgetLine(U, "evening")).toMatchObject({ ok: false, error: "ambiguous", candidates: ["Prefers evening workouts", "Evening calls on Thursdays"] });
+    expect(await forgetLine(U, "elbow")).toMatchObject({ ok: false, error: "not_found" });
+    expect(await forgetLine(U, "knee hurts")).toMatchObject({ ok: true, forgotten: { text: "Knee hurts on stairs; no lunges" }, count: 2 });
+    expect(await forgetLine(U, (knee as { line: { id: string } }).line.id)).toMatchObject({ ok: false, error: "not_found" });
+    expect(await forgetLine(U, "prefers evening workouts")).toMatchObject({ ok: true, count: 1 });
+    expect((await loadCoachMemory(U)).map((l) => l.text)).toEqual(["Evening calls on Thursdays"]);
+  });
+
+  it("edits a line from the You tab and marks it as the person's", async () => {
+    const r = await rememberLine(U, "Travels Mon-Wed", "coach");
+    const id = (r as { line: { id: string } }).line.id;
+    expect(await editLine(U, id, "Travels Tue-Thu now.")).toMatchObject({ ok: true, line: { text: "Travels Tue-Thu now", source: "person" } });
+    expect(await editLine(U, id, "  ")).toMatchObject({ ok: false, error: "empty" });
+    expect(await editLine("someone-else", id, "nope")).toMatchObject({ ok: false, error: "not_found" });
+  });
+
+  it("writes the context line, or nothing", () => {
+    expect(memoryContextLine([])).toBeNull();
+    expect(memoryContextLine([{ text: "A" }, { text: "B" }])).toBe("Remembered about them (they see and edit this list on the You tab): A; B.");
+  });
+});

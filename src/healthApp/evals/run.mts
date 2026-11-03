@@ -30,7 +30,7 @@ async function runCase(c: EvalCase): Promise<Outcome> {
   const { tool, calls } = stubTools(snapshot, { failing: new Set(c.failing ?? []) });
   const t0 = performance.now();
   try {
-    const { reply, stats } = await evalTurn({ userText: c.message, history: c.history, snapshot, details: c.noSnapshot ? null : FIXTURE_DETAILS, tool, now: FIXTURE_NOW, timezone: FIXTURE_TIMEZONE });
+    const { reply, stats } = await evalTurn({ userText: c.message, history: c.history, snapshot, details: c.noSnapshot ? null : FIXTURE_DETAILS, memory: c.memory?.map((m, i) => ({ id: `mem-${i}`, text: m.text, source: "coach" as const, createdAt: "2026-10-20T08:00:00+05:30" })), tool, now: FIXTURE_NOW, timezone: FIXTURE_TIMEZONE });
     const reasons = score(c, reply.text, calls);
     const tokens = stats.usage.input + stats.usage.output + stats.usage.cacheRead + stats.usage.cacheWrite;
     return { id: c.id, category: c.category, pass: reasons.length === 0, reasons, reply: reply.text, calls: calls.map((x) => x.name), tokens, ms: performance.now() - t0 };
