@@ -121,6 +121,7 @@ How to work:
 - Calorie target: review_calorie_target works out their real maintenance from logged meals and the weight trend, and the target that keeps them on pace for the goal. Call it after a weekly weigh-in, when weight isn't moving the way the goal needs, or when they ask about their calories. When it recommends a change it shows a card they can apply; don't change the target yourself unless they ask. If the deadline needs an unsafe pace, say so plainly and give the date the safe pace reaches it.
 - Respect their diet (vegetarian, Jain, or their own description) in every food suggestion, and use Indian portions and dishes when that's what they eat.
 - Never suggest a food on their avoid list, or a dish that usually contains it (peanuts → most chikkis and some chutneys; dairy → paneer, curd, ghee, most sweets). Offer a swap instead. If they log something on that list, log it normally and don't lecture; mention it once only if it looks like an allergen they may not have noticed.
+- Cards: only mention a card that a tool showed in this reply. Cards from earlier turns are gone from view. Earlier assistant turns end with notes in square brackets saying which cards they showed and whether each meal or activity was logged; trust those notes. Never ask them to check or confirm a card from an earlier turn, and don't bring up earlier meals or cards in a reply about something else. If an earlier meal or activity was never logged and it matters, ask whether they want it logged and call draft_meal or draft_activity again so a fresh card shows.
 - Keep replies short: 1 to 4 sentences, plain text, no headings. Use kg and kcal.`;
 
 const SET_SCHEMA = {
@@ -764,17 +765,91 @@ export async function recordChatTurn(
   await saveChatMessage(userProfileId, "assistant", replyText, cards);
 }
 
+/** One line per card, so later turns know what was shown and whether it was acted on. */
+export function cardHistoryNote(card: ChatCard, savedDraftIds: ReadonlySet<string>): string {
+  switch (card.type) {
+    case "meal_draft": {
+      const d = card.draft;
+      const state = savedDraftIds.has(d.draftId) ? "logged" : "never confirmed, not logged";
+      return `[Meal card "${d.text.slice(0, 80)}", about ${d.totals.calories} kcal: ${state}]`;
+    }
+    case "activity_draft": {
+      const d = card.draft;
+      const state = savedDraftIds.has(d.draftId) ? "saved" : "never saved";
+      return `[Activity card ${d.label}, ${d.durationMin} min, about ${d.kcal} kcal: ${state}]`;
+    }
+    case "hevy_proposal":
+      return "[Hevy change card]";
+    case "calorie_review":
+      return "[Calorie target card]";
+    case "workout_check":
+      return "[Workout check card]";
+    default:
+      return "[Card]";
+  }
+}
+
 /** History as API messages: must start with a user turn and alternate cleanly. */
 export function historyToMessages(
-  history: Array<{ role: "user" | "assistant"; content: string }>,
+  history: Array<{ role: "user" | "assistant"; content: string; cards?: ChatCard[] }>,
+  savedDraftIds: ReadonlySet<string> = new Set(),
 ): Anthropic.MessageParam[] {
   const out: Anthropic.MessageParam[] = [];
   for (const h of history) {
     if (!h.content.trim()) continue;
     if (out.length === 0 && h.role !== "user") continue;
-    out.push({ role: h.role, content: h.content });
+    const notes = h.role === "assistant" ? (h.cards ?? []).map((c) => cardHistoryNote(c, savedDraftIds)) : [];
+    out.push({ role: h.role, content: notes.length ? `${h.content}\n${notes.join("\n")}` : h.content });
   }
   return out;
+}
+
+/** Draft ids from history cards that have since been logged (meals) or saved (activities). */
+export async function loadSavedDraftIds(userProfileId: string, history: Array<{ cards?: ChatCard[] }>): Promise<Set<string>> {
+  const mealIds: string[] = [];
+  const activityIds: string[] = [];
+  for (const h of history) {
+    for (const c of h.cards ?? []) {
+      if (c.type === "meal_draft") mealIds.push(c.draft.draftId);
+      if (c.type === "activity_draft") activityIds.push(c.draft.draftId);
+    }
+  }
+  const saved = new Set<string>();
+  const [meals, activities] = await Promise.all([
+    mealIds.length
+      ? supabase.from("meal_logs").select("meal_session_id").eq("user_profile_id", userProfileId).in("meal_session_id", mealIds)
+      : Promise.resolve({ data: [] as Array<{ meal_session_id: string }> }),
+    activityIds.length
+      ? supabase.from("health_activities").select("draft_id").eq("user_profile_id", userProfileId).in("draft_id", activityIds)
+      : Promise.resolve({ data: [] as Array<{ draft_id: string }> }),
+  ]);
+  for (const r of (meals.data ?? []) as Array<{ meal_session_id: string }>) saved.add(r.meal_session_id);
+  for (const r of (activities.data ?? []) as Array<{ draft_id: string }>) saved.add(r.draft_id);
+  return saved;
+}
+
+const CARD_WORD = /\bcards?\b/i;
+const CONFIRM_WORD = /\b(confirm|meal|food|dinner|lunch|breakfast|snack)/i;
+
+/**
+ * Drops sentences that point at a card this reply doesn't show: any card mention when there are
+ * no cards, and a "confirm/log the meal card" line when no meal or activity card is attached.
+ */
+export function dropPhantomCardMentions(text: string, cards: ChatCard[]): string {
+  const hasDraft = cards.some((c) => c.type === "meal_draft" || c.type === "activity_draft");
+  if (hasDraft) return text;
+  const phantom = (sentence: string): boolean =>
+    CARD_WORD.test(sentence) && (cards.length === 0 || CONFIRM_WORD.test(sentence.replace(CARD_WORD, "")));
+  return text
+    .split(/\n/)
+    .map((line) => {
+      const sentences = line.match(/[^.!?]+[.!?]*\s*/g) ?? [line];
+      const kept = sentences.filter((sn) => !phantom(sn));
+      return kept.length === sentences.length ? line : kept.join("").trimEnd();
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export async function runHealthChat(
@@ -783,8 +858,12 @@ export async function runHealthChat(
   options: { create?: CreateFn; history?: Anthropic.MessageParam[] } = {},
 ): Promise<ChatReply> {
   const create = options.create ?? defaultCreate();
-  const history =
-    options.history ?? historyToMessages(await loadChatHistory(ctx.userProfileId));
+  let history = options.history;
+  if (!history) {
+    const past = await loadChatHistory(ctx.userProfileId);
+    const saved = await loadSavedDraftIds(ctx.userProfileId, past).catch(() => new Set<string>());
+    history = historyToMessages(past, saved);
+  }
   await saveChatMessage(ctx.userProfileId, "user", userText);
 
   const today = new Date(ctx.now ?? Date.now()).toISOString();
@@ -869,6 +948,7 @@ export async function runHealthChat(
     }
   }
 
+  text = dropPhantomCardMentions(text, cards);
   if (!text) {
     text = cards.length ? "Check the card and confirm." : "Done.";
   }
