@@ -25,7 +25,7 @@ vi.mock("./actions.js", async (orig) => {
   return { ...real, startMealDraft: actions.startMealDraft, logSteps: actions.logSteps };
 });
 
-import { historyToMessages, mealDraftReply, runHealthChat } from "./chat.js";
+import { dropPhantomCardMentions, historyToMessages, mealDraftReply, runHealthChat } from "./chat.js";
 
 const ctx = { userProfileId: "profile-1", timezone: "UTC", now: new Date("2026-10-27T08:00:00Z") };
 
@@ -135,5 +135,60 @@ describe("historyToMessages", () => {
       { role: "user", content: "log steps" },
       { role: "assistant", content: "done" },
     ]);
+  });
+});
+
+describe("card history notes", () => {
+  const meal = {
+    type: "meal_draft" as const,
+    draft: {
+      draftId: "meal-1",
+      text: "Burrito bowl with rice, paneer, rajma",
+      slot: "dinner" as const,
+      source: "web_research" as const,
+      items: [],
+      totals: { calories: 770, protein_g: 36, carbs_g: 0, fat_g: 0 },
+      estimated: true,
+      servingAssumption: null,
+    },
+  };
+
+  it("tells the model whether an earlier meal card was logged", () => {
+    const msgs = historyToMessages(
+      [
+        { role: "user", content: "I had burrito bowl" },
+        { role: "assistant", content: "Check the card, then tap Confirm & log.", cards: [meal] },
+      ],
+      new Set(["meal-1"]),
+    );
+    expect(msgs[1]!.content).toContain('[Meal card "Burrito bowl with rice, paneer, rajma", about 770 kcal: logged]');
+    const unsaved = historyToMessages([
+      { role: "user", content: "x" },
+      { role: "assistant", content: "Check the card.", cards: [meal] },
+    ]);
+    expect(unsaved[1]!.content).toContain("never confirmed, not logged");
+  });
+});
+
+describe("dropPhantomCardMentions", () => {
+  const hevy = { type: "hevy_proposal" } as unknown as Parameters<typeof dropPhantomCardMentions>[1][number];
+
+  it("drops a meal-card line from a reply that only has a Hevy card", () => {
+    const text = "Tell me if you want the same changes there.\n\nPlease also check the burrito bowl card and confirm it if it looks right.";
+    expect(dropPhantomCardMentions(text, [hevy])).toBe("Tell me if you want the same changes there.");
+  });
+
+  it("keeps the Hevy card line", () => {
+    const text = "I put the change on a card. Apply it when ready.";
+    expect(dropPhantomCardMentions(text, [hevy])).toBe(text);
+  });
+
+  it("drops any card mention when no card is shown", () => {
+    expect(dropPhantomCardMentions("You're on track. Check the card above.", [])).toBe("You're on track.");
+  });
+
+  it("leaves a reply with a meal card alone", () => {
+    const meal = { type: "meal_draft" } as unknown as Parameters<typeof dropPhantomCardMentions>[1][number];
+    expect(dropPhantomCardMentions("Check the card and confirm.", [meal])).toBe("Check the card and confirm.");
   });
 });
