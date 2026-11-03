@@ -64,8 +64,48 @@ export function healthChatFastModel(): string {
   return process.env.MAGNUS_HEALTH_CHAT_FAST_MODEL?.trim() || "claude-haiku-5-5";
 }
 
-/** Words that mean the person wants thinking, not just a log: these turns stay on the main model. */
-const COACHING = /\?|\b(why|should|could|would|plan|advice|advise|help|how (am|do|did|can|much|many|should)|what (should|can|do|did|is|are)|routine|program|stall|plateau|progress|review|analy[sz]|explain|recommend|suggest|change|swap|replace|week|goal|target|deadline|maintenance|on track|off track|slip|struggl|craving|tired|sore|injur|pain|sick|sleep|stress|motivat)/i;
+/**
+ * Words that mean the person wants thinking, not just a log: these turns stay on the main model.
+ * Questions and coaching asks; and reasons, states and slips ("skipped gym, knee hurts", "binged
+ * last night", "feeling low", "was travelling"), which need an answer, not only a record. "same as
+ * yesterday" needs history reasoning too.
+ */
+const COACHING = new RegExp(
+  [
+    "\\?",
+    // Prefixes: "stalled", "travelling", "skipped", "struggling" all match.
+    "\\b(?:why|should|could|would|plan|advice|advise|help|how (?:am|do|did|can|much|many|should)|what (?:should|can|do|did|is|are)|routine|program|stall|plateau|progress|review|analy[sz]|explain|recommend|suggest|change|swap|replace|week|goal|target|deadline|maintenance|on track|off track|slip|struggl|craving|tired|sore|injur|pain|sick|sleep|stress|motivat|skip|miss|binge|feel|anxi|depress|starv|travel|cramp)",
+    // Whole words only: "low" must not catch "lower", "ill" must not catch "will".
+    "\\b(?:low|sad|ill|flu|busy|lazy|cheat|drank|mood|fever|hungry|hangover|hungover|junk|rest day|same as|didn'?t|couldn'?t|unwell|headache)\\b",
+  ].join("|"),
+  "i",
+);
+
+/**
+ * Tools whose call means the turn turned into coaching (analysis, a Hevy change, a plan). If the
+ * fast model reached for one, the rest of the turn runs on the main model, which writes the
+ * explanation.
+ */
+const COACHING_TOOLS = new Set([
+  "get_training_analysis",
+  "get_routines",
+  "search_exercises",
+  "propose_routine_change",
+  "propose_new_routine",
+  "propose_workout_log",
+  "root_cause_analysis",
+  "review_calorie_target",
+  "set_daily_routine",
+  "set_goal",
+]);
+
+/** A message with a number, a food, a weigh-in or an activity in it almost always wants a log. */
+const LOGGABLE = /\d|\b(ate|had|eat|eating|khaya|khayi|khaaya|piya|drank|walk(ed)?|ran|run|swam|swim|cycled|gym|lifted|kg|kgs|steps|roti|rice|dal|chai|coffee|breakfast|lunch|dinner|snack|weigh(ed)?|weight)\b/i;
+
+/** True when the fast model answered a loggable message with words only: it should have called a tool. */
+export function fastModelDodgedLog(userText: string, toolCalls: number, round: number): boolean {
+  return round === 0 && toolCalls === 0 && LOGGABLE.test(userText);
+}
 
 /**
  * Which model answers this turn. Short, plain logs ("2 roti and dal for lunch", "walked 6k steps",
@@ -938,6 +978,8 @@ type TurnStats = {
   changed: boolean;
   /** Which budget ended the turn early, if any. */
   budgetHit?: "wall" | "rounds" | "tokens";
+  /** Why the turn moved from the fast model to the main one, if it did. */
+  escalated?: "no_tool" | "coaching_tool" | "refusal";
 };
 
 function addUsage(stats: TurnStats, usage: Anthropic.Usage | undefined): void {
@@ -962,6 +1004,7 @@ function logTurn(userProfileId: string, stats: TurnStats, outcome: "ok" | "refus
     changed: stats.changed,
     guardFired: stats.guardFired,
     ...(stats.budgetHit ? { budgetHit: stats.budgetHit } : {}),
+    ...(stats.escalated ? { escalated: stats.escalated } : {}),
     ...(error ? { error: error.slice(0, 300) } : {}),
   };
   logger.info({ userProfileId, wallMs: Math.round(wallMs), ...props }, "health chat turn");
@@ -1211,6 +1254,7 @@ async function answerTurn(
     if ((response.stop_reason as string) === "refusal") {
       // The fast model has no server-side fallback: retry the turn once on the main model.
       if (round === 0 && model !== healthChatModel()) {
+        stats.escalated = "refusal";
         model = healthChatModel();
         round -= 1;
         continue;
@@ -1233,9 +1277,23 @@ async function answerTurn(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
     );
     if (response.stop_reason !== "tool_use" || toolUses.length === 0) {
+      // The fast model answered a log with words only (no tool, so nothing saved): one retry on
+      // the main model, which is far better at turning a plain sentence into the right tool call.
+      if (model !== healthChatModel() && fastModelDodgedLog(userText, toolUses.length, round) && remaining() > budget.minCallMs) {
+        stats.escalated = "no_tool";
+        model = healthChatModel();
+        messages.pop();
+        round -= 1;
+        continue;
+      }
       if (response.stop_reason === "max_tokens") stats.budgetHit = "tokens";
       done = true;
       break;
+    }
+    if (model !== healthChatModel() && toolUses.some((tu) => COACHING_TOOLS.has(tu.name))) {
+      // The fast model reached for analysis or a Hevy change: the main model writes the rest.
+      stats.escalated = "coaching_tool";
+      model = healthChatModel();
     }
 
     const results = await Promise.all(

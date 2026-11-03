@@ -8,8 +8,34 @@ const env = {} as NodeJS.ProcessEnv;
 
 describe("pickChatModel", () => {
   it("sends plain logs to the fast model", () => {
-    for (const t of ["2 roti and dal for lunch", "walked 6000 steps", "82.4 this morning", "poha and chai", "yes"]) {
+    for (const t of [
+      "2 roti and dal for lunch",
+      "walked 6000 steps",
+      "82.4 this morning",
+      "poha and chai",
+      "yes",
+      "aaj 2 roti aur dal khaya",
+      "swam 40 min",
+      "did it",
+      "yes, 30 min",
+      "ate a burrito bowl and a coke",
+    ]) {
       expect(pickChatModel(t, env), t).toBe("claude-haiku-5-5");
+    }
+  });
+
+  it("keeps reasons, slips and states on the main model, since they need an answer", () => {
+    for (const t of [
+      "skipped gym, knee hurts",
+      "skipped the gym",
+      "feeling low, binged last night",
+      "no, was travelling",
+      "same as yesterday",
+      "missed my walk today",
+      "didn't eat lunch",
+      "hungover, ate junk",
+    ]) {
+      expect(pickChatModel(t, env), t).toBe("claude-sonnet-5-5");
     }
   });
 
