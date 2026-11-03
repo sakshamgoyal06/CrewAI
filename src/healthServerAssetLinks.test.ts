@@ -10,9 +10,13 @@ describe("assetLinks", () => {
   const fps = (env: NodeJS.ProcessEnv) =>
     (assetLinks(env) as Array<{ target: { sha256_cert_fingerprints: string[] } }>)[0]?.target.sha256_cert_fingerprints;
 
-  it("vouches for the CI-built APK out of the box", () => {
+  it("vouches for the release APK out of the box", () => {
     expect(fps({})).toEqual([BUILT_APK_CERT_SHA256]);
     expect(fps({ MAGNUS_ANDROID_CERT_SHA256: "not-a-fingerprint" })).toEqual([BUILT_APK_CERT_SHA256]);
+  });
+
+  it("never vouches for the public debug key", () => {
+    expect(fps({})).not.toContain("8E:67:88:10:B2:47:88:B6:F5:97:DD:93:6B:AD:00:FB:C5:5D:8B:25:B7:FF:39:D2:6A:08:A0:94:67:37:8C:D2");
   });
 
   it("can turn the built-in cert off", () => {
