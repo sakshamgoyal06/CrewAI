@@ -211,6 +211,7 @@ const viewFromHash = (h) => { const v = h.replace("#", ""); return v === "tracke
 
 function setView(view) {
   if (!VIEWS.includes(view)) view = "coach";
+  if (state.poppingOverlay) { afterClose(() => setView(view)); return; }
   for (const v of VIEWS) $(`view-${v}`).hidden = v !== view;
   for (const t of document.querySelectorAll(".tab")) {
     t.classList.toggle("active", t.dataset.view === view);
@@ -1014,6 +1015,10 @@ function suggestions(s) {
 /** Questions send straight away; the rest pre-fill the composer for the person to finish. */
 function useSuggestion(text) {
   closeSheet();
+  afterClose(() => useSuggestionNow(text));
+}
+
+function useSuggestionNow(text) {
   if ($("view-coach").hidden) setView("coach");
   if (text.endsWith("?")) { send(text); return; }
   const input = $("input");
@@ -1223,7 +1228,7 @@ function weeklyReviewView(r) {
   out.push(
     el("p", { class: "section-label" }, "Next week's one thing"),
     el("p", { class: "review-focus" }, r.focus),
-    el("button", { class: "btn primary block", type: "button", onclick: () => { closeSheet(); setView("coach"); $("input").value = "Let's go over my week. What should I change?"; autosize(); $("input").focus(); } }, "Talk it through with the coach"),
+    el("button", { class: "btn primary block", type: "button", onclick: () => { closeSheet(); afterClose(() => { setView("coach"); $("input").value = "Let's go over my week. What should I change?"; autosize(); $("input").focus(); }); } }, "Talk it through with the coach"),
   );
   return out;
 }
@@ -2218,11 +2223,46 @@ function finishedCard(card, draft, status) {
 
 // ---------- sheets ----------
 
-function closeSheet() {
+// Only the + quick-log picker is a bottom sheet. Everything bigger opens as its own full screen
+// with a back arrow, and the phone's back button closes it (one history entry per open overlay).
+const SHEET_ONLY = new Set(["quick"]);
+const AUTOFOCUS = new Set(["meal", "steps", "checkin"]);
+
+function hideOverlay() {
   state.sheetCleanup?.();
   state.sheetCleanup = null;
   $("sheet").hidden = true;
   $("scrim").hidden = true;
+  document.body.classList.remove("screen-open");
+}
+
+function closeSheet() {
+  if ($("sheet").hidden) return;
+  hideOverlay();
+  if (history.state?.overlay) {
+    // Pop the entry openSheet pushed; anything that navigates meanwhile waits for it (see setView).
+    state.poppingOverlay = true;
+    history.back();
+  }
+}
+
+window.addEventListener("popstate", () => {
+  if (state.poppingOverlay) {
+    state.poppingOverlay = false;
+    const next = state.afterPop;
+    state.afterPop = null;
+    next?.();
+    return;
+  }
+  // The phone's back button (or a swipe) while a screen or sheet is open: just close it.
+  if (!$("sheet").hidden) hideOverlay();
+});
+
+/** Runs fn once a closing overlay's history entry has been popped (at once if none is pending). */
+function afterClose(fn) {
+  if (!state.poppingOverlay) return fn();
+  const prev = state.afterPop;
+  state.afterPop = () => { prev?.(); fn(); };
 }
 
 function openSheet(kind) {
@@ -2230,11 +2270,18 @@ function openSheet(kind) {
   state.sheetCleanup?.();
   state.sheetCleanup = null;
   const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", account: "Food, connections & account" };
+  const screen = !SHEET_ONLY.has(kind);
+  const sheet = $("sheet");
+  sheet.classList.toggle("screen", screen);
+  sheet.classList.toggle("bottom", !screen);
   $("sheet-title").textContent = titles[kind];
   body.replaceChildren(SHEETS[kind]());
-  $("sheet").hidden = false;
-  $("scrim").hidden = false;
-  body.querySelector("input, textarea")?.focus();
+  if (sheet.hidden && !history.state?.overlay) history.pushState({ overlay: true }, "", location.hash || "#coach");
+  sheet.hidden = false;
+  sheet.scrollTop = 0;
+  $("scrim").hidden = screen;
+  document.body.classList.toggle("screen-open", screen);
+  if (AUTOFOCUS.has(kind)) body.querySelector("input, textarea")?.focus();
 }
 
 function submitter(fn) {
@@ -2319,12 +2366,9 @@ const SHEETS = {
       (state.usual || []).length
         ? el("div", { class: "usual-list" },
             el("p", { class: "section-label" }, "Again"),
-            ...state.usual.slice(0, 3).map((m) => el("button", { class: "usual-row", type: "button", onclick: () => { closeSheet(); if ($("view-coach").hidden) setView("coach"); repeatMeal(m); } },
+            ...state.usual.slice(0, 2).map((m) => el("button", { class: "usual-row", type: "button", onclick: () => { closeSheet(); afterClose(() => { if ($("view-coach").hidden) setView("coach"); repeatMeal(m); }); } },
               el("span", {}, m.text), el("small", {}, `${fmt(m.totals.calories)} kcal`))))
         : null,
-      el("p", { class: "section-label" }, "Ask the coach"),
-      el("div", { class: "ask-list" }, ...suggestions(state.snapshot).filter(([, t]) => t.endsWith("?")).map(([label, text]) =>
-        el("button", { type: "button", onclick: () => useSuggestion(text) }, label))),
     );
   },
 
@@ -2493,6 +2537,7 @@ $("photo-input").addEventListener("change", (e) => {
   sendPhoto(file);
 });
 $("sheet-close").addEventListener("click", closeSheet);
+$("sheet-back").addEventListener("click", closeSheet);
 $("scrim").addEventListener("click", closeSheet);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
 document.addEventListener("click", (e) => {
