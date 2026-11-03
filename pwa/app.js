@@ -1559,16 +1559,31 @@ function routineSection({ heading = true } = {}) {
     save);
 }
 
+/** A small on/off switch for a settings row. */
+function switchEl(on, label, onToggle) {
+  const b = el("button", { class: "switch", type: "button", role: "switch", "aria-checked": String(on), "aria-label": label });
+  b.addEventListener("click", () => onToggle(b.getAttribute("aria-checked") !== "true"));
+  return b;
+}
+
+/** A settings row: title and an optional quiet line on the left, a control on the right. */
+function settingRow(title, sub, control) {
+  return el("div", { class: "set-row" },
+    el("div", { class: "set-text" }, el("span", {}, title), sub ? el("small", {}, sub) : null),
+    control);
+}
+
 function notificationsSection() {
-  const wrap = el("div", { class: "stack" }, el("p", { class: "section-label" }, "Notifications"));
-  const status = el("p", { class: "hint" }, "Checking…");
-  const toggle = el("button", { class: "btn block", type: "button" }, "…");
-  const test = el("button", { class: "link", type: "button", hidden: true }, "Send a test");
-  const kinds = el("div", { class: "toggles" });
-  const quiet = el("div", { class: "grid2" });
-  wrap.append(status, toggle, test, kinds, quiet);
+  const wrap = el("div", { class: "settings-list" });
+  const phone = el("div", { class: "set-group" });
+  const kinds = el("div", { class: "set-group" });
+  const quiet = el("div", { class: "set-group" });
+  const kindsLabel = el("p", { class: "section-label" }, "Nudges");
+  const quietLabel = el("p", { class: "section-label" }, "Quiet hours");
+  wrap.append(phone, kindsLabel, kinds, quietLabel, quiet);
 
   let prefs = { quietStart: "22:30", quietEnd: "07:00", off: [] };
+  let busy = false;
   const savePrefs = async (patch) => {
     prefs = { ...prefs, ...patch };
     try { await api("/push/prefs", { method: "POST", body: JSON.stringify(patch) }); } catch (err) { toast(err.message); }
@@ -1577,43 +1592,32 @@ function notificationsSection() {
   async function paint() {
     const sub = await currentSubscription().catch(() => null);
     const on = !!sub && Notification.permission === "granted";
-    status.textContent = on ? "On for this phone. Tap a nudge to turn it off." : "Off. Turn on to get nudges for meals, steps, workouts and reviews.";
-    toggle.textContent = on ? "Turn off on this phone" : "Turn on notifications";
-    toggle.className = on ? "btn block" : "btn primary block";
-    test.hidden = !on;
-    kinds.replaceChildren(...NUDGES.map(([k, label]) => {
-      const b = el("button", { type: "button", class: prefs.off.includes(k) ? "" : "on", "aria-pressed": String(!prefs.off.includes(k)) }, label);
-      b.addEventListener("click", () => {
-        const off = prefs.off.includes(k) ? prefs.off.filter((x) => x !== k) : [...prefs.off, k];
-        savePrefs({ off });
+    const test = el("button", { class: "link small", type: "button", onclick: async () => {
+      try { await api("/push/test", { method: "POST" }); toast("Sent. It should arrive in a few seconds."); } catch (err) { toast(err.message); }
+    } }, "Send a test");
+    phone.replaceChildren(
+      settingRow("On this phone", on ? "Meals, steps, workouts and reviews" : "Off. Turn on to get nudges.",
+        switchEl(on, "Notifications on this phone", async () => {
+          if (busy) return;
+          busy = true;
+          try { (await currentSubscription()) ? await disablePush() : await enablePush(); } catch (err) { toast(err.message); }
+          busy = false;
+          paint();
+        })),
+      ...(on ? [el("div", { class: "set-foot" }, test)] : []),
+    );
+    kinds.replaceChildren(...NUDGES.map(([k, label]) =>
+      settingRow(label, null, switchEl(!prefs.off.includes(k), label, (next) => {
+        savePrefs({ off: next ? prefs.off.filter((x) => x !== k) : [...prefs.off, k] });
         paint();
-      });
-      return b;
-    }));
-    kinds.hidden = !on;
-    quiet.hidden = !on;
+      }))));
+    for (const n of [kindsLabel, kinds, quietLabel, quiet]) n.hidden = !on;
   }
-
-  toggle.addEventListener("click", async () => {
-    toggle.disabled = true;
-    try {
-      (await currentSubscription()) ? await disablePush() : await enablePush();
-    } catch (err) {
-      toast(err.message);
-    }
-    toggle.disabled = false;
-    paint();
-  });
-  test.addEventListener("click", async () => {
-    try { await api("/push/test", { method: "POST" }); toast("Sent. It should arrive in a few seconds."); } catch (err) { toast(err.message); }
-  });
 
   api("/push").then((r) => {
     prefs = r.prefs || prefs;
-    quiet.replaceChildren(
-      el("label", {}, "Quiet from", el("input", { class: "field", type: "time", value: prefs.quietStart, onchange: (e) => savePrefs({ quietStart: e.target.value }) })),
-      el("label", {}, "Until", el("input", { class: "field", type: "time", value: prefs.quietEnd, onchange: (e) => savePrefs({ quietEnd: e.target.value }) })),
-    );
+    const time = (key) => el("input", { class: "time-field", type: "time", value: prefs[key], onchange: (e) => savePrefs({ [key]: e.target.value }) });
+    quiet.replaceChildren(settingRow("From", null, time("quietStart")), settingRow("Until", null, time("quietEnd")));
     paint();
   }).catch(() => paint());
   return wrap;
