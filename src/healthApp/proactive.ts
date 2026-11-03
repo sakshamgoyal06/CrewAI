@@ -10,7 +10,8 @@ import { loggableError } from "../util/loggableError.js";
 import { formatTime } from "./gymSlot.js";
 import { getPrefs, isQuiet, sendNotification, type Notification, type NotificationPrefs } from "./push.js";
 import { cardFromReport, listReports, rcaDue, reviewExperiments, runRca } from "./rca.js";
-import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
+import { buildHealthSnapshot, loadHealthProfile, type HealthSnapshot } from "./snapshot.js";
+import { ensureDayPlan } from "./dailyChat.js";
 import { routineLine } from "./routine.js";
 import { runRoutineTick } from "./routineCheck.js";
 import { runInterventionTick } from "./interventions/engine.js";
@@ -63,7 +64,7 @@ export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs
         .join(" · ") + ".",
       `Week so far: ${s.northStar.onTrackDays}/7 on track.`,
     ];
-    out.push({ kind: "morning_plan", dedupeKey: `morning_plan:${date}`, title: "Today's plan", body: parts.join(" "), url: "/app/#tracker" });
+    out.push({ kind: "morning_plan", dedupeKey: `morning_plan:${date}`, title: "Today's plan", body: parts.join(" "), url: "/app/#coach" });
   }
 
   if (s.goal?.checkinDue && inWindow("08:30")) {
@@ -185,6 +186,8 @@ async function maybeRunRca(userProfileId: string, now: Date): Promise<void> {
 /** One pass of everything proactive. Each part fails on its own without stopping the others. */
 export async function proactiveTick(userProfileId: string, now = new Date()): Promise<void> {
   for (const [name, fn] of [
+    // First, so the day's thread opens with the plan before any check lands in it.
+    ["day plan", () => loadHealthProfile(userProfileId).then(({ timezone }) => ensureDayPlan(userProfileId, timezone, now)).then(() => undefined)],
     ["workout check", () => runWorkoutCheckWithPush(userProfileId, now)],
     ["routine", () => runRoutineWithLog(userProfileId, now)],
     ["nudges", () => runNudges(userProfileId, now)],

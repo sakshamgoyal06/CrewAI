@@ -791,3 +791,27 @@ body.screen-open { overflow: hidden; }
 .memory-add { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
 .memory-add .field { flex: 1; min-width: 0; }
 .memory .count { text-align: right; }
+
+/* One chat per day: the Past days button sits beside the week pill. */
+.head-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.head-actions .icon-btn { color: var(--muted); }
+.past-days .menu-row small { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.thread.past { flex: none; overflow: visible; padding: 4px 0 24px; }
+
+/* The day's plan: the first card of each day's thread. */
+.dayplan { display: grid; gap: 14px; border-color: var(--hair-strong); }
+.dayplan > .eyebrow { margin: 0; color: var(--accent); }
+.dp-greet { margin: -8px 0 0; font-family: var(--serif); font-weight: 700; font-size: 1.35rem; line-height: 1.2; }
+.dp-sec .eyebrow { margin-bottom: 4px; }
+.dp-sec p { margin: 0; line-height: 1.5; }
+.dp-plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dp-plan li { display: flex; gap: 12px; align-items: baseline; }
+.dp-time { flex: none; min-width: 68px; color: var(--muted); font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+.dp-targets { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; padding: 12px 0; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
+.dp-targets div { display: grid; gap: 2px; text-align: center; }
+.dp-targets b { font-family: var(--serif); font-size: 1.2rem; font-weight: var(--num-w, 700); font-variant-numeric: tabular-nums; }
+.dp-targets small { color: var(--muted); font-size: 0.78rem; }
+.dp-focus { padding: 10px 12px; border-left: 2px solid var(--accent); background: var(--accent-soft); border-radius: 4px 12px 12px 4px; }
+.dp-focus .eyebrow { margin-bottom: 4px; }
+.dp-focus p { margin: 0; line-height: 1.5; }
+.dp-motto { margin: 0; color: var(--muted); font-style: italic; }

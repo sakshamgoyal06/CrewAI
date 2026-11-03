@@ -57,10 +57,15 @@
           <p class="eyebrow" id="coach-date"></p>
           <h1 class="title-lg" id="greeting">Hello</h1>
         </div>
-        <button class="pill-stat" id="coach-stat" type="button" aria-label="This week's progress">
-          <span class="pill-ring"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="fill" id="pill-ring" cx="18" cy="18" r="15"/></svg></span>
-          <span><strong id="pill-days">–</strong><small>/ 7</small></span>
-        </button>
+        <div class="head-actions">
+          <button class="icon-btn ghost" id="past-days" type="button" aria-label="Past days">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5v4h4"/><path d="M12 7.5V12l3 2"/></svg>
+          </button>
+          <button class="pill-stat" id="coach-stat" type="button" aria-label="This week's progress">
+            <span class="pill-ring"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="fill" id="pill-ring" cx="18" cy="18" r="15"/></svg></span>
+            <span><strong id="pill-days">–</strong><small>/ 7</small></span>
+          </button>
+        </div>
       </header>
 
       <div id="thread" class="thread" aria-live="polite"></div>

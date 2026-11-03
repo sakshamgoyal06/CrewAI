@@ -27,6 +27,9 @@ import type { MealDraft } from "./meals.js";
 import { activityDraftInput, buildActivityDraft, deleteActivity, type ActivityDraft } from "./activityLog.js";
 import { routineInput } from "./routine.js";
 import { answerRoutineCheck, routineCheckAnswerInput, setRoutine, type RoutineCheckCard } from "./routineCheck.js";
+import type { DayPlanCard } from "./dailyChat.js";
+import { dayLabel } from "./dailyChat.js";
+import { localDateKey } from "../nutrition/localDate.js";
 import { cardHistoryNote, emptyCardStates, loadCardStates, type CardStates } from "./chatCards.js";
 import { buildTurnContext, legacyTurnContext, systemPrompt, usingLegacyPrompt, type TurnLoops } from "./chatPrompt.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
@@ -185,7 +188,8 @@ export type ChatCard =
   | HevyProposalCard
   | RcaCard
   | CalorieReviewCard
-  | InterventionCard;
+  | InterventionCard
+  | DayPlanCard;
 
 export type ChatReply = {
   text: string;
@@ -976,13 +980,14 @@ export function budgetReply(stats: Pick<TurnStats, "cards" | "changed" | "tools"
   return "That took too long and I couldn't finish it. Try again in a moment, or ask it in a smaller piece.";
 }
 
-export async function loadChatHistory(userProfileId: string, limit = HISTORY_MESSAGES): Promise<ChatHistoryRow[]> {
-  const { data, error } = await supabase
+/** The newest `limit` rows, oldest first; with `range`, only rows in [from, to) (one local day). */
+export async function loadChatHistory(userProfileId: string, limit = HISTORY_MESSAGES, range?: { from: string; to: string }): Promise<ChatHistoryRow[]> {
+  let q = supabase
     .from("health_chat_messages")
     .select("role, content, cards, created_at, turn_id, status")
-    .eq("user_profile_id", userProfileId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
+    .eq("user_profile_id", userProfileId);
+  if (range) q = q.gte("created_at", range.from).lt("created_at", range.to);
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(limit);
   if (error || !data) {
     return [];
   }
@@ -1194,21 +1199,33 @@ export async function recordChatTurn(
 /**
  * History as API messages. Starts with a user turn; each past assistant turn ends with one note
  * per card giving its live state; messages the app posted on its own (routine and gym checks,
- * the weekly root-cause card) are marked as such; and consecutive turns of one role (an answer,
- * then a check posted by the scheduler) are merged, so the thread alternates cleanly.
+ * the weekly root-cause card, the morning plan) are marked as such; and consecutive turns of one
+ * role (an answer, then a check posted by the scheduler) are merged, so the thread alternates
+ * cleanly. Given a timezone, the first message of each local day starts with its date ("[Tue 4
+ * Nov]"): the app shows one day per thread, but the model reads across the split, and the marker
+ * is what tells it which "had eggs" was yesterday. Dates are absolute so the prefix stays cached.
  */
 export function historyToMessages(
-  history: Array<{ role: "user" | "assistant"; content: string; cards?: ChatCard[]; turnId?: string | null }>,
+  history: Array<{ role: "user" | "assistant"; content: string; cards?: ChatCard[]; turnId?: string | null; createdAt?: string }>,
   states: CardStates = emptyCardStates(),
+  timezone?: string,
 ): Anthropic.MessageParam[] {
   const out: Array<{ role: "user" | "assistant"; content: string }> = [];
+  let lastDay: string | null = null;
   for (const h of history) {
     if (!h.content.trim()) continue;
     if (out.length === 0 && h.role !== "user") continue;
     const cards = h.cards ?? [];
     const notes = h.role === "assistant" ? cards.map((c) => cardHistoryNote(c, states)) : [];
-    const automatic = h.role === "assistant" && h.turnId === null && cards.some((c) => c.type === "workout_check" || c.type === "routine_check" || c.type === "rca");
-    const body = [automatic ? "[Posted by the app on its own, not in reply to the person]" : "", h.content, ...notes].filter(Boolean).join("\n");
+    const automatic =
+      h.role === "assistant" &&
+      (cards.some((c) => c.type === "day_plan") ||
+        (h.turnId === null && cards.some((c) => c.type === "workout_check" || c.type === "routine_check" || c.type === "rca")));
+    const at = timezone && h.createdAt ? Date.parse(h.createdAt) : Number.NaN;
+    const day = Number.isNaN(at) ? null : localDateKey(new Date(at), timezone);
+    const marker = day && day !== lastDay ? `[${dayLabel(day)}]` : "";
+    if (day) lastDay = day;
+    const body = [marker, automatic ? "[Posted by the app on its own, not in reply to the person]" : "", h.content, ...notes].filter(Boolean).join("\n");
     const last = out.at(-1);
     if (last && last.role === h.role) last.content = `${last.content}\n\n${body}`;
     else out.push({ role: h.role, content: body });
@@ -1275,7 +1292,7 @@ export async function runHealthChat(ctx: ActionContext, userText: string, option
   if (!history) {
     const past = historyWindow(completedTurns(await loadChatHistory(ctx.userProfileId)), new Date(now));
     const states = await loadCardStates(ctx.userProfileId, past.flatMap((h) => h.cards)).catch(() => emptyCardStates());
-    history = historyToMessages(past, states);
+    history = historyToMessages(past, states, ctx.timezone);
   }
 
   const start = await beginTurn(ctx.userProfileId, turnId, userText, now);

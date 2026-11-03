@@ -48,6 +48,7 @@ import {
 import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from "./events.js";
 import { loadChatHistory, runHealthChat, type ChatStreamEvent } from "./chat.js";
 import { hydrateCard, loadCardStates } from "./chatCards.js";
+import { isDateKey, listChatDays, localDayRange, tryDayPlan } from "./dailyChat.js";
 import { editLine, forgetLine, loadCoachMemory, MEMORY_MAX_CHARS, MEMORY_MAX_LINES, memoryToday, rememberLine } from "./coachMemory.js";
 import {
   activityDraftInput,
@@ -361,13 +362,23 @@ export function createHealthAppRouter(): express.Router {
 
   router.get(
     "/chat",
-    route("chat-history", async (ctx) => {
-      const messages = await loadChatHistory(ctx.userProfileId, 50);
+    route("chat-history", async (ctx, req) => {
+      // One day per thread: today by default (opened with the day's plan), or ?date= for a past day.
+      const today = localDateKey(new Date(), ctx.timezone);
+      const date = isDateKey(req.query.date) && req.query.date <= today ? req.query.date : today;
+      if (date === today) await tryDayPlan(ctx.userProfileId, ctx.timezone);
+      const messages = await loadChatHistory(ctx.userProfileId, 200, localDayRange(date, ctx.timezone));
       // Every card shows its live state (logged, answered, applied), whatever phone it's opened on.
       const states = await loadCardStates(ctx.userProfileId, messages.flatMap((m) => m.cards));
       for (const m of messages) m.cards = m.cards.map((c) => hydrateCard(c, states));
-      return { body: { messages } };
+      return { body: { messages, date, today } };
     }),
+  );
+
+  /** The days before today that have chat, newest first, for the Past days screen. */
+  router.get(
+    "/chat/days",
+    route("chat-days", async (ctx) => ({ body: { days: await listChatDays(ctx.userProfileId, ctx.timezone) } })),
   );
 
   router.post(
