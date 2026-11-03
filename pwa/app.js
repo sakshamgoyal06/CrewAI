@@ -22,7 +22,7 @@ const store = {
 };
 
 const state = {
-  snapshot: null, sending: false, historySig: null, trainingLoaded: false,
+  snapshot: null, sending: false, sheetStack: [], overlayDepth: 0, ignorePop: false, historySig: null, trainingLoaded: false,
   history: null, selectedDate: null, open: new Set(), trend: { metric: "calories", range: 30, bodyRange: 90 },
 };
 // Last good responses, so a cold open paints instantly and the network only fills in changes.
@@ -208,18 +208,33 @@ function showShell() {
 
 const VIEWS = ["coach", "today", "progress", "you"];
 /** Old links (and the Android app) still say #tracker; that page is now Today. */
+const currentView = () => VIEWS.find((v) => !$(`view-${v}`).hidden) || "coach";
 const viewFromHash = (h) => { const v = h.replace("#", ""); return v === "tracker" ? "today" : VIEWS.includes(v) ? v : "coach"; };
 
-function setView(view) {
+/**
+ * Coach is home. Leaving it for another tab adds one history entry, so the phone's back button
+ * returns to Coach (and only exits from Coach); hopping between the other tabs reuses that entry.
+ * fromHistory: the browser already moved (back/forward), so only draw.
+ */
+function setView(view, { fromHistory = false } = {}) {
   if (!VIEWS.includes(view)) view = "coach";
-  if (state.poppingOverlay) { afterClose(() => setView(view)); return; }
+  if (state.poppingOverlay) { afterClose(() => setView(view, { fromHistory })); return; }
+  if (!fromHistory && location.hash !== `#${view}`) {
+    const onTab = !!history.state?.tab;
+    if (view === "coach" && onTab) {
+      // Step back onto the Coach entry instead of stacking a new one; draw now, ignore the echo.
+      state.ignorePop = true;
+      history.back();
+    } else if (view === "coach") history.replaceState(null, "", "#coach");
+    else if (onTab) history.replaceState({ tab: true }, "", `#${view}`);
+    else history.pushState({ tab: true }, "", `#${view}`);
+  }
   for (const v of VIEWS) $(`view-${v}`).hidden = v !== view;
   for (const t of document.querySelectorAll(".tab")) {
     t.classList.toggle("active", t.dataset.view === view);
     t.setAttribute("aria-current", t.dataset.view === view ? "page" : "false");
   }
-  if (view !== "coach") document.body.classList.remove("typing");
-  if (location.hash !== `#${view}`) history.replaceState(null, "", `#${view}`);
+  if (view !== "coach") document.body.classList.remove("composing");
   if (view !== "coach") window.scrollTo(0, 0);
   if (view === "today" || view === "progress") {
     // Hevy history is several slow calls; only fetch it once a tracker page is actually opened.
@@ -267,10 +282,36 @@ function renderYou() {
     : "Set a target and a deadline";
   const r = s?.routine || [];
   $("you-routine").textContent = r.length ? r.map((i) => i.label).join(" · ") : "Walks, gym, swims, sports and reminders";
-  if (!renderYou.loaded) {
-    renderYou.loaded = true;
-    api("/account").then((a) => { $("you-who").textContent = a.email || a.name || "Signed in"; }).catch(() => { renderYou.loaded = false; });
+  // Warm the screens this menu opens, so Notifications and the account screen draw at once.
+  withCache("/account", (a) => { $("you-who").textContent = a.email || a.name || "Signed in"; });
+  fetchCached("/push").catch(() => {});
+  fetchCached("/billing").catch(() => {});
+}
+
+// ---------- cached reads for the settings screens ----------
+
+/** Last answer per path, in memory only (it can hold token labels, so never localStorage). */
+const getCache = new Map();
+const inflight = new Map();
+
+/** GET path once at a time; the answer lands in getCache. */
+function fetchCached(path) {
+  if (!inflight.has(path)) {
+    const p = api(path).then((r) => { getCache.set(path, r); return r; }).finally(() => inflight.delete(path));
+    inflight.set(path, p);
   }
+  return inflight.get(path);
+}
+
+/**
+ * Paint from the last answer straight away, then again when a fresh one arrives, but only if it
+ * changed, so a screen being edited isn't redrawn under the finger. onError runs only with no cache.
+ */
+function withCache(path, paint, onError) {
+  const had = getCache.get(path);
+  if (had) paint(had);
+  fetchCached(path).then((r) => { if (!had || JSON.stringify(r) !== JSON.stringify(had)) paint(r); })
+    .catch((err) => { if (!had) onError?.(err); });
 }
 
 // ---------- snapshot ----------
@@ -1747,6 +1788,8 @@ function notificationsSection() {
   let busy = false;
   const savePrefs = async (patch) => {
     prefs = { ...prefs, ...patch };
+    const cached = getCache.get("/push");
+    if (cached) getCache.set("/push", { ...cached, prefs });
     try { await api("/push/prefs", { method: "POST", body: JSON.stringify(patch) }); } catch (err) { toast(err.message); }
   };
 
@@ -1775,12 +1818,14 @@ function notificationsSection() {
     for (const n of [kindsLabel, kinds, quietLabel, quiet]) n.hidden = !on;
   }
 
-  api("/push").then((r) => {
-    prefs = r.prefs || prefs;
+  const paintAll = () => {
     const time = (key) => el("input", { class: "time-field", type: "time", value: prefs[key], onchange: (e) => savePrefs({ [key]: e.target.value }) });
     quiet.replaceChildren(settingRow("From", null, time("quietStart")), settingRow("Until", null, time("quietEnd")));
     paint();
-  }).catch(() => paint());
+  };
+  // The phone's own switch doesn't need the server: draw it now, then fill in the saved choices.
+  if (!getCache.has("/push")) paintAll();
+  withCache("/push", (r) => { prefs = r.prefs || prefs; paintAll(); });
   return wrap;
 }
 
@@ -1830,7 +1875,10 @@ function planSection(box) {
   const daysLeft = (iso) => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 86_400_000));
   async function paint() {
     let b;
-    try { b = await api("/billing"); } catch { box.replaceChildren(); return; }
+    try { b = await api("/billing"); getCache.set("/billing", b); } catch { box.replaceChildren(); return; }
+    draw(b);
+  }
+  function draw(b) {
     if (!b.enabled) { box.replaceChildren(); return; }
     const e = b.entitlement;
     const buy = (planId) => el("button", { class: planId === "yearly" ? "btn primary block" : "btn block", type: "button", onclick: async (ev) => {
@@ -1856,7 +1904,7 @@ function planSection(box) {
     }
     box.replaceChildren(...rows);
   }
-  paint();
+  withCache("/billing", draw, () => box.replaceChildren());
 }
 
 /**
@@ -1927,6 +1975,7 @@ function accountSection() {
       try {
         await api("/account/food", { method: "PUT", body: JSON.stringify({ diet: value.diet || "non_vegetarian", dietNote: value.diet === "custom" ? value.dietNote.trim() : null, foodAvoid: value.foodAvoid }) });
         toast("Saved. The coach will stick to it.");
+        fetchCached("/account").catch(() => {});
       } catch (err) { toast(err.message); save.disabled = false; }
     } }, "Save food preferences");
     food.replaceChildren(foodPrefsEditor(el, value, () => { save.disabled = false; }), save);
@@ -1937,7 +1986,7 @@ function accountSection() {
       hevy.replaceChildren(
         el("p", { class: "hint" }, "Connected. Workouts and routines come from your Hevy account."),
         el("button", { class: "link", type: "button", onclick: async () => {
-          try { await api("/integrations/hevy", { method: "DELETE" }); toast("Hevy disconnected."); paintHevy(false); } catch (err) { toast(err.message); }
+          try { await api("/integrations/hevy", { method: "DELETE" }); toast("Hevy disconnected."); paintHevy(false); fetchCached("/account").catch(() => {}); } catch (err) { toast(err.message); }
         } }, "Disconnect Hevy"),
       );
       return;
@@ -1948,6 +1997,7 @@ function accountSection() {
         toast("Hevy connected.");
         state.trainingLoaded = false;
         paintHevy(true);
+        fetchCached("/account").catch(() => {});
         refresh();
       }) },
         el("p", { class: "hint" }, "Paste your Hevy API key (Hevy Pro: hevy.com → Settings → Developer). I read workouts and only change routines when you tap Apply."),
@@ -1997,18 +2047,15 @@ function accountSection() {
     );
   }
 
-  async function load() {
-    try {
-      const a = await api("/account");
-      who.textContent = a.email ? `Signed in as ${a.email}` : a.name ? `Signed in as ${a.name}` : "Signed in with an app token.";
-      paintHevy(a.hevyConnected);
-      paintHc(a.tokens || []);
-      paintFood(a.food);
-    } catch (err) {
-      who.textContent = err.message;
-    }
+  function draw(a) {
+    who.textContent = a.email ? `Signed in as ${a.email}` : a.name ? `Signed in as ${a.name}` : "Signed in with an app token.";
+    paintHevy(a.hevyConnected);
+    paintHc(a.tokens || []);
+    paintFood(a.food);
   }
-  load();
+  // First open draws from the copy the You tab fetched; later changes re-read it.
+  const load = () => fetchCached("/account").then(draw).catch((err) => { who.textContent = err.message; });
+  withCache("/account", draw, (err) => { who.textContent = err.message; });
   return wrap;
 }
 
@@ -2513,6 +2560,8 @@ const SHEET_ONLY = new Set(["quick"]);
 const AUTOFOCUS = new Set(["meal", "steps", "checkin"]);
 
 function hideOverlay() {
+  state.sheetStack = [];
+  state.overlayDepth = 0;
   state.sheetCleanup?.();
   state.sheetCleanup = null;
   $("sheet").hidden = true;
@@ -2520,14 +2569,23 @@ function hideOverlay() {
   document.body.classList.remove("screen-open");
 }
 
+/** Closes every open screen at once (the ×, a save, or a jump elsewhere). */
 function closeSheet() {
   if ($("sheet").hidden) return;
+  const depth = history.state?.overlay ? state.overlayDepth || 1 : 0;
   hideOverlay();
-  if (history.state?.overlay) {
-    // Pop the entry openSheet pushed; anything that navigates meanwhile waits for it (see setView).
+  if (depth) {
+    // Pop the entries openSheet pushed; anything that navigates meanwhile waits for it (see setView).
     state.poppingOverlay = true;
-    history.back();
+    history.go(-depth);
   }
+}
+
+/** One step back: the screen underneath if a screen was opened from another, else close. */
+function backSheet() {
+  if ($("sheet").hidden) return;
+  if (history.state?.overlay) history.back();
+  else closeSheet();
 }
 
 window.addEventListener("popstate", () => {
@@ -2538,8 +2596,17 @@ window.addEventListener("popstate", () => {
     next?.();
     return;
   }
-  // The phone's back button (or a swipe) while a screen or sheet is open: just close it.
-  if (!$("sheet").hidden) hideOverlay();
+  if (state.ignorePop) { state.ignorePop = false; return; }
+  // The phone's back button (or a swipe) while a screen is open: go to the one underneath, or close.
+  if (!$("sheet").hidden) {
+    state.sheetStack.pop();
+    state.overlayDepth = Math.max(0, (state.overlayDepth || 1) - 1);
+    const under = state.sheetStack.at(-1);
+    if (under && state.overlayDepth > 0) openSheet(under, { fromHistory: true });
+    else hideOverlay();
+    return;
+  }
+  setView(viewFromHash(location.hash), { fromHistory: true });
 });
 
 /** Runs fn once a closing overlay's history entry has been popped (at once if none is pending). */
@@ -2549,7 +2616,7 @@ function afterClose(fn) {
   state.afterPop = () => { prev?.(); fn(); };
 }
 
-function openSheet(kind) {
+function openSheet(kind, { fromHistory = false } = {}) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
@@ -2560,7 +2627,22 @@ function openSheet(kind) {
   sheet.classList.toggle("bottom", !screen);
   $("sheet-title").textContent = titles[kind];
   body.replaceChildren(SHEETS[kind]());
-  if (sheet.hidden && !history.state?.overlay) history.pushState({ overlay: true }, "", location.hash || "#coach");
+  if (!fromHistory) {
+    const stack = state.sheetStack;
+    if (sheet.hidden) {
+      state.sheetStack = [kind];
+      state.overlayDepth = 1;
+      history.pushState({ overlay: 1 }, "", location.hash || "#coach");
+    } else if (stack.at(-1) === "quick") {
+      // A pick from the + list takes the list's place, so back goes to the page, not the list.
+      stack[stack.length - 1] = kind;
+    } else if (stack.at(-1) !== kind) {
+      // A screen opened from another screen: back returns to the first one.
+      stack.push(kind);
+      state.overlayDepth += 1;
+      history.pushState({ overlay: state.overlayDepth }, "", location.hash || "#coach");
+    }
+  }
   sheet.hidden = false;
   sheet.scrollTop = 0;
   $("scrim").hidden = screen;
@@ -2825,7 +2907,7 @@ $("photo-input").addEventListener("change", (e) => {
   sendPhoto(file);
 });
 $("sheet-close").addEventListener("click", closeSheet);
-$("sheet-back").addEventListener("click", closeSheet);
+$("sheet-back").addEventListener("click", backSheet);
 $("scrim").addEventListener("click", closeSheet);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
 document.addEventListener("click", (e) => {
@@ -2835,13 +2917,30 @@ document.addEventListener("click", (e) => {
 
 $("input").addEventListener("input", autosize);
 // While typing, the tab bar steps aside so the composer sits right on the keyboard.
-$("input").addEventListener("focus", () => document.body.classList.add("typing"));
+$("input").addEventListener("focus", () => document.body.classList.add("composing"));
 $("input").addEventListener("blur", () => setTimeout(() => {
-  if (document.activeElement !== $("input")) document.body.classList.remove("typing");
+  if (document.activeElement !== $("input")) document.body.classList.remove("composing");
 }, 120));
+// Android's back button hides the keyboard but leaves the box focused, which left the tab bar
+// hidden with no way back. When the keyboard goes away, let go of the box so the tabs return.
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  let fullHeight = vv.height;
+  let keyboardUp = false;
+  vv.addEventListener("resize", () => {
+    fullHeight = Math.max(fullHeight, vv.height);
+    if (vv.height < fullHeight - 150) { keyboardUp = true; return; }
+    if (keyboardUp) {
+      keyboardUp = false;
+      if (document.activeElement === $("input")) $("input").blur();
+    }
+  });
+  // A rotated screen has a new full height; start counting again.
+  screen.orientation?.addEventListener("change", () => { fullHeight = 0; keyboardUp = false; setTimeout(() => { fullHeight = vv.height; }, 300); });
+}
 // Tapping a composer button mustn't blur the textarea first, or the layout shifts under the finger.
 for (const id of ["send", "photo", "quick"]) $(id).addEventListener("pointerdown", (e) => { if (document.activeElement === $("input")) e.preventDefault(); });
-window.addEventListener("hashchange", () => setView(viewFromHash(location.hash)));
+window.addEventListener("hashchange", () => { if (viewFromHash(location.hash) !== currentView()) setView(viewFromHash(location.hash), { fromHistory: true }); });
 $("input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing && matchMedia("(pointer: fine)").matches) {
     e.preventDefault();
@@ -2884,7 +2983,13 @@ async function start() {
   if (!(await ensureOnboarded())) return;
   showShell();
   $("greeting").textContent = greeting();
-  setView(viewFromHash(location.hash));
+  // Opened straight onto another tab (a link, the Android app): put Coach underneath so back lands there.
+  const first = viewFromHash(location.hash);
+  if (first !== "coach" && !history.state?.tab) {
+    history.replaceState(null, "", "#coach");
+    history.pushState({ tab: true }, "", `#${first}`);
+  }
+  setView(first, { fromHistory: true });
   renderChips(null);
   const cachedChat = store.get(CHAT_CACHE_KEY, null);
   if (Array.isArray(cachedChat)) renderHistory(cachedChat);
