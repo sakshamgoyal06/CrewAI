@@ -1734,7 +1734,8 @@ function memorySection() {
 
   function row(line) {
     const li = el("li", { class: "memory-line" });
-    const text = el("span", { class: "main" }, line.text);
+    const text = el("span", { class: "main" }, line.text,
+      line.expiresOn ? el("span", { class: "memory-until" }, `Until ${new Date(`${line.expiresOn}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}`) : null);
     const edit = el("button", { class: "link small", type: "button", onclick: () => {
       const box = el("input", { class: "field", value: line.text, maxlength: "200" });
       const save = el("button", { class: "link small", type: "button", onclick: async () => {

@@ -37,6 +37,7 @@ function snap(over: Partial<HealthSnapshot> = {}): HealthSnapshot {
     hevyConnected: true,
     gym: { time: "18:30", checkDelayMin: 180, checkAt: "21:30" },
     workoutChecks: [],
+    recentSkips: [],
     goal: null,
     checkins: [],
     meals: [{ mealSessionId: "a", slot: "breakfast", text: "oats", calories: 600, proteinG: 60, loggedAt: "" }],

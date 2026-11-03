@@ -28,7 +28,7 @@ import { activityDraftInput, buildActivityDraft, deleteActivity, type ActivityDr
 import { routineInput } from "./routine.js";
 import { answerRoutineCheck, routineCheckAnswerInput, setRoutine, type RoutineCheckCard } from "./routineCheck.js";
 import { cardHistoryNote, emptyCardStates, loadCardStates, type CardStates } from "./chatCards.js";
-import { buildTurnContext, legacyTurnContext, systemPrompt, usingLegacyPrompt } from "./chatPrompt.js";
+import { buildTurnContext, legacyTurnContext, systemPrompt, usingLegacyPrompt, type TurnLoops } from "./chatPrompt.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
 import {
   newRoutineInput,
@@ -48,10 +48,10 @@ import {
   routineForModel,
   searchTemplates,
 } from "./training.js";
-import { cardFromReport, runRca, type RcaCard } from "./rca.js";
+import { cardFromReport, listReports, runRca, type RcaCard } from "./rca.js";
 import { loadCalorieReview, type CalorieReview } from "./calorieTarget.js";
 import { loadPersonalDetails } from "./onboarding.js";
-import { forgetLine, loadCoachMemory, rememberLine, type MemoryLine } from "./coachMemory.js";
+import { forgetLine, loadCoachMemory, memoryToday, rememberLine, type MemoryLine } from "./coachMemory.js";
 import { enqueueEvents } from "./events.js";
 import { randomUUID } from "node:crypto";
 import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
@@ -123,7 +123,29 @@ export function pickChatModel(text: string, env: NodeJS.ProcessEnv = process.env
   return env.MAGNUS_HEALTH_CHAT_FAST_MODEL?.trim() || "claude-haiku-5-5";
 }
 
-const HISTORY_MESSAGES = 20;
+/** Rows read for a turn; the window below decides how many of them the model sees. */
+const HISTORY_MESSAGES = 60;
+
+/**
+ * The history window. The model sees the last ~36 hours of chat, measured from a start that only
+ * moves on 12-hour boundaries, and at most HISTORY_MAX rows. Past the cap the oldest rows go in
+ * blocks of HISTORY_BLOCK, not one by one. Both keep the start of the history the same from one
+ * turn to the next, which is what lets it be read from the prompt cache instead of paid in full.
+ * A person back after a quiet spell still gets their last HISTORY_MIN rows, however old.
+ */
+export const HISTORY_WINDOW = { ageMs: 36 * 3_600_000, stepMs: 12 * 3_600_000, max: 24, block: 8, min: 6, rowChars: 1_500 };
+
+export function historyWindow<T extends { createdAt: string; content: string }>(rows: T[], now: Date, w = HISTORY_WINDOW): T[] {
+  const start = Math.floor((now.getTime() - w.ageMs) / w.stepMs) * w.stepMs;
+  let kept = rows.filter((r) => {
+    const t = Date.parse(r.createdAt);
+    return Number.isNaN(t) || t >= start;
+  });
+  if (kept.length > w.max) kept = kept.slice(Math.ceil((kept.length - w.max) / w.block) * w.block);
+  if (kept.length < w.min) kept = rows.slice(-w.min);
+  // One very long row (a pasted plan, a long reply) shouldn't crowd out the rest.
+  return kept.map((r) => (r.content.length > w.rowChars ? { ...r, content: `${r.content.slice(0, w.rowChars - 1).trimEnd()}…` } : r));
+}
 
 /**
  * Budgets for one turn. The app stops waiting at 90 s, so the server must be done well before
@@ -513,7 +535,13 @@ const toolDefinitions: Anthropic.Tool[] = [
       "Keep one short fact about the person for future turns (a schedule, an injury, a food they can't stand, how they like to be coached). They see and edit the list on the You tab. Not for meals, numbers the app already has, or anything you'd log instead.",
     input_schema: {
       type: "object",
-      properties: { text: { type: "string", description: "One line, third person, under 200 characters, e.g. 'Travels Mon-Wed most weeks; hotel breakfasts.'" } },
+      properties: {
+        text: { type: "string", description: "One line, third person, under 200 characters, e.g. 'Travels Mon-Wed most weeks; hotel breakfasts.'" },
+        until: {
+          type: "string",
+          description: "Last local date (YYYY-MM-DD) the fact holds, for anything time-bound ('travelling till Sunday', 'knee rest this week'). Leave out for lasting facts.",
+        },
+      },
       required: ["text"],
     },
   },
@@ -639,12 +667,13 @@ export async function runTool(
       };
     }
     case "remember": {
-      const r = await rememberLine(ctx.userProfileId, (input as { text?: unknown })?.text, "coach");
-      return { result: r.ok ? { ok: true, remembered: r.line.text, alreadyKnown: r.duplicate, lines: r.count } : { ok: false, error: r.error, lines: r.count, hint: r.error === "memory_full" ? "Forget something first; the list is capped." : "Nothing to remember." } };
+      const i = input as { text?: unknown; until?: unknown } | null;
+      const r = await rememberLine(ctx.userProfileId, i?.text, "coach", { until: i?.until, today: memoryToday(ctx.timezone, ctx.now) });
+      return { result: r.ok ? { ok: true, remembered: r.line.text, ...(r.line.expiresOn ? { until: r.line.expiresOn } : {}), alreadyKnown: r.duplicate, lines: r.count } : { ok: false, error: r.error, lines: r.count, hint: r.error === "memory_full" ? "Forget something first; the list is capped." : "Nothing to remember." } };
     }
     case "forget": {
       const text = (input as { text?: unknown })?.text;
-      const r = await forgetLine(ctx.userProfileId, typeof text === "string" ? text : "");
+      const r = await forgetLine(ctx.userProfileId, typeof text === "string" ? text : "", memoryToday(ctx.timezone, ctx.now));
       return { result: r.ok ? { ok: true, forgot: r.forgotten.text, lines: r.count } : { ok: false, error: r.error, candidates: r.candidates } };
     }
     case "delete_activity": {
@@ -1031,7 +1060,38 @@ type TurnStats = {
   budgetHit?: "wall" | "rounds" | "tokens";
   /** Why the turn moved from the fast model to the main one, if it did. */
   escalated?: "no_tool" | "coaching_tool" | "refusal";
+  /** How big each prompt layer was, to see where the input tokens go. */
+  layers?: { contextChars: number; historyChars: number; historyMessages: number };
 };
+
+/** The per-turn context block as the first part of the newest user message. */
+export function contextBlock(turnContext: string): Anthropic.TextBlockParam {
+  return { type: "text", text: `<context>\n${turnContext}\n</context>` };
+}
+
+/**
+ * A copy of history whose last message carries a cache marker, so the whole prefix up to it
+ * (tools, system prompt, history) is cached: the next turn reads it instead of paying for it,
+ * and so do later rounds of a tool turn.
+ */
+export function withHistoryCacheMarker(history: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
+  if (!history.length) return history;
+  const last = history[history.length - 1]!;
+  const blocks: Anthropic.ContentBlockParam[] = typeof last.content === "string" ? [{ type: "text", text: last.content }] : [...last.content];
+  const tail = blocks[blocks.length - 1];
+  if (!tail) return history;
+  blocks[blocks.length - 1] = { ...tail, cache_control: { type: "ephemeral" } } as Anthropic.ContentBlockParam;
+  return [...history.slice(0, -1), { role: last.role, content: blocks }];
+}
+
+function messageChars(messages: Anthropic.MessageParam[]): number {
+  let n = 0;
+  for (const m of messages) {
+    if (typeof m.content === "string") n += m.content.length;
+    else for (const b of m.content) n += b.type === "text" ? b.text.length : JSON.stringify(b).length;
+  }
+  return n;
+}
 
 function addUsage(stats: TurnStats, usage: Anthropic.Usage | undefined): void {
   if (!usage) return;
@@ -1056,6 +1116,7 @@ function logTurn(userProfileId: string, stats: TurnStats, outcome: "ok" | "refus
     guardFired: stats.guardFired,
     ...(stats.budgetHit ? { budgetHit: stats.budgetHit } : {}),
     ...(stats.escalated ? { escalated: stats.escalated } : {}),
+    ...(stats.layers ?? {}),
     ...(error ? { error: error.slice(0, 300) } : {}),
   };
   logger.info({ userProfileId, wallMs: Math.round(wallMs), ...props }, "health chat turn");
@@ -1172,7 +1233,7 @@ export async function runHealthChat(ctx: ActionContext, userText: string, option
 
   let history = options.history;
   if (!history) {
-    const past = completedTurns(await loadChatHistory(ctx.userProfileId));
+    const past = historyWindow(completedTurns(await loadChatHistory(ctx.userProfileId)), new Date(now));
     const states = await loadCardStates(ctx.userProfileId, past.flatMap((h) => h.cards)).catch(() => emptyCardStates());
     history = historyToMessages(past, states);
   }
@@ -1201,12 +1262,19 @@ export async function runHealthChat(ctx: ActionContext, userText: string, option
   }
 }
 
+/** The experiment they agreed to try in the weekly root-cause card, if one is running. */
+async function loadTurnLoops(userProfileId: string): Promise<TurnLoops> {
+  const trying = (await listReports(userProfileId, 3)).find((r) => r.status === "trying");
+  return trying ? { experiment: { text: trying.experiment, startedAt: trying.startedAt } } : {};
+}
+
 /** The model loop for one turn: rounds of tool calls until the coach answers in text. */
 /** What a turn reads and calls; evals swap these for a fixture so the model is the only live part. */
 export type TurnDeps = {
   snapshot?: HealthSnapshot | null;
   details?: string | null;
   memory?: MemoryLine[];
+  loops?: TurnLoops;
   tool?: (name: string, input: unknown) => Promise<ToolOutcome>;
   onEvent?: (event: ChatStreamEvent) => void;
 };
@@ -1224,12 +1292,12 @@ async function answerTurn(
 ): Promise<TurnAnswer> {
   const now = new Date(ctx.now ?? Date.now());
   // One snapshot per turn: it feeds the context block and answers get_status without a second load.
-  const [details, memory, snapshot] = await Promise.all([
+  const [details, memory, snapshot, loops] = await Promise.all([
     deps.details !== undefined ? Promise.resolve(deps.details) : loadPersonalDetails(ctx.userProfileId).catch(() => null),
     deps.memory !== undefined
       ? Promise.resolve(deps.memory)
       : Promise.resolve()
-          .then(() => loadCoachMemory(ctx.userProfileId))
+          .then(() => loadCoachMemory(ctx.userProfileId, memoryToday(ctx.timezone, now)))
           .catch((err) => {
             logger.warn({ err: loggableError(err) }, "health chat memory load failed; answering without it");
             return [] as MemoryLine[];
@@ -1244,17 +1312,25 @@ async function answerTurn(
               logger.warn({ err: loggableError(err) }, "health chat snapshot failed; answering without the context block");
               return null;
             }),
+    deps.loops !== undefined
+      ? Promise.resolve(deps.loops)
+      : usingLegacyPrompt()
+        ? Promise.resolve({} as TurnLoops)
+        : loadTurnLoops(ctx.userProfileId).catch(() => ({}) as TurnLoops),
   ]);
-  const turnContext = snapshot ? buildTurnContext(snapshot, details, now, memory) : legacyTurnContext(details, now, ctx.timezone, memory);
+  const turnContext = snapshot ? buildTurnContext(snapshot, details, now, memory, loops) : legacyTurnContext(details, now, ctx.timezone, memory);
   const tool = (name: string, input: unknown) =>
     name === "get_status" && snapshot && !deps.tool
       ? Promise.resolve({ result: statusForModel(snapshot) })
       : (deps.tool ?? ((n: string, i: unknown) => runTool(ctx, n, i)))(name, input);
   let model = pickChatModel(userText);
+  // The context block rides at the head of the newest message, after the cache marker, so the
+  // system prompt and the history before it stay byte-identical turn to turn and read from cache.
   const messages: Anthropic.MessageParam[] = [
-    ...history,
-    { role: "user", content: userText },
+    ...withHistoryCacheMarker(history),
+    { role: "user", content: [contextBlock(turnContext), { type: "text", text: userText }] },
   ];
+  stats.layers = { contextChars: turnContext.length, historyChars: messageChars(history), historyMessages: history.length };
   const cards: ChatCard[] = [];
   let changed = false;
   let text = "";
@@ -1281,10 +1357,7 @@ async function answerTurn(
           {
             model,
             max_tokens: budget.maxTokens,
-            system: [
-              { type: "text", text: systemPrompt(), cache_control: { type: "ephemeral" } },
-              { type: "text", text: turnContext },
-            ],
+            system: [{ type: "text", text: systemPrompt(), cache_control: { type: "ephemeral" } }],
             tools,
             messages,
           },
@@ -1428,6 +1501,7 @@ export async function evalTurn(input: {
   snapshot: HealthSnapshot | null;
   details: string | null;
   memory?: MemoryLine[];
+  loops?: TurnLoops;
   tool: (name: string, input: unknown) => Promise<ToolOutcome>;
   now: Date;
   timezone: string;
@@ -1449,6 +1523,7 @@ export async function evalTurn(input: {
     snapshot: input.snapshot,
     details: input.details,
     memory: input.memory ?? [],
+    loops: input.loops ?? {},
     tool: input.tool,
   });
   return { reply, stats };

@@ -12,7 +12,8 @@ PWA  ──POST /chat/stream {text, turnId}──▶  router.ts  ──▶  chat
                                                               │ beginTurn: claim the turn id
                                                               │ answerTurn: model loop
                                                               │   load snapshot + details + memory (parallel)
-                                                              │   system = [SYSTEM_PROMPT (cached), context block]
+                                                              │   tools (cached) → system (cached) → history (cached)
+                                                              │   → newest message = <context>…</context> + their text
                                                               │   rounds: model → tool calls → results → model
                                                               │   stream text deltas and tool progress as SSE
                                                               │ save assistant row, mark user row ok
@@ -39,8 +40,10 @@ PWA  ──POST /chat/stream {text, turnId}──▶  router.ts  ──▶  chat
 
 ## What the model sees
 
-System prompt (`chatPrompt.ts`, one cached block) + a per-turn context block built from one
-`HealthSnapshot`:
+System prompt (`chatPrompt.ts`, one cached block), the history window, then the newest message,
+which starts with a per-turn `<context>` block built from one `HealthSnapshot`. The context sits
+after the history's cache marker on purpose: it changes every turn, so anything after it can't be
+cached, and nothing that comes before it changes.
 
 ```
 Now: 2026-11-03T08:00:00Z (Asia/Kolkata, local date 2026-11-03). Phase: steady.
@@ -53,12 +56,18 @@ Routine today: Morning walk done (Walking · 30 min); Gym pending (6:30 pm).
 This week: 3 of the last 7 days on track (goal 5); most missed: Protein (4 days).
 Last weigh-in: 81.9 kg on 2026-11-02, 22.8% body fat.
 Open check-ins: gym on 2026-11-01.
+Open loops: trying "Gym at 7 am" since 2026-10-30; skipped Evening gym on 2026-11-03 (knee hurts).
 Last Hevy workout: Push day on 2026-11-01.
 ```
 
 - **Phases** (`chatPhase`): no_goal, first_week, steady, off_track, deadline_passed. The prompt
   says what each one means for the reply.
-- **History** (`historyToMessages`): the last completed turns, each assistant message followed by
+- **History window** (`historyWindow`): completed rows from the last ~36 hours, counted from a start
+  that moves only on 12-hour boundaries; above 24 rows the oldest go in blocks of 8; after a
+  quiet spell the last 6 rows stay anyway; any row over 1,500 characters is cut. The start of the
+  history therefore stays the same between turns, and a cache marker on its last message lets the
+  next turn read it from cache.
+- **History** (`historyToMessages`): those turns, each assistant message followed by
   bracketed notes giving every past card's state from the database (`chatCards.ts`:
   `loadCardStates` + `cardHistoryNote`). Consecutive same-role rows are merged. App-posted rows
   (check-ins, with `turn_id` null) are prefixed `[Posted by the app on its own...]` so the model
@@ -67,7 +76,10 @@ Last Hevy workout: Push day on 2026-11-01.
   never disagree within a turn.
 - **Coach memory** (`coachMemory.ts`): up to 30 lines of 200 characters the coach adds with the
   `remember` tool and drops with `forget`. The list goes into every context block and is shown,
-  editable, on the You tab. Nothing is remembered that the person cannot read.
+  editable, on the You tab. Nothing is remembered that the person cannot read. A line can carry
+  `expires_on` (the tool's `until`): after that local date it drops out by itself.
+- **Open loops** (`openLoopsLine`): the root-cause experiment they're trying and what they skipped
+  this week with reasons, from existing tables; no model call.
 - **Legacy switch**: `MAGNUS_CHAT_PROMPT=legacy` restores the previous prompt and one-line context.
 
 ## State honesty
@@ -89,11 +101,12 @@ prompt need not:
 
 Every turn writes a `chat_turn` row to `health_app_events`: turn id, outcome (ok / budget / error),
 models used, rounds, each tool with its duration and ok flag, tokens (input, output, cache read,
-cache write), cards shown, whether anything changed, whether the guard fired, wall time. The query
+cache write), cards shown, whether anything changed, whether the guard fired, wall time, and the
+size of each prompt layer (`contextChars`, `historyChars`, `historyMessages`). The query
 in PR #140's description gives daily p95 latency, token totals and error counts.
 
 Cost levers, in order: the cached system prompt and tool schema (a cache marker on the last tool
-caches the whole prefix), fast-model routing for plain logs, the 6-round and 4096-token budgets,
+caches the whole prefix), the cached history (a marker on its last message), fast-model routing for plain logs, the 6-round and 4096-token budgets,
 and the context block replacing most `get_status` calls.
 
 ## Evals

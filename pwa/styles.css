@@ -768,6 +768,7 @@ body.screen-open { overflow: hidden; }
 .memory-list li.memory-line { align-items: flex-start; }
 .memory-list .main { flex: 1; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
 .memory-actions { display: flex; gap: 14px; flex-shrink: 0; padding-top: 2px; }
+.memory-until { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
 .memory-list li .field { flex: 1; }
 .memory-add { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
 .memory-add .field { flex: 1; min-width: 0; }

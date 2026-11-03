@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildTurnContext, chatPhase, LEGACY_SYSTEM_PROMPT, legacyTurnContext, SYSTEM_PROMPT, systemPrompt } from "./chatPrompt.js";
+import { buildTurnContext, chatPhase, LEGACY_SYSTEM_PROMPT, legacyTurnContext, openLoopsLine, SYSTEM_PROMPT, systemPrompt } from "./chatPrompt.js";
 import { FIXTURE_DETAILS, FIXTURE_NOW, fixtureSnapshot } from "./evals/fixture.js";
 
 describe("chatPhase", () => {
@@ -64,5 +64,21 @@ describe("systemPrompt", () => {
       expect(SYSTEM_PROMPT).toContain(must);
     }
     expect(SYSTEM_PROMPT.length).toBeLessThan(LEGACY_SYSTEM_PROMPT.length + 2500);
+  });
+});
+
+describe("open loops", () => {
+  it("names the running experiment and this week's skips with reasons, or nothing", () => {
+    expect(openLoopsLine(fixtureSnapshot())).toBeNull();
+    const s = fixtureSnapshot({
+      recentSkips: [
+        { localDate: "2026-11-03", label: "Evening gym", reason: "knee hurts" },
+        { localDate: "2026-11-01", label: "Morning walk", reason: null },
+      ],
+    });
+    expect(openLoopsLine(s, { experiment: { text: "Gym at 7 am instead of 6:30 pm", startedAt: "2026-10-30T04:00:00Z" } })).toBe(
+      'Open loops: trying "Gym at 7 am instead of 6:30 pm" since 2026-10-30; skipped Evening gym on 2026-11-03 (knee hurts), Morning walk on 2026-11-01.',
+    );
+    expect(buildTurnContext(s, null, FIXTURE_NOW)).toContain("Open loops: skipped Evening gym on 2026-11-03 (knee hurts)");
   });
 });
