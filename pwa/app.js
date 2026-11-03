@@ -634,6 +634,7 @@ function renderRoutineToday(d) {
   const list = $("routine-today");
   const items = d.routine || [];
   list.hidden = !items.length;
+  $("routine-edit").textContent = (state.snapshot?.routine || []).length ? "Edit routine" : "Set your routine: walks, gym, swims, sports";
   const today = state.history?.today;
   list.replaceChildren(...items.map((r) => {
     const mark = r.state === "done" ? "✓" : r.state === "skipped" ? "–" : "";
@@ -1336,7 +1337,7 @@ const NUDGES = [
 ];
 
 /** Settings: the weekly routine. Saving replaces it, and training days follow from it. */
-function routineSection() {
+function routineSection({ heading = true } = {}) {
   const items = fromServer(state.snapshot?.routine || []);
   let dirty = false;
   const save = el("button", { class: "btn block", type: "button", disabled: "" }, "Save routine");
@@ -1350,13 +1351,14 @@ function routineSection() {
       dirty = false;
       toast(r.lifting?.short ? `Saved. Your plan wants ${r.lifting.need} gym days a week.` : "Routine saved.");
       refresh();
+      if (!heading) closeSheet();
     } catch (err) {
       save.disabled = !dirty;
       toast(err.message.includes("routine_unavailable") ? "Routines need a quick database update first." : err.message);
     }
   });
   return el("div", { class: "stack" },
-    el("p", { class: "section-label" }, "Your routine"),
+    heading ? el("p", { class: "section-label" }, "Your routine") : null,
     el("p", { class: "hint" }, "I remind you before each one, tick it off when it's logged (Hevy for the gym, Health Connect or a tap for the rest), and ask if it's missing."),
     editor,
     save);
@@ -2114,7 +2116,7 @@ function openSheet(kind) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", quick: "Quick add", scan: "Scan a packet", review: "Your week" };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Settings", routine: "Your routine", quick: "Quick add", scan: "Scan a packet", review: "Your week" };
   $("sheet-title").textContent = titles[kind];
   body.replaceChildren(SHEETS[kind]());
   $("sheet").hidden = false;
@@ -2195,7 +2197,9 @@ const SHEETS = {
       ...[["meal", "Meal"], ["activity", "Activity"], ["steps", "Steps"], ["checkin", "Weigh-in"]].map(([k, l]) =>
         el("button", { class: "quick", type: "button", onclick: () => openSheet(k) }, el("span", {}, l))),
       el("button", { class: "quick", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, el("span", {}, "Photo")),
-      el("button", { class: "quick", type: "button", onclick: () => openSheet("scan") }, el("span", {}, "Barcode")));
+      el("button", { class: "quick", type: "button", onclick: () => openSheet("scan") }, el("span", {}, "Barcode")),
+      el("button", { class: "quick", type: "button", onclick: () => openSheet("routine") }, el("span", {}, "Routine")),
+      el("button", { class: "quick", type: "button", onclick: () => openSheet("settings") }, el("span", {}, "Settings")));
   },
 
   review() {
@@ -2278,6 +2282,10 @@ const SHEETS = {
       el("p", { class: "hint" }, "Same scale, same time of day (morning, before eating) keeps the trend honest."),
       el("button", { class: "btn primary block", type: "submit" }, "Save weigh-in"),
     );
+  },
+
+  routine() {
+    return routineSection({ heading: false });
   },
 
   settings() {
