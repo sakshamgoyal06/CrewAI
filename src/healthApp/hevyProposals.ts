@@ -251,7 +251,7 @@ export function buildWorkoutBody(input: z.infer<typeof workoutLogInput>): HevyPo
 
 // ---------- store ----------
 
-type ProposalRow = {
+export type ProposalRow = {
   id: string;
   kind: ProposalKind;
   routine_id: string | null;

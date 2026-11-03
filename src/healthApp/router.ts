@@ -47,6 +47,7 @@ import {
 } from "./onboarding.js";
 import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from "./events.js";
 import { loadChatHistory, runHealthChat } from "./chat.js";
+import { hydrateCard, loadCardStates } from "./chatCards.js";
 import {
   activityDraftInput,
   activitySaveInput,
@@ -78,7 +79,7 @@ import { photoMealInput } from "./photoMeal.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
 import { liftingGap, routineInput } from "./routine.js";
 import { answerRoutineCheck, routineCheckAnswerInput, setRoutine } from "./routineCheck.js";
-import { applyProposal, cardFromRow, discardProposal, getProposals } from "./hevyProposals.js";
+import { applyProposal, discardProposal } from "./hevyProposals.js";
 import { analyzeTraining } from "./training.js";
 import { HEVY_HISTORY_WEEKS, hevyHistoryCached, invalidateHevyHistory } from "./hevyHistory.js";
 import { buildHealthHistory, clampDays } from "./history.js";
@@ -92,10 +93,9 @@ import {
   sendNotification,
   subscriptionInput,
 } from "./push.js";
-import { cardFromReport, getReports, rcaResponseInput, respondToRca, runRca } from "./rca.js";
+import { cardFromReport, rcaResponseInput, respondToRca, runRca } from "./rca.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
 import { loadCalorieReview } from "./calorieTarget.js";
-import { getWorkoutChecks } from "./workoutCheckStore.js";
 
 const chatInput = z.object({ text: z.string().trim().min(1).max(2000), turnId: z.string().uuid().optional() });
 
@@ -352,40 +352,9 @@ export function createHealthAppRouter(): express.Router {
     "/chat",
     route("chat-history", async (ctx) => {
       const messages = await loadChatHistory(ctx.userProfileId, 50);
-      // Workout check cards show the day's current answer, not the status they were posted with.
-      const dates = messages.flatMap((m) => m.cards.flatMap((c) => (c.type === "workout_check" ? [c.date] : [])));
-      if (dates.length) {
-        const sorted = [...dates].sort();
-        const checks = await getWorkoutChecks(ctx.userProfileId, sorted[0]!, sorted[sorted.length - 1]!);
-        for (const m of messages) {
-          m.cards = m.cards.map((c) => {
-            const current = c.type === "workout_check" ? checks.get(c.date) : undefined;
-            return current && c.type === "workout_check" ? { ...c, status: current.status, reason: current.reason } : c;
-          });
-        }
-      }
-      // Hevy proposal cards show whether they've since been applied or discarded.
-      const ids = messages.flatMap((m) => m.cards.flatMap((c) => (c.type === "hevy_proposal" ? [c.proposalId] : [])));
-      if (ids.length) {
-        const rows = await getProposals(ctx.userProfileId, ids);
-        for (const m of messages) {
-          m.cards = m.cards.map((c) => {
-            const row = c.type === "hevy_proposal" ? rows.get(c.proposalId) : undefined;
-            return row ? cardFromRow(row) : c;
-          });
-        }
-      }
-      // Root-cause cards show whether the experiment was taken up, and how it went.
-      const rcaIds = messages.flatMap((m) => m.cards.flatMap((c) => (c.type === "rca" ? [c.reportId] : [])));
-      if (rcaIds.length) {
-        const reports = await getReports(ctx.userProfileId, rcaIds);
-        for (const m of messages) {
-          m.cards = m.cards.map((c) => {
-            const r = c.type === "rca" ? reports.get(c.reportId) : undefined;
-            return r ? cardFromReport(r) : c;
-          });
-        }
-      }
+      // Every card shows its live state (logged, answered, applied), whatever phone it's opened on.
+      const states = await loadCardStates(ctx.userProfileId, messages.flatMap((m) => m.cards));
+      for (const m of messages) m.cards = m.cards.map((c) => hydrateCard(c, states));
       return { body: { messages } };
     }),
   );

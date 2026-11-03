@@ -49,6 +49,7 @@ vi.mock("./actions.js", async (orig) => {
 });
 
 import { completedTurns, dropPhantomCardMentions, historyToMessages, mealDraftReply, runHealthChat, TURN_BUDGET } from "./chat.js";
+import { cardHistoryNote, emptyCardStates, hydrateCard } from "./chatCards.js";
 
 const ctx = { userProfileId: "profile-1", timezone: "UTC", now: new Date("2026-10-27T08:00:00Z") };
 
@@ -256,6 +257,7 @@ describe("card history notes", () => {
       servingAssumption: null,
     },
   };
+  const states = () => ({ ...emptyCardStates(), mealsLogged: new Map([["meal-1", { calories: 760 }]]) });
 
   it("tells the model whether an earlier meal card was logged", () => {
     const msgs = historyToMessages(
@@ -263,14 +265,44 @@ describe("card history notes", () => {
         { role: "user", content: "I had burrito bowl" },
         { role: "assistant", content: "Check the card, then tap Confirm & log.", cards: [meal] },
       ],
-      new Set(["meal-1"]),
+      states(),
     );
-    expect(msgs[1]!.content).toContain('[Meal card "Burrito bowl with rice, paneer, rajma", about 770 kcal: logged]');
+    expect(msgs[1]!.content).toContain('[Meal card "Burrito bowl with rice, paneer, rajma", about 770 kcal: logged, 760 kcal]');
     const unsaved = historyToMessages([
       { role: "user", content: "x" },
       { role: "assistant", content: "Check the card.", cards: [meal] },
     ]);
     expect(unsaved[1]!.content).toContain("never confirmed, not logged");
+  });
+
+  it("marks the app's own check-ins and merges them into the previous coach turn", () => {
+    const check = { type: "routine_check" as const, itemId: "walk", date: "2026-11-02", label: "Morning walk", activityKey: "walk", startTime: "07:00", durationMin: 30, status: "missing" as const };
+    const msgs = historyToMessages([
+      { role: "user", content: "9000 steps", turnId: "t1" },
+      { role: "assistant", content: "Saved.", cards: [], turnId: "t1" },
+      { role: "assistant", content: "Did the morning walk happen?", cards: [check], turnId: null },
+      { role: "user", content: "yes", turnId: "t2" },
+    ]);
+    expect(msgs.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+    expect(msgs[1]!.content).toBe(
+      "Saved.\n\n[Posted by the app on its own, not in reply to the person]\nDid the morning walk happen?\n[Routine check for Morning walk on 2026-11-02: not answered yet]",
+    );
+  });
+
+  it("shows a check as answered once its table says so", () => {
+    const check = { type: "routine_check" as const, itemId: "walk", date: "2026-11-02", label: "Morning walk", activityKey: "walk", startTime: "07:00", durationMin: 30, status: "missing" as const };
+    const st = { ...emptyCardStates(), routineChecks: new Map([["walk|2026-11-02", { itemId: "walk", localDate: "2026-11-02", label: "Morning walk", status: "skipped" as const, reason: "rain", activityId: null }]]) };
+    expect(cardHistoryNote(check, st)).toBe("[Routine check for Morning walk on 2026-11-02: answered: skipped, reason: rain]");
+    expect(hydrateCard(check, st)).toMatchObject({ status: "skipped", reason: "rain" });
+    const gym = { type: "workout_check" as const, date: "2026-11-01", gymTime: "18:30", status: "missing" as const };
+    expect(cardHistoryNote(gym, { ...emptyCardStates(), workoutChecks: new Map([["2026-11-01", { status: "found", reason: null }]]) })).toBe(
+      "[Gym check for 2026-11-01 (slot 18:30): resolved: workout found in Hevy]",
+    );
+  });
+
+  it("folds the logged state into meal and activity cards for the app", () => {
+    expect(hydrateCard(meal, states())).toEqual({ ...meal, saved: { calories: 760 } });
+    expect(hydrateCard(meal, emptyCardStates())).toBe(meal);
   });
 });
 
