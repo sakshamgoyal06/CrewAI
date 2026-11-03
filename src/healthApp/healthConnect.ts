@@ -43,6 +43,12 @@ export const healthConnectPayload = z
     sleep: z
       .array(z.object({ asleep_seconds: z.coerce.number().min(0).optional(), ...interval }).passthrough())
       .optional(),
+    /**
+     * Sent by the Magnus Android app: the whole span its hourly aggregates cover. Stored steps,
+     * distance and calories buckets in that span are replaced, so a sync whose buckets start at
+     * different minutes can't stack on top of an earlier one.
+     */
+    synced_range: z.object({ start_time: iso, end_time: iso }).optional(),
     resting_heart_rate: z
       .array(z.object({ bpm: z.coerce.number().min(20).max(250), time: iso }).passthrough())
       .optional(),
@@ -68,6 +74,9 @@ export type ScaleReading = {
 };
 
 const toIso = (s: string): string => new Date(s).toISOString();
+
+/** Kinds the Android app sends as hourly aggregates (the rest are individual records). */
+const AGGREGATED = ["steps", "distance", "active_calories"] as const;
 
 /** Walk-like sessions count toward walk minutes. */
 export function isWalkType(type: string): boolean {
@@ -215,6 +224,16 @@ export async function ingestHealthConnect(
   const EXTRA = new Set<ActivitySample["kind"]>(["active_calories", "sleep", "resting_hr"]);
   const core = samples.filter((s) => !EXTRA.has(s.kind));
   const extra = samples.filter((s) => EXTRA.has(s.kind));
+  if (payload.synced_range) {
+    const { error } = await supabase
+      .from("health_activity_samples")
+      .delete()
+      .eq("user_profile_id", ctx.userProfileId)
+      .in("kind", [...AGGREGATED])
+      .gte("start_time", toIso(payload.synced_range.start_time))
+      .lt("start_time", toIso(payload.synced_range.end_time));
+    if (error) return { ok: false, error: error.message };
+  }
   if (core.length > 0) {
     const { error } = await supabase
       .from("health_activity_samples")
@@ -238,7 +257,16 @@ export async function ingestHealthConnect(
     );
   }
 
-  const dates = [...new Set(samples.map((s) => s.localDate))].filter((d) => d <= today).sort();
+  const touched = new Set(samples.map((s) => s.localDate));
+  if (payload.synced_range) {
+    // Every day in the replaced span gets its totals rebuilt, even one that now has no buckets.
+    const end = Math.min(Date.parse(payload.synced_range.end_time), (ctx.now ?? new Date()).getTime());
+    for (let t = Date.parse(payload.synced_range.start_time); t <= end; t += 6 * 3600_000) {
+      touched.add(localDateKey(new Date(t), ctx.timezone));
+    }
+    touched.add(localDateKey(new Date(end), ctx.timezone));
+  }
+  const dates = [...touched].filter((d) => d <= today).sort();
   const days: IngestResult["days"] = [];
   for (const date of dates) {
     const { data, error } = await supabase
