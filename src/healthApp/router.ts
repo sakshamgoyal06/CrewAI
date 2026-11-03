@@ -239,20 +239,23 @@ export function createHealthAppRouter(): express.Router {
   router.get(
     "/account",
     route("account", async (ctx) => {
-      const [{ data }, hevy, tokens] = await Promise.all([
+      // All five reads at once: done one after another they made this screen take about a second.
+      const [{ data }, hevy, tokens, onboarded, food] = await Promise.all([
         supabase.from("user_profile").select("display_name, email").eq("id", ctx.userProfileId).maybeSingle(),
         hevyConnected(ctx.userProfileId),
         listPersonalTokens(ctx.userProfileId),
+        isOnboarded(ctx.userProfileId),
+        loadFoodPrefs(ctx.userProfileId).catch(() => null),
       ]);
       return {
         body: {
-          onboarded: await isOnboarded(ctx.userProfileId),
+          onboarded,
           name: data?.display_name ?? null,
           email: data?.email ?? null,
           timezone: ctx.timezone,
           hevyConnected: hevy,
           tokens,
-          food: await loadFoodPrefs(ctx.userProfileId).catch(() => null),
+          food,
         },
       };
     }),
