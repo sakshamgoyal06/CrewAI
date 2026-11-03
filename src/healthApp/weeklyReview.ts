@@ -98,6 +98,7 @@ const FOCUS: Record<CheckId, string> = {
   protein: "Hit protein: add one protein-heavy item (paneer, eggs, dal, curd, chicken or a shake) to two meals a day.",
   steps: "Get the steps in: one 20 to 30 minute walk after lunch or dinner covers most of the gap.",
   workout: "Show up on your training days, even for a short session. Logging it in Hevy counts.",
+  routine: "Stick to the routine you set: each reminder is the cue, and a short session still counts when you log it.",
 };
 
 export function summarizeWeek(

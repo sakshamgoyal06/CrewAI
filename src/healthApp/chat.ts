@@ -25,6 +25,8 @@ import {
 } from "./actions.js";
 import type { MealDraft } from "./meals.js";
 import { activityDraftInput, buildActivityDraft, deleteActivity, type ActivityDraft } from "./activityLog.js";
+import { routineInput } from "./routine.js";
+import { answerRoutineCheck, routineCheckAnswerInput, setRoutine } from "./routineCheck.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
 import {
   newRoutineInput,
@@ -111,7 +113,9 @@ How to work:
 - On a training day with no Hevy workout, a sport counts as the day's training only if it burned about as much as their usual gym session; the card says whether it did. Their plan needs at least 3 strength sessions a week (fewer if they train fewer days); if sport is eating into that, say so plainly.
 - Use get_status before answering questions about progress, and quote its numbers; never invent numbers.
 - If a goal or targets are missing and the question needs them, ask for them in one short question.
-- Workouts: on training days the app checks Hevy a few hours after the gym slot and asks in chat if nothing is logged. When they answer (skipped and why, or trained but didn't log it), record it with answer_workout_check. If they skipped, ask why in one short question if they didn't say.
+- Routine: the person sets a weekly routine of activities (e.g. a morning walk every day, the gym Mon/Wed/Fri at 18:30, a swim on Tuesdays), each with days, a time, a length and a reminder. get_status shows it and today's items as done, skipped or pending. When they describe their routine or ask to change it, call set_daily_routine with the WHOLE routine (it replaces what's there; keep items they didn't mention, with their ids). Use "gym" for lifting logged in Hevy. If it returns lifting.short, say in one sentence that the plan needs at least lifting.need strength sessions a week. Don't put meal times on the routine.
+- After a routine slot passes with nothing logged, the app asks in chat. When they answer about a non-gym item (did it, didn't, did a different length), record it with answer_routine_check; "done" logs the activity, so don't also call draft_activity for it. The gym is answered with answer_workout_check.
+- Workouts: on gym days the app checks Hevy a few hours after the gym slot and asks in chat if nothing is logged. When they answer (skipped and why, or trained but didn't log it), record it with answer_workout_check. If they skipped, ask why in one short question if they didn't say.
 - Training (Hevy): use get_training_analysis to see what's progressing, stalled or going backwards, and get_routines for their current plan. To change Hevy (swap or add an exercise, change sets/reps/rest, create a routine, log a workout), find exercise ids with search_exercises, then call the matching propose_* tool. It shows a card they apply; nothing changes in Hevy until they do, so never say it's done. Suggest changes from the data: a lift that has stalled for 3+ weeks gets a rep-range change or a close variation, not a whole new program. Keep a routine's other exercises as they are unless asked.
 - When they're off track or ask why, call root_cause_analysis. It mines the last three weeks and returns evidence, one hypothesis and one 7-day experiment, shown as a card they can take up. Explain it in a sentence or two; don't stack extra advice on top.
 - Calorie target: review_calorie_target works out their real maintenance from logged meals and the weight trend, and the target that keeps them on pace for the goal. Call it after a weekly weigh-in, when weight isn't moving the way the goal needs, or when they ask about their calories. When it recommends a change it shows a card they can apply; don't change the target yourself unless they ask. If the deadline needs an unsafe pace, say so plainly and give the date the safe pace reaches it.
@@ -244,7 +248,7 @@ const tools: Anthropic.Tool[] = [
   {
     name: "set_daily_targets",
     description:
-      "Update daily targets: calories (upper limit), protein grams (minimum), steps, and training weekdays (0 = Sunday … 6 = Saturday).",
+      "Update daily targets: calories (upper limit), protein grams (minimum), steps. trainingDays and gymTime only matter when there's no routine; with a routine, change the routine with set_daily_routine instead.",
     input_schema: {
       type: "object",
       properties: {
@@ -384,6 +388,49 @@ const tools: Anthropic.Tool[] = [
     input_schema: { type: "object", properties: {} },
   },
   {
+    name: "set_daily_routine",
+    description:
+      "Replace the person's weekly routine. Each item: activity ('gym' for lifting in Hevy, or walking, running, swimming, cycling, football, badminton, cricket, yoga...), days (0 = Sunday … 6 = Saturday), startTime local HH:MM (or null for no fixed time), durationMin, remindBeforeMin (minutes before to remind; null for no reminder; default 15, gym 30), optional label ('Morning walk'). Pass existing items' ids to keep them. Training days are derived from it (everything except walks).",
+    input_schema: {
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              activity: { type: "string" },
+              label: { type: "string" },
+              days: { type: "array", items: { type: "integer" } },
+              startTime: { type: ["string", "null"] },
+              durationMin: { type: "integer" },
+              remindBeforeMin: { type: ["integer", "null"] },
+            },
+            required: ["activity", "days", "durationMin"],
+          },
+        },
+      },
+      required: ["items"],
+    },
+  },
+  {
+    name: "answer_routine_check",
+    description:
+      "Record the answer for a non-gym routine item on a day: done (logs the activity at its planned time; pass durationMin if they did a different length), skipped (with their reason), or recheck (look at the logs again).",
+    input_schema: {
+      type: "object",
+      properties: {
+        itemId: { type: "string" },
+        date: { type: "string", description: "YYYY-MM-DD; defaults to today." },
+        answer: { type: "string", enum: ["done", "skipped", "recheck"] },
+        durationMin: { type: "integer" },
+        reason: { type: "string" },
+      },
+      required: ["itemId", "answer"],
+    },
+  },
+  {
     name: "answer_workout_check",
     description:
       "Record the answer to the post-gym-slot workout check: recheck (look in Hevy again), skipped (with reason), or trained_unlogged (trained but didn't log in Hevy; counts as the day's workout).",
@@ -423,6 +470,16 @@ export function statusForModel(s: HealthSnapshot): Record<string, unknown> {
     recentWorkouts: s.workouts.slice(0, 5),
     hevyConnected: s.hevyConnected,
     gymSlot: s.gym,
+    routine: (s.routine ?? []).map((i) => ({
+      id: i.id,
+      activity: i.activityKey,
+      label: i.label,
+      days: i.days,
+      startTime: i.startTime,
+      durationMin: i.durationMin,
+      remindBeforeMin: i.remindBeforeMin,
+    })),
+    routineToday: (s.today.routine ?? []).map((r) => ({ itemId: r.itemId, label: r.label, state: r.state, detail: r.detail })),
     workoutChecks: s.workoutChecks,
     recentActivities: (s.activities ?? []).map((a) => ({
       id: a.id,
@@ -582,6 +639,21 @@ export async function runTool(
       const review = await loadCalorieReview(ctx.userProfileId, ctx.now);
       if (review.status !== "ok" || !review.recommend) return { result: review };
       return { result: { ...review, shownToUserAsCard: true }, card: { type: "calorie_review", review } };
+    }
+    case "set_daily_routine": {
+      const p = routineInput.safeParse(input);
+      if (!p.success) return invalid(p.error);
+      const r = await setRoutine(ctx, p.data);
+      return {
+        result: r.ok ? { ok: true, items: r.items.map((i) => ({ id: i.id, label: i.label, days: i.days, startTime: i.startTime })), trainingDays: r.trainingDays, lifting: r.lifting } : r,
+        changed: r.ok,
+      };
+    }
+    case "answer_routine_check": {
+      const p = routineCheckAnswerInput.safeParse(input);
+      if (!p.success) return invalid(p.error);
+      const r = await answerRoutineCheck(ctx, p.data);
+      return { result: r, changed: r.ok };
     }
     case "answer_workout_check": {
       const p = workoutCheckAnswerInput.safeParse(input);

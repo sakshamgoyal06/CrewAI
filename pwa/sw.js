@@ -1,7 +1,7 @@
 // App shell: served from cache at once, refreshed in the background (a new deploy shows on the
 // next open). API calls always go to the network so numbers are never stale.
-const CACHE = "magnus-health-v14";
-const SHELL = ["/app/", "/app/index.html", "/app/styles.css", "/app/app.js", "/app/telemetry.js", "/app/session.js", "/app/onboarding.js", "/app/scan.js", "/app/foodprefs.js", "/app/manifest.webmanifest", "/app/icon.svg"];
+const CACHE = "magnus-health-v15";
+const SHELL = ["/app/", "/app/index.html", "/app/styles.css", "/app/app.js", "/app/telemetry.js", "/app/session.js", "/app/onboarding.js", "/app/scan.js", "/app/foodprefs.js", "/app/routine.js", "/app/manifest.webmanifest", "/app/icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

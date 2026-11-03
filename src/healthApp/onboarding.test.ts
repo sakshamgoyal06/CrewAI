@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../tools/clients.js", () => ({ supabase: {}, redis: {}, anthropic: {} }));
 
-import { cleanAvoidList, foodPrefsLine, onboardingInput, startingPlan, type OnboardingInput } from "./onboarding.js";
+import { cleanAvoidList, foodPrefsLine, onboardingInput, startingPlan, weekFrom, type OnboardingInput } from "./onboarding.js";
 
 const TODAY = "2026-11-02";
 const base: OnboardingInput = {
@@ -101,5 +101,31 @@ describe("food preferences", () => {
     );
     expect(foodPrefsLine({ diet: "jain", food_avoid: [] })).toBe("diet: Jain (no root vegetables, no eggs or meat)");
     expect(foodPrefsLine({})).toBeNull();
+  });
+});
+
+describe("routine at onboarding", () => {
+  const routine = [
+    { activity: "walking", days: [0, 1, 2, 3, 4, 5, 6], startTime: "07:00", durationMin: 30 },
+    { activity: "gym", days: [1, 3, 5], startTime: "18:30", durationMin: 60 },
+    { activity: "swimming", days: [2], startTime: "06:30", durationMin: 45 },
+  ];
+
+  it("derives training days and the gym slot from the routine", () => {
+    expect(weekFrom({ ...base, routine })).toEqual({ trainingDays: [1, 2, 3, 5], gymTime: "18:30" });
+    expect(weekFrom(base)).toEqual({ trainingDays: [1, 2, 4, 5], gymTime: null });
+  });
+
+  it("uses the routine's training days for maintenance, and says when the gym is short", () => {
+    const same = startingPlan({ ...base, routine }, TODAY);
+    expect(same.maintenanceKcal).toBe(startingPlan(base, TODAY).maintenanceKcal);
+    expect(same.lines.join(" ")).toContain("do what your routine has for that day");
+    const short = startingPlan({ ...base, routine: [routine[0]!, { ...routine[1]!, days: [1] }, { ...routine[2]!, days: [2, 4] }] }, TODAY);
+    expect(short.lines.join(" ")).toContain("Your routine has 1 gym day a week. The plan needs at least 3 strength sessions");
+  });
+
+  it("accepts a routine in the input", () => {
+    expect(onboardingInput.safeParse({ ...base, routine }).success).toBe(true);
+    expect(onboardingInput.safeParse({ ...base, routine: [{ ...routine[0]!, days: [] }] }).success).toBe(false);
   });
 });

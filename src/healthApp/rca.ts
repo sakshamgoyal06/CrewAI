@@ -57,6 +57,7 @@ const CHECK_LABEL: Record<CheckId, string> = {
   protein: "Protein",
   steps: "Steps",
   workout: "Workout",
+  routine: "Routine",
 };
 
 const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : 0);
@@ -261,6 +262,7 @@ export function fallbackInsight(signals: Signal[]): { hypothesis: string; experi
     protein: "Add one 30 g protein item to your lightest meal every day for 7 days.",
     steps: "Take a 20-minute walk straight after lunch every day for 7 days.",
     workout: "Pack your gym bag the night before every training day for the next 2 weeks.",
+    routine: "Keep only the routine items you can do on your worst day for 7 days, then add back one at a time.",
   };
   return {
     hypothesis: top.text,

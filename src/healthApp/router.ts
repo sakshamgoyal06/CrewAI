@@ -75,6 +75,8 @@ import {
 import { getUsualMeals, repeatUsualMeal } from "./frequentMeals.js";
 import { photoMealInput } from "./photoMeal.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
+import { liftingGap, routineInput } from "./routine.js";
+import { answerRoutineCheck, routineCheckAnswerInput, setRoutine } from "./routineCheck.js";
 import { applyProposal, cardFromRow, discardProposal, getProposals } from "./hevyProposals.js";
 import { analyzeTraining } from "./training.js";
 import { HEVY_HISTORY_WEEKS, hevyHistoryCached, invalidateHevyHistory } from "./hevyHistory.js";
@@ -577,6 +579,33 @@ export function createHealthAppRouter(): express.Router {
   router.get(
     "/targets/review",
     route("targets-review", async (ctx) => ({ body: await loadCalorieReview(ctx.userProfileId) })),
+  );
+
+  /** The weekly routine: walks, gym, swims, sports, each with days, time, length and reminder. */
+  router.get(
+    "/routine",
+    route("routine", async (ctx) => {
+      const { routine } = await loadHealthProfile(ctx.userProfileId);
+      if (routine === null) return { status: 503, body: { ok: false, error: "routine_unavailable" } };
+      return { body: { ok: true, items: routine, lifting: liftingGap(routine) } };
+    }),
+  );
+
+  router.put(
+    "/routine",
+    route("routine-save", async (ctx, req) => {
+      const r = await setRoutine(ctx, routineInput.parse(req.body));
+      return r.ok ? { body: r } : { status: r.error === "routine_unavailable" ? 503 : 400, body: r };
+    }),
+  );
+
+  /** Answer to a routine follow-up: done (logs it), skipped (with why), or look again. */
+  router.post(
+    "/routine/check",
+    route("routine-check", async (ctx, req) => {
+      const r = await answerRoutineCheck(ctx, routineCheckAnswerInput.parse(req.body));
+      return r.ok ? { body: r } : { status: r.error === "routine_item_not_found" ? 404 : 400, body: r };
+    }),
   );
 
   /** Answer to the post-gym-slot check: recheck Hevy, skipped (with reason), or trained but unlogged. */

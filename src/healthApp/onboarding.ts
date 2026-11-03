@@ -20,6 +20,8 @@ import { supabase } from "../tools/clients.js";
 import { logCheckin, setGoal, setTargets, type ActionContext } from "./actions.js";
 import { KCAL_PER_KG } from "./calorieTarget.js";
 import { postCoachMessage } from "./workoutCheckStore.js";
+import { gymTimeOf, liftingGap, MAX_ROUTINE_ITEMS, normalizeRoutine, routineItemInput, trainingDaysOf } from "./routine.js";
+import { saveRoutine } from "./routineStore.js";
 
 const DAY_MS = 86_400_000;
 const dayNumber = (date: string): number => Math.round(Date.parse(`${date}T00:00:00Z`) / DAY_MS);
@@ -87,6 +89,8 @@ export const onboardingInput = z
       .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
       .nullable()
       .optional(),
+    /** The weekly routine; when given, training days and the gym slot come from it. */
+    routine: z.array(routineItemInput).max(MAX_ROUTINE_ITEMS).optional(),
     ...foodPrefsShape,
   })
   .refine((v) => v.diet !== "custom" || !!v.dietNote, { message: "describe your diet", path: ["dietNote"] })
@@ -116,11 +120,21 @@ export type StartingPlan = {
   lines: string[];
 };
 
+/** Training days and gym slot: from the routine when there is one, else as answered. */
+export function weekFrom(input: Pick<OnboardingInput, "routine" | "trainingDays" | "gymTime">): { trainingDays: number[]; gymTime: string | null } {
+  if (input.routine?.length) {
+    const items = normalizeRoutine(input.routine);
+    return { trainingDays: trainingDaysOf(items), gymTime: gymTimeOf(items) };
+  }
+  return { trainingDays: input.trainingDays, gymTime: input.gymTime ?? null };
+}
+
 /** The day-1 plan. Pure. */
 export function startingPlan(input: OnboardingInput, today: string): StartingPlan {
+  const { trainingDays } = weekFrom(input);
   const age = Number(today.slice(0, 4)) - input.birthYear;
   const bmr = 10 * input.weightKg + 6.25 * input.heightCm - 5 * age + (input.sex === "male" ? 5 : -161);
-  const factor = ACTIVITY_FACTOR[input.activity] + PER_TRAINING_DAY * Math.min(6, input.trainingDays.length);
+  const factor = ACTIVITY_FACTOR[input.activity] + PER_TRAINING_DAY * Math.min(6, trainingDays.length);
   const maintenance = bmr * factor;
 
   // A body fat target with no weight target: keep lean mass, change fat.
@@ -185,7 +199,15 @@ export function startingPlan(input: OnboardingInput, today: string): StartingPla
     }
   }
   lines.push(`Protein ${proteinTarget} g a day and ${stepTarget.toLocaleString("en-US")} steps.`);
-  lines.push(`A day counts as on track when you log 3 meals, land at 60–100% of the calorie target, hit protein and steps, and train on training days. Aim for 5 of 7.`);
+  const gap = input.routine?.length ? liftingGap(normalizeRoutine(input.routine)) : null;
+  if (gap?.short) {
+    lines.push(`Your routine has ${gap.gymDays} gym day${gap.gymDays === 1 ? "" : "s"} a week. The plan needs at least ${gap.need} strength sessions to hold on to muscle${input.goalType === "lose" ? " while you lose fat" : ""}, so consider turning one session into a gym day.`);
+  }
+  lines.push(
+    input.routine?.length
+      ? `A day counts as on track when you log 3 meals, land at 60–100% of the calorie target, hit protein and steps, and do what your routine has for that day. I'll remind you before each one. Aim for 5 of 7.`
+      : `A day counts as on track when you log 3 meals, land at 60–100% of the calorie target, hit protein and steps, and train on training days. Aim for 5 of 7.`,
+  );
 
   return {
     bmrKcal: Math.round(bmr),
@@ -299,14 +321,20 @@ export async function completeOnboarding(
   });
   if (!goal.ok) return { ok: false, error: goal.error ?? "goal_failed" };
 
+  const week = weekFrom(input);
   const targets = await setTargets(ctx, {
     calorieTarget: plan.calorieTarget,
     proteinTarget: plan.proteinTarget,
     stepTarget: plan.stepTarget,
-    trainingDays: input.trainingDays,
-    gymTime: input.gymTime ?? null,
+    trainingDays: week.trainingDays,
+    gymTime: week.gymTime,
   });
   if (!targets.ok) return { ok: false, error: targets.error ?? "targets_failed" };
+  if (input.routine?.length) {
+    const saved = await saveRoutine(ctx.userProfileId, normalizeRoutine(input.routine));
+    // Without the routine table the training days and gym slot above still hold.
+    if (!saved.ok) logger.warn({ err: saved.error }, "routine not saved at onboarding");
+  }
 
   await postCoachMessage(
     ctx.userProfileId,

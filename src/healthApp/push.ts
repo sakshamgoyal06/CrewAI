@@ -36,6 +36,8 @@ export const NOTIFICATION_KINDS = [
   "evening_wrap",
   "weigh_in",
   "rca",
+  "routine_reminder",
+  "routine_check",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

@@ -10,6 +10,7 @@ import type { ActionContext } from "./actions.js";
 import { trainingActivity } from "./activities.js";
 import { FALLBACK_WEIGHT_KG, getActivities, latestWeightKg, loadTrainingContext } from "./activityLog.js";
 import { formatTime, zonedInstant, type GymSlot } from "./gymSlot.js";
+import { isGym, UNTIMED_CHECK_AT, type RoutineItem } from "./routine.js";
 import { loadHealthProfile, loadRecentWorkouts, weekdayOfDate, type WorkoutSummary } from "./snapshot.js";
 import { analyzeTraining, hevyKey, loadWorkoutHistory, workoutReview } from "./training.js";
 import {
@@ -62,11 +63,29 @@ export function dueWorkoutChecks(input: {
   return out;
 }
 
+/**
+ * The gym slots to check: each gym item on the routine (its days, time and delay), or the legacy
+ * single gym slot on training days when there's no routine. A gym item with no time is checked
+ * in the evening.
+ */
+export function gymPlans(profile: {
+  targets: { trainingDays: number[] };
+  gym: GymSlot;
+  routine?: RoutineItem[] | null;
+}): Array<{ trainingDays: number[]; slot: GymSlot }> {
+  if (!profile.routine?.length) return [{ trainingDays: profile.targets.trainingDays, slot: profile.gym }];
+  return profile.routine.filter(isGym).map((i) => ({
+    trainingDays: i.days,
+    slot: i.startTime ? { time: i.startTime, checkDelayMin: i.checkAfterMin } : { time: UNTIMED_CHECK_AT, checkDelayMin: 0 },
+  }));
+}
+
 export function workoutOn(workouts: WorkoutSummary[], date: string): WorkoutSummary | null {
   return workouts.find((w) => w.localDate === date) ?? null;
 }
 
 export function missedWorkoutMessage(date: string, today: string, slot: GymSlot): string {
+  if (slot.checkDelayMin === 0) return `There's no workout in Hevy for ${date === today ? "today" : "yesterday"}. Did you train?`;
   const when = date === today ? "Your" : "Yesterday's";
   const hours = Math.round((slot.checkDelayMin / 60) * 10) / 10;
   return `${when} ${formatTime(slot.time!)} gym slot was ${hours} hours ago and there's no workout in Hevy. Did you train?`;
@@ -122,8 +141,16 @@ export async function runWorkoutChecks(
   now = new Date(),
   deps: Deps = defaultDeps,
 ): Promise<Array<{ date: string; status: WorkoutCheckStatus }>> {
-  const { timezone, targets, gym } = await deps.loadProfile(userProfileId);
-  const due = dueWorkoutChecks({ now, timezone, trainingDays: targets.trainingDays, slot: gym });
+  const profile = await deps.loadProfile(userProfileId);
+  const { timezone } = profile;
+  // One check per day: with two gym items on a day, the first one due wins.
+  const byDate = new Map<string, { date: string; dueAt: Date; slot: GymSlot }>();
+  for (const plan of gymPlans(profile)) {
+    for (const d of dueWorkoutChecks({ now, timezone, trainingDays: plan.trainingDays, slot: plan.slot })) {
+      if (!byDate.has(d.date)) byDate.set(d.date, { ...d, slot: plan.slot });
+    }
+  }
+  const due = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
   if (!due.length) return [];
 
   const existing = await deps.getChecks(userProfileId, due[0]!.date, due[due.length - 1]!.date);
@@ -136,7 +163,7 @@ export async function runWorkoutChecks(
 
   const today = localDateKey(now, timezone);
   const results: Array<{ date: string; status: WorkoutCheckStatus }> = [];
-  for (const { date } of pending) {
+  for (const { date, slot: gym } of pending) {
     const workout = workoutOn(hevy.workouts, date);
     // A sport that burned like a gym session already covers the day; no need to ask.
     const sport = workout ? null : await deps.sportOn?.(userProfileId, timezone, date).catch(() => null) ?? null;

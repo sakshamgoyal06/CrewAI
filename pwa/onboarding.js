@@ -2,9 +2,8 @@
 // Nothing is saved until "Start"; the reveal is a live preview from /onboarding/preview.
 
 import { foodPrefsEditor } from "./foodprefs.js";
+import { ROUTINE_PRESETS, routineEditor, routineSummary, toPayload } from "./routine.js";
 
-const WD = ["S", "M", "T", "W", "T", "F", "S"];
-const WD_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 function plusMonths(months) {
   const d = new Date();
@@ -20,7 +19,9 @@ export function runOnboarding(root, { api, el, toast }) {
   const a = {
     sex: null, birthYear: "", heightCm: "", weightKg: "", bodyFatPct: "",
     goalType: "lose", targetWeightKg: "", targetBodyFatPct: "", deadline: plusMonths(4),
-    activity: "desk", trainingDays: [1, 3, 5], gymTime: "", diet: null, dietNote: "", foodAvoid: [],
+    activity: "desk", diet: null, dietNote: "", foodAvoid: [],
+    // Starts as an evening gym on Mon/Wed/Fri; they add walks, swims or sports, or change it.
+    routine: [{ ...structuredClone(ROUTINE_PRESETS[1].item), label: "" }],
   };
   let step = 0;
 
@@ -30,7 +31,7 @@ export function runOnboarding(root, { api, el, toast }) {
     bodyFatPct: num(a.bodyFatPct), goalType: a.goalType,
     targetWeightKg: a.goalType === "recomp" ? undefined : num(a.targetWeightKg),
     targetBodyFatPct: num(a.targetBodyFatPct), deadline: a.deadline, activity: a.activity,
-    trainingDays: a.trainingDays, gymTime: a.gymTime || null, diet: a.diet,
+    trainingDays: routineSummary(a.routine).trainingDays, routine: toPayload(a.routine).items, diet: a.diet,
     dietNote: a.diet === "custom" ? a.dietNote.trim() : undefined, foodAvoid: a.foodAvoid,
   });
 
@@ -85,22 +86,15 @@ export function runOnboarding(root, { api, el, toast }) {
     },
     {
       title: "Your week",
-      lead: "This sets your starting calories and when I check in.",
+      lead: "Your routine sets your starting calories, and I'll remind you before each part of it.",
       body: () => [
         el("p", { class: "section-label" }, "Most days you're"),
         choice([["desk", "At a desk"], ["light", "On your feet"], ["active", "Physically active"]], "activity"),
-        el("p", { class: "section-label" }, "Training days"),
-        el("div", { class: "days" }, ...WD.map((d, i) => {
-          const on = a.trainingDays.includes(i);
-          return el("button", { type: "button", class: on ? "on" : "", "aria-pressed": String(on), "aria-label": WD_LONG[i], onclick: () => {
-            a.trainingDays = on ? a.trainingDays.filter((x) => x !== i) : [...a.trainingDays, i].sort();
-            render();
-          } }, d);
-        })),
-        el("label", {}, "Usual gym time", el("input", { class: "field", type: "time", value: a.gymTime || null, oninput: (e) => { a.gymTime = e.target.value; } })),
-        el("p", { class: "hint" }, "Workouts come from Hevy. You can connect it in Settings after this."),
+        el("p", { class: "section-label" }, "Your routine"),
+        routineEditor(el, a.routine),
+        el("p", { class: "hint" }, "Gym sessions come from Hevy (connect it in Settings after this). Walks, swims and sports are picked up from Health Connect or logged in a tap."),
       ],
-      valid: () => null,
+      valid: () => (a.routine.some((i) => !i.days.length) ? "Each activity needs at least one day." : a.routine.some((i) => i.activity === "other" && !i.label.trim()) ? "Name the activity marked 'Something else'." : null),
     },
     {
       title: "How you eat",
