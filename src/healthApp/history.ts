@@ -13,6 +13,8 @@ import { hevyHistoryCached } from "./hevyHistory.js";
 import { scoreDay, type DayCheck, type HealthTargets } from "./northStar.js";
 import { loadHealthProfile, weekdayOfDate, windowDates } from "./snapshot.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
+import { routineDayStatus, type RoutineItemStatus } from "./routine.js";
+import { checksOn, getRoutineChecks } from "./routineStore.js";
 
 export const DEFAULT_HISTORY_DAYS = 30;
 export const MAX_HISTORY_DAYS = 56;
@@ -73,6 +75,8 @@ export type HistoryDay = {
   sportCounted: string | null;
   /** "Trained, didn't log it in Hevy" from the post-gym check. */
   trainedUnlogged: boolean;
+  /** Routine items planned that day, with done / skipped / pending. */
+  routine: RoutineItemStatus[];
 };
 
 export type HealthHistory = {
@@ -198,12 +202,12 @@ export async function buildHealthHistory(
   opts: { days?: number; now?: Date } = {},
 ): Promise<HealthHistory> {
   const now = opts.now ?? new Date();
-  const { timezone, targets } = await loadHealthProfile(userProfileId);
+  const { timezone, targets, routine } = await loadHealthProfile(userProfileId);
   const dates = windowDates(now, timezone, clampDays(opts.days));
   const from = dates[0]!;
   const to = dates[dates.length - 1]!;
 
-  const [mealRes, activityRes, hevy, checkins, workoutChecks, activities, stepRes] = await Promise.all([
+  const [mealRes, activityRes, hevy, checkins, workoutChecks, activities, stepRes, routineChecks] = await Promise.all([
     supabase
       .from("meal_logs")
       .select("meal_session_id, local_date, meal_slot, raw_text, description, calories, protein_g, carbs_g, fat_g, logged_at, created_at, component_index")
@@ -224,6 +228,7 @@ export async function buildHealthHistory(
       .eq("kind", "steps")
       .gte("local_date", from)
       .lte("local_date", to),
+    routine?.length ? getRoutineChecks(userProfileId, from, to) : Promise.resolve(new Map()),
   ]);
   const actsByDate = new Map<string, Activity[]>();
   for (const a of activities) actsByDate.set(a.localDate, [...(actsByDate.get(a.localDate) ?? []), a]);
@@ -271,6 +276,17 @@ export async function buildHealthHistory(
     const isTraining = targets.trainingDays.includes(weekday);
     const sport = isTraining && !dayWorkouts.length && !trainedUnlogged ? trainingActivity(dayActs, timed, typicalBurn) : null;
     const sportCounted = sport ? `${sport.label} · ${sport.durationMin} min` : null;
+    const check = workoutChecks.get(date);
+    const dayRoutine: RoutineItemStatus[] = routine?.length
+      ? routineDayStatus(routine, weekday, {
+          workouts: dayWorkouts.length || (trainedUnlogged ? 1 : 0),
+          gymSkipped: check?.status === "skipped" ? { reason: check.reason } : null,
+          sport,
+          activities: dayActs,
+          walkMinutes: nOrNull(a?.walk_minutes),
+          checks: checksOn(routineChecks, date),
+        })
+      : [];
     const burn: Burn | null = burnForDay({
       activeKcal: nOrNull(a?.active_kcal),
       steps,
@@ -290,6 +306,7 @@ export async function buildHealthHistory(
         steps,
         workoutsLogged: dayWorkouts.length || (trainedUnlogged ? 1 : 0),
         sportLabel: sportCounted,
+        routine: dayRoutine,
       },
       targets,
     );
@@ -313,6 +330,7 @@ export async function buildHealthHistory(
       activities: dayActs.map((x) => ({ ...x, counted: lines.get(x.id)?.counted ?? true, why: lines.get(x.id)?.why ?? null })),
       sportCounted,
       trainedUnlogged,
+      routine: dayRoutine,
     };
   });
 

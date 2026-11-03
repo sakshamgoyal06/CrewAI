@@ -11,6 +11,8 @@ import { formatTime } from "./gymSlot.js";
 import { getPrefs, isQuiet, sendNotification, type Notification, type NotificationPrefs } from "./push.js";
 import { cardFromReport, listReports, rcaDue, reviewExperiments, runRca } from "./rca.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
+import { routineLine } from "./routine.js";
+import { runRoutineTick } from "./routineCheck.js";
 import { runWorkoutChecks, SCHEDULER_INTERVAL_MS } from "./workoutCheck.js";
 import { postCoachMessage } from "./workoutCheckStore.js";
 
@@ -46,8 +48,11 @@ export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs
   const check = (id: string) => s.today.checks.find((c) => c.id === id);
 
   if (inWindow("08:00")) {
+    const planned = s.today.routine ?? [];
     const parts = [
-      s.today.isTrainingDay ? (s.gym.time ? `Training day: gym at ${formatTime(s.gym.time)}.` : "Training day.") : "Rest day.",
+      planned.length
+        ? `Today: ${routineLine(planned)}.`
+        : s.today.isTrainingDay ? (s.gym.time ? `Training day: gym at ${formatTime(s.gym.time)}.` : "Training day.") : "Rest day.",
       [
         s.targets.calorieTarget ? `${fmt(s.targets.calorieTarget)} kcal` : null,
         s.targets.proteinTarget ? `${s.targets.proteinTarget} g protein` : null,
@@ -128,6 +133,11 @@ async function runWorkoutCheckWithPush(userProfileId: string, now: Date): Promis
   }
 }
 
+async function runRoutineWithLog(userProfileId: string, now: Date): Promise<void> {
+  const r = await runRoutineTick(userProfileId, now);
+  if (r.reminders || r.followUps.length) logger.info({ ...r }, "routine tick ran");
+}
+
 async function maybeRunRca(userProfileId: string, now: Date): Promise<void> {
   const snapshot = await buildHealthSnapshot(userProfileId, now);
   const days = snapshot.northStar.days;
@@ -174,6 +184,7 @@ async function maybeRunRca(userProfileId: string, now: Date): Promise<void> {
 export async function proactiveTick(userProfileId: string, now = new Date()): Promise<void> {
   for (const [name, fn] of [
     ["workout check", () => runWorkoutCheckWithPush(userProfileId, now)],
+    ["routine", () => runRoutineWithLog(userProfileId, now)],
     ["nudges", () => runNudges(userProfileId, now)],
     ["rca", () => maybeRunRca(userProfileId, now)],
   ] as const) {

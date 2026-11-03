@@ -17,6 +17,8 @@ import { getActiveGoal, getBodyCheckins } from "./bodyStore.js";
 import { computeGoalProgress, type BodyCheckin, type GoalProgress } from "./goalProgress.js";
 import { checkTime, DEFAULT_CHECK_DELAY_MIN } from "./gymSlot.js";
 import { listMealsForDate } from "./meals.js";
+import { routineDayStatus, trainingDaysOf, type RoutineItem, type RoutineItemStatus } from "./routine.js";
+import { checksOn, getRoutineChecks, loadRoutine } from "./routineStore.js";
 import { getWorkoutChecks, type WorkoutCheck } from "./workoutCheckStore.js";
 import {
   computeNorthStar,
@@ -48,7 +50,11 @@ export type HealthSnapshot = {
     steps: number;
     walkMinutes: number | null;
     isTrainingDay: boolean;
+    /** Today's routine items, in time order, with done / skipped / pending. */
+    routine: RoutineItemStatus[];
   };
+  /** The weekly routine (empty when none is set). */
+  routine: RoutineItem[];
   northStar: NorthStar;
   targets: HealthTargets;
   workouts: WorkoutSummary[];
@@ -93,8 +99,10 @@ export async function loadHealthProfile(
   timezone: string;
   targets: HealthTargets;
   gym: { time: string | null; checkDelayMin: number };
+  /** The weekly routine; null when the routine table isn't there yet (legacy gym slot only). */
+  routine: RoutineItem[] | null;
 }> {
-  const [profile, health] = await Promise.all([
+  const [profile, health, routineRows] = await Promise.all([
     supabase.from("user_profile").select("timezone").eq("id", userProfileId).maybeSingle(),
     supabase
       .from("user_health_profile")
@@ -103,15 +111,20 @@ export async function loadHealthProfile(
       )
       .eq("user_profile_id", userProfileId)
       .maybeSingle(),
+    loadRoutine(userProfileId).catch(() => null),
   ]);
   const h = (health.data ?? {}) as Record<string, unknown>;
   const num = (v: unknown): number | null => {
     const n = typeof v === "number" ? v : Number(v);
     return v === null || v === undefined || !Number.isFinite(n) || n <= 0 ? null : n;
   };
-  const trainingDays = Array.isArray(h.training_days)
-    ? h.training_days.map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
-    : [];
+  const routine = routineRows;
+  // With a routine, it decides the training days; otherwise the stored list does.
+  const trainingDays = routine && routine.length
+    ? trainingDaysOf(routine)
+    : Array.isArray(h.training_days)
+      ? h.training_days.map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+      : [];
   return {
     timezone: resolveTimezone((profile.data as { timezone?: string } | null)?.timezone),
     targets: {
@@ -125,6 +138,7 @@ export async function loadHealthProfile(
       time: typeof h.gym_time === "string" && /^\d{2}:\d{2}/.test(h.gym_time) ? h.gym_time.slice(0, 5) : null,
       checkDelayMin: num(h.workout_check_delay_min) ?? DEFAULT_CHECK_DELAY_MIN,
     },
+    routine,
   };
 }
 
@@ -220,13 +234,13 @@ export async function buildHealthSnapshot(
   userProfileId: string,
   now = new Date(),
 ): Promise<HealthSnapshot> {
-  const { timezone, targets, gym } = await loadHealthProfile(userProfileId);
+  const { timezone, targets, gym, routine } = await loadHealthProfile(userProfileId);
   const dates = windowDates(now, timezone);
   const from = dates[0]!;
   const to = dates[dates.length - 1]!;
 
   const historyFrom = localDateKey(new Date(now.getTime() - CHECKIN_HISTORY_DAYS * DAY_MS), timezone);
-  const [meals, activity, hevy, goal, checkins, todayMealList, workoutChecks, activities] = await Promise.all([
+  const [meals, activity, hevy, goal, checkins, todayMealList, workoutChecks, activities, routineChecks] = await Promise.all([
     loadMealDays(userProfileId, from, to),
     getActivityRange(userProfileId, from, to),
     recentWorkoutsCached(userProfileId, timezone),
@@ -235,6 +249,7 @@ export async function buildHealthSnapshot(
     listMealsForDate(userProfileId, to),
     getWorkoutChecks(userProfileId, from, to),
     getActivities(userProfileId, from, to),
+    routine?.length ? getRoutineChecks(userProfileId, from, to) : Promise.resolve(new Map()),
   ]);
   const kg = [...checkins].reverse().find((c) => c.weight_kg != null)?.weight_kg ?? FALLBACK_WEIGHT_KG;
   const typicalBurn = typicalTrainingBurn(hevy.workouts.map((w) => w.durationMin ?? 0), kg);
@@ -250,11 +265,25 @@ export async function buildHealthSnapshot(
     }
   }
 
+  const routineByDate = new Map<string, RoutineItemStatus[]>();
   const days = dates.map((date) => {
     const m = meals.get(date);
     const a: DailyActivity | undefined = activity.get(date);
     const logged = workoutsByDate.get(date) ?? 0;
-    const sport = logged ? null : trainingActivity(activities.filter((x) => x.localDate === date), [], typicalBurn);
+    const dayActs = activities.filter((x) => x.localDate === date);
+    const sport = logged ? null : trainingActivity(dayActs, [], typicalBurn);
+    const check = workoutChecks.get(date);
+    const dayRoutine = routine?.length
+      ? routineDayStatus(routine, weekdayOfDate(date), {
+          workouts: logged,
+          gymSkipped: check?.status === "skipped" ? { reason: check.reason } : null,
+          sport,
+          activities: dayActs,
+          walkMinutes: a?.walkMinutes ?? null,
+          checks: checksOn(routineChecks, date),
+        })
+      : [];
+    routineByDate.set(date, dayRoutine);
     return scoreDay(
       {
         date,
@@ -265,6 +294,7 @@ export async function buildHealthSnapshot(
         steps: a?.steps ?? 0,
         workoutsLogged: logged,
         sportLabel: sport ? `${sport.label} · ${sport.durationMin} min` : null,
+        routine: dayRoutine,
       },
       targets,
     );
@@ -283,7 +313,9 @@ export async function buildHealthSnapshot(
       steps: todayActivity?.steps ?? 0,
       walkMinutes: todayActivity?.walkMinutes ?? null,
       isTrainingDay: targets.trainingDays.includes(weekdayOfDate(to)),
+      routine: routineByDate.get(to) ?? [],
     },
+    routine: routine ?? [],
     northStar: computeNorthStar(days),
     targets,
     workouts: hevy.workouts,

@@ -5,6 +5,7 @@ import { SESSION_ID, trackApi } from "./telemetry.js";
 import { runOnboarding } from "./onboarding.js";
 import { scanView } from "./scan.js";
 import { foodPrefsEditor } from "./foodprefs.js";
+import { fromServer, routineEditor, toPayload } from "./routine.js";
 import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
 const TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } })();
@@ -457,7 +458,7 @@ function snapshotDay() {
     onTrack: s.today.onTrack, score: s.today.score, checks: s.today.checks,
     calories: s.today.calories, proteinG: s.today.proteinG, carbsG: null, fatG: null,
     meals: (s.meals || []).map((m) => ({ ...m, proteinG: m.proteinG, carbsG: null, fatG: null, items: [] })).reverse(),
-    steps: s.today.steps, walkMinutes: s.today.walkMinutes, burn: null, workouts: [], activities: [], sportCounted: null, trainedUnlogged: false, partial: true,
+    steps: s.today.steps, walkMinutes: s.today.walkMinutes, burn: null, workouts: [], activities: [], sportCounted: null, trainedUnlogged: false, routine: s.today.routine || [], partial: true,
   };
 }
 
@@ -576,7 +577,9 @@ function mealRow(m) {
 function renderMove(d, t, isToday) {
   const hevy = state.history?.hevy;
   const s = state.snapshot;
-  $("move-meta").textContent = isToday && d.isTrainingDay && s?.gym?.time ? `Gym ${clock(s.gym.time)}` : d.isTrainingDay ? "Training day" : "Rest day";
+  $("move-meta").textContent = d.routine?.length
+    ? `${d.routine.filter((r) => r.state === "done").length}/${d.routine.length} done`
+    : isToday && d.isTrainingDay && s?.gym?.time ? `Gym ${clock(s.gym.time)}` : d.isTrainingDay ? "Training day" : "Rest day";
   const stepT = t.stepTarget || 8000;
   const mins = d.workouts.reduce((a, w) => a + (w.durationMin || 0), 0);
   const tile = (label, value, unit, sub, pct) =>
@@ -592,6 +595,7 @@ function renderMove(d, t, isToday) {
     tile("Workout", d.workouts.length ? fmt(mins) : d.trainedUnlogged || d.sportCounted ? "✓" : "–", d.workouts.length ? "min" : null,
       d.workouts.length ? `${fmt(d.workouts.reduce((a, w) => a + w.volumeKg, 0))} kg lifted` : d.trainedUnlogged ? "not in Hevy" : d.sportCounted ? d.sportCounted.split(" · ")[0] : d.isTrainingDay ? "none logged" : "rest", null),
   );
+  renderRoutineToday(d);
   renderBurnBreakdown(d);
   renderActivities(d);
   const rows = d.workouts.map((w) =>
@@ -623,6 +627,33 @@ function renderMove(d, t, isToday) {
           : d.partial ? "Loading workouts…"
           : "No workout logged.")]),
   );
+}
+
+/** The routine items planned that day, ticked off as they're logged; non-gym ones can be marked done here. */
+function renderRoutineToday(d) {
+  const list = $("routine-today");
+  const items = d.routine || [];
+  list.hidden = !items.length;
+  const today = state.history?.today;
+  list.replaceChildren(...items.map((r) => {
+    const mark = r.state === "done" ? "✓" : r.state === "skipped" ? "–" : "";
+    let action = null;
+    if (r.state === "pending" && !r.gym) {
+      action = el("button", { class: "btn", type: "button" }, "Done");
+      action.addEventListener("click", async () => {
+        action.disabled = true;
+        try { await answerRoutine({ itemId: r.itemId, date: d.date, answer: "done" }); toast(`${r.label} logged.`); }
+        catch (err) { action.disabled = false; toast(err.message); }
+      });
+    }
+    const sub = r.state === "pending"
+      ? (r.gym ? `${r.detail} · log it in Hevy` : `${r.detail} · ${r.durationMin} min`)
+      : r.detail;
+    return el("li", { class: r.state },
+      el("span", { class: "mark", "aria-hidden": "true" }, mark),
+      el("span", { class: "main" }, el("span", { class: "title" }, r.label), el("span", { class: "sub" }, sub)),
+      !today || d.date <= today ? action : null);
+  }));
 }
 
 /** Steps + gym + each activity, so the Burned number explains itself. */
@@ -1137,6 +1168,7 @@ function appendCard(c) {
   if (c.type === "meal_draft") $("thread").append(mealDraftCard(c.draft));
   else if (c.type === "activity_draft") $("thread").append(activityDraftCard(c.draft));
   else if (c.type === "workout_check") $("thread").append(workoutCheckCard(c));
+  else if (c.type === "routine_check") $("thread").append(routineCheckCard(c));
   else if (c.type === "hevy_proposal") $("thread").append(hevyProposalCard(c));
   else if (c.type === "rca") $("thread").append(rcaCard(c));
   else if (c.type === "calorie_review") $("thread").append(calorieReviewCard(c.review));
@@ -1293,11 +1325,40 @@ const NUDGES = [
   ["morning_plan", "Morning plan"],
   ["meal_reminder", "Meal reminders"],
   ["step_pace", "Step pace"],
+  ["routine_reminder", "Routine reminders"],
+  ["routine_check", "Routine follow-ups"],
   ["workout_check", "Workout check"],
   ["evening_wrap", "Evening wrap"],
   ["weigh_in", "Weekly weigh-in"],
   ["rca", "Root-cause reviews"],
 ];
+
+/** Settings: the weekly routine. Saving replaces it, and training days follow from it. */
+function routineSection() {
+  const items = fromServer(state.snapshot?.routine || []);
+  let dirty = false;
+  const save = el("button", { class: "btn block", type: "button", disabled: "" }, "Save routine");
+  const editor = routineEditor(el, items, () => { dirty = true; save.disabled = false; });
+  save.addEventListener("click", async () => {
+    if (items.some((i) => !i.days.length)) { toast("Each activity needs at least one day."); return; }
+    if (items.some((i) => i.activity === "other" && !i.label.trim())) { toast("Name the activity marked 'Something else'."); return; }
+    save.disabled = true;
+    try {
+      const r = await api("/routine", { method: "PUT", body: JSON.stringify(toPayload(items)) });
+      dirty = false;
+      toast(r.lifting?.short ? `Saved. Your plan wants ${r.lifting.need} gym days a week.` : "Routine saved.");
+      refresh();
+    } catch (err) {
+      save.disabled = !dirty;
+      toast(err.message.includes("routine_unavailable") ? "Routines need a quick database update first." : err.message);
+    }
+  });
+  return el("div", { class: "stack" },
+    el("p", { class: "section-label" }, "Your routine"),
+    el("p", { class: "hint" }, "I remind you before each one, tick it off when it's logged (Hevy for the gym, Health Connect or a tap for the rest), and ask if it's missing."),
+    editor,
+    save);
+}
 
 function notificationsSection() {
   const wrap = el("div", { class: "stack" }, el("p", { class: "section-label" }, "Notifications"));
@@ -1737,6 +1798,86 @@ function workoutCheckCard(c) {
   return card;
 }
 
+// ---------- routine follow-up card ----------
+
+/** The routine item's state on a day, from the tracker's history, if it's loaded. */
+function routineStateOn(date, itemId) {
+  const day = state.history?.days?.find((x) => x.date === date);
+  return day?.routine?.find((r) => r.itemId === itemId) ?? null;
+}
+
+async function answerRoutine(body) {
+  const r = await api("/routine/check", { method: "POST", body: JSON.stringify(body) });
+  refresh();
+  return r;
+}
+
+/** Asked after a routine slot (walk, swim, sport) passes with nothing logged for it. */
+function routineCheckCard(c) {
+  const card = el("div", { class: "draft check" });
+  const day = `${WD_LONG[dateOf(c.date).getUTCDay()]} ${dateOf(c.date).getUTCDate()}`;
+  const known = routineStateOn(c.date, c.itemId);
+  let cur = { ...c, status: known?.state === "done" ? "done" : known?.state === "skipped" ? "skipped" : c.status, reason: c.reason ?? null };
+
+  async function answer(body, buttons) {
+    for (const b of buttons) b.disabled = true;
+    try {
+      const r = await answerRoutine({ itemId: c.itemId, date: c.date, ...body });
+      if (r.status === "missing") {
+        toast("Nothing logged for it yet.");
+        for (const b of buttons) b.disabled = false;
+        return;
+      }
+      cur = { ...cur, status: r.status, reason: body.reason ?? null, durationMin: body.durationMin ?? cur.durationMin };
+      render();
+    } catch (err) {
+      for (const b of buttons) b.disabled = false;
+      toast(err.message);
+    }
+  }
+
+  function render() {
+    if (cur.status !== "missing") {
+      card.className = "draft done";
+      card.replaceChildren(el("div", { class: cur.status === "skipped" ? "muted" : "done-line" },
+        cur.status === "done" ? `✓ ${cur.label} · ${cur.durationMin} min · ${day}` : `Skipped ${cur.label.toLowerCase()}${cur.reason ? ` · ${cur.reason}` : ""} · ${day}`));
+      return;
+    }
+    const done = el("button", { class: "btn primary", type: "button" }, `Done · ${cur.durationMin} min`);
+    const mins = el("input", { class: "field", type: "number", inputmode: "numeric", min: "1", max: "600", placeholder: "Minutes", "aria-label": "Minutes done" });
+    const shorter = el("form", { class: "reason-other", hidden: true, onsubmit: (e) => { e.preventDefault(); const m = Number(mins.value); if (m > 0) answer({ answer: "done", durationMin: m }, all()); } },
+      mins, el("button", { class: "btn", type: "submit" }, "Save"));
+    const other = el("button", { class: "btn", type: "button", onclick: () => { shorter.hidden = !shorter.hidden; if (!shorter.hidden) mins.focus(); } }, "Different length");
+    const skipped = el("button", { class: "btn", type: "button" }, "Skipped");
+    const instead = el("button", { class: "link", type: "button", onclick: () => { state.activityDate = cur.date; openSheet("activity"); } }, "Did something else instead");
+    const reasons = el("div", { class: "reasons", hidden: true });
+    const otherReason = el("input", { class: "field", placeholder: "Other reason", maxlength: "300" });
+    const all = () => [done, other, skipped, ...card.querySelectorAll("form button, .reasons button")];
+    done.addEventListener("click", () => answer({ answer: "done" }, all()));
+    skipped.addEventListener("click", () => { reasons.hidden = !reasons.hidden; });
+    reasons.append(
+      el("p", { class: "draft-note" }, "What got in the way? This feeds the weekly review."),
+      el("div", { class: "chips wrap" },
+        ...SKIP_REASONS.map((r) => el("button", { class: "chip", type: "button", onclick: () => answer({ answer: "skipped", reason: r }, all()) }, r))),
+      el("form", { class: "reason-other", onsubmit: (e) => { e.preventDefault(); answer({ answer: "skipped", reason: otherReason.value.trim() || undefined }, all()); } },
+        otherReason, el("button", { class: "btn", type: "submit" }, "Save")),
+    );
+    card.className = "draft check";
+    card.replaceChildren(
+      el("p", { class: "eyebrow" }, `Routine · ${day}`),
+      el("p", { class: "check-line" }, `${cur.label}${cur.startTime ? ` at ${clock(cur.startTime)}` : ""}: nothing logged yet.`),
+      el("div", { class: "draft-actions" }, done),
+      el("div", { class: "draft-actions" }, other, skipped),
+      shorter,
+      reasons,
+      el("div", { class: "row-actions" }, instead),
+    );
+  }
+
+  render();
+  return card;
+}
+
 // ---------- activity draft card ----------
 
 /** An activity's estimate: change minutes or effort and it re-estimates; Save logs it once. */
@@ -2141,13 +2282,6 @@ const SHEETS = {
     const s = state.snapshot;
     const g = s?.goal?.goal;
     const t = s?.targets || {};
-    const days = new Set(t.trainingDays || []);
-    const dayButtons = el("div", { class: "days" },
-      ...WD.map((d, i) => {
-        const b = el("button", { type: "button", class: days.has(i) ? "on" : "", "aria-pressed": String(days.has(i)), "aria-label": WD_LONG[i] }, d);
-        b.addEventListener("click", () => { days.has(i) ? days.delete(i) : days.add(i); b.classList.toggle("on"); b.setAttribute("aria-pressed", String(days.has(i))); });
-        return b;
-      }));
     return el("div", {},
       el("form", { class: "stack", onsubmit: submitter(async (fd) => {
         await api("/goal", { method: "POST", body: JSON.stringify({ targetWeightKg: num(fd.get("tw")), targetBodyFatPct: num(fd.get("tbf")), targetMuscleMassKg: num(fd.get("tmm")), deadline: fd.get("deadline") }) });
@@ -2164,7 +2298,7 @@ const SHEETS = {
         el("button", { class: "btn primary block", type: "submit" }, "Save goal"),
       ),
       el("form", { class: "stack", onsubmit: submitter(async (fd) => {
-        await api("/targets", { method: "POST", body: JSON.stringify({ calorieTarget: num(fd.get("kcal")), proteinTarget: num(fd.get("prot")), stepTarget: num(fd.get("steps")), trainingDays: [...days], gymTime: fd.get("gym") || null, checkDelayMin: num(fd.get("delay")) }) });
+        await api("/targets", { method: "POST", body: JSON.stringify({ calorieTarget: num(fd.get("kcal")), proteinTarget: num(fd.get("prot")), stepTarget: num(fd.get("steps")) }) });
         toast("Targets saved.");
         refresh();
       }) },
@@ -2174,17 +2308,9 @@ const SHEETS = {
           el("label", {}, "Protein g", el("input", { class: "field", name: "prot", type: "number", inputmode: "numeric", value: t.proteinTarget ?? null })),
           el("label", {}, "Steps", el("input", { class: "field", name: "steps", type: "number", inputmode: "numeric", value: t.stepTarget ?? null })),
         ),
-        el("label", {}, "Training days", dayButtons),
-        el("div", { class: "grid2" },
-          el("label", {}, "Gym slot", el("input", { class: "field", name: "gym", type: "time", value: s?.gym?.time ?? null })),
-          el("label", {}, "Check Hevy after",
-            el("select", { class: "field", name: "delay" },
-              ...[[120, "2 hours"], [180, "3 hours"], [240, "4 hours"]].map(([v, label]) =>
-                el("option", { value: String(v), selected: (s?.gym?.checkDelayMin ?? 180) === v ? "" : null }, label)))),
-        ),
-        el("p", { class: "hint" }, "On training days, if Hevy has no workout by then, I'll ask in chat."),
         el("button", { class: "btn block", type: "submit" }, "Save targets"),
       ),
+      routineSection(),
       notificationsSection(),
       accountSection(),
     );

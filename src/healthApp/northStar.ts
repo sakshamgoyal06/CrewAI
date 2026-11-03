@@ -17,6 +17,11 @@ export type DayInputs = {
   workoutsLogged: number;
   /** A sport that stood in for the day's training (see activities.ts), e.g. "Football · 60 min". */
   sportLabel?: string | null;
+  /**
+   * The routine items planned that day and whether each is done (routine.ts). When there are any,
+   * they replace the workout check with one "Routine" check that needs every item done.
+   */
+  routine?: Array<{ label: string; state: "done" | "skipped" | "pending" }> | null;
 };
 
 export type HealthTargets = {
@@ -28,7 +33,7 @@ export type HealthTargets = {
   minMealSessions: number;
 };
 
-export type CheckId = "meals_logged" | "calories" | "protein" | "steps" | "workout";
+export type CheckId = "meals_logged" | "calories" | "protein" | "steps" | "workout" | "routine";
 
 export type DayCheck = {
   id: CheckId;
@@ -105,7 +110,16 @@ export function scoreDay(day: DayInputs, targets: HealthTargets): DayScore {
     detail: `${day.steps.toLocaleString("en-US")} / ${targets.stepTarget.toLocaleString("en-US")}`,
   });
 
-  if (targets.trainingDays.includes(day.weekday)) {
+  if (day.routine?.length) {
+    const done = day.routine.filter((r) => r.state === "done").length;
+    checks.push({
+      id: "routine",
+      label: "Routine",
+      met: done === day.routine.length,
+      progress: clamp01(done / day.routine.length),
+      detail: day.routine.map((r) => `${r.label} ${r.state === "done" ? "✓" : r.state === "skipped" ? "skipped" : "–"}`).join(" · "),
+    });
+  } else if (targets.trainingDays.includes(day.weekday)) {
     const sport = day.workoutsLogged > 0 ? null : day.sportLabel ?? null;
     const met = day.workoutsLogged > 0 || sport !== null;
     checks.push({
