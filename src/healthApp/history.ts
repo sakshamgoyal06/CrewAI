@@ -70,6 +70,9 @@ export type HistoryDay = {
   /** From Health Connect: minutes asleep (credited to the wake-up day) and resting heart rate. */
   sleepMinutes: number | null;
   restingHr: number | null;
+  /** Health Connect's total calories burned (resting metabolism included) and average HRV. */
+  totalKcal: number | null;
+  hrvMs: number | null;
   burn: Burn | null;
   workouts: HistoryWorkout[];
   /** Swims, runs, sports... (not Hevy), with whether each counts toward the day's burn. */
@@ -330,6 +333,8 @@ export async function buildHealthHistory(
       distanceM: nOrNull(a?.walk_distance_m),
       sleepMinutes: nOrNull(a?.sleep_minutes),
       restingHr: nOrNull(a?.resting_hr),
+      totalKcal: nOrNull(a?.total_kcal),
+      hrvMs: nOrNull(a?.hrv_ms),
       burn,
       workouts: dayWorkouts,
       activities: dayActs.map((x) => ({ ...x, counted: lines.get(x.id)?.counted ?? true, why: lines.get(x.id)?.why ?? null })),

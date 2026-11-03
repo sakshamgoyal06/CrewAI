@@ -82,6 +82,7 @@ class ConnectActivity : ComponentActivity() {
     }
 
     private fun onPermissions(granted: Set<String>) {
+        SyncStore(this).permissionsAsked = HealthSync.PERMISSIONS_VERSION
         if (granted.none { it in HealthSync.PERMISSIONS }) {
             // After two refusals Android stops showing the prompt, so offer Health Connect itself too.
             show(

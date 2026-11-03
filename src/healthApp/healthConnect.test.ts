@@ -125,7 +125,7 @@ describe("totalsFromSamples", () => {
         { kind: "exercise", value: 3600, detail: { type: "STRENGTH_TRAINING" } },
         { kind: "exercise", value: 600, detail: { type: "EXERCISE_TYPE_HIKING" } },
       ]),
-    ).toEqual({ steps: 6500, distanceM: 3200, walkMinutes: 40, activeKcal: null, sleepMinutes: null, restingHr: null });
+    ).toEqual({ steps: 6500, distanceM: 3200, walkMinutes: 40, activeKcal: null, totalKcal: null, sleepMinutes: null, restingHr: null, hrvMs: null });
     expect(isWalkType("running")).toBe(false);
   });
 });
@@ -199,6 +199,21 @@ describe("ingestHealthConnect", () => {
       }),
     );
     expect(r).toMatchObject({ ok: true, days: [{ date: "2026-10-27", steps: 3000 }] });
+  });
+
+  it("sums total calories, averages HRV and adds lean mass to the day's weigh-in", async () => {
+    const kcal = (h: number, calories: number) => ({ calories, start_time: `2026-10-27T0${h}:00:00Z`, end_time: `2026-10-27T0${h + 1}:00:00Z` });
+    const r = await ingestHealthConnect(
+      ctx,
+      healthConnectPayload.parse({
+        total_calories: [kcal(3, 95.2), kcal(4, 110)],
+        hrv: [{ rmssd_ms: 40, time: "2026-10-27T01:00:00Z" }, { rmssd_ms: 50, time: "2026-10-27T02:00:00Z" }],
+        weight: [{ kilograms: 84.2, time: "2026-10-27T02:00:00Z" }],
+        lean_body_mass: [{ kilograms: 61.37, time: "2026-10-27T02:00:00Z" }],
+      }),
+    );
+    expect(r).toMatchObject({ ok: true, days: [{ date: "2026-10-27", totalKcal: 205, hrvMs: 45 }] });
+    expect(db.checkins.get("2026-10-27")).toMatchObject({ weight_kg: 84.2, lean_mass_kg: 61.4 });
   });
 
   it("ignores future days", async () => {
