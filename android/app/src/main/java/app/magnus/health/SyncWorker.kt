@@ -21,10 +21,10 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     companion object {
         private val online = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
-        /** Hourly while connected. */
+        /** Hourly while connected. Safe to call on every app open: an existing schedule is kept. */
         fun schedule(context: Context) {
             val req = PeriodicWorkRequestBuilder<SyncWorker>(1, TimeUnit.HOURS).setConstraints(online).build()
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork("hc-sync", ExistingPeriodicWorkPolicy.UPDATE, req)
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork("hc-sync", ExistingPeriodicWorkPolicy.KEEP, req)
         }
 
         fun runNow(context: Context) {

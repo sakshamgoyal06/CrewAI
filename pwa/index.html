@@ -97,6 +97,14 @@
         <button class="link" data-sheet="checkin" type="button">Log it</button>
       </div>
 
+      <div class="due" id="hc-prompt" hidden>
+        <span>Sync steps, sleep and workouts from this phone</span>
+        <span class="due-actions">
+          <button class="link quiet" id="hc-prompt-later" type="button">Not now</button>
+          <button class="btn primary small" id="hc-prompt-go" type="button">Connect</button>
+        </span>
+      </div>
+
       <section class="block fuel" id="fuel" aria-label="Food">
         <div class="block-head">
           <h2>Food</h2>
@@ -113,6 +121,7 @@
         </div>
         <ul class="routine-today" id="routine-today" hidden></ul>
         <div class="tiles" id="move-tiles"></div>
+        <p class="burn-breakdown" id="recovery" hidden></p>
         <p class="burn-breakdown" id="burn-breakdown" hidden></p>
         <ul class="list rows" id="workouts"></ul>
         <ul class="list rows" id="activities"></ul>

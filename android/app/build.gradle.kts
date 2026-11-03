@@ -14,8 +14,8 @@ android {
         applicationId = "app.magnus.health"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         manifestPlaceholders["magnusHost"] = magnusHost
         buildConfigField("String", "MAGNUS_ORIGIN", "\"https://$magnusHost\"")
         resValue("string", "launch_url", "https://$magnusHost/app/?src=android")
@@ -29,6 +29,14 @@ android {
     // Release signing comes from CI secrets; without them the release build is unsigned.
     val storeFile = System.getenv("MAGNUS_KEYSTORE_PATH")
     signingConfigs {
+        // A fixed debug key (committed on purpose): every CI build installs over the last one
+        // without an uninstall, keeps Health Connect access, and has one SHA-256 for assetlinks.
+        getByName("debug") {
+            this.storeFile = file("magnus-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         if (storeFile != null) {
             create("release") {
                 this.storeFile = file(storeFile)

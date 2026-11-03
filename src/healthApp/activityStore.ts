@@ -16,8 +16,15 @@ export type DailyActivity = {
   walkDistanceM: number | null;
   /** Active calories from the phone; left out of the write when unknown. */
   activeKcal?: number | null;
+  /** Minutes asleep, credited to the day you woke up (Health Connect); left out when unknown. */
+  sleepMinutes?: number | null;
+  /** Resting heart rate in bpm (Health Connect); left out when unknown. */
+  restingHr?: number | null;
   source: ActivitySource;
 };
+
+/** Columns added by later migrations: a database without them still takes the steps. */
+const OPTIONAL_COLUMNS = ["active_kcal", "sleep_minutes", "resting_hr"] as const;
 
 /** Upsert one day. Device pushes send the day's running total, so the latest value wins. */
 export async function upsertDailyActivity(
@@ -34,12 +41,16 @@ export async function upsertDailyActivity(
     updated_at: new Date().toISOString(),
   };
   if (activity.activeKcal != null) row.active_kcal = Math.round(activity.activeKcal);
+  if (activity.sleepMinutes != null) row.sleep_minutes = Math.round(activity.sleepMinutes);
+  if (activity.restingHr != null) row.resting_hr = Math.round(activity.restingHr);
   const write = (r: Record<string, unknown>) =>
     supabase.from("health_daily_activity").upsert(r, { onConflict: "user_profile_id,local_date" });
   let { error } = await write(row);
-  // Before the active_kcal migration the column doesn't exist; keep the steps.
-  if (error && "active_kcal" in row && /active_kcal/.test(error.message)) {
-    delete row.active_kcal;
+  // Before a migration adds a column it doesn't exist; drop what the error names and keep the steps.
+  for (let i = 0; error && i < OPTIONAL_COLUMNS.length; i++) {
+    const missing = OPTIONAL_COLUMNS.filter((c) => c in row && error!.message.includes(c));
+    if (!missing.length) break;
+    for (const c of missing) delete row[c];
     ({ error } = await write(row));
   }
   return error ? { ok: false, error: error.message } : { ok: true };
@@ -52,7 +63,8 @@ export async function getActivityRange(
 ): Promise<Map<string, DailyActivity>> {
   const { data, error } = await supabase
     .from("health_daily_activity")
-    .select("local_date, steps, walk_minutes, walk_distance_m, source")
+    // `*`: optional columns arrive with later migrations; a missing one must not break reads.
+    .select("*")
     .eq("user_profile_id", userProfileId)
     .gte("local_date", fromDate)
     .lte("local_date", toDate);
@@ -66,6 +78,8 @@ export async function getActivityRange(
       steps: Number(r.steps) || 0,
       walkMinutes: r.walk_minutes === null ? null : Number(r.walk_minutes),
       walkDistanceM: r.walk_distance_m === null ? null : Number(r.walk_distance_m),
+      sleepMinutes: r.sleep_minutes == null ? null : Number(r.sleep_minutes),
+      restingHr: r.resting_hr == null ? null : Number(r.resting_hr),
       source: r.source as ActivitySource,
     });
   }

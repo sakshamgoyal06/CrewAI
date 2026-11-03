@@ -1,6 +1,7 @@
 /**
- * Android steps, walks and weigh-ins from Health Connect, pushed by the HC Webhook app
- * (github.com/mcnaveen/health-connect-webhook) to `POST /api/health/ingest/health-connect`.
+ * Android steps, walks, sleep, resting heart rate and weigh-ins from Health Connect, pushed to
+ * `POST /api/health/ingest/health-connect` by the Magnus Android app (android/) or, as a fallback,
+ * the HC Webhook app (github.com/mcnaveen/health-connect-webhook).
  *
  * HC Webhook sends only new or changed records per sync, and re-sends a whole bucket when it
  * changes. So buckets are upserted by (kind, start_time) and the day's totals are rebuilt from
@@ -38,13 +39,20 @@ export const healthConnectPayload = z
     active_calories: z.array(z.object({ calories: z.coerce.number().min(0), ...interval }).passthrough()).optional(),
     weight: z.array(z.object({ kilograms: z.coerce.number().positive(), time: iso }).passthrough()).optional(),
     body_fat: z.array(z.object({ percentage: z.coerce.number().positive(), time: iso }).passthrough()).optional(),
+    /** Sleep sessions; asleep_seconds leaves out awake stages when the tracker records them. */
+    sleep: z
+      .array(z.object({ asleep_seconds: z.coerce.number().min(0).optional(), ...interval }).passthrough())
+      .optional(),
+    resting_heart_rate: z
+      .array(z.object({ bpm: z.coerce.number().min(20).max(250), time: iso }).passthrough())
+      .optional(),
   })
   .passthrough();
 
 export type HealthConnectPayload = z.infer<typeof healthConnectPayload>;
 
 export type ActivitySample = {
-  kind: "steps" | "distance" | "exercise" | "active_calories";
+  kind: "steps" | "distance" | "exercise" | "active_calories" | "sleep" | "resting_hr";
   startTime: string;
   endTime: string;
   localDate: string;
@@ -92,6 +100,17 @@ export function parseHealthConnect(payload: HealthConnectPayload, timezone: stri
     });
   }
 
+  // A night's sleep belongs to the day you wake up.
+  for (const n of payload.sleep ?? []) {
+    const span = Math.max(0, (Date.parse(n.end_time) - Date.parse(n.start_time)) / 1000);
+    const asleep = Math.min(span, n.asleep_seconds ?? span);
+    if (asleep <= 0) continue;
+    samples.push({ kind: "sleep", startTime: toIso(n.start_time), endTime: toIso(n.end_time), localDate: day(n.end_time), value: Math.round(asleep), detail: {} });
+  }
+  for (const h of payload.resting_heart_rate ?? []) {
+    samples.push({ kind: "resting_hr", startTime: toIso(h.time), endTime: toIso(h.time), localDate: day(h.time), value: Math.round(h.bpm), detail: {} });
+  }
+
   // Several scale readings on one day: keep the latest of each metric.
   const latest = new Map<string, { time: string; value: number }>();
   const keep = (metric: "weightKg" | "bodyFatPct", time: string, value: number) => {
@@ -114,23 +133,55 @@ export function parseHealthConnect(payload: HealthConnectPayload, timezone: stri
   return { samples, scale };
 }
 
-/** activeKcal is null when the phone sent no active-calories buckets for the day. */
-export type DayTotals = { steps: number; distanceM: number; walkMinutes: number; activeKcal: number | null };
+/** activeKcal, sleepMinutes and restingHr are null when the phone sent none for the day. */
+export type DayTotals = {
+  steps: number;
+  distanceM: number;
+  walkMinutes: number;
+  activeKcal: number | null;
+  sleepMinutes: number | null;
+  restingHr: number | null;
+};
 
-export function totalsFromSamples(
-  rows: Array<{ kind: string; value: number; detail: Record<string, unknown> | null }>,
-): DayTotals {
+type SampleRow = { kind: string; value: number; detail: Record<string, unknown> | null; start_time?: string; end_time?: string };
+
+/** Phone and watch can both record the same night: keep the longest of overlapping sessions. */
+function sleepSeconds(rows: SampleRow[]): number | null {
+  const sessions = rows.filter((r) => r.kind === "sleep");
+  if (!sessions.length) return null;
+  const kept: SampleRow[] = [];
+  for (const r of [...sessions].sort((a, b) => b.value - a.value)) {
+    const s = Date.parse(r.start_time ?? "");
+    const e = Date.parse(r.end_time ?? "");
+    const overlaps = Number.isFinite(s) && Number.isFinite(e) && kept.some((k) => s < Date.parse(k.end_time!) && Date.parse(k.start_time!) < e);
+    if (!overlaps) kept.push(r);
+  }
+  return kept.reduce((t, r) => t + r.value, 0);
+}
+
+export function totalsFromSamples(rows: SampleRow[]): DayTotals {
   let steps = 0;
   let distanceM = 0;
   let walkSeconds = 0;
   let activeKcal: number | null = null;
+  const asleep = sleepSeconds(rows);
+  let restingHr: number | null = null;
   for (const r of rows) {
     if (r.kind === "active_calories") activeKcal = (activeKcal ?? 0) + r.value;
+    // Several readings in a day: the lowest is the resting rate.
+    if (r.kind === "resting_hr" && r.value > 0) restingHr = restingHr === null ? r.value : Math.min(restingHr, r.value);
     if (r.kind === "steps") steps += r.value;
     else if (r.kind === "distance") distanceM += r.value;
     else if (r.kind === "exercise" && isWalkType(String(r.detail?.type ?? ""))) walkSeconds += r.value;
   }
-  return { steps: Math.round(steps), distanceM: Math.round(distanceM), walkMinutes: Math.round(walkSeconds / 60), activeKcal: activeKcal === null ? null : Math.round(activeKcal) };
+  return {
+    steps: Math.round(steps),
+    distanceM: Math.round(distanceM),
+    walkMinutes: Math.round(walkSeconds / 60),
+    activeKcal: activeKcal === null ? null : Math.round(activeKcal),
+    sleepMinutes: asleep === null ? null : Math.min(1440, Math.round(asleep / 60)),
+    restingHr: restingHr === null ? null : Math.round(restingHr),
+  };
 }
 
 export type IngestResult = {
@@ -159,20 +210,24 @@ export async function ingestHealthConnect(
         source: "health_connect",
         updated_at: new Date().toISOString(),
       }));
-  const core = samples.filter((s) => s.kind !== "active_calories");
-  const calories = samples.filter((s) => s.kind === "active_calories");
+  // Calories, sleep and heart rate are extra: if the database predates them, steps and walks
+  // still go through.
+  const EXTRA = new Set<ActivitySample["kind"]>(["active_calories", "sleep", "resting_hr"]);
+  const core = samples.filter((s) => !EXTRA.has(s.kind));
+  const extra = samples.filter((s) => EXTRA.has(s.kind));
   if (core.length > 0) {
     const { error } = await supabase
       .from("health_activity_samples")
       .upsert(toRows(core), { onConflict: "user_profile_id,kind,start_time" });
     if (error) return { ok: false, error: error.message };
   }
-  // Calories burned is extra: if the database predates it, steps and walks still go through.
-  if (calories.length > 0) {
+  for (const kind of EXTRA) {
+    const rows = extra.filter((s) => s.kind === kind);
+    if (!rows.length) continue;
     const { error } = await supabase
       .from("health_activity_samples")
-      .upsert(toRows(calories), { onConflict: "user_profile_id,kind,start_time" });
-    if (error) logger.warn({ err: error.message }, "health connect: active calories not stored");
+      .upsert(toRows(rows), { onConflict: "user_profile_id,kind,start_time" });
+    if (error) logger.warn({ err: error.message, kind }, "health connect: extra samples not stored");
   }
 
   // Swims, runs, sports... recorded by the phone or a watch become activities in the tracker.
@@ -188,7 +243,7 @@ export async function ingestHealthConnect(
   for (const date of dates) {
     const { data, error } = await supabase
       .from("health_activity_samples")
-      .select("kind, value, detail")
+      .select("kind, value, detail, start_time, end_time")
       .eq("user_profile_id", ctx.userProfileId)
       .eq("local_date", date);
     if (error) return { ok: false, error: error.message };
@@ -197,6 +252,8 @@ export async function ingestHealthConnect(
         kind: String(r.kind),
         value: Number(r.value) || 0,
         detail: (r.detail as Record<string, unknown>) ?? null,
+        start_time: r.start_time ? String(r.start_time) : undefined,
+        end_time: r.end_time ? String(r.end_time) : undefined,
       })),
     );
     const saved = await upsertDailyActivity(ctx.userProfileId, {
@@ -205,6 +262,8 @@ export async function ingestHealthConnect(
       walkMinutes: totals.walkMinutes,
       walkDistanceM: totals.distanceM,
       activeKcal: totals.activeKcal,
+      sleepMinutes: totals.sleepMinutes,
+      restingHr: totals.restingHr,
       source: "health_connect",
     });
     if (!saved.ok) return saved;
