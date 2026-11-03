@@ -9,19 +9,42 @@ import { healthAppAuthConfig } from "./auth.js";
 import { cancelRazorpaySubscription, razorpayConfig } from "./billing.js";
 
 /** Tables exported in full (every column), all keyed by user_profile_id. */
-const EXPORT_TABLES = [
+export const EXPORT_TABLES = [
   "user_health_profile",
   "health_goals",
   "health_body_checkins",
   "meal_logs",
+  "meal_daily_rollups",
+  "meal_plan_entries",
   "health_daily_activity",
   "health_activity_samples",
+  "health_activities",
+  "health_routine_items",
+  "health_routine_checks",
   "health_chat_messages",
+  "health_coach_memory",
   "health_workout_checks",
   "health_hevy_proposals",
   "health_rca_reports",
+  "health_interventions",
+  "health_plan_versions",
   "health_notifications",
+  "user_subscriptions",
+  "health_app_events",
 ] as const;
+
+/**
+ * Tables the code touches that are deliberately not in the export, and why. A test fails when
+ * the code starts using a table that is in neither list, so a new feature can't skip the export.
+ */
+export const NOT_EXPORTED: Record<string, string> = {
+  user_profile: "exported separately as `profile`",
+  health_app_tokens: "credentials (hashes of device tokens)",
+  user_integrations: "credentials (the Hevy key)",
+  health_push_subscriptions: "credentials (push endpoint keys for this browser)",
+  food_nutrition: "shared food table, not personal",
+  food_recipes: "shared food table, not personal",
+};
 
 const PAGE = 1000;
 

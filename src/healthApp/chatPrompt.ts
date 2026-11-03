@@ -198,7 +198,7 @@ export function buildTurnContext(
     const w = s.workouts[0];
     if (w) lines.push(`Last Hevy workout: ${w.title} on ${w.localDate}.`);
   } else {
-    lines.push("Hevy: not connected.");
+    lines.push("Hevy: not connected (they paste their Hevy Pro API key from https://hevy.com/settings?developer in You → Food, connections & account).");
   }
   return lines.join("\n");
 }

@@ -38,6 +38,8 @@ const inAndroidApp = () => { try { return sessionStorage.getItem(ANDROID_KEY) ==
 const HC_LINKED_KEY = "magnus-hc-linked";
 const HC_DISMISSED_KEY = "magnus-hc-prompt-dismissed";
 // Built by CI from main (.github/workflows/android.yml) and kept on the android-latest release.
+/** Where Hevy shows the API key (Settings → Developer). */
+const HEVY_KEY_URL = "https://hevy.com/settings?developer";
 const ANDROID_APK_URL = "https://github.com/sakshamgoyal06/crewai/releases/download/android-latest/magnus.apk";
 const ONBOARDED_KEY = "magnus-onboarded";
 
@@ -93,6 +95,11 @@ async function api(path, options = {}) {
       endSession("Magnus is invite-only right now. Ask Saksham for an invite.");
       throw new Error("Invite only.");
     }
+    if (body.error === "token_scope") {
+      // A device token (Android app, HC Webhook) only sends data in; it can't open the app.
+      endSession("That token is for syncing Health Connect only. Sign in with Google instead.");
+      throw new Error("Sync-only token.");
+    }
   }
   const body = await res.json().catch(() => ({}));
   trackApi(path, options.method, res.status, performance.now() - started, res.ok ? null : body.error || `http_${res.status}`);
@@ -129,7 +136,7 @@ function friendlyError(code) {
     billing_unavailable: "Payments aren't available right now. Try again later.",
     invalid_signature: "The payment couldn't be verified. If you were charged, it will show up within a few minutes.",
     daily_limit: "You've hit today's limit for the coach. Log from Today, or try again tomorrow.",
-    hevy_key_invalid: "Hevy didn't accept that key. Copy it again from hevy.com → Settings → Developer.",
+    hevy_key_invalid: "Hevy didn't accept that key. Copy it again from hevy.com/settings?developer.",
   }[code] || "Something went wrong. Try again.";
 }
 
@@ -2249,7 +2256,8 @@ function accountSection() {
         fetchCached("/account").catch(() => {});
         refresh();
       }) },
-        el("p", { class: "hint" }, "Paste your Hevy API key (Hevy Pro: hevy.com → Settings → Developer). I read workouts and only change routines when you tap Apply."),
+        el("p", { class: "hint" }, "Paste your Hevy API key (needs Hevy Pro). I read workouts and only change routines when you tap Apply."),
+        el("a", { class: "link", href: HEVY_KEY_URL, target: "_blank", rel: "noopener" }, "Get your key from Hevy →"),
         el("input", { class: "field", name: "key", type: "password", autocomplete: "off", placeholder: "Hevy API key", required: true }),
         el("button", { class: "btn block", type: "submit" }, "Connect Hevy"),
       ),

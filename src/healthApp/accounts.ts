@@ -22,6 +22,21 @@ const sha256 = (s: string): string => createHash("sha256").update(s).digest("hex
 
 export type AuthUser = { id: string; email?: string | null; name?: string | null };
 
+/**
+ * What a bearer may do. `full`: the signed-in person (Google, the owner token, tokens made before
+ * scopes existed). `ingest`: a device token (the Android app, a phone automation) that may only
+ * send data in and ask whose account it is, so a token lifted off a phone can't read or delete
+ * anything.
+ */
+export type TokenScope = "full" | "ingest";
+
+/** Routes an `ingest` token may call (method + path under /api/health). */
+const INGEST_ROUTES = new Set(["POST /ingest/health-connect", "POST /steps", "GET /whoami"]);
+
+export function scopeAllows(scope: TokenScope, method: string, path: string): boolean {
+  return scope === "full" || INGEST_ROUTES.has(`${method.toUpperCase()} ${path.replace(/\/+$/, "")}`);
+}
+
 /** Sign-up gate. `open` (default) lets anyone with a Google account in; `invite` only listed emails. */
 export function signupAllowed(email: string | null | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
   const mode = env.MAGNUS_SIGNUP_MODE?.trim().toLowerCase() || "open";
@@ -61,22 +76,27 @@ export function publicAuthConfig(env: NodeJS.ProcessEnv = process.env): {
 // ---------- token caches ----------
 
 const CACHE_MS = 5 * 60_000;
-const jwtCache = new Map<string, { at: number; userProfileId: string | null }>();
-const tokenCache = new Map<string, { at: number; userProfileId: string | null }>();
+type CacheEntry = { at: number; userProfileId: string | null; scope?: TokenScope };
+const jwtCache = new Map<string, CacheEntry>();
+const tokenCache = new Map<string, CacheEntry>();
 
-function cached(map: Map<string, { at: number; userProfileId: string | null }>, key: string): string | null | undefined {
+function cachedEntry(map: Map<string, CacheEntry>, key: string): CacheEntry | undefined {
   const hit = map.get(key);
   if (!hit) return undefined;
   if (Date.now() - hit.at > CACHE_MS) {
     map.delete(key);
     return undefined;
   }
-  return hit.userProfileId;
+  return hit;
 }
 
-function remember(map: Map<string, { at: number; userProfileId: string | null }>, key: string, id: string | null): void {
+function cached(map: Map<string, CacheEntry>, key: string): string | null | undefined {
+  return cachedEntry(map, key)?.userProfileId;
+}
+
+function remember(map: Map<string, CacheEntry>, key: string, id: string | null, scope?: TokenScope): void {
   if (map.size > 5000) map.clear();
-  map.set(key, { at: Date.now(), userProfileId: id });
+  map.set(key, { at: Date.now(), userProfileId: id, scope });
 }
 
 /** Forget cached lookups for a profile (after a delete or token revoke). */
@@ -159,11 +179,13 @@ async function userFromSupabaseJwt(jwt: string): Promise<AuthUser | null> {
 
 // ---------- personal tokens ----------
 
-export async function createPersonalToken(userProfileId: string, label = "Health Connect"): Promise<string> {
+/** New tokens are device tokens (`ingest`): they feed data in and can't read the account. */
+export async function createPersonalToken(userProfileId: string, label = "Health Connect", scope: TokenScope = "ingest"): Promise<string> {
   const token = `${PERSONAL_TOKEN_PREFIX}${randomBytes(24).toString("base64url")}`;
-  const { error } = await supabase
-    .from("health_app_tokens")
-    .insert({ user_profile_id: userProfileId, token_hash: sha256(token), label: label.slice(0, 60) });
+  const row = { user_profile_id: userProfileId, token_hash: sha256(token), label: label.slice(0, 60) };
+  let { error } = await supabase.from("health_app_tokens").insert({ ...row, scope });
+  // Before the scope migration (20261104090000) is applied the column isn't there yet.
+  if (error && /scope/.test(error.message)) ({ error } = await supabase.from("health_app_tokens").insert(row));
   if (error) throw new Error(`create token: ${error.message}`);
   return token;
 }
@@ -214,18 +236,25 @@ export async function revokePersonalToken(userProfileId: string, id: string): Pr
   return (data ?? []).length > 0;
 }
 
-async function profileForPersonalToken(token: string): Promise<string | null> {
+async function profileForPersonalToken(token: string): Promise<{ id: string; scope: TokenScope } | null> {
   const hash = sha256(token);
-  const hit = cached(tokenCache, hash);
-  if (hit !== undefined) return hit;
-  const { data, error } = await supabase
+  const hit = cachedEntry(tokenCache, hash);
+  if (hit) return hit.userProfileId ? { id: hit.userProfileId, scope: hit.scope ?? "ingest" } : null;
+  let { data, error } = await supabase
     .from("health_app_tokens")
-    .select("id, user_profile_id")
+    .select("id, user_profile_id, scope")
     .eq("token_hash", hash)
     .maybeSingle();
+  if (error && /scope/.test(error.message)) {
+    // Scope migration not applied yet: every token is a pre-scope token, so `full`.
+    ({ data, error } = await supabase.from("health_app_tokens").select("id, user_profile_id").eq("token_hash", hash).maybeSingle());
+    if (data) data = { ...data, scope: "full" };
+  }
   if (error) throw new Error(`read token: ${error.message}`);
   const id = data ? String(data.user_profile_id) : null;
-  remember(tokenCache, hash, id);
+  // Anything but an explicit `full` is treated as the narrow scope.
+  const scope: TokenScope = data?.scope === "full" ? "full" : "ingest";
+  remember(tokenCache, hash, id, scope);
   if (data) {
     void supabase
       .from("health_app_tokens")
@@ -233,19 +262,19 @@ async function profileForPersonalToken(token: string): Promise<string | null> {
       .eq("id", data.id)
       .then(() => undefined, () => undefined);
   }
-  return id;
+  return id ? { id, scope } : null;
 }
 
 // ---------- request auth ----------
 
-export type ResolveResult = { userProfileId: string } | { error: "unauthorized" | "signup_closed" };
+export type ResolveResult = { userProfileId: string; scope: TokenScope } | { error: "unauthorized" | "signup_closed" };
 
 export async function resolveRequestUser(
   authorizationHeader: string | undefined,
   opts: { timezone?: string } = {},
 ): Promise<ResolveResult> {
   const legacy = authenticateHealthApp(authorizationHeader, healthAppAuthConfig());
-  if (legacy) return { userProfileId: legacy };
+  if (legacy) return { userProfileId: legacy, scope: "full" };
 
   const m = /^Bearer\s+(.+)$/i.exec(authorizationHeader?.trim() ?? "");
   const bearer = m?.[1]?.trim();
@@ -253,14 +282,14 @@ export async function resolveRequestUser(
 
   try {
     if (bearer.startsWith(PERSONAL_TOKEN_PREFIX)) {
-      const id = await profileForPersonalToken(bearer);
-      return id ? { userProfileId: id } : { error: "unauthorized" };
+      const t = await profileForPersonalToken(bearer);
+      return t ? { userProfileId: t.id, scope: t.scope } : { error: "unauthorized" };
     }
     // Supabase access tokens are JWTs (three dot-separated parts).
     if (bearer.split(".").length !== 3) return { error: "unauthorized" };
     const key = sha256(bearer);
     const hit = cached(jwtCache, key);
-    if (hit !== undefined) return hit ? { userProfileId: hit } : { error: "unauthorized" };
+    if (hit !== undefined) return hit ? { userProfileId: hit, scope: "full" } : { error: "unauthorized" };
     const user = await userFromSupabaseJwt(bearer);
     if (!user) {
       remember(jwtCache, key, null);
@@ -269,7 +298,7 @@ export async function resolveRequestUser(
     const id = await profileForAuthUser(user, opts.timezone);
     if (!id) return { error: "signup_closed" };
     remember(jwtCache, key, id);
-    return { userProfileId: id };
+    return { userProfileId: id, scope: "full" };
   } catch (err) {
     logger.error({ err: loggableError(err) }, "health app auth failed");
     return { error: "unauthorized" };

@@ -9,7 +9,6 @@ import {
   type HevyWorkout,
 } from "../pillars/health/workouts/hevy/index.js";
 import { supabase } from "../tools/clients.js";
-import { ownerHevyFallback } from "./auth.js";
 import { trainingActivity, typicalTrainingBurn, type Activity } from "./activities.js";
 import { FALLBACK_WEIGHT_KG, getActivities } from "./activityLog.js";
 import { getActivityRange, type DailyActivity } from "./activityStore.js";
@@ -233,7 +232,7 @@ export async function loadRecentWorkouts(
   userProfileId: string,
   timezone: string,
 ): Promise<{ connected: boolean; fetched: boolean; workouts: WorkoutSummary[] }> {
-  const apiKey = (await hevyApiKeyForUser(userProfileId)) ?? ownerHevyFallback(userProfileId);
+  const apiKey = await hevyApiKeyForUser(userProfileId);
   if (!apiKey) {
     return { connected: false, fetched: false, workouts: [] };
   }
