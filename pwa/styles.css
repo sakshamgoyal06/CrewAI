@@ -722,3 +722,8 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 #sheet-back svg { stroke-width: 2; }
 body.screen-open { overflow: hidden; }
 @keyframes slide-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Weight / body fat line */
+.chart .trendline { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .dot { fill: var(--bg); stroke: var(--accent); stroke-width: 2; }
+.chart .dot.on { fill: var(--accent); r: 5; }

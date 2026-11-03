@@ -23,7 +23,7 @@ const store = {
 
 const state = {
   snapshot: null, sending: false, historySig: null, trainingLoaded: false,
-  history: null, selectedDate: null, open: new Set(), trend: { metric: "calories", range: 30 },
+  history: null, selectedDate: null, open: new Set(), trend: { metric: "calories", range: 30, bodyRange: 90 },
 };
 // Last good responses, so a cold open paints instantly and the network only fills in changes.
 const CHAT_CACHE_KEY = "magnus-chat-cache";
@@ -869,10 +869,9 @@ function renderTrend() {
   const h = state.history;
   if (!h) return;
   const { metric, range } = state.trend;
-  $("hc-prompt-go")?.addEventListener("click", (e) => connectHealthConnect(e.currentTarget));
-$("hc-prompt-later")?.addEventListener("click", () => { store.set(HC_DISMISSED_KEY, true); $("hc-prompt").hidden = true; });
-for (const b of document.querySelectorAll("#trend-tabs button")) b.classList.toggle("on", b.dataset.metric === metric);
-  for (const b of document.querySelectorAll("#trend-range button")) b.classList.toggle("on", Number(b.dataset.range) === range);
+  for (const b of document.querySelectorAll("#trend-tabs button")) b.classList.toggle("on", b.dataset.metric === metric);
+  if (BODY_TREND[metric]) return renderBodyTrend(metric);
+  renderRange([[7, "7D"], [30, "30D"]], range, (v) => { state.trend.range = v; });
   const cfg = TREND[metric];
   const days = h.days.slice(-range);
   const t = h.targets || {};
@@ -991,7 +990,119 @@ function barChart(host, days, cfg, target, onPick) {
 }
 
 for (const b of document.querySelectorAll("#trend-tabs button")) b.addEventListener("click", () => { state.trend.metric = b.dataset.metric; renderTrend(); });
-for (const b of document.querySelectorAll("#trend-range button")) b.addEventListener("click", () => { state.trend.range = Number(b.dataset.range); renderTrend(); });
+$("hc-prompt-go")?.addEventListener("click", (e) => connectHealthConnect(e.currentTarget));
+$("hc-prompt-later")?.addEventListener("click", () => { store.set(HC_DISMISSED_KEY, true); $("hc-prompt").hidden = true; });
+
+/** The range buttons: days for daily metrics, months for weight and body fat. */
+function renderRange(options, current, set) {
+  $("trend-range").replaceChildren(...options.map(([v, label]) =>
+    el("button", { type: "button", class: v === current ? "on" : "", onclick: () => { set(v); renderTrend(); } }, label)));
+}
+
+// ---------- weight & body fat trend ----------
+
+/** Weigh-ins (typed, or synced from a scale through Health Connect) as a line against the goal. */
+const BODY_TREND = {
+  weight: { key: "weight_kg", label: "Weight", unit: "kg", dp: 1, target: "weight_kg" },
+  bodyfat: { key: "body_fat_pct", label: "Body fat", unit: "%", dp: 1, target: "body_fat_pct" },
+};
+
+function renderBodyTrend(metric) {
+  const cfg = BODY_TREND[metric];
+  const range = state.trend.bodyRange;
+  renderRange([[30, "1M"], [90, "3M"], [180, "6M"]], range, (v) => { state.trend.bodyRange = v; });
+  const s = state.snapshot;
+  const to = state.history?.today || s?.today?.date;
+  const from = new Date(dateOf(to).getTime() - (range - 1) * 86_400_000).toISOString().slice(0, 10);
+  const points = (s?.checkins || []).filter((c) => c[cfg.key] != null && c.localDate >= from && c.localDate <= to).map((c) => ({ date: c.localDate, v: c[cfg.key] }));
+  const target = s?.goal?.goal?.targets?.[cfg.target] ?? null;
+  const summary = $("trend-summary");
+  const unit = cfg.unit === "%" ? "%" : ` ${cfg.unit}`;
+  const val = (v) => `${fmt(v, cfg.dp)}${unit}`;
+  const months = { 30: "a month", 90: "3 months", 180: "6 months" }[range];
+
+  const showSummary = () => {
+    summary.classList.remove("picked");
+    if (!points.length) {
+      summary.replaceChildren(el("span", { class: "tv" }, "No weigh-ins yet"), el("span", { class: "ts" }, `Log a weigh-in, or connect a smart scale through Health Connect.`));
+      return;
+    }
+    const last = points.at(-1), first = points[0];
+    const change = last.v - first.v;
+    const parts = [points.length > 1 ? `${change > 0 ? "+" : change < 0 ? "−" : "±"}${fmt(Math.abs(change), cfg.dp)}${unit} in ${months}` : "first weigh-in in this range",
+      target != null ? `target ${val(target)}` : null];
+    summary.replaceChildren(el("span", { class: "tv" }, val(last.v)), el("span", { class: "ts" }, `latest, ${shortDate(last.date)} · ${parts.filter(Boolean).join(" · ")}`));
+  };
+  const showPoint = (p) => {
+    if (!p) return showSummary();
+    summary.classList.add("picked");
+    summary.replaceChildren(el("span", { class: "tv" }, val(p.v)), el("span", { class: "ts" }, shortDate(p.date)));
+  };
+  showSummary();
+  $("trend-note").textContent = points.length > 1 ? "Tap a point to see that weigh-in." : "";
+  $("trend-legend").replaceChildren(...(target != null ? [el("span", { class: "lg" }, el("i", { class: "key-target" }), `Target ${val(target)}`)] : []));
+  if (!points.length) {
+    $("trend-chart").replaceChildren(el("button", { class: "btn block", type: "button", onclick: () => openSheet("checkin") }, "Log a weigh-in"));
+    return;
+  }
+  lineChart($("trend-chart"), points, from, to, target, cfg, showPoint);
+}
+
+function lineChart(host, points, from, to, target, cfg, onPick) {
+  const W = Math.max(260, host.clientWidth || 320), H = 168;
+  const padL = 34, padR = 8, padT = 12, padB = 22;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const vals = points.map((p) => p.v).concat(target != null ? [target] : []);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = Math.max((hi - lo) * 0.15, cfg.unit === "%" ? 0.5 : 1);
+  lo -= pad; hi += pad;
+  const t0 = dateOf(from).getTime(), t1 = dateOf(to).getTime();
+  const x = (d) => padL + ((dateOf(d).getTime() - t0) / Math.max(1, t1 - t0)) * iw;
+  const y = (v) => padT + (1 - (v - lo) / (hi - lo)) * ih;
+
+  const s = svg("svg", { viewBox: `0 0 ${W} ${H}`, width: String(W), height: String(H), role: "img", "aria-label": `${cfg.label} over time` });
+  for (const v of [lo + pad, (lo + hi) / 2, hi - pad]) {
+    s.append(svg("line", { class: "grid", x1: String(padL), x2: String(W - padR), y1: String(y(v)), y2: String(y(v)) }));
+    const tx = svg("text", { class: "axis", x: String(padL - 6), y: String(y(v) + 3.5), "text-anchor": "end" });
+    tx.textContent = fmt(v, cfg.unit === "%" || hi - lo < 6 ? 1 : 0);
+    s.append(tx);
+  }
+  // Month or week ticks along the bottom.
+  const span = (t1 - t0) / 86_400_000;
+  const step = span > 60 ? 30 : 7;
+  for (let k = 0; k * step <= span; k++) {
+    const date = new Date(t1 - k * step * 86_400_000).toISOString().slice(0, 10);
+    if (x(date) < padL + 12) continue;
+    // The newest tick sits on the right edge, so it hangs left instead of being cut off.
+    const tx = svg("text", { class: "axis", x: String(k ? x(date) : W - padR), y: String(H - 6), "text-anchor": k ? "middle" : "end" });
+    tx.textContent = dateOf(date).toLocaleDateString(undefined, step === 30 ? { month: "short", timeZone: "UTC" } : { day: "numeric", month: "short", timeZone: "UTC" });
+    s.append(tx);
+  }
+  if (target != null) s.append(svg("line", { class: "target", x1: String(padL), x2: String(W - padR), y1: String(y(target)), y2: String(y(target)) }));
+  const line = points.map((p, i) => `${i ? "L" : "M"} ${x(p.date).toFixed(1)} ${y(p.v).toFixed(1)}`).join(" ");
+  if (points.length > 1) s.append(svg("path", { class: "trendline", d: line }));
+  const dots = points.map((p) => { const c = svg("circle", { class: "dot", cx: String(x(p.date)), cy: String(y(p.v)), r: "3.5" }); s.append(c); return c; });
+  const hit = svg("rect", { class: "hit", x: String(padL - 8), y: "0", width: String(iw + 16), height: String(H) });
+  s.append(hit);
+  host.replaceChildren(s);
+
+  let active = -1;
+  const show = (i) => {
+    if (i === active) return;
+    active = i;
+    dots.forEach((d, j) => d.classList.toggle("on", j === i));
+    onPick(i >= 0 ? points[i] : null);
+  };
+  const nearest = (e) => {
+    const r = s.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    let best = 0;
+    points.forEach((p, i) => { if (Math.abs(x(p.date) - px) < Math.abs(x(points[best].date) - px)) best = i; });
+    return best;
+  };
+  host.hideTip = () => show(-1);
+  hit.addEventListener("pointerdown", (e) => show(nearest(e)));
+}
 document.addEventListener("pointerdown", (e) => {
   if (!e.target.closest("#trend-chart, #trend-summary")) $("trend-chart").hideTip?.();
 });
