@@ -159,6 +159,9 @@ export function cardHistoryNote(card: ChatCard, states: CardStates): string {
       return `[Root-cause card, experiment "${live.experiment.slice(0, 80)}": ${live.status === "proposed" ? "no answer yet" : live.status}]`;
     case "intervention":
       return interventionNote(live);
+    case "day_plan":
+      // The plan's text is the message itself; nothing to add.
+      return "";
     case "calorie_review":
       return `[Calorie target card: suggests ${live.review.suggestedTarget} kcal (current ${live.review.currentTarget ?? "unset"}); the person applies it from the card]`;
     default:

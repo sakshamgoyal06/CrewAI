@@ -1194,10 +1194,10 @@ function scrollThread() {
   requestAnimationFrame(() => { t.scrollTop = t.scrollHeight; });
 }
 
-function addMessage(role, text) {
+function addMessage(role, text, into = $("thread")) {
   const node = el("div", { class: `msg ${role}` }, text);
-  $("thread").append(node);
-  scrollThread();
+  into.append(node);
+  if (into.id === "thread") scrollThread();
   return node;
 }
 
@@ -1236,22 +1236,36 @@ function renderHistory(messages) {
   const prevBehavior = t.style.scrollBehavior;
   t.style.scrollBehavior = "auto";
   t.replaceChildren();
-  for (const m of messages) {
-    addMessage(m.role === "user" ? "user" : "coach", m.content);
-    for (const c of m.cards || []) appendCard(c);
-    if (m.role === "user" && unanswered(m)) {
-      failedTurn("That one didn't get a reply.", m.turnId ? () => send(m.content, m.turnId, () => {}) : null);
-    }
-  }
+  renderMessages(messages, t, { retry: true });
   requestAnimationFrame(() => { t.scrollTop = t.scrollHeight; t.style.scrollBehavior = prevBehavior; });
 }
 
+/** Messages and their cards into a thread. The day's plan is a card, so its text bubble is skipped. */
+function renderMessages(messages, into, { retry = false } = {}) {
+  for (const m of messages) {
+    const cards = m.cards || [];
+    if (!cards.some((c) => c.type === "day_plan")) addMessage(m.role === "user" ? "user" : "coach", m.content, into);
+    for (const c of cards) appendCard(c, into);
+    if (retry && m.role === "user" && unanswered(m)) {
+      failedTurn("That one didn't get a reply.", m.turnId ? () => send(m.content, m.turnId, () => {}) : null);
+    }
+  }
+}
+
+/** The phone's own date, to tell whether the saved thread is still today's. */
+function localToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Each day is its own thread: GET /chat returns today's (opened by the day's plan); earlier days
+// open from the Past days screen.
 async function loadHistory() {
   try {
-    const { messages } = await api("/chat");
+    const { messages, date } = await api("/chat");
     if (state.sending) return;
     renderHistory(messages);
-    store.set(CHAT_CACHE_KEY, messages.slice(-50));
+    store.set(CHAT_CACHE_KEY, { date: date || localToday(), messages: messages.slice(-50) });
   } catch (err) {
     if (!state.historySig) renderEmpty();
   }
@@ -1504,15 +1518,78 @@ function autosize() {
   $("composer").classList.toggle("has-text", !!t.value.trim());
 }
 
-function appendCard(c) {
-  if (c.type === "meal_draft") $("thread").append(mealDraftCard(c.draft, { saved: c.saved }));
-  else if (c.type === "activity_draft") $("thread").append(activityDraftCard(c.draft, { saved: c.saved }));
-  else if (c.type === "workout_check") $("thread").append(workoutCheckCard(c));
-  else if (c.type === "routine_check") $("thread").append(routineCheckCard(c));
-  else if (c.type === "hevy_proposal") $("thread").append(hevyProposalCard(c));
-  else if (c.type === "rca") $("thread").append(rcaCard(c));
-  else if (c.type === "intervention") $("thread").append(interventionCard(c));
-  else if (c.type === "calorie_review") $("thread").append(calorieReviewCard(c.review));
+function appendCard(c, into = $("thread")) {
+  if (c.type === "meal_draft") into.append(mealDraftCard(c.draft, { saved: c.saved }));
+  else if (c.type === "activity_draft") into.append(activityDraftCard(c.draft, { saved: c.saved }));
+  else if (c.type === "workout_check") into.append(workoutCheckCard(c));
+  else if (c.type === "routine_check") into.append(routineCheckCard(c));
+  else if (c.type === "hevy_proposal") into.append(hevyProposalCard(c));
+  else if (c.type === "rca") into.append(rcaCard(c));
+  else if (c.type === "intervention") into.append(interventionCard(c));
+  else if (c.type === "calorie_review") into.append(calorieReviewCard(c.review));
+  else if (c.type === "day_plan") into.append(dayPlanCard(c));
+}
+
+// ---------- the day's plan ----------
+
+const longDay = (date) => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
+
+/** What the coach opens each day with: plan, targets, goal, yesterday, one thing to look at. */
+function dayPlanCard(c) {
+  const sec = (label, ...kids) => el("div", { class: "dp-sec" }, el("p", { class: "eyebrow" }, label), ...kids);
+  return el("div", { class: "draft dayplan" },
+    el("p", { class: "eyebrow" }, c.greeting),
+    el("h3", { class: "dp-greet" }, `${longDay(c.date)}'s plan`),
+    sec("Today",
+      c.plan?.length
+        ? el("ul", { class: "dp-plan" }, ...c.plan.map((p) => el("li", {}, el("span", { class: "dp-time" }, p.time || "Any time"), el("span", {}, p.label))))
+        : el("p", {}, c.dayKind || "")),
+    el("div", { class: "dp-targets" }, ...(c.targets || []).map((t) => el("div", {}, el("b", {}, t.value), el("small", {}, t.label)))),
+    c.goal ? sec("Goal", el("p", {}, c.goal)) : null,
+    c.yesterday ? sec("Yesterday", el("p", {}, c.yesterday)) : null,
+    sec("This week", el("p", {}, c.week)),
+    c.focus ? el("div", { class: "dp-focus" }, el("p", { class: "eyebrow" }, "Worth a look"), el("p", {}, c.focus)) : null,
+    el("p", { class: "dp-motto" }, c.motivation),
+  );
+}
+
+// ---------- past days ----------
+
+function dayTitle(date) {
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  const yKey = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;
+  return date === yKey ? "Yesterday" : new Date(`${date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+}
+
+function pastDaysSection() {
+  const list = el("div", { class: "menu past-days" });
+  const paint = (days) => {
+    if (!days) return list.replaceChildren(el("p", { class: "hint center" }, "Loading…"));
+    if (!days.length) return list.replaceChildren(el("p", { class: "hint center" }, "Earlier days show here. Each day starts with a fresh chat."));
+    list.replaceChildren(...days.map((d) =>
+      el("button", { class: "menu-row", type: "button", onclick: () => { state.chatDay = d.date; openSheet("chatDay"); } },
+        el("span", {}, el("b", {}, dayTitle(d.date)), el("small", {}, d.preview || `${d.count} messages`)),
+        el("i", { class: "chev-r" }))));
+  };
+  paint(state.pastDays || null);
+  api("/chat/days").then((r) => { state.pastDays = r.days; paint(r.days); }).catch((err) => toast(err.message));
+  return list;
+}
+
+/** One earlier day's chat, read back as it was. Cards still show their live state. */
+function chatDaySection() {
+  const date = state.chatDay;
+  $("sheet-title").textContent = dayTitle(date);
+  const thread = el("div", { class: "thread past" }, el("p", { class: "hint center" }, "Loading…"));
+  api(`/chat?date=${encodeURIComponent(date)}`)
+    .then(({ messages }) => {
+      thread.replaceChildren();
+      if (!messages.length) thread.append(el("p", { class: "hint center" }, "Nothing was said this day."));
+      else renderMessages(messages, thread);
+    })
+    .catch((err) => { thread.replaceChildren(el("p", { class: "hint center" }, err.message)); });
+  return thread;
 }
 
 // ---------- root-cause card ----------
@@ -2792,7 +2869,7 @@ function openSheet(kind, { fromHistory = false } = {}) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account" };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", pastDays: "Past days", chatDay: "" };
   const screen = !SHEET_ONLY.has(kind);
   const sheet = $("sheet");
   sheet.classList.toggle("screen", screen);
@@ -3039,6 +3116,14 @@ const SHEETS = {
     return memorySection();
   },
 
+  pastDays() {
+    return pastDaysSection();
+  },
+
+  chatDay() {
+    return chatDaySection();
+  },
+
   plan() {
     return planHistorySection();
   },
@@ -3062,6 +3147,7 @@ $("google-signin").addEventListener("click", async () => {
 });
 
 for (const t of document.querySelectorAll(".tab")) t.addEventListener("click", () => setView(t.dataset.view));
+$("past-days").addEventListener("click", () => openSheet("pastDays"));
 // The tab bar floats over the bottom of each view, so the views reserve its real height. A fixed
 // 68px guess was too small once Android's font size setting made the tabs taller.
 {
@@ -3167,8 +3253,9 @@ async function start() {
   }
   setView(first, { fromHistory: true });
   renderChips(null);
+  // Only today's thread is shown; a saved one from an earlier day waits for the fresh load.
   const cachedChat = store.get(CHAT_CACHE_KEY, null);
-  if (Array.isArray(cachedChat)) renderHistory(cachedChat);
+  if (cachedChat?.date === localToday() && Array.isArray(cachedChat.messages)) renderHistory(cachedChat.messages);
   const cachedDays = store.get(HISTORY_CACHE_KEY, null);
   if (cachedDays?.days?.length) state.history = cachedDays;
   const cachedSnap = store.get(SNAPSHOT_CACHE_KEY, null);
