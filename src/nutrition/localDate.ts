@@ -1,7 +1,35 @@
 /**
- * User-local calendar date helpers for nutrition (meal logs, rollups, reminders).
+ * User-local calendar date helpers (meal logs, chat days, limits).
  */
-import { getLocalTimeParts } from "../jobs/morningBriefTime.js";
+
+export type LocalTimeParts = {
+  hour: number;
+  minute: number;
+  /** YYYY-MM-DD in the given timezone. */
+  dateKey: string;
+};
+
+/** Hour (0–23), minute and calendar date in `timeZone` for the instant `date`. */
+export function getLocalTimeParts(date: Date, timeZone: string): LocalTimeParts {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes): string => parts.find((p) => p.type === type)?.value ?? "0";
+  const hour = Number.parseInt(get("hour"), 10);
+  const minute = Number.parseInt(get("minute"), 10);
+  return {
+    // Some engines print midnight as "24" with hour12: false.
+    hour: Number.isNaN(hour) ? 0 : hour % 24,
+    minute: Number.isNaN(minute) ? 0 : minute,
+    dateKey: `${get("year")}-${get("month")}-${get("day")}`,
+  };
+}
 
 export const DEFAULT_TIMEZONE = "UTC";
 

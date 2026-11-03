@@ -47,3 +47,13 @@ Hevy client (`src/pillars/health/workouts/hevy/`), the meal estimator chain (`sr
 ## Database
 
 No tables were dropped. Migrations stay in `supabase/migrations/`, and old tables (chat messages, events, lists, LifeOS, YouTube, Kite) are untouched.
+
+## Added 2026-11-03 (audit cleanup)
+
+Telegram-era code that was still in `src/` and running for nothing, moved here at its original path:
+
+- `src/nutrition/store/mealPlanStore.ts`, `mealRollupStore.ts`, `src/nutrition/analytics/anomalyDetector.ts`, `src/nutrition/parseMealPlanJson.ts`, `src/meals/mealDaySummary.ts`, `scripts/nutrition/rebuild-rollups.mts`: meal plans and the daily rollup. The app recomputed `meal_daily_rollups` on every meal log (4+ queries) and nothing read it. The tables stay in the database and in the account export.
+- `src/nutrition/store/mealHistoryStore.ts` and `src/nutrition/types.ts`: full copies; the live files keep only what the app uses.
+- `src/pillars/health/workouts/hevy/parseHevyWriteCommand.ts`, `formatHevyContext.ts`: Telegram commands and prompt formatting for Hevy.
+- `src/jobs/morningBriefTime.ts`: the morning-brief window; its time helper moved to `src/nutrition/localDate.ts`.
+- Removed outright: Upstash Redis (only a readiness ping used it), the Telegram rate-limit setting, the HealthifyMe proxy flag, `maskTelegramUserId`.

@@ -40,7 +40,7 @@ vi.mock("../tools/clients.js", () => {
     };
     return chain;
   }
-  return { supabase: { from: () => query() }, redis: {}, anthropic: {} };
+  return { supabase: { from: () => query() }, anthropic: {} };
 });
 vi.mock("../pillars/health/workouts/hevy/index.js", () => hevy);
 vi.mock("./training.js", async (orig) => ({ ...(await orig<typeof import("./training.js")>()), ...training }));

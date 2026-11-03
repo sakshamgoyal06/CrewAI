@@ -26,7 +26,6 @@ vi.mock("../tools/clients.js", () => {
   };
   return {
     supabase: { from: () => ({ select: () => query("select"), update: (patch: Record<string, unknown>) => query("update", patch) }) },
-    redis: {},
     anthropic: {},
   };
 });

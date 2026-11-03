@@ -19,15 +19,3 @@ export const logger = pino({
     remove: true,
   },
 });
-
-/** Safe for logs in production (short suffix only). */
-export function maskTelegramUserId(telegramUserId: string): string {
-  const s = String(telegramUserId);
-  if (!isProduction()) {
-    return s;
-  }
-  if (s.length <= 4) {
-    return "…";
-  }
-  return `…${s.slice(-4)}`;
-}

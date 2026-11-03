@@ -1,14 +1,10 @@
 /**
  * Meal logging: optional web first (Anthropic web_search and/or SerpAPI + fetch excerpts + Claude),
- * then USDA / Healthify / CalorieNinjas / LLM.
+ * then USDA / CalorieNinjas / LLM.
  */
 
 export function mealLogLlmFallbackEnabled(): boolean {
   return process.env.MAGNUS_MEAL_LOG_LLM_FALLBACK?.trim().toLowerCase() === "true";
-}
-
-export function mealLogHealthifyProxyConfigured(): boolean {
-  return Boolean(process.env.HEALTHIFYME_PROXY_URL?.trim());
 }
 
 /**

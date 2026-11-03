@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../tools/clients.js", () => ({ supabase: {}, redis: {}, anthropic: {} }));
+vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 
 import type { HevyWorkout } from "../pillars/health/workouts/hevy/index.js";
 import { analyzeTraining, describeSets, estimateOneRepMax, searchTemplates, workoutReview } from "./training.js";

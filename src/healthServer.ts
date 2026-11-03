@@ -7,7 +7,7 @@ import { createHealthAppRouter } from "./healthApp/router.js";
 import { logger } from "./logger.js";
 import { securityHeaders } from "./securityHeaders.js";
 import { loggableError } from "./util/loggableError.js";
-import { redis, supabase } from "./tools/clients.js";
+import { supabase } from "./tools/clients.js";
 
 /**
  * The signing cert of the published APK: the private release key held in GitHub secrets
@@ -69,10 +69,6 @@ export function startHealthServer(): Promise<HealthServer> {
 
   app.get("/ready", async (_req, res) => {
     try {
-      const ping = await redis.ping();
-      if (ping !== "PONG") {
-        throw new Error(`redis ping: ${String(ping)}`);
-      }
       const { error } = await supabase
         .from("user_profile")
         .select("id", { head: true, count: "exact" });

@@ -7,7 +7,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { getLocalTimeParts } from "../jobs/morningBriefTime.js";
+import { getLocalTimeParts } from "../nutrition/localDate.js";
 import { estimateMealNutrition } from "../meals/estimateMealNutrition.js";
 import type { MealNutritionEstimate } from "../meals/types.js";
 import { resolveTimezone } from "../nutrition/localDate.js";
@@ -16,7 +16,6 @@ import {
   softDeleteMealSession,
   type MealSessionSummary,
 } from "../nutrition/store/mealHistoryStore.js";
-import { recomputeDailyRollup } from "../nutrition/store/mealRollupStore.js";
 import { supabase } from "../tools/clients.js";
 
 export const MEAL_SLOTS = ["breakfast", "lunch", "dinner", "snack", "unspecified"] as const;
@@ -218,8 +217,6 @@ export async function saveConfirmedMeal(
   if (error) {
     return { ok: false, error: error.message };
   }
-  // Nothing in the app reads the rollup back, so don't make the person wait on it.
-  void recomputeDailyRollup(userProfileId, input.localDate).catch(() => undefined);
   return {
     ok: true,
     mealSessionId: input.draftId,

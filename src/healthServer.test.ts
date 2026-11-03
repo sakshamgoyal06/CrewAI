@@ -4,7 +4,6 @@ vi.mock("./tools/clients.js", () => ({
   supabase: {
     from: () => ({ select: async () => ({ error: null }) }),
   },
-  redis: { ping: async () => "PONG" },
   anthropic: {},
 }));
 

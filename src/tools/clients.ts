@@ -2,7 +2,6 @@ import "dotenv/config";
 
 import { Anthropic } from "@anthropic-ai/sdk";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { Redis } from "@upstash/redis";
 
 import { isProduction } from "../env.js";
 import { logger } from "../logger.js";
@@ -51,23 +50,6 @@ export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey, {
     persistSession: false,
     autoRefreshToken: false,
   },
-});
-
-const redisUrl =
-  process.env.UPSTASH_REDIS_REST_URL?.trim() || process.env.REDIS_URL?.trim();
-const redisToken =
-  process.env.UPSTASH_REDIS_REST_TOKEN?.trim() ||
-  process.env.REDIS_TOKEN?.trim();
-
-if (!redisUrl || !redisToken) {
-  throw new Error(
-    "Missing Redis config: set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (or REDIS_URL and REDIS_TOKEN).",
-  );
-}
-
-export const redis = new Redis({
-  url: redisUrl,
-  token: redisToken,
 });
 
 const anthropicTimeout = Number.parseInt(
