@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /** A small in-memory stand-in for the one table this module touches. */
-type Row = { id: string; user_profile_id: string; text: string; source: string; created_at: string; updated_at: string; forgotten_at: string | null };
+type Row = { id: string; user_profile_id: string; text: string; source: string; created_at: string; updated_at: string; forgotten_at: string | null; expires_on?: string | null };
 const rows: Row[] = [];
 let nextId = 1;
 
@@ -23,6 +23,12 @@ vi.mock("../tools/clients.js", () => {
     const q = {
       eq: (k: keyof Row, v: unknown) => { filters.push((r) => r[k] === v); return q; },
       is: (k: keyof Row, v: unknown) => { filters.push((r) => r[k] === v); return q; },
+      // Only the one shape the module sends: "expires_on.is.null,expires_on.gte.<date>".
+      or: (expr: string) => {
+        const day = /expires_on\.gte\.(\d{4}-\d{2}-\d{2})/.exec(expr)![1]!;
+        filters.push((r) => r.expires_on == null || r.expires_on >= day);
+        return q;
+      },
       order: () => q,
       limit: (n: number) => { limitN = n; return q; },
       select: () => q,
@@ -45,7 +51,7 @@ vi.mock("../tools/clients.js", () => {
   };
 });
 
-import { editLine, forgetLine, loadCoachMemory, MEMORY_MAX_LINES, memoryContextLine, normalizeMemoryText, rememberLine } from "./coachMemory.js";
+import { editLine, forgetLine, loadCoachMemory, MEMORY_MAX_LINES, memoryContextLine, normalizeMemoryText, normalizeUntil, rememberLine } from "./coachMemory.js";
 
 const U = "profile-1";
 
@@ -98,8 +104,28 @@ describe("coach memory", () => {
     expect(await editLine("someone-else", id, "nope")).toMatchObject({ ok: false, error: "not_found" });
   });
 
+  it("ends a time-bound line after its last day, and a repeat moves the end date", async () => {
+    const r = await rememberLine(U, "Travelling till Sunday; hotel food", "coach", { until: "2026-11-08", today: "2026-11-03" });
+    expect(r).toMatchObject({ ok: true, line: { expiresOn: "2026-11-08" } });
+    expect((await loadCoachMemory(U, "2026-11-08")).map((l) => l.text)).toEqual(["Travelling till Sunday; hotel food"]);
+    expect(await loadCoachMemory(U, "2026-11-09")).toEqual([]);
+    const again = await rememberLine(U, "Travelling till Sunday; hotel food", "coach", { until: "2026-11-10", today: "2026-11-03" });
+    expect(again).toMatchObject({ ok: true, duplicate: true, line: { expiresOn: "2026-11-10" } });
+    expect(await loadCoachMemory(U, "2026-11-09")).toHaveLength(1);
+  });
+
+  it("ignores an end date that is malformed or already past", async () => {
+    expect(normalizeUntil("2026-02-30", "2026-01-01")).toBeNull();
+    expect(normalizeUntil("next sunday", "2026-01-01")).toBeNull();
+    expect(normalizeUntil("2026-11-02", "2026-11-03")).toBeNull();
+    expect(normalizeUntil("2026-11-03", "2026-11-03")).toBe("2026-11-03");
+    const r = await rememberLine(U, "Knee rest", "coach", { until: "2020-01-01", today: "2026-11-03" });
+    expect(r).toMatchObject({ ok: true, line: { expiresOn: null } });
+  });
+
   it("writes the context line, or nothing", () => {
     expect(memoryContextLine([])).toBeNull();
     expect(memoryContextLine([{ text: "A" }, { text: "B" }])).toBe("Remembered about them (they see and edit this list on the You tab): A; B.");
+    expect(memoryContextLine([{ text: "Travelling", expiresOn: "2026-11-08" }])).toContain("Travelling (until 2026-11-08).");
   });
 });

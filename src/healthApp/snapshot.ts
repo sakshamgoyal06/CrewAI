@@ -69,6 +69,8 @@ export type HealthSnapshot = {
   gym: { time: string | null; checkDelayMin: number; checkAt: string | null };
   /** Post-gym-slot checks in the 7-day window, newest first. */
   workoutChecks: WorkoutCheck[];
+  /** Routine items and gym sessions skipped in the 7-day window, newest first, with their reason. */
+  recentSkips: Array<{ localDate: string; label: string; reason: string | null }>;
   goal: GoalProgress | null;
   /** Body check-ins for the last ~6 months, oldest first, for the trend chart. */
   checkins: BodyCheckin[];
@@ -87,6 +89,30 @@ export type HealthSnapshot = {
 const CHECKIN_HISTORY_DAYS = 180;
 
 /** Local dates oldest → newest, ending today. */
+/**
+ * What was skipped this week and why, newest first: skipped routine items (a gym item carries its
+ * Hevy check's reason), plus skipped gym checks on days without a routine item for them.
+ */
+export function recentSkips(
+  routineByDate: Map<string, RoutineItemStatus[]>,
+  checks: WorkoutCheck[],
+): Array<{ localDate: string; label: string; reason: string | null }> {
+  const out: Array<{ localDate: string; label: string; reason: string | null }> = [];
+  for (const [date, items] of routineByDate) {
+    for (const i of items) {
+      if (i.state !== "skipped") continue;
+      const reason = i.detail?.startsWith("Skipped · ") ? i.detail.slice("Skipped · ".length) : null;
+      out.push({ localDate: date, label: i.label, reason });
+    }
+  }
+  for (const c of checks) {
+    if (c.status !== "skipped") continue;
+    if ((routineByDate.get(c.localDate) ?? []).some((i) => i.gym)) continue;
+    out.push({ localDate: c.localDate, label: "Gym", reason: c.reason });
+  }
+  return out.sort((a, b) => b.localDate.localeCompare(a.localDate));
+}
+
 export function windowDates(now: Date, timezone: string, days = WINDOW_DAYS): string[] {
   const out: string[] = [];
   for (let i = days - 1; i >= 0; i--) {
@@ -332,6 +358,7 @@ export async function buildHealthSnapshot(
     hevyConnected: hevy.connected,
     gym: { ...gym, checkAt: checkTime(gym) },
     workoutChecks: [...workoutChecks.values()].sort((a, b) => b.localDate.localeCompare(a.localDate)),
+    recentSkips: recentSkips(routineByDate, [...workoutChecks.values()]),
     goal: goal ? computeGoalProgress(goal, checkins, to) : null,
     checkins,
     activities,

@@ -48,7 +48,7 @@ import {
 import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from "./events.js";
 import { loadChatHistory, runHealthChat, type ChatStreamEvent } from "./chat.js";
 import { hydrateCard, loadCardStates } from "./chatCards.js";
-import { editLine, forgetLine, loadCoachMemory, MEMORY_MAX_CHARS, MEMORY_MAX_LINES, rememberLine } from "./coachMemory.js";
+import { editLine, forgetLine, loadCoachMemory, MEMORY_MAX_CHARS, MEMORY_MAX_LINES, memoryToday, rememberLine } from "./coachMemory.js";
 import {
   activityDraftInput,
   activitySaveInput,
@@ -696,29 +696,34 @@ export function createHealthAppRouter(): express.Router {
   );
 
   /** Coach memory: the lines the coach keeps about the person, editable on the You tab. */
-  const memoryText = z.object({ text: z.string().trim().min(1).max(MEMORY_MAX_CHARS) });
+  const memoryText = z.object({
+    text: z.string().trim().min(1).max(MEMORY_MAX_CHARS),
+    until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  });
   router.get(
     "/memory",
-    route("memory", async (ctx) => ({ body: { ok: true, lines: await loadCoachMemory(ctx.userProfileId), max: MEMORY_MAX_LINES } })),
+    route("memory", async (ctx) => ({ body: { ok: true, lines: await loadCoachMemory(ctx.userProfileId, memoryToday(ctx.timezone)), max: MEMORY_MAX_LINES } })),
   );
   router.post(
     "/memory",
     route("memory-add", async (ctx, req) => {
-      const r = await rememberLine(ctx.userProfileId, memoryText.parse(req.body).text, "person");
+      const body = memoryText.parse(req.body);
+      const r = await rememberLine(ctx.userProfileId, body.text, "person", { until: body.until, today: memoryToday(ctx.timezone) });
       return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );
   router.put(
     "/memory/:id",
     route("memory-edit", async (ctx, req) => {
-      const r = await editLine(ctx.userProfileId, String(req.params.id), memoryText.parse(req.body).text);
+      const body = memoryText.parse(req.body);
+      const r = await editLine(ctx.userProfileId, String(req.params.id), body.text, { until: body.until, today: memoryToday(ctx.timezone) });
       return r.ok ? { body: r } : { status: r.error === "not_found" ? 404 : 400, body: r };
     }),
   );
   router.delete(
     "/memory/:id",
     route("memory-forget", async (ctx, req) => {
-      const r = await forgetLine(ctx.userProfileId, String(req.params.id));
+      const r = await forgetLine(ctx.userProfileId, String(req.params.id), memoryToday(ctx.timezone));
       return r.ok ? { body: r } : { status: 404, body: r };
     }),
   );

@@ -3,7 +3,8 @@
  *
  * Two parts, on purpose: the system prompt is the same for everyone and every turn, so it is
  * cached; the context block changes per person and per turn (date, state of the week, phase,
- * unanswered check-ins) and is sent uncached. Rules that code already enforces (a fixed line
+ * unanswered check-ins) and goes at the head of the newest user message, after the cached
+ * history, so it never breaks the cache for what comes before it. Rules that code already enforces (a fixed line
  * under a draft card, the phantom-card guard, tool failure messages) are not repeated here.
  *
  * `MAGNUS_CHAT_PROMPT=legacy` restores the previous prompt and context with a redeploy.
@@ -33,6 +34,7 @@ They have an outcome goal (target weight, body fat % or muscle mass by a deadlin
 - Several things in one message (a meal and steps and a weigh-in): call every tool, in one round if you can.
 
 # Coaching
+- Their newest message starts with a <context> block the app writes (today, the week, their goal, what you remember). They didn't type it and can't see it, so never quote it back as their words.
 - Use the context block for today and this week. Call get_status only when you need more than it has (recent meals, workouts, routine detail).
 - Progress questions: numbers first, then one observation, then at most one suggestion.
 - Off track or "why": call root_cause_analysis once. It returns evidence, one hypothesis and one 7-day experiment on a card. Explain it in one or two sentences; don't stack more advice on it.
@@ -41,10 +43,12 @@ They have an outcome goal (target weight, body fat % or muscle mass by a deadlin
 - Routine: set_daily_routine replaces the whole routine, so include items they didn't mention, with their ids. "gym" is lifting in Hevy. No meal times on the routine. If the result says lifting.short, say in one sentence the plan needs lifting.need strength sessions a week.
 - A sport on a training day counts as training only if it burned about what their gym session does; the card says. Three strength sessions a week is the floor (fewer if they train fewer days); if sport is eating into that, say so.
 - Don't repeat advice you gave in the last few days; refer back to it instead. Don't restate what they just told you.
+- Open loops in the context block are things in motion. When it fits the conversation, ask how an experiment they're trying is going. If the same thing keeps getting skipped for the same reason, name the pattern once, kindly, and offer one small change (a time, a shorter session, a swap); never scold.
 
 # Memory
 - The context block lists what you've been asked to remember. Use it without announcing it, and never contradict it (a remembered injury or schedule beats a generic suggestion).
 - When they tell you something durable that changes how to coach them (a travel pattern, an injury, a food they hate, a working-hours constraint, "don't talk about weight on Mondays"), call remember with one short line in the third person, in the same turn as the log or answer. Not for a meal, a number the app already tracks, or a one-off.
+- A fact that holds for a while and then ends (travelling till Sunday, resting a knee this week, a festival fast) gets remember with until set to its last local date. It drops off on its own after that.
 - When they say something no longer applies or ask you to forget it, call forget with that line's words. Say once that they can see and edit the list under You, then Coach memory, the first time you remember something.
 
 # Phases (the context block names the current one)
@@ -109,7 +113,33 @@ export function chatPhase(s: HealthSnapshot, now: Date): ChatPhase {
  * The uncached system block for this turn: the date, who they are, where the week stands, what
  * is open. Short and factual; every number here is one the coach may quote.
  */
-export function buildTurnContext(s: HealthSnapshot, details: string | null, now: Date, memory: Array<Pick<MemoryLine, "text">> = []): string {
+/** Things in motion the coach should keep in mind: the experiment they agreed to try. */
+export type TurnLoops = { experiment?: { text: string; startedAt: string | null } | null };
+
+const MAX_SKIPS = 5;
+
+/**
+ * One line of what's unfinished: the experiment they're trying and what they skipped this week
+ * and why. Built from tables the app already has; no model call. Null when there's nothing.
+ */
+export function openLoopsLine(s: Pick<HealthSnapshot, "recentSkips">, loops: TurnLoops = {}): string | null {
+  const parts: string[] = [];
+  const e = loops.experiment;
+  if (e?.text) parts.push(`trying "${e.text}"${e.startedAt ? ` since ${e.startedAt.slice(0, 10)}` : ""}`);
+  const skips = (s.recentSkips ?? []).slice(0, MAX_SKIPS);
+  if (skips.length) {
+    parts.push(`skipped ${skips.map((k) => `${k.label} on ${k.localDate}${k.reason ? ` (${k.reason})` : ""}`).join(", ")}`);
+  }
+  return parts.length ? `Open loops: ${parts.join("; ")}.` : null;
+}
+
+export function buildTurnContext(
+  s: HealthSnapshot,
+  details: string | null,
+  now: Date,
+  memory: Array<Pick<MemoryLine, "text" | "expiresOn">> = [],
+  loops: TurnLoops = {},
+): string {
   const lines: string[] = [];
   lines.push(`Now: ${now.toISOString()} (${s.timezone}, local date ${s.today.date}). Phase: ${chatPhase(s, now)}.`);
   if (details) lines.push(`About them: ${details}.`);
@@ -153,6 +183,8 @@ export function buildTurnContext(s: HealthSnapshot, details: string | null, now:
   if (openGym.length || openRoutine.length) {
     lines.push(`Open check-ins: ${[openGym.length ? `gym on ${openGym.join(", ")}` : "", openRoutine.length ? `today's ${openRoutine.join(", ")}` : ""].filter(Boolean).join("; ")}.`);
   }
+  const loopsLine = openLoopsLine(s, loops);
+  if (loopsLine) lines.push(loopsLine);
   if (s.hevyConnected) {
     const w = s.workouts[0];
     if (w) lines.push(`Last Hevy workout: ${w.title} on ${w.localDate}.`);
@@ -163,7 +195,7 @@ export function buildTurnContext(s: HealthSnapshot, details: string | null, now:
 }
 
 /** The old one-line context, kept for `MAGNUS_CHAT_PROMPT=legacy`. */
-export function legacyTurnContext(details: string | null, now: Date, timezone: string, memory: Array<Pick<MemoryLine, "text">> = []): string {
+export function legacyTurnContext(details: string | null, now: Date, timezone: string, memory: Array<Pick<MemoryLine, "text" | "expiresOn">> = []): string {
   const remembered = memoryContextLine(memory);
   return `Now: ${now.toISOString()}. Person's timezone: ${timezone}.${details ? ` About them: ${details}.` : ""}${remembered ? ` ${remembered}` : ""}`;
 }

@@ -67,7 +67,16 @@ vi.mock("./actions.js", async (orig) => {
   return { ...real, startMealDraft: actions.startMealDraft, logSteps: actions.logSteps };
 });
 
-import { completedTurns, dropPhantomCardMentions, historyToMessages, mealDraftReply, runHealthChat, TURN_BUDGET } from "./chat.js";
+import {
+  completedTurns,
+  dropPhantomCardMentions,
+  historyToMessages,
+  historyWindow,
+  mealDraftReply,
+  runHealthChat,
+  TURN_BUDGET,
+  withHistoryCacheMarker,
+} from "./chat.js";
 import { cardHistoryNote, emptyCardStates, hydrateCard } from "./chatCards.js";
 
 const ctx = { userProfileId: "profile-1", timezone: "UTC", now: new Date("2026-10-27T08:00:00Z") };
@@ -491,8 +500,14 @@ describe("coach memory in a turn", () => {
 
     const next = vi.fn().mockResolvedValueOnce(text("Hotel breakfast: eggs or poha, skip the pastries."));
     await runHealthChat(ctx, "what should I eat tomorrow morning?", { create: next, history: [] });
-    const system = next.mock.calls[0]![0].system as Array<{ text: string }>;
-    expect(system[1]!.text).toContain("Remembered about them (they see and edit this list on the You tab): Travels Mon-Wed most weeks; hotel breakfasts.");
+    const sent = next.mock.calls[0]![0] as { system: Array<{ text: string }>; messages: Anthropic.MessageParam[] };
+    // The context rides in the newest message; the system prompt stays the same cached block.
+    expect(sent.system).toHaveLength(1);
+    // (The mock keeps a live reference to the array, so read the first message, not the last.)
+    const newest = sent.messages[0]!.content as Anthropic.TextBlockParam[];
+    expect(newest[0]!.text).toMatch(/^<context>\n/);
+    expect(newest[0]!.text).toContain("Remembered about them (they see and edit this list on the You tab): Travels Mon-Wed most weeks; hotel breakfasts.");
+    expect(newest[1]).toEqual({ type: "text", text: "what should I eat tomorrow morning?" });
   });
 
   it("forgets by the line's words and tells the model when nothing matched", async () => {
@@ -511,5 +526,52 @@ describe("coach memory in a turn", () => {
       .mockResolvedValueOnce(text("I don't have anything about your knee on the list."));
     await runHealthChat(ctx, "forget the knee thing", { create: again, history: [] });
     expect(JSON.parse((lastToolResult(again) as { content: string }).content)).toMatchObject({ ok: false, error: "not_found" });
+  });
+});
+
+describe("history window and cache", () => {
+  const now = new Date("2026-11-03T18:00:00Z");
+  const at = (h: number, content = `m${h}`) => ({ createdAt: new Date(now.getTime() - h * 3_600_000).toISOString(), content });
+
+  it("keeps the last ~36 hours from a start that only moves on 12-hour steps", () => {
+    // now - 36 h = 06:00 Nov 2, floored to 00:00 Nov 2: rows from 42 h ago on are in.
+    const rows = [at(50), at(43), at(41), at(30), at(10), at(2), at(1), at(0.5)];
+    expect(historyWindow(rows, now).map((r) => r.content)).toEqual(["m41", "m30", "m10", "m2", "m1", "m0.5"]);
+    // Two hours later the start hasn't moved, so the first row the model sees is the same.
+    expect(historyWindow(rows, new Date(now.getTime() + 2 * 3_600_000))[0]!.content).toBe("m41");
+  });
+
+  it("drops the oldest in blocks so the start holds still between drops", () => {
+    const rows = Array.from({ length: 30 }, (_, i) => at(30 - i));
+    const kept = historyWindow(rows, now);
+    expect(kept).toHaveLength(22);
+    expect(historyWindow([...rows, at(0.1)], now)[0]).toEqual(kept[0]);
+  });
+
+  it("keeps the last few rows after a quiet spell and trims a very long row", () => {
+    const rows = [at(100), at(90, "x".repeat(5_000)), at(80)];
+    const kept = historyWindow(rows, now);
+    expect(kept).toHaveLength(3);
+    expect(kept[1]!.content.length).toBe(1_500);
+  });
+
+  it("puts one cache marker on the last history block without touching the input", () => {
+    const history: Anthropic.MessageParam[] = [
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "hello" },
+    ];
+    const marked = withHistoryCacheMarker(history);
+    expect(marked[1]).toEqual({ role: "assistant", content: [{ type: "text", text: "hello", cache_control: { type: "ephemeral" } }] });
+    expect(marked[0]).toBe(history[0]);
+    expect(history[1]!.content).toBe("hello");
+    expect(withHistoryCacheMarker([])).toEqual([]);
+  });
+
+  it("logs how big each prompt layer was", async () => {
+    const create = vi.fn().mockResolvedValueOnce(msg([{ type: "text", text: "Hi.", citations: null } as Anthropic.TextBlock], "end_turn"));
+    await runHealthChat(ctx, "hey", { create, history: [{ role: "user", content: "earlier" }, { role: "assistant", content: "reply" }] });
+    const props = events.at(-1)!.props as { historyMessages: number; historyChars: number; contextChars: number };
+    expect(props).toMatchObject({ historyMessages: 2, historyChars: 12 });
+    expect(props.contextChars).toBeGreaterThan(0);
   });
 });

@@ -61,6 +61,7 @@ export function fixtureSnapshot(overrides: Partial<HealthSnapshot> = {}): Health
     hevyConnected: true,
     gym: { time: "18:30", checkDelayMin: 180, checkAt: "21:30" },
     workoutChecks: [],
+    recentSkips: [],
     goal: {
       goal: { id: "g1", startDate: "2026-10-06", deadline: "2027-01-31", targets: { weight_kg: 74 } },
       weeksLeft: 12.7,
