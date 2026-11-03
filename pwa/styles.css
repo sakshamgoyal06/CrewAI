@@ -597,3 +597,6 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .routine-today .main { flex: 1; min-width: 0; display: grid; }
 .routine-today .sub { color: var(--muted); font-size: 0.8rem; }
 .routine-today .btn { padding: 6px 12px; font-size: 0.82rem; }
+.head-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px 8px 10px; border-radius: 999px; border: 1px solid var(--hair-strong); background: var(--raised); color: var(--text); font: 500 0.88rem var(--sans); }
+.head-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.routine-edit { display: block; margin: 0 0 12px; font-size: 0.9rem; }
