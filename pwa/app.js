@@ -222,6 +222,32 @@ function setView(view) {
   if (view === "you") renderYou();
 }
 
+// ---------- appearance ----------
+
+const THEME_KEY = "magnus-theme";
+const THEME_COLOR = { light: "#faf6ee", dark: "#160f1d" };
+
+/** "system" follows the phone; "light" / "dark" pin it. Saved on this device. */
+function applyTheme(choice) {
+  const root = document.documentElement;
+  if (choice === "light" || choice === "dark") root.dataset.theme = choice;
+  else delete root.dataset.theme;
+  for (const m of document.querySelectorAll('meta[name="theme-color"]')) {
+    const own = m.media.includes("light") ? "light" : "dark";
+    m.content = THEME_COLOR[choice === "light" || choice === "dark" ? choice : own];
+  }
+  for (const b of document.querySelectorAll("#theme-seg button")) {
+    const on = b.dataset.theme === (choice || "system");
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", String(on));
+  }
+}
+
+function setTheme(choice) {
+  store.set(THEME_KEY, choice === "system" ? null : choice);
+  applyTheme(choice);
+}
+
 /** The You page: who's signed in and one-line summaries under each settings row. */
 function renderYou() {
   const s = state.snapshot;
@@ -2410,6 +2436,8 @@ for (const t of document.querySelectorAll(".tab")) t.addEventListener("click", (
   fit();
 }
 $("coach-stat").addEventListener("click", () => setView("progress"));
+for (const b of document.querySelectorAll("#theme-seg button")) b.addEventListener("click", () => setTheme(b.dataset.theme));
+applyTheme(store.get(THEME_KEY, null) || "system");
 $("review-btn").addEventListener("click", () => openSheet("review"));
 $("quick").addEventListener("click", () => openSheet("quick"));
 $("photo").addEventListener("click", () => $("photo-input").click());

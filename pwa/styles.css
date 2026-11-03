@@ -33,8 +33,9 @@
   --m-f: #d9837a;
   color-scheme: dark;
 }
+/* Light: follows the phone unless the person picked a theme on the You tab (html[data-theme]). */
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme="dark"]) {
     --bg: #faf6ee;
     --surface: #ffffff;
     --raised: #f1eadf;
@@ -58,6 +59,30 @@
     --m-f: #b5523f;
     color-scheme: light;
   }
+}
+:root[data-theme="light"] {
+  --bg: #faf6ee;
+  --surface: #ffffff;
+  --raised: #f1eadf;
+  --sunken: #f4eee4;
+  --hair: #ece4d6;
+  --hair-strong: #e0d6c5;
+  --text: #1e1526;
+  --muted: #5e5368;
+  --faint: #8b8094;
+  --accent: #5b2e7a;
+  --accent-ink: #fbf7ff;
+  --accent-soft: rgba(91, 46, 122, 0.09);
+  --lilac: #7a5a12;
+  --good: #23714f;
+  --warn: #8f5a06;
+  --bad: #b3261e;
+  --glass: rgba(250, 246, 238, 0.94);
+  --shadow: 0 16px 36px -28px rgba(60, 30, 80, 0.45);
+  --m-p: #7a5a12;
+  --m-c: #3d63b8;
+  --m-f: #b5523f;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -670,3 +695,9 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .routine-today .sub { color: var(--muted); font-size: 0.8rem; }
 .routine-today .btn { padding: 6px 12px; font-size: 0.82rem; }
 #you-who { text-transform: none; letter-spacing: 0.02em; }
+
+/* Appearance switch on the You tab */
+.appearance { margin-top: 28px; }
+.appearance .section-label { margin: 0 0 10px; }
+.appearance .seg { margin: 0; }
+.appearance .seg button { padding: 10px 8px; font-size: 0.9rem; }

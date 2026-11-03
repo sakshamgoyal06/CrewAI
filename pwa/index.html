@@ -5,6 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="theme-color" content="#160f1d" media="(prefers-color-scheme: dark)">
   <meta name="theme-color" content="#faf6ee" media="(prefers-color-scheme: light)">
+  <script>
+    // Theme picked on the You tab, applied before first paint so there's no flash of the other one.
+    try {
+      var t = JSON.parse(localStorage.getItem("magnus-theme") || "null");
+      if (t === "light" || t === "dark") {
+        document.documentElement.dataset.theme = t;
+        document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) { m.content = t === "light" ? "#faf6ee" : "#160f1d"; });
+      }
+    } catch (e) {}
+  </script>
   <meta name="mobile-web-app-capable" content="yes">
   <title>Magnus</title>
   <link rel="manifest" href="manifest.webmanifest">
@@ -199,6 +209,14 @@
         <button class="menu-row" data-sheet="notifications" type="button"><span><b>Notifications</b><small>Nudges and quiet hours</small></span><i class="chev-r"></i></button>
         <button class="menu-row" data-sheet="account" type="button"><span><b>Food, connections &amp; account</b><small>Diet, Hevy, Health Connect, plan, your data</small></span><i class="chev-r"></i></button>
       </nav>
+      <section class="appearance" aria-label="Appearance">
+        <p class="section-label">Appearance</p>
+        <div class="seg" id="theme-seg" role="radiogroup" aria-label="Theme">
+          <button type="button" role="radio" data-theme="system">System</button>
+          <button type="button" role="radio" data-theme="light">Light</button>
+          <button type="button" role="radio" data-theme="dark">Dark</button>
+        </div>
+      </section>
       <p class="hint center"><a href="/app/privacy.html">Privacy</a></p>
     </main>
 
