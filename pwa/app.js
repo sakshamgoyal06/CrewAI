@@ -107,6 +107,9 @@ function friendlyError(code) {
     deadline_must_be_after_start: "The deadline needs to be after today.",
     no_items: "Add at least one item.",
     hevy_not_connected: "Hevy isn't connected for this account.",
+    trial_running: "Something here is already on trial. Let's see how that goes first.",
+    already_answered: "That card was already answered.",
+    item_gone: "That routine item isn't in your routine any more.",
     hevy_unavailable: "Couldn't reach Hevy. Try again in a minute.",
     in_progress: "Still working on that one. The answer will show here in a moment.",
     routine_changed_in_hevy: "That routine changed in Hevy since. Ask the coach for a fresh suggestion.",
@@ -1508,6 +1511,7 @@ function appendCard(c) {
   else if (c.type === "routine_check") $("thread").append(routineCheckCard(c));
   else if (c.type === "hevy_proposal") $("thread").append(hevyProposalCard(c));
   else if (c.type === "rca") $("thread").append(rcaCard(c));
+  else if (c.type === "intervention") $("thread").append(interventionCard(c));
   else if (c.type === "calorie_review") $("thread").append(calorieReviewCard(c.review));
 }
 
@@ -1551,6 +1555,172 @@ function rcaCard(c) {
   }
   render(c);
   return card;
+}
+
+// ---------- plan-change card ----------
+
+const INTERVENTION_EYEBROW = {
+  routine_slipping: "Routine check",
+  routine_mismatch: "Routine check",
+  calories_over: "Food check",
+  calories_under: "Food check",
+  protein_short: "Food check",
+  rebound: "Food check",
+  stalled: "Progress check",
+  logging_fading: "Logging check",
+  over_ambitious: "Goal check",
+  deadline_drift: "Goal date",
+  safety: "Health check",
+};
+const INTERVENTION_DONE = {
+  kept: "Kept as is",
+  confirmed: "Now part of your plan",
+  applied: "Saved to your plan",
+  ended: "Back to your plan",
+  cancelled: "Trial cancelled",
+  expired: "Closed without changes",
+  info: "",
+};
+const REASONS = [["time", "Time"], ["energy", "Energy"], ["enjoyment", "Don't enjoy it"], ["forgot", "Forgot"], ["away", "Away or unwell"]];
+const fmtDay = (d) => (d ? new Date(`${d}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "");
+
+/** A plan that stopped fitting: what we saw, a few changes with what each does to the goal, or keep it. */
+function interventionCard(c) {
+  const card = el("div", { class: "draft intervention" });
+  let busy = false;
+  async function act(action, extra = {}) {
+    if (busy) return;
+    busy = true;
+    card.classList.add("busy");
+    try {
+      const r = await api(`/interventions/${c.interventionId}`, { method: "POST", body: JSON.stringify({ action, ...extra }) });
+      if (r.talk) {
+        busy = false;
+        card.classList.remove("busy");
+        send(r.talk);
+        return;
+      }
+      if (r.card) Object.assign(c, r.card);
+      if (r.message) toast(r.message);
+    } catch (err) {
+      toast(err.message);
+    }
+    busy = false;
+    card.classList.remove("busy");
+    render();
+  }
+
+  function option(o) {
+    const b = el("button", { class: "intervention-option", type: "button" },
+      el("span", { class: "label" }, o.label),
+      o.impact ? el("span", { class: "impact" }, o.impact) : null);
+    b.addEventListener("click", () => act("choose", { optionId: o.id }));
+    return b;
+  }
+
+  function render() {
+    const parts = [el("p", { class: "eyebrow" }, INTERVENTION_EYEBROW[c.pattern] || "Plan check"), el("p", { class: "rca-hypothesis" }, c.title)];
+    if (c.evidence?.length) parts.push(el("ul", { class: "changes evidence" }, ...c.evidence.map((t) => el("li", { class: "info" }, el("span", { class: "sign" }, "·"), el("span", {}, t)))));
+    if (c.status === "offered") {
+      if (c.askReason) {
+        parts.push(el("p", { class: "section-label" }, "What got in the way?"));
+        const row = el("div", { class: "chips-row" });
+        for (const [id, label] of REASONS) {
+          const b = el("button", { class: "chip", type: "button" }, label);
+          b.addEventListener("click", () => act("reason", { reason: id }));
+          row.append(b);
+        }
+        parts.push(row);
+      }
+      if (c.recommendation) parts.push(el("p", { class: "intervention-rec" }, c.recommendation));
+      const real = c.options.filter((o) => o.kind !== "talk");
+      const talk = c.options.find((o) => o.kind === "talk");
+      if (real.length) parts.push(el("div", { class: "intervention-options" }, ...real.map(option)));
+      const keep = el("button", { class: "btn", type: "button" }, c.recommendation ? "Stick to the plan" : "Keep as is");
+      keep.addEventListener("click", () => act("keep"));
+      const talkBtn = el("button", { class: "btn", type: "button" }, "Talk it through");
+      talkBtn.addEventListener("click", () => (talk ? act("choose", { optionId: talk.id }) : send(`About "${c.title}": can we talk it through?`)));
+      parts.push(el("div", { class: "draft-actions" }, keep, talkBtn));
+    } else if (c.status === "trial") {
+      parts.push(el("div", { class: "experiment" },
+        el("p", { class: "section-label" }, `Trying until ${fmtDay(c.reviewOn)}`),
+        el("p", {}, c.chosen || ""),
+        el("p", { class: "hint" }, "Your plan and goal date stay as they are until you decide to keep this.")));
+      const cancel = el("button", { class: "btn", type: "button" }, "Cancel trial");
+      cancel.addEventListener("click", () => act("cancel"));
+      parts.push(el("div", { class: "draft-actions" }, cancel));
+    } else if (c.status === "confirm") {
+      parts.push(el("div", { class: "experiment" }, el("p", { class: "section-label" }, "Make this your plan?"), el("p", {}, c.verdict || c.chosen || "")));
+      const no = el("button", { class: "btn", type: "button" }, "Go back");
+      const yes = el("button", { class: "btn primary", type: "button" }, "Yes, make it my plan");
+      no.addEventListener("click", () => act("decline"));
+      yes.addEventListener("click", () => act("confirm"));
+      parts.push(el("div", { class: "draft-actions" }, no, yes));
+    } else {
+      const done = [INTERVENTION_DONE[c.status] ?? c.status, c.chosen && c.status !== "kept" ? `: ${c.chosen}` : ""].join("");
+      if (done) parts.push(el("p", { class: `rca-status ${c.status === "confirmed" || c.status === "applied" ? "helped" : ""}` }, done));
+      if (c.verdict) parts.push(el("p", { class: "hint" }, c.verdict));
+    }
+    card.replaceChildren(...parts);
+  }
+  render();
+  return card;
+}
+
+/** Plan history: every plan agreed to, newest first. Going back saves a new version, so nothing is lost. */
+function planHistorySection() {
+  const wrap = el("div", { class: "stack plan-history" },
+    el("p", { class: "hint" }, "Each time your goal, targets or routine changes, a version is saved here. Going back to one cancels any trial that's running."));
+  const list = el("ul", { class: "list plan-list" });
+  wrap.append(list);
+  const summary = (s) => {
+    const bits = [];
+    if (s.goal) {
+      const t = s.goal.targets || {};
+      const goal = [t.weight_kg != null ? `${t.weight_kg} kg` : null, t.body_fat_pct != null ? `${t.body_fat_pct}% fat` : null, t.muscle_mass_kg != null ? `${t.muscle_mass_kg} kg muscle` : null].filter(Boolean).join(", ");
+      bits.push(`${goal || "Goal"} by ${fmtDay(s.goal.deadline)}`);
+    }
+    const tg = s.targets || {};
+    bits.push([tg.calorieTarget ? `${tg.calorieTarget} kcal` : null, tg.proteinTarget ? `${tg.proteinTarget} g protein` : null, tg.stepTarget ? `${tg.stepTarget} steps` : null].filter(Boolean).join(" · "));
+    if (s.routine?.length) bits.push(`${s.routine.length} routine ${s.routine.length === 1 ? "item" : "items"}`);
+    return bits.filter(Boolean);
+  };
+  async function paint() {
+    try {
+      const r = await api("/plan/versions");
+      if (!r.versions.length) return list.replaceChildren(el("li", { class: "none hint" }, "No saved versions yet. One is saved the next time your plan changes."));
+      list.replaceChildren(...r.versions.map((v, idx) => {
+        const li = el("li", { class: "plan-version" },
+          el("div", { class: "plan-head" },
+            el("b", {}, `Version ${v.version}`),
+            el("span", { class: "hint" }, new Date(v.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }))),
+          el("p", { class: "plan-reason" }, v.reason),
+          ...summary(v.snapshot).map((t) => el("p", { class: "hint" }, t)));
+        if (idx === 0) li.append(el("p", { class: "rca-status helped" }, "Current plan"));
+        else {
+          const b = el("button", { class: "btn", type: "button" }, "Go back to this");
+          b.addEventListener("click", async () => {
+            b.disabled = true;
+            try {
+              await api(`/plan/versions/${encodeURIComponent(v.id)}/revert`, { method: "POST" });
+              toast(`Back to version ${v.version}.`);
+              refresh?.();
+              paint();
+            } catch (err) {
+              b.disabled = false;
+              toast(err.message);
+            }
+          });
+          li.append(b);
+        }
+        return li;
+      }));
+    } catch (err) {
+      list.replaceChildren(el("li", { class: "none hint" }, err.message));
+    }
+  }
+  paint();
+  return wrap;
 }
 
 // ---------- calorie target review ----------
@@ -1670,6 +1840,7 @@ const NUDGES = [
   ["evening_wrap", "Evening wrap"],
   ["weigh_in", "Weekly weigh-in"],
   ["rca", "Root-cause reviews"],
+  ["intervention", "Plan check-ins"],
 ];
 
 /** Settings: the weekly routine. Saving replaces it, and training days follow from it. */
@@ -2621,7 +2792,7 @@ function openSheet(kind, { fromHistory = false } = {}) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", account: "Food, connections & account" };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account" };
   const screen = !SHEET_ONLY.has(kind);
   const sheet = $("sheet");
   sheet.classList.toggle("screen", screen);
@@ -2866,6 +3037,10 @@ const SHEETS = {
 
   memory() {
     return memorySection();
+  },
+
+  plan() {
+    return planHistorySection();
   },
 
   account() {

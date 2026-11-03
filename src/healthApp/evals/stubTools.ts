@@ -72,6 +72,8 @@ export function stubTools(snapshot: HealthSnapshot | null, options: { failing?: 
         return { result: { ok: true, ...input }, changed: true };
       case "remember":
         return { result: { ok: true, remembered: String(input.text ?? ""), alreadyKnown: false, lines: 1 } };
+      case "respond_to_intervention":
+        return { result: { ok: true, status: input.action === "choose" ? "trial" : input.action === "keep" ? "kept" : "ok", message: "Done." }, changed: true };
       case "forget":
         return { result: { ok: true, forgot: String(input.text ?? ""), lines: 0 } };
       case "set_daily_routine":

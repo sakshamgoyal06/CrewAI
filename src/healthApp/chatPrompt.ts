@@ -12,6 +12,8 @@
 import type { HealthSnapshot } from "./snapshot.js";
 import { memoryContextLine, type MemoryLine } from "./coachMemory.js";
 import { localDateKey } from "../nutrition/localDate.js";
+import { interventionsLine } from "./interventions/card.js";
+import type { Intervention } from "./interventions/types.js";
 
 export const SYSTEM_PROMPT = `You are Magnus, a personal health coach inside an app, talking with one person about their own health. You are warm, direct and specific. You sound like a knowledgeable friend who has their numbers in front of them, not like an app.
 
@@ -43,6 +45,7 @@ They have an outcome goal (target weight, body fat % or muscle mass by a deadlin
 - Routine: set_daily_routine replaces the whole routine, so include items they didn't mention, with their ids. "gym" is lifting in Hevy. No meal times on the routine. If the result says lifting.short, say in one sentence the plan needs lifting.need strength sessions a week.
 - A sport on a training day counts as training only if it burned about what their gym session does; the card says. Three strength sessions a week is the floor (fewer if they train fewer days); if sport is eating into that, say so.
 - Don't repeat advice you gave in the last few days; refer back to it instead. Don't restate what they just told you.
+- Plan changes: the app spots patterns (an item that keeps slipping, a calorie target crossed most days, weight stalled while logging) and offers a smaller change on a card. A chosen change runs as a trial; their agreed plan only changes when they say yes after the check. If they answer a plan-change card in words, call respond_to_intervention with its id; don't re-offer what they declined. Treat the plan as what didn't fit, never them: no "missed again", no "discipline", no "cheat". Every change you suggest says what it does to the goal date; if no easier change keeps the date, say plainly that the current plan is what gets there on time.
 - Open loops in the context block are things in motion. When it fits the conversation, ask how an experiment they're trying is going. If the same thing keeps getting skipped for the same reason, name the pattern once, kindly, and offer one small change (a time, a shorter session, a swap); never scold.
 
 # Memory
@@ -114,7 +117,11 @@ export function chatPhase(s: HealthSnapshot, now: Date): ChatPhase {
  * is open. Short and factual; every number here is one the coach may quote.
  */
 /** Things in motion the coach should keep in mind: the experiment they agreed to try. */
-export type TurnLoops = { experiment?: { text: string; startedAt: string | null } | null };
+export type TurnLoops = {
+  experiment?: { text: string; startedAt: string | null } | null;
+  /** Plan changes in motion: open offers, trials, "make it your plan?" questions. */
+  interventions?: Intervention[];
+};
 
 const MAX_SKIPS = 5;
 
@@ -130,7 +137,9 @@ export function openLoopsLine(s: Pick<HealthSnapshot, "recentSkips">, loops: Tur
   if (skips.length) {
     parts.push(`skipped ${skips.map((k) => `${k.label} on ${k.localDate}${k.reason ? ` (${k.reason})` : ""}`).join(", ")}`);
   }
-  return parts.length ? `Open loops: ${parts.join("; ")}.` : null;
+  const changes = interventionsLine(loops.interventions ?? []);
+  if (!parts.length) return changes;
+  return `Open loops: ${parts.join("; ")}.${changes ? `\n${changes}` : ""}`;
 }
 
 export function buildTurnContext(

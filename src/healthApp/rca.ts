@@ -16,7 +16,7 @@ import { loggableError } from "../util/loggableError.js";
 import type { ActionContext } from "./actions.js";
 import { getActivityRange } from "./activityStore.js";
 import { scoreDay, type CheckId, type DayScore, type HealthTargets } from "./northStar.js";
-import { loadHealthProfile, summarizeWorkout, weekdayOfDate, windowDates } from "./snapshot.js";
+import { loadHealthProfile, summarizeWorkout, weekdayOfDate, windowDates, type WorkoutSummary } from "./snapshot.js";
 import { hevyKey, loadWorkoutHistory } from "./training.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
 
@@ -331,7 +331,11 @@ export function buildDayRecords(input: {
 }
 
 /** Complete days only (today excluded), oldest first. */
-export async function loadDayRecords(userProfileId: string, now: Date, days = RCA_WINDOW_DAYS): Promise<{ records: DayRecord[]; targets: HealthTargets; timezone: string }> {
+export async function loadDayRecords(
+  userProfileId: string,
+  now: Date,
+  days = RCA_WINDOW_DAYS,
+): Promise<{ records: DayRecord[]; targets: HealthTargets; timezone: string; workouts: WorkoutSummary[] }> {
   const { timezone, targets } = await loadHealthProfile(userProfileId);
   const yesterday = new Date(now.getTime() - DAY_MS);
   const dates = windowDates(yesterday, timezone, days);
@@ -351,10 +355,14 @@ export async function loadDayRecords(userProfileId: string, now: Date, days = RC
     apiKey ? loadWorkoutHistory(apiKey, now, Math.ceil(days / 7) + 1) : Promise.resolve(null),
   ]);
   const workoutDates = new Set<string>();
+  const workouts: WorkoutSummary[] = [];
   if (hevy?.ok) {
     for (const w of hevy.workouts) {
       const s = summarizeWorkout(w, timezone);
-      if (s) workoutDates.add(s.localDate);
+      if (s) {
+        workoutDates.add(s.localDate);
+        if (s.localDate >= from && s.localDate <= to) workouts.push(s);
+      }
     }
   }
   const steps = new Map<string, number>();
@@ -368,7 +376,7 @@ export async function loadDayRecords(userProfileId: string, now: Date, days = RC
     workoutDates,
     checks: new Map([...checks].map(([d, c]) => [d, { status: c.status, reason: c.reason }])),
   });
-  return { records, targets, timezone };
+  return { records, targets, timezone, workouts };
 }
 
 // ---------- reports ----------
@@ -459,10 +467,13 @@ export async function writeInsight(
     const msg = await create({
       model: process.env.MAGNUS_HEALTH_CHAT_MODEL?.trim() || "claude-opus-5-5",
       max_tokens: 800,
-      system: SYSTEM,
+      // Cache markers: the instructions and tool are identical for everyone, so repeat runs read them
+      // from cache once they're long enough to be cached.
+      system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
       tools: [
         {
           name: "write_rca",
+          cache_control: { type: "ephemeral" },
           description: "Record the hypothesis and the experiment.",
           input_schema: {
             type: "object",
@@ -519,6 +530,28 @@ const defaultRunDeps: RunDeps = {
   },
 };
 
+export const REUSE_DAYS = 14;
+
+/** A stable key for a set of signals: which patterns, with their numbers. */
+export function evidenceSignature(signals: Pick<Signal, "id" | "text">[]): string {
+  return signals.map((s) => `${s.id}=${s.text}`).sort().join("|");
+}
+
+/**
+ * The insight of a recent report built from the same evidence, so the model isn't asked the same
+ * question twice. Null when the evidence changed or the last one is older than two weeks.
+ */
+export function reusableInsight(
+  signals: Signal[],
+  past: RcaReport[],
+  now: Date,
+): { hypothesis: string; experiment: string; targetCheck: CheckId | null; source: "reused" } | null {
+  if (!signals.length) return null;
+  const sig = evidenceSignature(signals);
+  const hit = past.find((p) => now.getTime() - Date.parse(p.createdAt) < REUSE_DAYS * DAY_MS && evidenceSignature(p.signals) === sig);
+  return hit ? { hypothesis: hit.hypothesis, experiment: hit.experiment, targetCheck: hit.targetCheck, source: "reused" } : null;
+}
+
 /** Mines the window, writes the insight and stores the report. Null when there's nothing off track. */
 export async function runRca(
   userProfileId: string,
@@ -539,7 +572,9 @@ export async function runRca(
   const onTrackDays = recent.filter((r) => r.score.onTrack).length;
   if (!signals.length && trigger !== "manual") return null;
   const past = await deps.past(userProfileId, 6);
-  const insight = await deps.insight(signals, { targets, onTrackDays, days: recent.length, past });
+  // Same evidence as a report from the last two weeks: reuse its insight instead of a model call.
+  const reused = reusableInsight(signals, past, now);
+  const insight = reused ?? (await deps.insight(signals, { targets, onTrackDays, days: recent.length, past }));
   const baseline = insight.targetCheck ? checkHitRate(recent.slice(-14), insight.targetCheck).rate : null;
   const report = await deps.save(userProfileId, {
     trigger,
