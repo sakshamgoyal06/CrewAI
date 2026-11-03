@@ -97,7 +97,7 @@ import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
 import { loadCalorieReview } from "./calorieTarget.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
 
-const chatInput = z.object({ text: z.string().trim().min(1).max(2000) });
+const chatInput = z.object({ text: z.string().trim().min(1).max(2000), turnId: z.string().uuid().optional() });
 
 type Locals = { userProfileId: string };
 type Handler = (ctx: ActionContext, req: express.Request) => Promise<{ status?: number; body: unknown }>;
@@ -393,10 +393,12 @@ export function createHealthAppRouter(): express.Router {
   router.post(
     "/chat",
     route("chat", async (ctx, req) => {
-      const { text } = chatInput.parse(req.body);
+      const { text, turnId } = chatInput.parse(req.body);
       const allowed = await allowUse(ctx, "chat");
       if (allowed !== true) return { status: 429, body: { error: allowed } };
-      return { body: await runHealthChat(ctx, text) };
+      const r = await runHealthChat(ctx, text, { turnId, sessionId: req.get("x-magnus-session") ?? undefined });
+      if ("error" in r) return { status: 409, body: r };
+      return { body: r };
     }),
   );
 

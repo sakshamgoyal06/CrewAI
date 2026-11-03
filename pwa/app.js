@@ -96,7 +96,7 @@ async function api(path, options = {}) {
   }
   const body = await res.json().catch(() => ({}));
   trackApi(path, options.method, res.status, performance.now() - started, res.ok ? null : body.error || `http_${res.status}`);
-  if (!res.ok) throw new Error(friendlyError(body.error));
+  if (!res.ok) throw Object.assign(new Error(friendlyError(body.error)), { inProgress: body.error === "in_progress" });
   return body;
 }
 
@@ -108,6 +108,7 @@ function friendlyError(code) {
     no_items: "Add at least one item.",
     hevy_not_connected: "Hevy isn't connected for this account.",
     hevy_unavailable: "Couldn't reach Hevy. Try again in a minute.",
+    in_progress: "Still working on that one. The answer will show here in a moment.",
     routine_changed_in_hevy: "That routine changed in Hevy since. Ask the coach for a fresh suggestion.",
     routine_not_found: "That routine no longer exists in Hevy.",
     proposal_discarded: "That suggestion was discarded.",
@@ -1170,7 +1171,15 @@ function renderEmpty() {
 
 function historySig(messages) {
   const last = messages.at(-1);
-  return `${messages.length}|${last?.createdAt ?? ""}|${JSON.stringify(messages.flatMap((m) => (m.cards || []).map((c) => c.status ?? "")))}`;
+  return `${messages.length}|${last?.createdAt ?? ""}|${JSON.stringify(messages.flatMap((m) => [m.status ?? "", ...(m.cards || []).map((c) => c.status ?? "")]))}`;
+}
+
+// A turn still marked pending this long after it was sent died with the server; treat it as failed.
+const STALE_TURN_MS = 150_000;
+
+function unanswered(m) {
+  if (m.status === "failed") return true;
+  return m.status === "pending" && Date.now() - new Date(m.createdAt).getTime() > STALE_TURN_MS;
 }
 
 function renderHistory(messages) {
@@ -1186,6 +1195,9 @@ function renderHistory(messages) {
   for (const m of messages) {
     addMessage(m.role === "user" ? "user" : "coach", m.content);
     for (const c of m.cards || []) appendCard(c);
+    if (m.role === "user" && unanswered(m)) {
+      failedTurn("That one didn't get a reply.", m.turnId ? () => send(m.content, m.turnId, () => {}) : null);
+    }
   }
   requestAnimationFrame(() => { t.scrollTop = t.scrollHeight; t.style.scrollBehavior = prevBehavior; });
 }
@@ -1204,17 +1216,23 @@ async function loadHistory() {
 // A coach turn can take a while (meal web search); past this the UI frees up instead of looking dead.
 const CHAT_TIMEOUT_MS = 90_000;
 
+// A turn that failed or timed out is retried under the same id, so the server answers once at most.
+function newTurnId() {
+  return crypto.randomUUID?.() ?? `${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
 /** Returns false when the message wasn't sent, so the caller keeps the text. */
-async function send(text) {
+async function send(text, turnId = newTurnId(), showUser = addMessage.bind(null, "user", text)) {
   if (!text.trim()) return false;
-  return coachTurn(addMessage.bind(null, "user", text), () => api("/chat", { method: "POST", body: JSON.stringify({ text }) }));
+  const request = () => api("/chat", { method: "POST", body: JSON.stringify({ text, turnId }) });
+  return coachTurn(showUser, request, () => send(text, turnId, () => {}));
 }
 
 /**
  * One exchange in the thread: the person's bubble, a typing indicator, then the reply and its
  * cards. Shared by typed messages, meal photos and repeat meals.
  */
-async function coachTurn(showUser, request) {
+async function coachTurn(showUser, request, retry) {
   if (state.sending) {
     toast("Still answering your last message. One moment.");
     return false;
@@ -1240,12 +1258,23 @@ async function coachTurn(showUser, request) {
     if (reply.changed) refresh();
   } catch (err) {
     typing.remove();
-    addMessage("coach err", err.message);
+    failedTurn(err.message, retry);
+    // The server may still be answering: pick the reply up from history shortly.
+    if (err.inProgress) setTimeout(() => { if (!state.sending) loadHistory(); }, 8000);
   } finally {
     state.sending = false;
     $("send").disabled = false;
   }
   return true;
+}
+
+/** The error line under a message that got no reply, with a Retry that reuses the same turn id. */
+function failedTurn(message, retry) {
+  const node = addMessage("coach err", message);
+  if (retry) {
+    node.append(" ", el("button", { class: "link", type: "button", onclick: () => { node.remove(); retry(); } }, "Retry"));
+  }
+  return node;
 }
 
 // ---------- meal photos ----------
