@@ -8,12 +8,25 @@ import { logger } from "./logger.js";
 import { loggableError } from "./util/loggableError.js";
 import { redis, supabase } from "./tools/clients.js";
 
-/** MAGNUS_ANDROID_CERT_SHA256: the signing cert fingerprint(s) of the Android app, comma-separated. */
+/**
+ * The signing cert of the APK that CI builds (android/app/magnus-debug.keystore, committed, so the
+ * fingerprint is public). Vouching for it lets that APK open full screen with no browser bar.
+ */
+export const BUILT_APK_CERT_SHA256 =
+  "8E:67:88:10:B2:47:88:B6:F5:97:DD:93:6B:AD:00:FB:C5:5D:8B:25:B7:FF:39:D2:6A:08:A0:94:67:37:8C:D2";
+
+/**
+ * Digital Asset Links for the Android app: the CI-built APK's cert, plus any in
+ * MAGNUS_ANDROID_CERT_SHA256 (comma-separated, e.g. a Play signing key).
+ * MAGNUS_ANDROID_CERT_SHA256=none turns the built-in one off.
+ */
 export function assetLinks(env: NodeJS.ProcessEnv): unknown[] {
-  const fingerprints = (env.MAGNUS_ANDROID_CERT_SHA256 ?? "")
+  const raw = env.MAGNUS_ANDROID_CERT_SHA256 ?? "";
+  const configured = raw
     .split(",")
     .map((s) => s.trim().toUpperCase())
     .filter((s) => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(s));
+  const fingerprints = [...new Set([...(raw.trim().toLowerCase() === "none" ? [] : [BUILT_APK_CERT_SHA256]), ...configured])];
   if (!fingerprints.length) return [];
   return [
     {
