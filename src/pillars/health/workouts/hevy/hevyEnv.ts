@@ -1,14 +1,8 @@
 /**
  * Hevy Pro public API — https://api.hevyapp.com/docs/
- * Per-user keys in `user_integrations`; env vars are deploy-owner fallback only.
+ * Each person's key lives (sealed) in `user_integrations`; there is no deploy-wide key.
  */
 import { loadUserIntegrations } from "../../../../users/userIntegrations.js";
-
-export function hevyApiKeyFromEnv(): string | undefined {
-  const k =
-    process.env.HEVY_API_KEY?.trim() || process.env.MAGNUS_HEVY_API_KEY?.trim() || "";
-  return k || undefined;
-}
 
 export async function hevyApiKeyForUser(userProfileId?: string): Promise<string | undefined> {
   if (!userProfileId?.trim()) {

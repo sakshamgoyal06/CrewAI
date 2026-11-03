@@ -3,7 +3,6 @@
  * weekly frequency and volume. Pure functions plus the loaders that read Hevy.
  */
 import { localDateKey } from "../nutrition/localDate.js";
-import { ownerHevyFallback } from "./auth.js";
 import {
   fetchHevyExerciseTemplateCatalog,
   fetchHevyRoutinesPage,
@@ -171,7 +170,7 @@ export function analyzeTraining(
 // ---------- Hevy reads ----------
 
 export async function hevyKey(userProfileId: string): Promise<string | undefined> {
-  return (await hevyApiKeyForUser(userProfileId)) ?? ownerHevyFallback(userProfileId);
+  return await hevyApiKeyForUser(userProfileId);
 }
 
 /** Workouts newest first, back to `weeks` ago (at most 15 pages of 10). */

@@ -31,7 +31,7 @@ supabase/migrations/    database schema
 2. Copy `.env.example` to `.env` and fill the required values.
 3. Apply the migrations `supabase/migrations/20261027120000_health_app_activity.sql` and `20261028090000_health_gym_slot.sql` and `20261028100000_health_hevy_proposals.sql` and `20261101090000_health_push_rca.sql` (Supabase SQL editor, or `SUPABASE_DB_PASSWORD=… npm run db:apply -- <file>`).
 4. `OWNER_TIMEZONE=Asia/Kolkata npm run app:setup`, then put the two printed values (`MAGNUS_HEALTH_APP_USER_PROFILE_ID`, `MAGNUS_HEALTH_APP_TOKEN`) in `.env` / Railway.
-5. Connect Hevy in the app (You → Food, connections & account), or set `HEVY_API_KEY` for the owner.
+5. Connect Hevy in the app (You → Food, connections & account).
 6. `npm run dev`, open `http://localhost:8080/app/`, paste the token. On the phone, open the Railway URL in Chrome → menu → **Install app**.
 7. In the app, open **Tracker → ⚙** and set your goal (target weight / body fat / muscle mass + deadline) and daily targets, training days and gym slot.
 
