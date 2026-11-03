@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-  <meta name="theme-color" content="#0c0c0b" media="(prefers-color-scheme: dark)">
-  <meta name="theme-color" content="#f5f2ec" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#160f1d" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#faf6ee" media="(prefers-color-scheme: light)">
   <meta name="mobile-web-app-capable" content="yes">
   <title>Magnus</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -40,50 +40,98 @@
   <section id="onboarding" class="onboarding" hidden></section>
 
   <div id="shell" hidden>
-    <!-- Coach (home) -->
+    <!-- Coach (home): header, messages, composer. Nothing floats over the composer. -->
     <main id="view-coach" class="view coach" aria-label="Coach">
       <header class="coach-head">
-        <div>
+        <div class="head-text">
           <p class="eyebrow" id="coach-date"></p>
-          <h1 class="display" id="greeting">Hello</h1>
+          <h1 class="title-lg" id="greeting">Hello</h1>
         </div>
-        <button class="pill-stat" id="coach-stat" type="button" aria-label="Open tracker">
+        <button class="pill-stat" id="coach-stat" type="button" aria-label="This week's progress">
           <span class="pill-ring"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="fill" id="pill-ring" cx="18" cy="18" r="15"/></svg></span>
-          <span><strong id="pill-days">–</strong><small>of 7 on track</small></span>
+          <span><strong id="pill-days">–</strong><small>/ 7</small></span>
         </button>
       </header>
 
       <div id="thread" class="thread" aria-live="polite"></div>
 
-      <div class="composer-wrap">
-        <div class="chips" id="chips"></div>
-        <form id="composer" class="composer">
-          <button class="icon-btn" id="quick" type="button" aria-label="Quick add">+</button>
-          <button class="icon-btn" id="photo" type="button" aria-label="Log a meal from a photo">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
-          </button>
-          <input id="photo-input" type="file" accept="image/*" hidden>
-          <textarea id="input" rows="1" placeholder="Log a meal, steps, weight… or ask" autocomplete="off"></textarea>
-          <button class="send" id="send" type="submit" aria-label="Send">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
-          </button>
-        </form>
-      </div>
+      <form id="composer" class="composer">
+        <button class="icon-btn ghost" id="quick" type="button" aria-label="Log something">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <textarea id="input" rows="1" placeholder="Message your coach" autocomplete="off"></textarea>
+        <button class="icon-btn ghost" id="photo" type="button" aria-label="Log a meal from a photo">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        </button>
+        <input id="photo-input" type="file" accept="image/*" hidden>
+        <button class="send" id="send" type="submit" aria-label="Send">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+        </button>
+      </form>
     </main>
 
-    <!-- Tracker -->
-    <main id="view-tracker" class="view tracker" aria-label="Tracker" hidden>
-      <header class="tracker-head">
+    <!-- Today: the selected day's food, movement and checks. -->
+    <main id="view-today" class="view page" aria-label="Today" hidden>
+      <header class="page-head">
         <div>
           <p class="eyebrow" id="tracker-date"></p>
-          <h1 class="display">Tracker</h1>
+          <h1 class="title-lg" id="day-card-title">Today</h1>
         </div>
-        <button class="icon-btn ghost" id="settings-btn" type="button" aria-label="Goal and targets">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>
-        </button>
+        <button class="btn primary small" id="log-btn" data-sheet="quick" type="button">+ Log</button>
       </header>
 
-      <section class="hero card">
+      <div class="days-strip" id="days-strip" role="tablist" aria-label="Pick a day"></div>
+
+      <div class="due" id="checkin-due" hidden>
+        <span>Weekly weigh-in is due</span>
+        <button class="link" data-sheet="checkin" type="button">Log it</button>
+      </div>
+
+      <section class="block fuel" id="fuel" aria-label="Food">
+        <div class="block-head">
+          <h2>Food</h2>
+          <span class="meta" id="fuel-meta"></span>
+        </div>
+        <div id="fuel-body"><p class="none">Loading…</p></div>
+        <ul class="list rows" id="meals"></ul>
+      </section>
+
+      <section class="block move" id="move" aria-label="Activity">
+        <div class="block-head">
+          <h2>Movement</h2>
+          <span class="meta" id="move-meta"></span>
+        </div>
+        <ul class="routine-today" id="routine-today" hidden></ul>
+        <div class="tiles" id="move-tiles"></div>
+        <p class="burn-breakdown" id="burn-breakdown" hidden></p>
+        <ul class="list rows" id="workouts"></ul>
+        <ul class="list rows" id="activities"></ul>
+        <div class="block-links">
+          <button class="link" data-sheet="activity" type="button">Add swim, run or sport</button>
+          <button class="link quiet" id="routine-edit" data-sheet="routine" type="button">Set your routine</button>
+        </div>
+      </section>
+
+      <section class="block" id="day-card" aria-label="Checklist">
+        <div class="block-head">
+          <h2>On track</h2>
+          <span class="score" id="today-score">–</span>
+        </div>
+        <ul class="checks" id="checks"></ul>
+        <div class="quick-row" id="quick-row" hidden></div>
+      </section>
+    </main>
+
+    <!-- Progress: the week, trends, goal, lifts. -->
+    <main id="view-progress" class="view page" aria-label="Progress" hidden>
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">This week</p>
+          <h1 class="title-lg">Progress</h1>
+        </div>
+      </header>
+
+      <section class="hero">
         <div class="hero-ring">
           <svg viewBox="0 0 200 200" id="week-ring" aria-hidden="true"></svg>
           <div class="hero-center">
@@ -92,59 +140,15 @@
           </div>
         </div>
         <div class="hero-copy">
-          <p class="eyebrow">North star · on-track days</p>
+          <p class="eyebrow">On-track days</p>
           <p class="hero-line" id="ns-line"></p>
           <div class="week-labels" id="week-labels"></div>
-          <button class="link" id="review-btn" type="button">Your weekly review →</button>
+          <button class="link" id="review-btn" type="button">Weekly review</button>
         </div>
       </section>
 
-      <div class="due" id="checkin-due" hidden>
-        <span>Weekly weigh-in is due.</span>
-        <button class="link" data-sheet="checkin" type="button">Log it</button>
-      </div>
-
-      <!-- Day picker: every card below shows the selected day. -->
-      <div class="days-strip" id="days-strip" role="tablist" aria-label="Pick a day"></div>
-
-      <section class="card fuel" id="fuel" aria-label="Food">
-        <div class="card-head">
-          <h2>Food</h2>
-          <span class="meta" id="fuel-meta"></span>
-        </div>
-        <div id="fuel-body"><p class="none">Loading…</p></div>
-        <ul class="list rows" id="meals"></ul>
-      </section>
-
-      <section class="card move" id="move" aria-label="Activity">
-        <div class="card-head">
-          <h2>Activity</h2>
-          <span class="meta" id="move-meta"></span>
-        </div>
-        <ul class="routine-today" id="routine-today" hidden></ul>
-        <div class="tiles" id="move-tiles"></div>
-        <p class="burn-breakdown" id="burn-breakdown" hidden></p>
-        <ul class="list rows" id="workouts"></ul>
-        <ul class="list rows" id="activities"></ul>
-        <button class="link add-activity" data-sheet="activity" type="button">+ Add swim, run or sport</button>
-      </section>
-
-      <section class="card" id="day-card">
-        <div class="card-head">
-          <h2 id="day-card-title">Today</h2>
-          <span class="score" id="today-score">–</span>
-        </div>
-        <ul class="checks" id="checks"></ul>
-        <div class="quick-row" id="quick-row">
-          <button class="quick" data-sheet="meal" type="button"><span>Meal</span></button>
-          <button class="quick" data-sheet="steps" type="button"><span>Steps</span></button>
-          <button class="quick" data-sheet="activity" type="button"><span>Activity</span></button>
-          <button class="quick" data-sheet="checkin" type="button"><span>Weigh-in</span></button>
-        </div>
-      </section>
-
-      <section class="card trends" id="trends" aria-label="Trends">
-        <div class="card-head">
+      <section class="block trends" id="trends" aria-label="Trends">
+        <div class="block-head">
           <h2>Trends</h2>
           <div class="range" id="trend-range" role="group" aria-label="Range">
             <button type="button" data-range="7">7D</button>
@@ -164,8 +168,8 @@
         <p class="hint" id="trend-note"></p>
       </section>
 
-      <section class="card" id="goal-card">
-        <div class="card-head">
+      <section class="block" id="goal-card">
+        <div class="block-head">
           <h2>Goal</h2>
           <span class="meta" id="goal-meta"></span>
         </div>
@@ -173,19 +177,43 @@
         <div id="target-review" class="target-review"></div>
       </section>
 
-      <section class="card">
-        <div class="card-head"><h2>Lifts</h2><span class="meta" id="lifts-meta"></span></div>
+      <section class="block">
+        <div class="block-head"><h2>Lifts</h2><span class="meta" id="lifts-meta"></span></div>
         <ul class="list" id="lifts"></ul>
         <button class="btn block ask" id="lifts-ask" type="button" hidden>Ask the coach what to change</button>
       </section>
+    </main>
+
+    <!-- You: settings as a short menu; each row opens one focused sheet. -->
+    <main id="view-you" class="view page" aria-label="You" hidden>
+      <header class="page-head">
+        <div>
+          <p class="eyebrow" id="you-who">Account</p>
+          <h1 class="title-lg">You</h1>
+        </div>
+      </header>
+      <nav class="menu" aria-label="Settings">
+        <button class="menu-row" data-sheet="settings" type="button"><span><b>Goal &amp; targets</b><small id="you-goal">Weight, body fat, deadline, daily targets</small></span><i class="chev-r"></i></button>
+        <button class="menu-row" data-sheet="routine" type="button"><span><b>Routine</b><small id="you-routine">Walks, gym, swims, sports and reminders</small></span><i class="chev-r"></i></button>
+        <button class="menu-row" data-sheet="checkin" type="button"><span><b>Weigh-in</b><small>Weight, body fat, muscle</small></span><i class="chev-r"></i></button>
+        <button class="menu-row" data-sheet="notifications" type="button"><span><b>Notifications</b><small>Nudges and quiet hours</small></span><i class="chev-r"></i></button>
+        <button class="menu-row" data-sheet="account" type="button"><span><b>Food, connections &amp; account</b><small>Diet, Hevy, Health Connect, plan, your data</small></span><i class="chev-r"></i></button>
+      </nav>
+      <p class="hint center"><a href="/app/privacy.html">Privacy</a></p>
     </main>
 
     <nav class="tabbar" aria-label="Sections">
       <button class="tab active" data-view="coach" type="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Coach</span>
       </button>
-      <button class="tab" data-view="tracker" type="button">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg><span>Tracker</span>
+      <button class="tab" data-view="today" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span>Today</span>
+      </button>
+      <button class="tab" data-view="progress" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M7 16v-5M12 16V7M17 16v-8"/></svg><span>Progress</span>
+      </button>
+      <button class="tab" data-view="you" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.2-3.6 4.1-5.4 7.5-5.4s6.3 1.8 7.5 5.4"/></svg><span>You</span>
       </button>
     </nav>
   </div>

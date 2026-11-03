@@ -58,14 +58,15 @@ export function foodPrefsEditor(el, value, onChange = () => {}) {
     };
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add(); } });
 
-    node.replaceChildren(
+    // replaceChildren() would print a null as the text "null".
+    node.replaceChildren(...[
       diets,
       note,
       el("p", { class: "section-label" }, "Anything you avoid?"),
       el("p", { class: "hint" }, "Allergies, intolerances or just won't eat. I'll never suggest these. Tap again to remove."),
       chips,
       el("div", { class: "avoid-add" }, input, el("button", { class: "btn", type: "button", onclick: add }, "Add")),
-    );
+    ].filter(Boolean));
   }
 
   paint();
