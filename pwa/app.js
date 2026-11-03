@@ -1673,6 +1673,67 @@ function settingRow(title, sub, control) {
     control);
 }
 
+/** Coach memory: the lines the coach keeps about you. Read, edit, remove, add. */
+function memorySection() {
+  const wrap = el("div", { class: "stack memory" },
+    el("p", { class: "hint" }, "When you tell the coach something that should stick, like a travel week, an injury or a food you can't stand, it lands here and goes into every reply. Edit or remove anything; nothing is kept that you can't see."));
+  const list = el("ul", { class: "list memory-list" });
+  const input = el("input", { class: "field", name: "text", maxlength: "200", placeholder: "Something the coach should remember", autocomplete: "off", required: true });
+  const count = el("p", { class: "hint count" });
+  const form = el("form", { class: "memory-add", onsubmit: submitter(async (fd) => {
+    const text = String(fd.get("text") || "").trim();
+    if (!text) return;
+    const r = await api("/memory", { method: "POST", body: JSON.stringify({ text }) });
+    if (!r.ok) throw new Error(r.error === "memory_full" ? "The list is full. Remove a line first." : "Couldn't save that.");
+    input.value = "";
+    toast(r.duplicate ? "Already on the list." : "The coach will remember that.");
+    await paint();
+  }) }, input, el("button", { class: "btn primary", type: "submit" }, "Add"));
+  wrap.append(list, form, count);
+
+  function row(line) {
+    const li = el("li", { class: "memory-line" });
+    const text = el("span", { class: "main" }, line.text);
+    const edit = el("button", { class: "link small", type: "button", onclick: () => {
+      const box = el("input", { class: "field", value: line.text, maxlength: "200" });
+      const save = el("button", { class: "link small", type: "button", onclick: async () => {
+        const next = box.value.trim();
+        if (!next || next === line.text) { li.replaceWith(row(line)); return; }
+        try {
+          const r = await api(`/memory/${encodeURIComponent(line.id)}`, { method: "PUT", body: JSON.stringify({ text: next }) });
+          li.replaceWith(row(r.line));
+        } catch (err) { toast(err.message); }
+      } }, "Save");
+      li.replaceChildren(box, save);
+      box.focus();
+    } }, "Edit");
+    const remove = el("button", { class: "link small quiet", type: "button", onclick: async () => {
+      try {
+        await api(`/memory/${encodeURIComponent(line.id)}`, { method: "DELETE" });
+        li.remove();
+        await paint();
+      } catch (err) { toast(err.message); }
+    } }, "Remove");
+    li.append(text, el("span", { class: "memory-actions" }, edit, remove));
+    return li;
+  }
+
+  async function paint() {
+    try {
+      const r = await api("/memory");
+      state.memoryCount = r.lines.length;
+      list.replaceChildren(...(r.lines.length ? r.lines.map(row) : [el("li", { class: "none hint" }, "Nothing yet. Tell the coach in chat, or add a line below.")]));
+      count.textContent = r.lines.length ? `${r.lines.length} of ${r.max} lines.` : "";
+      const sub = $("you-memory");
+      if (sub) sub.textContent = r.lines.length ? `${r.lines.length} ${r.lines.length === 1 ? "line" : "lines"} the coach keeps in mind` : "What the coach remembers about you";
+    } catch (err) {
+      list.replaceChildren(el("li", { class: "none hint" }, err.message));
+    }
+  }
+  paint();
+  return wrap;
+}
+
 function notificationsSection() {
   const wrap = el("div", { class: "settings-list" });
   const phone = el("div", { class: "set-group" });
@@ -2492,7 +2553,7 @@ function openSheet(kind) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", account: "Food, connections & account" };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", account: "Food, connections & account" };
   const screen = !SHEET_ONLY.has(kind);
   const sheet = $("sheet");
   sheet.classList.toggle("screen", screen);
@@ -2718,6 +2779,10 @@ const SHEETS = {
 
   notifications() {
     return notificationsSection();
+  },
+
+  memory() {
+    return memorySection();
   },
 
   account() {

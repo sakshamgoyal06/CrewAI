@@ -43,6 +43,25 @@ vi.mock("../tools/clients.js", () => {
 });
 vi.mock("./events.js", () => ({ enqueueEvents: (rows: Array<Record<string, unknown>>) => events.push(...rows) }));
 vi.mock("./snapshot.js", () => ({ buildHealthSnapshot: vi.fn() }));
+const memory: Array<{ id: string; text: string; source: string; createdAt: string }> = [];
+vi.mock("./coachMemory.js", async (orig) => {
+  const real = await orig<typeof import("./coachMemory.js")>();
+  return {
+    ...real,
+    loadCoachMemory: async () => [...memory],
+    rememberLine: async (_user: string, text: string, source: string) => {
+      const line = { id: `m${memory.length + 1}`, text: real.normalizeMemoryText(text)!, source, createdAt: "2026-10-27T08:00:00Z" };
+      memory.push(line);
+      return { ok: true, line, duplicate: false, count: memory.length };
+    },
+    forgetLine: async (_user: string, text: string) => {
+      const i = memory.findIndex((m) => m.text.toLowerCase().includes(text.toLowerCase()));
+      if (i < 0) return { ok: false, error: "not_found", candidates: [], count: memory.length };
+      const [forgotten] = memory.splice(i, 1);
+      return { ok: true, forgotten, count: memory.length };
+    },
+  };
+});
 vi.mock("./actions.js", async (orig) => {
   const real = await orig<typeof import("./actions.js")>();
   return { ...real, startMealDraft: actions.startMealDraft, logSteps: actions.logSteps };
@@ -80,6 +99,7 @@ const draft = {
 beforeEach(() => {
   saved.length = 0;
   events.length = 0;
+  memory.length = 0;
   actions.startMealDraft.mockReset().mockResolvedValue(draft);
   actions.logSteps.mockClear();
 });
@@ -451,5 +471,45 @@ describe("streaming events", () => {
     ]);
     expect(reply).toMatchObject({ text: "Saved 9,000 steps." });
     expect(create.mock.calls[0]![1].onText).toBeTypeOf("function");
+  });
+});
+
+describe("coach memory in a turn", () => {
+  const text = (t: string) => msg([{ type: "text", text: t, citations: null } as Anthropic.TextBlock], "end_turn");
+
+  it("remembers through the tool and carries the line into the next turn's context", async () => {
+    const create = vi
+      .fn()
+      .mockResolvedValueOnce(msg([{ type: "tool_use", id: "t1", name: "remember", input: { text: "Travels Mon-Wed most weeks; hotel breakfasts." } } as Anthropic.ToolUseBlock], "tool_use"))
+      .mockResolvedValueOnce(text("Noted. You can see what I keep under You, then Coach memory."));
+    const reply = await runHealthChat(ctx, "I travel Mon to Wed most weeks btw", { create, history: [] });
+    expect(reply.text).toMatch(/Noted/);
+    expect(memory.map((m) => m.text)).toEqual(["Travels Mon-Wed most weeks; hotel breakfasts"]);
+    const toolResult = lastToolResult(create) as { content: string };
+    expect(JSON.parse(toolResult.content)).toMatchObject({ ok: true, remembered: "Travels Mon-Wed most weeks; hotel breakfasts", lines: 1 });
+    expect((events[0]!.props as { tools: Array<{ name: string }> }).tools).toMatchObject([{ name: "remember" }]);
+
+    const next = vi.fn().mockResolvedValueOnce(text("Hotel breakfast: eggs or poha, skip the pastries."));
+    await runHealthChat(ctx, "what should I eat tomorrow morning?", { create: next, history: [] });
+    const system = next.mock.calls[0]![0].system as Array<{ text: string }>;
+    expect(system[1]!.text).toContain("Remembered about them (they see and edit this list on the You tab): Travels Mon-Wed most weeks; hotel breakfasts.");
+  });
+
+  it("forgets by the line's words and tells the model when nothing matched", async () => {
+    memory.push({ id: "m1", text: "Knee hurts on stairs; no lunges", source: "coach", createdAt: "2026-10-20T08:00:00Z" });
+    const create = vi
+      .fn()
+      .mockResolvedValueOnce(msg([{ type: "tool_use", id: "t1", name: "forget", input: { text: "knee hurts" } } as Anthropic.ToolUseBlock], "tool_use"))
+      .mockResolvedValueOnce(text("Good to hear. Forgotten."));
+    await runHealthChat(ctx, "knee's fine now, forget that", { create, history: [] });
+    expect(memory).toEqual([]);
+    expect(JSON.parse((lastToolResult(create) as { content: string }).content)).toMatchObject({ ok: true, forgot: "Knee hurts on stairs; no lunges", lines: 0 });
+
+    const again = vi
+      .fn()
+      .mockResolvedValueOnce(msg([{ type: "tool_use", id: "t1", name: "forget", input: { text: "knee" } } as Anthropic.ToolUseBlock], "tool_use"))
+      .mockResolvedValueOnce(text("I don't have anything about your knee on the list."));
+    await runHealthChat(ctx, "forget the knee thing", { create: again, history: [] });
+    expect(JSON.parse((lastToolResult(again) as { content: string }).content)).toMatchObject({ ok: false, error: "not_found" });
   });
 });

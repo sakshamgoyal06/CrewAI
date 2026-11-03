@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildTurnContext, chatPhase, LEGACY_SYSTEM_PROMPT, SYSTEM_PROMPT, systemPrompt } from "./chatPrompt.js";
+import { buildTurnContext, chatPhase, LEGACY_SYSTEM_PROMPT, legacyTurnContext, SYSTEM_PROMPT, systemPrompt } from "./chatPrompt.js";
 import { FIXTURE_DETAILS, FIXTURE_NOW, fixtureSnapshot } from "./evals/fixture.js";
 
 describe("chatPhase", () => {
@@ -33,6 +33,15 @@ describe("buildTurnContext", () => {
     );
     expect(later).toContain("Open check-ins: gym on 2026-11-01");
     expect(ctx).toContain("Last Hevy workout: Push day on 2026-11-01.");
+  });
+
+  it("carries the coach's memory lines, and leaves the line out when there are none", () => {
+    const lines = [{ text: "Travels Mon-Wed most weeks" }, { text: "Hates karela" }];
+    expect(buildTurnContext(fixtureSnapshot(), FIXTURE_DETAILS, FIXTURE_NOW, lines)).toContain(
+      "Remembered about them (they see and edit this list on the You tab): Travels Mon-Wed most weeks; Hates karela.",
+    );
+    expect(buildTurnContext(fixtureSnapshot(), FIXTURE_DETAILS, FIXTURE_NOW)).not.toContain("Remembered about them");
+    expect(legacyTurnContext(null, FIXTURE_NOW, "Asia/Kolkata", lines)).toContain("Remembered about them");
   });
 
   it("says when there is no goal and no Hevy", () => {

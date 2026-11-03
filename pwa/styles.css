@@ -763,3 +763,12 @@ body.screen-open { overflow: hidden; }
 .sheet.screen #sheet-body > .stack > .section-label:first-child, .sheet.screen #sheet-body > div > .stack:first-child > .section-label:first-child { margin-top: 0; }
 .sheet.screen .choices { gap: 6px; }
 .sheet.screen .choice { padding: 11px 14px; }
+
+/* Coach memory screen */
+.memory-list li.memory-line { align-items: flex-start; }
+.memory-list .main { flex: 1; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
+.memory-actions { display: flex; gap: 14px; flex-shrink: 0; padding-top: 2px; }
+.memory-list li .field { flex: 1; }
+.memory-add { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.memory-add .field { flex: 1; min-width: 0; }
+.memory .count { text-align: right; }
