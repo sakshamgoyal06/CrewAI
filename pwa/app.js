@@ -1,4 +1,4 @@
-// Magnus health app. Coach chat is home; the tracker is the second page. Both write through
+// Magnus health app. Four tabs: Coach chat (home), Today, Progress and You (settings). All write through
 // the same /api/health endpoints, so anything logged in one shows up in the other.
 
 import { SESSION_ID, trackApi } from "./telemetry.js";
@@ -114,10 +114,10 @@ function friendlyError(code) {
     owner_account: "The owner account can't be deleted from the app.",
     barcode_not_found: "That barcode isn't in the food database yet. Type what it was instead, or snap a photo of the label.",
     barcode_lookup_failed: "Couldn't reach the food database just now. Try again in a minute, or type what you had.",
-    free_limit: "That's today's free allowance. Upgrade to Pro in Settings for unlimited coaching, or log from the tracker.",
+    free_limit: "That's today's free allowance. Upgrade to Pro in Settings for unlimited coaching, or log from Today.",
     billing_unavailable: "Payments aren't available right now. Try again later.",
     invalid_signature: "The payment couldn't be verified. If you were charged, it will show up within a few minutes.",
-    daily_limit: "You've hit today's limit for the coach. Log from the tracker, or try again tomorrow.",
+    daily_limit: "You've hit today's limit for the coach. Log from Today, or try again tomorrow.",
     hevy_key_invalid: "Hevy didn't accept that key. Copy it again from hevy.com → Settings → Developer.",
   }[code] || "Something went wrong. Try again.";
 }
@@ -198,16 +198,43 @@ function showShell() {
   $("shell").hidden = false;
 }
 
+const VIEWS = ["coach", "today", "progress", "you"];
+/** Old links (and the Android app) still say #tracker; that page is now Today. */
+const viewFromHash = (h) => { const v = h.replace("#", ""); return v === "tracker" ? "today" : VIEWS.includes(v) ? v : "coach"; };
+
 function setView(view) {
-  $("view-coach").hidden = view !== "coach";
-  $("view-tracker").hidden = view !== "tracker";
-  for (const t of document.querySelectorAll(".tab")) t.classList.toggle("active", t.dataset.view === view);
+  if (!VIEWS.includes(view)) view = "coach";
+  for (const v of VIEWS) $(`view-${v}`).hidden = v !== view;
+  for (const t of document.querySelectorAll(".tab")) {
+    t.classList.toggle("active", t.dataset.view === view);
+    t.setAttribute("aria-current", t.dataset.view === view ? "page" : "false");
+  }
+  if (view !== "coach") document.body.classList.remove("typing");
   if (location.hash !== `#${view}`) history.replaceState(null, "", `#${view}`);
-  if (view === "tracker") {
-    window.scrollTo(0, 0);
-    // Hevy history is several slow calls; only fetch it once the tracker is actually opened.
+  if (view !== "coach") window.scrollTo(0, 0);
+  if (view === "today" || view === "progress") {
+    // Hevy history is several slow calls; only fetch it once a tracker page is actually opened.
     if (!state.trainingLoaded) { state.trainingLoaded = true; loadTraining(); loadDays(); loadReview(); }
-    else if (state.history) requestAnimationFrame(renderTrend);
+    else if (view === "progress" && state.history) requestAnimationFrame(renderTrend);
+    // The strip may have been drawn while this page was hidden, when it had no width to scroll.
+    if (view === "today" && state.history) requestAnimationFrame(() => renderStrip(state.selectedDate === todayKey()));
+  }
+  if (view === "you") renderYou();
+}
+
+/** The You page: who's signed in and one-line summaries under each settings row. */
+function renderYou() {
+  const s = state.snapshot;
+  const g = s?.goal;
+  $("you-goal").textContent = g
+    ? [g.goal.targets.weight_kg != null ? `${fmt(g.goal.targets.weight_kg, 1)} kg` : null, g.goal.targets.body_fat_pct != null ? `${fmt(g.goal.targets.body_fat_pct, 1)}% fat` : null,
+       `by ${dateOf(g.goal.deadline).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}`].filter(Boolean).join(" · ")
+    : "Set a target and a deadline";
+  const r = s?.routine || [];
+  $("you-routine").textContent = r.length ? r.map((i) => i.label).join(" · ") : "Walks, gym, swims, sports and reminders";
+  if (!renderYou.loaded) {
+    renderYou.loaded = true;
+    api("/account").then((a) => { $("you-who").textContent = a.email || a.name || "Signed in"; }).catch(() => { renderYou.loaded = false; });
   }
 }
 
@@ -280,6 +307,7 @@ function renderSnapshot(s) {
   // Day cards: from the history once it's loaded; until then today's numbers from this snapshot.
   if (!state.history) renderDay();
   renderChips(s);
+  if (!$("view-you").hidden) renderYou();
 }
 
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : "");
@@ -481,7 +509,6 @@ function renderDay() {
       ),
     ),
   );
-  $("quick-row").hidden = !isToday;
 }
 
 function renderFuel(d, t) {
@@ -925,32 +952,32 @@ window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer
 
 // ---------- coach ----------
 
-function renderChips(s) {
+/** Suggestions for the empty chat and the Log sheet. Kept off the composer so typing has room. */
+function suggestions(s) {
   const h = new Date().getHours();
   const meal = h < 11 ? "breakfast" : h < 16 ? "lunch" : "dinner";
-  const chips = [
-    [`Log ${meal}`, `I had `],
+  return [
+    [`Log ${meal}`, "I had "],
     s?.goal?.checkinDue || (s && !s.goal && !s.checkins.length) ? ["Weekly weigh-in", "Weigh-in: "] : null,
-    ["Steps today", "Steps today: "],
     ["How am I doing?", "How am I doing this week?"],
     !s?.goal ? ["Set my goal", "I want to reach "] : ["Why am I off track?", "Why am I off track this week, and what should I change?"],
   ].filter(Boolean);
-  // The two best usual meals for this time of day lead, as one-tap repeats.
-  const usual = (state.usual || []).slice(0, 2).map((m) =>
-    el("button", { class: "chip usual", type: "button", title: m.text, onclick: () => repeatMeal(m) }, `↻ ${short(m.text)}`));
-  $("chips").replaceChildren(
-    ...usual,
-    ...chips.map(([label, text]) =>
-      el("button", { class: "chip", type: "button", onclick: () => {
-        // Questions send straight away (no keyboard pop-up); the rest pre-fill for the person to finish.
-        if (text.endsWith("?")) { send(text); return; }
-        const input = $("input");
-        input.value = text;
-        input.focus();
-        autosize();
-      } }, label),
-    ),
-  );
+}
+
+/** Questions send straight away; the rest pre-fill the composer for the person to finish. */
+function useSuggestion(text) {
+  closeSheet();
+  if ($("view-coach").hidden) setView("coach");
+  if (text.endsWith("?")) { send(text); return; }
+  const input = $("input");
+  input.value = text;
+  input.focus();
+  autosize();
+}
+
+function renderChips(s) {
+  state.suggest = suggestions(s);
+  if ($("thread").querySelector(".empty")) renderEmpty();
 }
 
 function scrollThread() {
@@ -968,9 +995,11 @@ function addMessage(role, text) {
 function renderEmpty() {
   $("thread").replaceChildren(
     el("div", { class: "empty" },
-      el("p", { class: "eyebrow" }, "Coach"),
       el("h2", { class: "display" }, "What did you eat, walk or lift today?"),
       el("p", {}, "Tell me in plain words. I'll log it, keep your week on track, and tell you what's slipping."),
+      el("div", { class: "suggest" },
+        ...(state.suggest || suggestions(state.snapshot)).map(([label, text]) =>
+          el("button", { type: "button", onclick: () => useSuggestion(text) }, label))),
     ),
   );
 }
@@ -1163,6 +1192,8 @@ function autosize() {
   const t = $("input");
   t.style.height = "auto";
   t.style.height = `${Math.min(140, t.scrollHeight)}px`;
+  // Camera when empty, send once there's text: one action at a time on the right.
+  $("composer").classList.toggle("has-text", !!t.value.trim());
 }
 
 function appendCard(c) {
@@ -2005,6 +2036,7 @@ function mealDraftCard(draft, { onDone } = {}) {
   const original = JSON.stringify(draft.items);
   const items = draft.items.length ? draft.items.map((i) => ({ ...i })) : [{ name: draft.text, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }];
   let slot = SLOTS.some(([k]) => k === draft.slot) ? draft.slot : "snack";
+  let editing = !draft.estimated || !draft.items.length;
 
   const kcal = el("div", { class: "draft-kcal" });
   const macros = el("div", { class: "macros" });
@@ -2023,7 +2055,18 @@ function mealDraftCard(draft, { onDone } = {}) {
     confirm.disabled = !items.length || items.some((i) => !i.name.trim()) || t.c <= 0;
   }
 
+  const add = el("button", { class: "add-line", type: "button", onclick: () => { items.push({ name: "", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }); renderItems(); totals(); list.querySelector("li:last-child input")?.focus(); } }, "+ Add item");
+  const edit = el("button", { class: "link", type: "button", onclick: () => { editing = !editing; renderItems(); } }, "Edit");
+
   function renderItems() {
+    // Read-only by default: the estimate in a few quiet lines. Edit opens the table.
+    list.className = editing ? "items" : "items-ro";
+    add.hidden = !editing;
+    edit.textContent = editing ? "Done" : "Edit";
+    if (!editing) {
+      list.replaceChildren(...items.map((i) => el("li", {}, el("span", {}, i.name || "Unnamed"), el("span", {}, `${fmt(+i.calories || 0)} kcal · ${fmt(+i.protein_g || 0, 1)} g P`))));
+      return;
+    }
     list.replaceChildren(
       el("li", { class: "item-head" }, el("span", {}, "Item"), el("span", {}, "kcal"), el("span", {}, "prot g"), el("span")),
       ...items.map((item, idx) =>
@@ -2071,12 +2114,11 @@ function mealDraftCard(draft, { onDone } = {}) {
   const discard = el("button", { class: "btn", type: "button", onclick: () => { markDraft(draft.draftId, { state: "discarded" }); finishedCard(card, draft, { state: "discarded" }); onDone?.(); } }, "Discard");
 
   card.append(...[
-    el("p", { class: "eyebrow" }, "Meal estimate · check and confirm"),
+    el("div", { class: "draft-top" }, el("p", { class: "eyebrow" }, "Meal estimate"), edit),
     kcal, macros,
     !draft.estimated ? el("p", { class: "draft-note" }, "No estimate found. Enter calories and protein yourself.") : null,
     draft.servingAssumption ? assumptionNote(draft.servingAssumption) : null,
-    seg, list,
-    el("button", { class: "add-line", type: "button", onclick: () => { items.push({ name: "", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }); renderItems(); totals(); list.querySelector("li:last-child input")?.focus(); } }, "+ Add item"),
+    seg, list, add,
     el("div", { class: "draft-actions" }, discard, confirm),
   ].filter(Boolean));
   renderSeg();
@@ -2116,7 +2158,7 @@ function openSheet(kind) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Settings", routine: "Your routine", quick: "Quick add", scan: "Scan a packet", review: "Your week" };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", account: "Food, connections & account" };
   $("sheet-title").textContent = titles[kind];
   body.replaceChildren(SHEETS[kind]());
   $("sheet").hidden = false;
@@ -2177,7 +2219,7 @@ const SHEETS = {
         el("label", {}, "Distance km (optional)", el("input", { class: "field", name: "km", type: "number", step: "0.1", min: "0", inputmode: "decimal" })),
         el("label", {}, "Watch kcal (optional)", el("input", { class: "field", name: "kcal", type: "number", min: "0", inputmode: "numeric" }))),
       el("button", { class: "btn primary block", type: "submit" }, "Estimate"),
-      el("p", { class: "hint" }, "Burn shows on the tracker. Your calorie target stays the same: it already allows for your usual activity."),
+      el("p", { class: "hint" }, "Burn shows on Today. Your calorie target stays the same: it already allows for your usual activity."),
     );
     api("/activities/catalog").then((c) => {
       pick.replaceChildren(el("option", { value: "" }, "Choose…"), ...c.activities.map((a) => el("option", { value: a.key }, a.label)));
@@ -2193,13 +2235,26 @@ const SHEETS = {
   },
 
   quick() {
-    return el("div", { class: "quick-row two" },
-      ...[["meal", "Meal"], ["activity", "Activity"], ["steps", "Steps"], ["checkin", "Weigh-in"]].map(([k, l]) =>
-        el("button", { class: "quick", type: "button", onclick: () => openSheet(k) }, el("span", {}, l))),
-      el("button", { class: "quick", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, el("span", {}, "Photo")),
-      el("button", { class: "quick", type: "button", onclick: () => openSheet("scan") }, el("span", {}, "Barcode")),
-      el("button", { class: "quick", type: "button", onclick: () => openSheet("routine") }, el("span", {}, "Routine")),
-      el("button", { class: "quick", type: "button", onclick: () => openSheet("settings") }, el("span", {}, "Settings")));
+    const icon = (d) => { const g = svg("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }); g.innerHTML = d; return g; };
+    const tile = (label, d, onclick) => el("button", { class: "log-tile", type: "button", onclick }, icon(d), el("span", {}, label));
+    return el("div", { class: "stack" },
+      el("div", { class: "log-grid" },
+        tile("Meal", '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M16 3c-1.7 1-2.5 3-2.5 6s1 4 2.5 4v8"/>', () => openSheet("meal")),
+        tile("Photo", '<path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', () => { closeSheet(); $("photo-input").click(); }),
+        tile("Barcode", '<path d="M4 6v12M7 6v12M11 6v12M14 6v12M17 6v12M20 6v12"/>', () => openSheet("scan")),
+        tile("Steps", '<path d="M8 4c1.5 0 2.5 2 2.5 4.5S9.5 13 8 13s-2.5-2-2.5-4.5S6.5 4 8 4zM6 16h4v2a2 2 0 0 1-4 0zM16 8c1.5 0 2.5 2 2.5 4.5S17.5 17 16 17s-2.5-2-2.5-4.5S14.5 8 16 8z"/>', () => openSheet("steps")),
+        tile("Activity", '<path d="M3 12h4l3-7 4 14 3-7h4"/>', () => openSheet("activity")),
+        tile("Weigh-in", '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9.5a4 4 0 0 1 6 0M12 9.5l1.2-1.6"/>', () => openSheet("checkin"))),
+      (state.usual || []).length
+        ? el("div", { class: "usual-list" },
+            el("p", { class: "section-label" }, "Again"),
+            ...state.usual.slice(0, 3).map((m) => el("button", { class: "usual-row", type: "button", onclick: () => { closeSheet(); if ($("view-coach").hidden) setView("coach"); repeatMeal(m); } },
+              el("span", {}, m.text), el("small", {}, `${fmt(m.totals.calories)} kcal`))))
+        : null,
+      el("p", { class: "section-label" }, "Ask the coach"),
+      el("div", { class: "ask-list" }, ...suggestions(state.snapshot).filter(([, t]) => t.endsWith("?")).map(([label, text]) =>
+        el("button", { type: "button", onclick: () => useSuggestion(text) }, label))),
+    );
   },
 
   review() {
@@ -2320,10 +2375,15 @@ const SHEETS = {
         ),
         el("button", { class: "btn block", type: "submit" }, "Save targets"),
       ),
-      routineSection(),
-      notificationsSection(),
-      accountSection(),
     );
+  },
+
+  notifications() {
+    return notificationsSection();
+  },
+
+  account() {
+    return accountSection();
   },
 };
 
@@ -2349,8 +2409,7 @@ for (const t of document.querySelectorAll(".tab")) t.addEventListener("click", (
   if ("ResizeObserver" in window) new ResizeObserver(fit).observe(bar);
   fit();
 }
-$("coach-stat").addEventListener("click", () => setView("tracker"));
-$("settings-btn").addEventListener("click", () => openSheet("settings"));
+$("coach-stat").addEventListener("click", () => setView("progress"));
 $("review-btn").addEventListener("click", () => openSheet("review"));
 $("quick").addEventListener("click", () => openSheet("quick"));
 $("photo").addEventListener("click", () => $("photo-input").click());
@@ -2369,6 +2428,14 @@ document.addEventListener("click", (e) => {
 });
 
 $("input").addEventListener("input", autosize);
+// While typing, the tab bar steps aside so the composer sits right on the keyboard.
+$("input").addEventListener("focus", () => document.body.classList.add("typing"));
+$("input").addEventListener("blur", () => setTimeout(() => {
+  if (document.activeElement !== $("input")) document.body.classList.remove("typing");
+}, 120));
+// Tapping a composer button mustn't blur the textarea first, or the layout shifts under the finger.
+for (const id of ["send", "photo", "quick"]) $(id).addEventListener("pointerdown", (e) => { if (document.activeElement === $("input")) e.preventDefault(); });
+window.addEventListener("hashchange", () => setView(viewFromHash(location.hash)));
 $("input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing && matchMedia("(pointer: fine)").matches) {
     e.preventDefault();
@@ -2411,7 +2478,7 @@ async function start() {
   if (!(await ensureOnboarded())) return;
   showShell();
   $("greeting").textContent = greeting();
-  setView(location.hash === "#tracker" ? "tracker" : "coach");
+  setView(viewFromHash(location.hash));
   renderChips(null);
   const cachedChat = store.get(CHAT_CACHE_KEY, null);
   if (Array.isArray(cachedChat)) renderHistory(cachedChat);
