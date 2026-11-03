@@ -829,7 +829,7 @@ export async function loadSavedDraftIds(userProfileId: string, history: Array<{ 
 }
 
 const CARD_WORD = /\bcards?\b/i;
-const CONFIRM_WORD = /\b(confirm|meal|food|burrito|bowl|dinner|lunch|breakfast|snack)/i;
+const CONFIRM_WORD = /\b(confirm|meal|food|dinner|lunch|breakfast|snack)/i;
 
 /**
  * Drops sentences that point at a card this reply doesn't show: any card mention when there are
