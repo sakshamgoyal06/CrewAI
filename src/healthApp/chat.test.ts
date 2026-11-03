@@ -2,30 +2,53 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const saved = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+const events = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 const actions = vi.hoisted(() => ({
   startMealDraft: vi.fn(),
   logSteps: vi.fn(async () => ({ ok: true, date: "2026-10-27", steps: 9000 })),
 }));
 
-vi.mock("../tools/clients.js", () => ({
-  supabase: {
-    from: () => ({
-      insert: async (row: Record<string, unknown>) => {
-        saved.push(row);
-        return { error: null };
+/** A tiny in-memory health_chat_messages: insert, filtered select (maybeSingle) and filtered update. */
+vi.mock("../tools/clients.js", () => {
+  const matches = (row: Record<string, unknown>, filters: Array<[string, unknown]>) => filters.every(([k, v]) => row[k] === v);
+  const query = (filters: Array<[string, unknown]>, finish: (rows: Record<string, unknown>[]) => unknown) => {
+    const q = {
+      eq: (k: string, v: unknown) => {
+        filters.push([k, v]);
+        return q;
       },
-    }),
-  },
-  redis: {},
-  anthropic: {},
-}));
+      maybeSingle: async () => ({ data: finish(saved.filter((r) => matches(r, filters))) ?? null, error: null }),
+      then: (resolve: (v: unknown) => void) => resolve({ data: finish(saved.filter((r) => matches(r, filters))), error: null }),
+    };
+    return q;
+  };
+  return {
+    supabase: {
+      from: () => ({
+        insert: async (row: Record<string, unknown>) => {
+          saved.push({ created_at: new Date().toISOString(), ...row });
+          return { error: null };
+        },
+        select: () => query([], (rows) => rows[0]),
+        update: (patch: Record<string, unknown>) =>
+          query([], (rows) => {
+            for (const r of rows) Object.assign(r, patch);
+            return rows;
+          }),
+      }),
+    },
+    redis: {},
+    anthropic: {},
+  };
+});
+vi.mock("./events.js", () => ({ enqueueEvents: (rows: Array<Record<string, unknown>>) => events.push(...rows) }));
 vi.mock("./snapshot.js", () => ({ buildHealthSnapshot: vi.fn() }));
 vi.mock("./actions.js", async (orig) => {
   const real = await orig<typeof import("./actions.js")>();
   return { ...real, startMealDraft: actions.startMealDraft, logSteps: actions.logSteps };
 });
 
-import { dropPhantomCardMentions, historyToMessages, mealDraftReply, runHealthChat } from "./chat.js";
+import { completedTurns, dropPhantomCardMentions, historyToMessages, mealDraftReply, runHealthChat } from "./chat.js";
 
 const ctx = { userProfileId: "profile-1", timezone: "UTC", now: new Date("2026-10-27T08:00:00Z") };
 
@@ -55,8 +78,89 @@ const draft = {
 
 beforeEach(() => {
   saved.length = 0;
+  events.length = 0;
   actions.startMealDraft.mockReset().mockResolvedValue(draft);
   actions.logSteps.mockClear();
+});
+
+const TURN = "0f6d5c3e-8b1a-4c2d-9e7f-123456789abc";
+const stepsTurn = () =>
+  vi
+    .fn()
+    .mockResolvedValueOnce(
+      msg([{ type: "tool_use", id: "t1", name: "log_steps", input: { steps: 9000 } } as Anthropic.ToolUseBlock], "tool_use"),
+    )
+    .mockResolvedValueOnce(msg([{ type: "text", text: "Saved 9,000 steps.", citations: null } as Anthropic.TextBlock], "end_turn"));
+
+describe("chat turns", () => {
+  it("stores both rows under the turn id and marks the user row ok once answered", async () => {
+    const reply = await runHealthChat(ctx, "9000 steps today", { create: stepsTurn(), history: [], turnId: TURN });
+    expect(reply).toMatchObject({ text: "Saved 9,000 steps.", changed: true, turnId: TURN });
+    expect(saved.map((r) => [r.role, r.turn_id, r.status])).toEqual([
+      ["user", TURN, "ok"],
+      ["assistant", TURN, "ok"],
+    ]);
+  });
+
+  it("replays the stored reply when the same turn id comes again, without logging twice", async () => {
+    await runHealthChat(ctx, "9000 steps today", { create: stepsTurn(), history: [], turnId: TURN });
+    const create = vi.fn();
+    const again = await runHealthChat(ctx, "9000 steps today", { create, history: [], turnId: TURN });
+    expect(again).toMatchObject({ text: "Saved 9,000 steps.", replayed: true, changed: false });
+    expect(create).not.toHaveBeenCalled();
+    expect(actions.logSteps).toHaveBeenCalledTimes(1);
+    expect(saved).toHaveLength(2);
+  });
+
+  it("reports a turn that is still being answered instead of starting it twice", async () => {
+    let release!: () => void;
+    const create = vi.fn(() => new Promise<Anthropic.Message>((resolve) => {
+      release = () => resolve(msg([{ type: "text", text: "ok", citations: null } as Anthropic.TextBlock], "end_turn"));
+    }));
+    const first = runHealthChat(ctx, "hello", { create, history: [], turnId: TURN });
+    await new Promise((r) => setTimeout(r, 0));
+    const second = await runHealthChat(ctx, "hello", { create: vi.fn(), history: [], turnId: TURN });
+    expect(second).toEqual({ error: "in_progress", turnId: TURN });
+    release();
+    await first;
+    expect(saved.filter((r) => r.role === "user")).toHaveLength(1);
+  });
+
+  it("marks the user row failed when the model call throws, and lets a retry reopen it", async () => {
+    const boom = vi.fn().mockRejectedValue(new Error("overloaded"));
+    await expect(runHealthChat(ctx, "9000 steps today", { create: boom, history: [], turnId: TURN })).rejects.toThrow("overloaded");
+    expect(saved.map((r) => [r.role, r.status])).toEqual([["user", "failed"]]);
+    expect(events.at(-1)).toMatchObject({ kind: "chat_turn", status: 500, props: { outcome: "error", error: "overloaded" } });
+
+    const reply = await runHealthChat(ctx, "9000 steps today", { create: stepsTurn(), history: [], turnId: TURN });
+    expect(reply).toMatchObject({ text: "Saved 9,000 steps.", turnId: TURN });
+    expect(saved.map((r) => [r.role, r.status])).toEqual([
+      ["user", "ok"],
+      ["assistant", "ok"],
+    ]);
+  });
+
+  it("logs one event per turn with models, rounds, tools and tokens", async () => {
+    await runHealthChat(ctx, "9000 steps today", { create: stepsTurn(), history: [], turnId: TURN });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      kind: "chat_turn",
+      status: 200,
+      name: "claude-haiku-5-5",
+      props: { turnId: TURN, outcome: "ok", rounds: 2, models: ["claude-haiku-5-5"], tokens: { input: 2, output: 2 }, changed: true },
+    });
+    expect((events[0]!.props as { tools: Array<{ name: string; ok: boolean }> }).tools).toMatchObject([{ name: "log_steps", ok: true }]);
+  });
+
+  it("keeps failed and pending user messages out of what the model sees", () => {
+    const rows = [
+      { role: "user" as const, content: "a", status: "failed" as const },
+      { role: "user" as const, content: "b", status: "pending" as const },
+      { role: "user" as const, content: "c", status: "ok" as const },
+      { role: "assistant" as const, content: "d", status: "ok" as const },
+    ];
+    expect(completedTurns(rows).map((r) => r.content)).toEqual(["c", "d"]);
+  });
 });
 
 describe("runHealthChat", () => {

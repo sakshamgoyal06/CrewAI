@@ -49,6 +49,8 @@ import {
 import { cardFromReport, runRca, type RcaCard } from "./rca.js";
 import { loadCalorieReview, type CalorieReview } from "./calorieTarget.js";
 import { loadPersonalDetails } from "./onboarding.js";
+import { enqueueEvents } from "./events.js";
+import { randomUUID } from "node:crypto";
 import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
 
 export function healthChatModel(): string {
@@ -98,7 +100,25 @@ export type ChatReply = {
   cards: ChatCard[];
   /** True when the turn wrote data, so the tracker should refresh. */
   changed: boolean;
+  /** The turn this reply answers; the client sends it so a retry can't log twice. */
+  turnId?: string;
+  /** True when this is the stored reply to a turn the client sent before (a retry after a timeout). */
+  replayed?: boolean;
 };
+
+export type ChatMessageStatus = "ok" | "pending" | "failed";
+
+export type ChatHistoryRow = {
+  role: "user" | "assistant";
+  content: string;
+  cards: ChatCard[];
+  createdAt: string;
+  turnId: string | null;
+  status: ChatMessageStatus;
+};
+
+/** A turn still being answered when a retry with the same id arrives; after this it's assumed dead. */
+const IN_PROGRESS_MS = 150_000;
 
 const SYSTEM_PROMPT = `You are Magnus, a personal health coach inside an app. You are talking with one person about their own health.
 
@@ -714,13 +734,10 @@ function defaultCreate(): CreateFn {
         } as never) as unknown as Promise<Anthropic.Message>);
 }
 
-export async function loadChatHistory(
-  userProfileId: string,
-  limit = HISTORY_MESSAGES,
-): Promise<Array<{ role: "user" | "assistant"; content: string; cards: ChatCard[]; createdAt: string }>> {
+export async function loadChatHistory(userProfileId: string, limit = HISTORY_MESSAGES): Promise<ChatHistoryRow[]> {
   const { data, error } = await supabase
     .from("health_chat_messages")
-    .select("role, content, cards, created_at")
+    .select("role, content, cards, created_at, turn_id, status")
     .eq("user_profile_id", userProfileId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -734,7 +751,17 @@ export async function loadChatHistory(
       content: String(r.content),
       cards: Array.isArray(r.cards) ? (r.cards as ChatCard[]) : [],
       createdAt: String(r.created_at),
+      turnId: r.turn_id ? String(r.turn_id) : null,
+      status: (r.status === "pending" || r.status === "failed" ? r.status : "ok") as ChatMessageStatus,
     }));
+}
+
+/**
+ * What the model should see of history: only turns that completed. A message whose reply failed
+ * (or is still running elsewhere) would otherwise look like an unanswered question.
+ */
+export function completedTurns<T extends { role: "user" | "assistant"; status?: ChatMessageStatus }>(rows: T[]): T[] {
+  return rows.filter((r) => r.role === "assistant" || !r.status || r.status === "ok");
 }
 
 async function saveChatMessage(
@@ -742,13 +769,132 @@ async function saveChatMessage(
   role: "user" | "assistant",
   content: string,
   cards: ChatCard[] = [],
+  turn: { turnId: string; status: ChatMessageStatus } | null = null,
 ): Promise<void> {
-  const { error } = await supabase
-    .from("health_chat_messages")
-    .insert({ user_profile_id: userProfileId, role, content, cards });
+  const { error } = await supabase.from("health_chat_messages").insert({
+    user_profile_id: userProfileId,
+    role,
+    content,
+    cards,
+    ...(turn ? { turn_id: turn.turnId, status: turn.status } : {}),
+  });
   if (error) {
     logger.warn({ error: error.message }, "health chat message save failed");
   }
+}
+
+async function setTurnStatus(userProfileId: string, turnId: string, status: ChatMessageStatus, content?: string): Promise<void> {
+  const { error } = await supabase
+    .from("health_chat_messages")
+    .update({ status, ...(content !== undefined ? { content, created_at: new Date().toISOString() } : {}) })
+    .eq("user_profile_id", userProfileId)
+    .eq("turn_id", turnId)
+    .eq("role", "user");
+  if (error) {
+    logger.warn({ error: error.message, turnId, status }, "health chat turn status update failed");
+  }
+}
+
+type TurnStart = { kind: "new" | "retry" } | { kind: "in_progress" } | { kind: "replay"; reply: ChatReply };
+
+/**
+ * Claims a turn id. A fresh id gets a pending user row. A repeated id (the client retried after a
+ * timeout or a double tap) replays the stored reply, reports that the first attempt is still
+ * running, or reopens a failed turn, so nothing is ever logged twice.
+ */
+async function beginTurn(userProfileId: string, turnId: string, userText: string, now: number): Promise<TurnStart> {
+  const { data: existing, error } = await supabase
+    .from("health_chat_messages")
+    .select("status, created_at")
+    .eq("user_profile_id", userProfileId)
+    .eq("turn_id", turnId)
+    .eq("role", "user")
+    .maybeSingle();
+  if (error) logger.warn({ error: error.message, turnId }, "health chat turn lookup failed");
+
+  if (!existing) {
+    await saveChatMessage(userProfileId, "user", userText, [], { turnId, status: "pending" });
+    return { kind: "new" };
+  }
+  if (existing.status === "ok") {
+    const { data: reply } = await supabase
+      .from("health_chat_messages")
+      .select("content, cards")
+      .eq("user_profile_id", userProfileId)
+      .eq("turn_id", turnId)
+      .eq("role", "assistant")
+      .maybeSingle();
+    if (reply) {
+      return {
+        kind: "replay",
+        reply: {
+          text: String(reply.content),
+          cards: Array.isArray(reply.cards) ? (reply.cards as ChatCard[]) : [],
+          changed: false,
+          turnId,
+          replayed: true,
+        },
+      };
+    }
+  }
+  if (existing.status === "pending" && now - new Date(String(existing.created_at)).getTime() < IN_PROGRESS_MS) {
+    return { kind: "in_progress" };
+  }
+  await setTurnStatus(userProfileId, turnId, "pending", userText);
+  return { kind: "retry" };
+}
+
+type TurnStats = {
+  turnId: string;
+  sessionId?: string;
+  models: string[];
+  rounds: number;
+  tools: Array<{ name: string; ms: number; ok: boolean }>;
+  usage: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  guardFired: boolean;
+  cards: string[];
+  changed: boolean;
+};
+
+function addUsage(stats: TurnStats, usage: Anthropic.Usage | undefined): void {
+  if (!usage) return;
+  const u = usage as Anthropic.Usage & { cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null };
+  stats.usage.input += u.input_tokens ?? 0;
+  stats.usage.output += u.output_tokens ?? 0;
+  stats.usage.cacheRead += u.cache_read_input_tokens ?? 0;
+  stats.usage.cacheWrite += u.cache_creation_input_tokens ?? 0;
+}
+
+/** One row per coach turn in health_app_events, plus a log line: what it cost and how it went. */
+function logTurn(userProfileId: string, stats: TurnStats, outcome: "ok" | "refusal" | "error" | "replay" | "in_progress", wallMs: number, error?: string): void {
+  const props = {
+    turnId: stats.turnId,
+    outcome,
+    models: stats.models,
+    rounds: stats.rounds,
+    tools: stats.tools,
+    tokens: stats.usage,
+    cards: stats.cards,
+    changed: stats.changed,
+    guardFired: stats.guardFired,
+    ...(error ? { error: error.slice(0, 300) } : {}),
+  };
+  logger.info({ userProfileId, wallMs: Math.round(wallMs), ...props }, "health chat turn");
+  enqueueEvents([
+    {
+      user_profile_id: userProfileId,
+      session_id: stats.sessionId?.slice(0, 64) ?? null,
+      source: "server",
+      kind: "chat_turn",
+      name: stats.models.at(-1) ?? null,
+      duration_ms: Math.round(wallMs),
+      status: outcome === "ok" || outcome === "replay" ? 200 : outcome === "in_progress" ? 409 : 500,
+      props,
+      app_version: null,
+      user_agent: null,
+      occurred_at: new Date().toISOString(),
+    },
+  ]);
 }
 
 /**
@@ -852,20 +998,72 @@ export function dropPhantomCardMentions(text: string, cards: ChatCard[]): string
     .trim();
 }
 
-export async function runHealthChat(
-  ctx: ActionContext,
-  userText: string,
-  options: { create?: CreateFn; history?: Anthropic.MessageParam[] } = {},
-): Promise<ChatReply> {
-  const create = options.create ?? defaultCreate();
+export type RunChatOptions = {
+  create?: CreateFn;
+  history?: Anthropic.MessageParam[];
+  /** Client-generated id for this turn; a repeat replays or reports the earlier attempt. */
+  turnId?: string;
+  /** The client's page-load id, so the turn lines up with its telemetry. */
+  sessionId?: string;
+};
+
+export type RunChatResult = ChatReply | { error: "in_progress"; turnId: string };
+
+export async function runHealthChat(ctx: ActionContext, userText: string, options: RunChatOptions = {}): Promise<RunChatResult> {
+  const startedAt = performance.now();
+  const now = ctx.now ? ctx.now.getTime() : Date.now();
+  const turnId = options.turnId ?? randomUUID();
+  const stats: TurnStats = {
+    turnId,
+    sessionId: options.sessionId,
+    models: [],
+    rounds: 0,
+    tools: [],
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    guardFired: false,
+    cards: [],
+    changed: false,
+  };
+
   let history = options.history;
   if (!history) {
-    const past = await loadChatHistory(ctx.userProfileId);
+    const past = completedTurns(await loadChatHistory(ctx.userProfileId));
     const saved = await loadSavedDraftIds(ctx.userProfileId, past).catch(() => new Set<string>());
     history = historyToMessages(past, saved);
   }
-  await saveChatMessage(ctx.userProfileId, "user", userText);
 
+  const start = await beginTurn(ctx.userProfileId, turnId, userText, now);
+  if (start.kind === "replay") {
+    logTurn(ctx.userProfileId, stats, "replay", performance.now() - startedAt);
+    return start.reply;
+  }
+  if (start.kind === "in_progress") {
+    logTurn(ctx.userProfileId, stats, "in_progress", performance.now() - startedAt);
+    return { error: "in_progress", turnId };
+  }
+
+  try {
+    const reply = await answerTurn(ctx, userText, history, options.create ?? defaultCreate(), stats);
+    await saveChatMessage(ctx.userProfileId, "assistant", reply.text, reply.cards, { turnId, status: "ok" });
+    await setTurnStatus(ctx.userProfileId, turnId, "ok");
+    logTurn(ctx.userProfileId, stats, reply.refused ? "refusal" : "ok", performance.now() - startedAt);
+    return { text: reply.text, cards: reply.cards, changed: reply.changed, turnId };
+  } catch (err) {
+    // The person's message stays in the thread marked failed (with a retry); the model never sees it.
+    await setTurnStatus(ctx.userProfileId, turnId, "failed");
+    logTurn(ctx.userProfileId, stats, "error", performance.now() - startedAt, err instanceof Error ? err.message : String(err));
+    throw err;
+  }
+}
+
+/** The model loop for one turn: rounds of tool calls until the coach answers in text. */
+async function answerTurn(
+  ctx: ActionContext,
+  userText: string,
+  history: Anthropic.MessageParam[],
+  create: CreateFn,
+  stats: TurnStats,
+): Promise<{ text: string; cards: ChatCard[]; changed: boolean; refused: boolean }> {
   const today = new Date(ctx.now ?? Date.now()).toISOString();
   const details = await loadPersonalDetails(ctx.userProfileId).catch(() => null);
   let model = pickChatModel(userText);
@@ -876,8 +1074,11 @@ export async function runHealthChat(
   const cards: ChatCard[] = [];
   let changed = false;
   let text = "";
+  let refused = false;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    stats.rounds += 1;
+    if (stats.models.at(-1) !== model) stats.models.push(model);
     const response = await create({
       model,
       max_tokens: 16000,
@@ -889,6 +1090,8 @@ export async function runHealthChat(
       messages,
     });
 
+    addUsage(stats, response.usage);
+
     if ((response.stop_reason as string) === "refusal") {
       // The fast model has no server-side fallback: retry the turn once on the main model.
       if (round === 0 && model !== healthChatModel()) {
@@ -897,6 +1100,7 @@ export async function runHealthChat(
         continue;
       }
       text = "I can't help with that one. Ask me about your meals, steps, workouts or goal.";
+      refused = true;
       break;
     }
 
@@ -917,12 +1121,18 @@ export async function runHealthChat(
 
     const results = await Promise.all(
       toolUses.map(async (tu): Promise<Anthropic.ToolResultBlockParam> => {
+        const t0 = performance.now();
         try {
           const outcome = await runTool(ctx, tu.name, tu.input);
-          if (outcome.card) cards.push(outcome.card);
+          stats.tools.push({ name: tu.name, ms: Math.round(performance.now() - t0), ok: true });
+          if (outcome.card) {
+            cards.push(outcome.card);
+            stats.cards.push(outcome.card.type);
+          }
           if (outcome.changed) changed = true;
           return { type: "tool_result", tool_use_id: tu.id, content: JSON.stringify(outcome.result) };
         } catch (err) {
+          stats.tools.push({ name: tu.name, ms: Math.round(performance.now() - t0), ok: false });
           logger.warn({ err: loggableError(err), tool: tu.name }, "health chat tool failed");
           return { type: "tool_result", tool_use_id: tu.id, content: "Tool failed.", is_error: true };
         }
@@ -948,10 +1158,12 @@ export async function runHealthChat(
     }
   }
 
-  text = dropPhantomCardMentions(text, cards);
+  const guarded = dropPhantomCardMentions(text, cards);
+  stats.guardFired = guarded !== text;
+  text = guarded;
   if (!text) {
     text = cards.length ? "Check the card and confirm." : "Done.";
   }
-  await saveChatMessage(ctx.userProfileId, "assistant", text, cards);
-  return { text, cards, changed };
+  stats.changed = changed;
+  return { text, cards, changed, refused };
 }
