@@ -97,6 +97,9 @@ import {
 import { cardFromReport, rcaResponseInput, respondToRca, runRca } from "./rca.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
 import { loadCalorieReview } from "./calorieTarget.js";
+import { cardFromIntervention, checkNewGoal, recordManualPlan, respond as respondToIntervention, revertToVersion } from "./interventions/engine.js";
+import { listVersions } from "./interventions/plan.js";
+import { listInterventions } from "./interventions/store.js";
 
 const chatInput = z.object({ text: z.string().trim().min(1).max(2000), turnId: z.string().uuid().optional() });
 
@@ -284,6 +287,10 @@ export function createHealthAppRouter(): express.Router {
     "/onboarding",
     route("onboarding", async (ctx, req) => {
       const r = await completeOnboarding(ctx, onboardingInput.parse(req.body));
+      if (r.ok) {
+        void recordManualPlan(ctx.userProfileId, "Your starting plan");
+        void checkNewGoal(ctx.userProfileId);
+      }
       return r.ok ? { body: r } : fromResult(r);
     }),
   );
@@ -538,14 +545,23 @@ export function createHealthAppRouter(): express.Router {
 
   router.post(
     "/goal",
-    route("goal", async (ctx, req) => fromResult(await setGoal(ctx, goalInput.parse(req.body)))),
+    route("goal", async (ctx, req) => {
+      const r = await setGoal(ctx, goalInput.parse(req.body));
+      if (r.ok) {
+        void recordManualPlan(ctx.userProfileId, "You set a new goal");
+        void checkNewGoal(ctx.userProfileId);
+      }
+      return fromResult(r);
+    }),
   );
 
   router.post(
     "/targets",
-    route("targets", async (ctx, req) =>
-      fromResult(await setTargets(ctx, targetsInput.parse(req.body))),
-    ),
+    route("targets", async (ctx, req) => {
+      const r = await setTargets(ctx, targetsInput.parse(req.body));
+      if (r.ok) void recordManualPlan(ctx.userProfileId, "You changed your targets");
+      return fromResult(r);
+    }),
   );
 
   /** Plan, trial and what can be bought. */
@@ -622,6 +638,7 @@ export function createHealthAppRouter(): express.Router {
     "/routine",
     route("routine-save", async (ctx, req) => {
       const r = await setRoutine(ctx, routineInput.parse(req.body));
+      if (r.ok) void recordManualPlan(ctx.userProfileId, "You changed your routine");
       return r.ok ? { body: r } : { status: r.error === "routine_unavailable" ? 503 : 400, body: r };
     }),
   );
@@ -728,6 +745,41 @@ export function createHealthAppRouter(): express.Router {
     route("memory-forget", async (ctx, req) => {
       const r = await forgetLine(ctx.userProfileId, String(req.params.id), memoryToday(ctx.timezone));
       return r.ok ? { body: r } : { status: 404, body: r };
+    }),
+  );
+
+  /** Plan-change cards: the person's answers, and the list of open ones. */
+  const interventionAnswer = z.object({
+    action: z.enum(["choose", "keep", "reason", "cancel", "confirm", "decline"]),
+    optionId: z.string().max(40).optional(),
+    reason: z.string().max(20).optional(),
+  });
+  router.get(
+    "/interventions",
+    route("interventions", async (ctx) => {
+      const rows = await listInterventions(ctx.userProfileId, 60);
+      return { body: { ok: true, interventions: rows.map(cardFromIntervention) } };
+    }),
+  );
+  router.post(
+    "/interventions/:id",
+    route("intervention-respond", async (ctx, req) => {
+      const body = interventionAnswer.parse(req.body);
+      const r = await respondToIntervention(ctx, String(req.params.id), body.action, { optionId: body.optionId, reason: body.reason });
+      return r.ok ? { body: r } : { status: r.error === "not_found" ? 404 : 409, body: r };
+    }),
+  );
+
+  /** Plan history: every plan the person agreed to, and going back to one. */
+  router.get(
+    "/plan/versions",
+    route("plan-versions", async (ctx) => ({ body: { ok: true, versions: await listVersions(ctx.userProfileId, 50) } })),
+  );
+  router.post(
+    "/plan/versions/:id/revert",
+    route("plan-revert", async (ctx, req) => {
+      const r = await revertToVersion(ctx, String(req.params.id));
+      return r.ok ? { body: r } : { status: r.error === "not_found" ? 404 : 400, body: r };
     }),
   );
 

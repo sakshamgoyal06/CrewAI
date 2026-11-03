@@ -13,6 +13,7 @@ import { cardFromReport, listReports, rcaDue, reviewExperiments, runRca } from "
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
 import { routineLine } from "./routine.js";
 import { runRoutineTick } from "./routineCheck.js";
+import { runInterventionTick } from "./interventions/engine.js";
 import { runWorkoutChecks, SCHEDULER_INTERVAL_MS } from "./workoutCheck.js";
 import { postCoachMessage } from "./workoutCheckStore.js";
 
@@ -188,6 +189,7 @@ export async function proactiveTick(userProfileId: string, now = new Date()): Pr
     ["routine", () => runRoutineWithLog(userProfileId, now)],
     ["nudges", () => runNudges(userProfileId, now)],
     ["rca", () => maybeRunRca(userProfileId, now)],
+    ["interventions", () => runInterventionTick(userProfileId, now).then(() => undefined)],
   ] as const) {
     try {
       await fn();

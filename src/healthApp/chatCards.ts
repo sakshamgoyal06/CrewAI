@@ -11,6 +11,9 @@ import { cardFromReport, getReports, type RcaReport } from "./rca.js";
 import { checkKey, getRoutineChecks } from "./routineStore.js";
 import type { RoutineCheck } from "./routine.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
+import { cardFromIntervention, interventionNote } from "./interventions/card.js";
+import { getInterventions } from "./interventions/store.js";
+import type { Intervention } from "./interventions/types.js";
 
 export type CardStates = {
   /** Meal draft id → calories logged under it (summed from meal_logs, deleted rows excluded). */
@@ -23,10 +26,11 @@ export type CardStates = {
   routineChecks: Map<string, RoutineCheck>;
   proposals: Map<string, ProposalRow>;
   reports: Map<string, RcaReport>;
+  interventions: Map<string, Intervention>;
 };
 
 export function emptyCardStates(): CardStates {
-  return { mealsLogged: new Map(), activitiesSaved: new Map(), workoutChecks: new Map(), routineChecks: new Map(), proposals: new Map(), reports: new Map() };
+  return { mealsLogged: new Map(), activitiesSaved: new Map(), workoutChecks: new Map(), routineChecks: new Map(), proposals: new Map(), reports: new Map(), interventions: new Map() };
 }
 
 /** Loads the live state behind every card in `cards`, in as few queries as the mix needs. */
@@ -38,6 +42,7 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
   const routineDates: string[] = [];
   const proposalIds: string[] = [];
   const reportIds: string[] = [];
+  const interventionIds: string[] = [];
   for (const c of cards) {
     if (c.type === "meal_draft") mealIds.push(c.draft.draftId);
     else if (c.type === "activity_draft") activityIds.push(c.draft.draftId);
@@ -45,13 +50,14 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
     else if (c.type === "routine_check") routineDates.push(c.date);
     else if (c.type === "hevy_proposal") proposalIds.push(c.proposalId);
     else if (c.type === "rca") reportIds.push(c.reportId);
+    else if (c.type === "intervention") interventionIds.push(c.interventionId);
   }
   const range = (dates: string[]) => {
     const s = [...dates].sort();
     return [s[0]!, s[s.length - 1]!] as const;
   };
 
-  const [meals, activities, workouts, routines, proposals, reports] = await Promise.all([
+  const [meals, activities, workouts, routines, proposals, reports, interventions] = await Promise.all([
     mealIds.length
       ? supabase.from("meal_logs").select("meal_session_id, calories").eq("user_profile_id", userProfileId).in("meal_session_id", mealIds).is("deleted_at", null)
       : Promise.resolve({ data: [] }),
@@ -62,6 +68,7 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
     routineDates.length ? getRoutineChecks(userProfileId, ...range(routineDates)) : Promise.resolve(new Map<string, RoutineCheck>()),
     getProposals(userProfileId, proposalIds),
     getReports(userProfileId, reportIds),
+    getInterventions(userProfileId, interventionIds),
   ]);
 
   for (const r of (meals.data ?? []) as Array<{ meal_session_id: string; calories: number | null }>) {
@@ -76,6 +83,7 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
   states.routineChecks = routines;
   states.proposals = proposals;
   states.reports = reports;
+  states.interventions = interventions;
   return states;
 }
 
@@ -105,6 +113,10 @@ export function hydrateCard(card: ChatCard, states: CardStates): ChatCard {
     case "rca": {
       const r = states.reports.get(card.reportId);
       return r ? cardFromReport(r) : card;
+    }
+    case "intervention": {
+      const i = states.interventions.get(card.interventionId);
+      return i ? cardFromIntervention(i) : card;
     }
     default:
       return card;
@@ -145,6 +157,8 @@ export function cardHistoryNote(card: ChatCard, states: CardStates): string {
       return `[Hevy change card "${live.title}": ${live.status === "applied" ? "applied in Hevy" : live.status === "discarded" ? "discarded" : live.status === "failed" ? "failed to apply" : "not applied yet"}]`;
     case "rca":
       return `[Root-cause card, experiment "${live.experiment.slice(0, 80)}": ${live.status === "proposed" ? "no answer yet" : live.status}]`;
+    case "intervention":
+      return interventionNote(live);
     case "calorie_review":
       return `[Calorie target card: suggests ${live.review.suggestedTarget} kcal (current ${live.review.currentTarget ?? "unset"}); the person applies it from the card]`;
     default:

@@ -38,6 +38,7 @@ export const NOTIFICATION_KINDS = [
   "rca",
   "routine_reminder",
   "routine_check",
+  "intervention",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

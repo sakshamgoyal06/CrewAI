@@ -55,6 +55,8 @@ import { forgetLine, loadCoachMemory, memoryToday, rememberLine, type MemoryLine
 import { enqueueEvents } from "./events.js";
 import { randomUUID } from "node:crypto";
 import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
+import { checkNewGoal, openInterventions, recordManualPlan, respond as respondToIntervention } from "./interventions/engine.js";
+import type { InterventionCard } from "./interventions/types.js";
 
 export function healthChatModel(): string {
   // Sonnet answers a tool-heavy coach turn several times faster than Opus; set the env var to
@@ -100,6 +102,7 @@ const COACHING_TOOLS = new Set([
   "review_calorie_target",
   "set_daily_routine",
   "set_goal",
+  "respond_to_intervention",
 ]);
 
 /** A message with a number, a food, a weigh-in or an activity in it almost always wants a log. */
@@ -181,7 +184,8 @@ export type ChatCard =
   | RoutineCheckCard
   | HevyProposalCard
   | RcaCard
-  | CalorieReviewCard;
+  | CalorieReviewCard
+  | InterventionCard;
 
 export type ChatReply = {
   text: string;
@@ -550,6 +554,21 @@ const toolDefinitions: Anthropic.Tool[] = [
     description: "Drop a remembered line when they say it no longer applies or ask you to forget it. Pass the line's words from the context block.",
     input_schema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] },
   },
+  {
+    name: "respond_to_intervention",
+    description:
+      "Act on a plan-change card (ids are in the context block's Plan changes line) when they answer it in words. choose + optionId starts that option as a trial; keep = leave the plan as is; reason (time|energy|enjoyment|forgot|away) = what got in the way, which rebuilds the options; cancel = stop a running trial; confirm / decline = answer \"make it your plan?\" after a trial was checked.",
+    input_schema: {
+      type: "object",
+      properties: {
+        interventionId: { type: "string" },
+        action: { type: "string", enum: ["choose", "keep", "reason", "cancel", "confirm", "decline"] },
+        optionId: { type: "string" },
+        reason: { type: "string", enum: ["time", "energy", "enjoyment", "forgot", "away"] },
+      },
+      required: ["interventionId", "action"],
+    },
+  },
 ];
 
 /**
@@ -671,6 +690,20 @@ export async function runTool(
       const r = await rememberLine(ctx.userProfileId, i?.text, "coach", { until: i?.until, today: memoryToday(ctx.timezone, ctx.now) });
       return { result: r.ok ? { ok: true, remembered: r.line.text, ...(r.line.expiresOn ? { until: r.line.expiresOn } : {}), alreadyKnown: r.duplicate, lines: r.count } : { ok: false, error: r.error, lines: r.count, hint: r.error === "memory_full" ? "Forget something first; the list is capped." : "Nothing to remember." } };
     }
+    case "respond_to_intervention": {
+      const p = z
+        .object({
+          interventionId: z.string().uuid(),
+          action: z.enum(["choose", "keep", "reason", "cancel", "confirm", "decline"]),
+          optionId: z.string().max(40).optional(),
+          reason: z.string().max(20).optional(),
+        })
+        .safeParse(input);
+      if (!p.success) return invalid(p.error);
+      const r = await respondToIntervention(ctx, p.data.interventionId, p.data.action, { optionId: p.data.optionId, reason: p.data.reason });
+      if (!r.ok) return { result: r };
+      return { result: { ok: true, status: r.card.status, message: r.message, talk: r.talk, shownToUserAsCard: true }, card: r.card, changed: true };
+    }
     case "forget": {
       const text = (input as { text?: unknown })?.text;
       const r = await forgetLine(ctx.userProfileId, typeof text === "string" ? text : "", memoryToday(ctx.timezone, ctx.now));
@@ -702,12 +735,17 @@ export async function runTool(
       const p = goalInput.safeParse(input);
       if (!p.success) return invalid(p.error);
       const r = await setGoal(ctx, p.data);
+      if (r.ok) {
+        void recordManualPlan(ctx.userProfileId, "You set a new goal");
+        void checkNewGoal(ctx.userProfileId, ctx.now ? new Date(ctx.now) : new Date());
+      }
       return { result: r, changed: r.ok };
     }
     case "set_daily_targets": {
       const p = targetsInput.safeParse(input);
       if (!p.success) return invalid(p.error);
       const r = await setTargets(ctx, p.data);
+      if (r.ok) void recordManualPlan(ctx.userProfileId, "You changed your targets");
       return { result: r, changed: r.ok };
     }
     case "get_training_analysis": {
@@ -768,6 +806,7 @@ export async function runTool(
       const p = routineInput.safeParse(input);
       if (!p.success) return invalid(p.error);
       const r = await setRoutine(ctx, p.data);
+      if (r.ok) void recordManualPlan(ctx.userProfileId, "You changed your routine");
       return {
         result: r.ok ? { ok: true, items: r.items.map((i) => ({ id: i.id, label: i.label, days: i.days, startTime: i.startTime })), trainingDays: r.trainingDays, lifting: r.lifting } : r,
         changed: r.ok,
@@ -873,6 +912,7 @@ const TOOL_PROGRESS: Record<string, string> = {
   propose_workout_log: "Drafting the workout",
   root_cause_analysis: "Looking at the last three weeks",
   review_calorie_target: "Reviewing your calories",
+  respond_to_intervention: "Updating your plan",
   delete_meal: "Removing that",
   delete_activity: "Removing that",
 };
@@ -1264,8 +1304,9 @@ export async function runHealthChat(ctx: ActionContext, userText: string, option
 
 /** The experiment they agreed to try in the weekly root-cause card, if one is running. */
 async function loadTurnLoops(userProfileId: string): Promise<TurnLoops> {
-  const trying = (await listReports(userProfileId, 3)).find((r) => r.status === "trying");
-  return trying ? { experiment: { text: trying.experiment, startedAt: trying.startedAt } } : {};
+  const [reports, interventions] = await Promise.all([listReports(userProfileId, 3), openInterventions(userProfileId).catch(() => [])]);
+  const trying = reports.find((r) => r.status === "trying");
+  return { ...(trying ? { experiment: { text: trying.experiment, startedAt: trying.startedAt } } : {}), ...(interventions.length ? { interventions } : {}) };
 }
 
 /** The model loop for one turn: rounds of tool calls until the coach answers in text. */
