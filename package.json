@@ -1,7 +1,7 @@
 {
   "name": "magnus",
   "version": "1.0.0",
-  "description": "Magnus — personal health coach PWA (chat + tracker) on Anthropic SDK, Supabase and Hevy",
+  "description": "Magnus \u2014 personal health coach PWA (chat + tracker) on Anthropic SDK, Supabase and Hevy",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:apply": "tsx scripts/apply-sql-migration.mts",
-    "app:setup": "tsx scripts/health-app-setup.mts"
+    "app:setup": "tsx scripts/health-app-setup.mts",
+    "evals": "tsx src/healthApp/evals/run.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
