@@ -1,4 +1,4 @@
-/* Magnus: royal and quiet. Deep aubergine, one antique-gold accent, ivory text, Fraunces numerals.
+/* Magnus: royal and quiet. Deep aubergine, one antique-gold accent, ivory text, Lato throughout.
    Light mode is ivory with a royal-plum accent. One level of card; hierarchy from type, not boxes. */
 :root {
   --bg: #160f1d;
@@ -19,8 +19,12 @@
   --bad: #ee8a8a;
   --glass: rgba(22, 15, 29, 0.92);
   --shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.9);
-  --serif: "Fraunces", "Iowan Old Style", Georgia, serif;
-  --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Lato throughout: classic, warm and easy to read at small sizes. --serif is the display face
+     (headings, big numbers); it's Lato too, set heavier for headings and lighter for numerals. */
+  --serif: "Lato", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --sans: "Lato", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --head-w: 700;
+  --num-w: 400;
   --radius: 24px;
   --tabbar-h: 64px;
   /* Macro series: protein, carbs, fat. */
@@ -69,8 +73,8 @@ button { cursor: pointer; }
 svg { display: block; }
 [hidden] { display: none !important; }
 
-.display { font-family: var(--serif); font-weight: 400; font-size: 2.3rem; line-height: 1.05; letter-spacing: -0.02em; margin: 0; font-variation-settings: "opsz" 96; }
-.title-lg { font-family: var(--serif); font-weight: 500; font-size: 1.75rem; line-height: 1.1; letter-spacing: -0.015em; margin: 0; font-variation-settings: "opsz" 72; }
+.display { font-family: var(--serif); font-weight: var(--head-w); font-size: 2.1rem; line-height: 1.12; letter-spacing: -0.015em; margin: 0; }
+.title-lg { font-family: var(--serif); font-weight: var(--head-w); font-size: 1.65rem; line-height: 1.15; letter-spacing: -0.01em; margin: 0; }
 .eyebrow { margin: 0 0 4px; font-size: 0.7rem; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .muted { color: var(--muted); }
 .meta { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
@@ -137,7 +141,7 @@ body.typing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 8px
   display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px;
   background: transparent; border: 1px solid var(--hair-strong); text-align: left;
 }
-.pill-stat strong { font-family: var(--serif); font-weight: 500; font-size: 1.15rem; line-height: 1; }
+.pill-stat strong { font-family: var(--serif); font-weight: 700; font-size: 1.15rem; line-height: 1; }
 .pill-stat small { color: var(--muted); font-size: 0.78rem; }
 .pill-stat > span:last-child { display: flex; align-items: baseline; gap: 3px; }
 .pill-ring svg { width: 30px; height: 30px; transform: rotate(-90deg); }
@@ -211,7 +215,7 @@ body.typing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 8px
 /* Meal draft card (chat + sheet) */
 .draft { align-self: stretch; max-width: 100%; background: var(--surface); border: 1px solid var(--hair); border-radius: 20px; padding: 16px; animation: rise 0.25s ease both; }
 .draft-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-.draft-kcal { font-family: var(--serif); font-size: 1.9rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.draft-kcal { font-family: var(--serif); font-size: 1.9rem; line-height: 1; font-variant-numeric: tabular-nums;  font-weight: var(--num-w);}
 .draft-kcal small { font-family: var(--sans); font-size: 0.8rem; color: var(--muted); margin-left: 4px; }
 .macros { display: flex; gap: 14px; color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; margin: 6px 0 12px; }
 .macros b { color: var(--text); font-weight: 500; }
@@ -249,7 +253,7 @@ body.typing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 8px
 
 /* Today / Progress: open blocks separated by space and a hairline; one level of surface. */
 .block { padding: 24px 0; border-top: 1px solid var(--hair); }
-.block h2, .card h2 { margin: 0; font-family: var(--serif); font-size: 1.25rem; font-weight: 500; letter-spacing: -0.01em; }
+.block h2, .card h2 { margin: 0; font-family: var(--serif); font-size: 1.15rem; font-weight: var(--head-w); letter-spacing: -0.01em; }
 .block-head, .card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; gap: 12px; }
 .card { background: var(--surface); border: 1px solid var(--hair); border-radius: var(--radius); padding: 18px; margin-bottom: 12px; }
 .block-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 16px; margin-top: 16px; }
@@ -259,14 +263,14 @@ body.typing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 8px
 .hero-ring { position: relative; width: 140px; height: 140px; }
 .hero-ring svg { width: 100%; height: 100%; }
 .hero-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
-.hero-num { font-family: var(--serif); font-size: 3.3rem; line-height: 0.9; }
+.hero-num { font-family: var(--serif); font-size: 3.3rem; line-height: 0.9; font-weight: 300; }
 .hero-of { font-size: 0.75rem; color: var(--muted); }
 .hero-line { margin: 0 0 10px; font-size: 0.95rem; line-height: 1.45; }
 .week-labels { display: flex; gap: 2px; max-width: 200px; }
 .week-labels span { flex: 1; text-align: center; font-size: 0.68rem; color: var(--faint); }
 .week-labels span.on { color: var(--accent); }
 .week-labels span.today { color: var(--text); font-weight: 600; }
-.score { font-family: var(--serif); font-size: 1.5rem; line-height: 1; }
+.score { font-family: var(--serif); font-size: 1.5rem; line-height: 1;  font-weight: var(--num-w);}
 
 .due { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; margin: 4px 0 8px; border-radius: 14px; background: var(--accent-soft); color: var(--text); font-size: 0.92rem; }
 
@@ -274,7 +278,7 @@ body.typing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 8px
 .metric:first-child { border-top: 0; padding-top: 0; }
 .metric-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .metric-name { color: var(--muted); font-size: 0.85rem; }
-.metric-val { font-family: var(--serif); font-size: 1.7rem; line-height: 1.1; }
+.metric-val { font-family: var(--serif); font-size: 1.7rem; line-height: 1.1;  font-weight: var(--num-w);}
 .metric-val small { font-family: var(--sans); font-size: 0.8rem; color: var(--muted); }
 .metric-target { color: var(--muted); font-size: 0.85rem; text-align: right; }
 .bar { height: 4px; border-radius: 4px; background: var(--hair-strong); overflow: hidden; margin: 8px 0; }
@@ -348,7 +352,7 @@ body.typing .tabbar { display: none; }
 }
 .grabber { width: 38px; height: 4px; border-radius: 4px; background: var(--hair-strong); margin: 4px auto 10px; }
 .sheet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-.sheet-head h2 { margin: 0; font-family: var(--serif); font-weight: 500; font-size: 1.5rem; letter-spacing: -0.01em; }
+.sheet-head h2 { margin: 0; font-family: var(--serif); font-weight: var(--head-w); font-size: 1.4rem; letter-spacing: -0.01em; }
 .sheet label { display: grid; gap: 6px; font-size: 0.82rem; color: var(--muted); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -412,7 +416,7 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .draft.check .draft-actions .btn { font-size: 0.88rem; white-space: nowrap; padding: 11px 10px; }
 
 /* Hevy proposal card */
-.proposal-title { font-family: var(--serif); font-weight: 400; font-size: 1.5rem; margin: 2px 0 6px; }
+.proposal-title { font-family: var(--serif); font-weight: var(--head-w); font-size: 1.5rem; margin: 2px 0 6px; }
 .changes { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 6px; font-size: 0.9rem; }
 .changes li { display: grid; grid-template-columns: 18px 1fr; gap: 6px; align-items: baseline; }
 .changes .sign { font-weight: 600; text-align: center; }
@@ -470,7 +474,7 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 /* ---------- Food ---------- */
 .fuel-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
 .fuel-top .big { display: flex; align-items: baseline; gap: 6px; }
-.fuel-top .num { font-family: var(--serif); font-size: 3rem; line-height: 0.95; font-weight: 400; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.fuel-top .num { font-family: var(--serif); font-size: 3rem; line-height: 0.95; font-weight: 300; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .fuel-top .unit { color: var(--muted); font-size: 0.85rem; }
 .fuel-top .side { text-align: right; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .fuel-top .side .warn { color: var(--warn); font-weight: 600; }
@@ -527,7 +531,7 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .tile { background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; padding: 12px; min-width: 0; }
 .tile .tl { font-size: 0.74rem; color: var(--muted); }
-.tile .tv { font-family: var(--serif); font-size: 1.7rem; line-height: 1.1; white-space: nowrap; }
+.tile .tv { font-family: var(--serif); font-size: 1.7rem; line-height: 1.1; white-space: nowrap;  font-weight: var(--num-w);}
 .tile .tv small { font-family: var(--sans); font-size: 0.74rem; color: var(--muted); }
 .tile .ts { font-size: 0.72rem; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .move .list.rows { margin-top: 10px; }
@@ -548,7 +552,7 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .trend-tabs { margin-bottom: 14px; scrollbar-width: none; }
 .trend-tabs::-webkit-scrollbar { display: none; }
 .trend-summary { display: grid; margin-bottom: 8px; }
-.trend-summary .tv { font-family: var(--serif); font-size: 1.7rem; line-height: 1.1; }
+.trend-summary .tv { font-family: var(--serif); font-size: 1.7rem; line-height: 1.1;  font-weight: var(--num-w);}
 .trend-summary .ts { color: var(--muted); font-size: 0.82rem; }
 .chart { position: relative; margin: 0 -4px; touch-action: pan-y; }
 .chart svg { width: 100%; height: auto; overflow: visible; }
@@ -602,7 +606,7 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .chips-row .chip { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--hair); background: transparent; color: var(--muted); font: inherit; font-size: 0.85rem; }
 .plan-nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 6px 0; }
 .plan-nums div { display: grid; gap: 2px; padding: 14px 10px; border-radius: 14px; border: 1px solid var(--hair); text-align: center; }
-.plan-nums strong { font-family: var(--serif); font-weight: 400; font-size: 1.7rem; line-height: 1; }
+.plan-nums strong { font-family: var(--serif); font-weight: var(--num-w); font-size: 1.7rem; line-height: 1; }
 .plan-nums small { color: var(--muted); font-size: 0.75rem; }
 .plan-warn { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); font-size: 0.9rem; }
 .plan-lines p { margin: 0 0 10px; color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
