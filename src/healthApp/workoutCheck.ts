@@ -13,6 +13,7 @@ import { formatTime, zonedInstant, type GymSlot } from "./gymSlot.js";
 import { isGym, UNTIMED_CHECK_AT, type RoutineItem } from "./routine.js";
 import { loadHealthProfile, loadRecentWorkouts, weekdayOfDate, type WorkoutSummary } from "./snapshot.js";
 import { analyzeTraining, hevyKey, loadWorkoutHistory, workoutReview } from "./training.js";
+import { postCheck } from "./coachInbox.js";
 import {
   getWorkoutChecks,
   insertWorkoutCheck,
@@ -130,7 +131,10 @@ const defaultDeps: Deps = {
   recentWorkouts: (id, tz) => loadRecentWorkouts(id, tz),
   getChecks: (id, from, to) => getWorkoutChecks(id, from, to),
   insertCheck: (id, check) => insertWorkoutCheck(id, check),
-  postMessage: (id, content, cards) => postCoachMessage(id, content, cards),
+  postMessage: (id, content, cards) =>
+    cards.length && (cards[0] as { type?: string }).type === "workout_check"
+      ? postCheck(id, content, cards[0] as WorkoutCheckCard).then(() => undefined)
+      : postCoachMessage(id, content, cards),
   review: reviewFromHevy,
   sportOn: sportFromActivities,
 };

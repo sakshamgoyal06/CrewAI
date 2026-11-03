@@ -28,6 +28,7 @@ import {
   type RoutineItem,
   type RoutineItemStatus,
 } from "./routine.js";
+import { postCheck } from "./coachInbox.js";
 import { checksOn, getRoutineChecks, insertRoutineCheck, saveRoutine, saveRoutineCheckAnswer } from "./routineStore.js";
 import { loadHealthProfile, loadRecentWorkouts, weekdayOfDate } from "./snapshot.js";
 import { getWorkoutChecks, postCoachMessage } from "./workoutCheckStore.js";
@@ -107,7 +108,7 @@ const defaultDeps: Deps = {
   loadProfile: (id) => loadHealthProfile(id),
   status: routineStatusFor,
   insertCheck: insertRoutineCheck,
-  postMessage: postCoachMessage,
+  postMessage: (id, content, cards) => postCheck(id, content, cards[0] as RoutineCheckCard).then(() => undefined),
   notify: sendNotification,
   prefs: getPrefs,
 };
