@@ -4290,7 +4290,7 @@ async function ensureOnboarded() {
   return true;
 }
 
-initMeals({ api, el, toast, logOwn: (slot, date) => { state.mealSlot = slot || null; state.mealDate = date && date !== (todayKey() || localToday()) ? date : null; openSheet("meal"); }, openSheet, closeSheet, backSheet, setView, fmt, todayKey: () => todayKey() || localToday(), refresh });
+initMeals({ api, el, svg, toast, logOwn: (slot, date) => { state.mealSlot = slot || null; state.mealDate = date && date !== (todayKey() || localToday()) ? date : null; openSheet("meal"); }, openSheet, closeSheet, backSheet, setView, fmt, todayKey: () => todayKey() || localToday(), refresh });
 
 async function start() {
   if (!(await ensureOnboarded())) return;
