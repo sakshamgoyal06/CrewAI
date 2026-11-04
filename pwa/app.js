@@ -6,6 +6,7 @@ import { runOnboarding } from "./onboarding.js";
 import { scanView } from "./scan.js";
 import { foodPrefsEditor } from "./foodprefs.js";
 import { fromServer, routineEditor, toPayload } from "./routine.js";
+import { initMeals, loadPlan, mealScreen, mealsTitles, planLineFor, renderMeals, setupScreen } from "./meals.js";
 import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
 const TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } })();
@@ -116,7 +117,7 @@ async function api(path, options = {}) {
   }
   const body = await res.json().catch(() => ({}));
   trackApi(path, options.method, res.status, performance.now() - started, res.ok ? null : body.error || `http_${res.status}`);
-  if (!res.ok) throw Object.assign(new Error(friendlyError(body.error)), { inProgress: body.error === "in_progress" });
+  if (!res.ok) throw Object.assign(new Error(friendlyError(body.error)), { inProgress: body.error === "in_progress", code: body.error });
   return body;
 }
 
@@ -152,6 +153,13 @@ function friendlyError(code) {
     daily_limit: "You've hit today's limit for the coach. Log from Today, or try again tomorrow.",
     draft_limit: "That's a lot of meal estimates for one day. Pick a usual meal or scan a barcode, or try again tomorrow.",
     rca_limit: "I've already looked into this a few times today. Ask again tomorrow.",
+    no_targets: "Set your daily calorie and protein targets first.",
+    no_setup: "Set up your meals first.",
+    option_not_found: "That option isn't in your plan any more.",
+    meal_not_planned: "That meal isn't planned any more.",
+    already_logged: "Already logged.",
+    nothing_to_log: "Add at least one item.",
+    nothing_to_undo: "Nothing to undo.",
     hevy_key_invalid: "Hevy didn't accept that key. Copy it again from the link above (hevy.com/settings?developer).",
   }[code] || "Something went wrong. Try again.";
 }
@@ -232,7 +240,7 @@ function showShell() {
   $("shell").hidden = false;
 }
 
-const VIEWS = ["coach", "today", "progress", "you"];
+const VIEWS = ["coach", "today", "meals", "progress", "you"];
 /** Old links (and the Android app) still say #tracker; that page is now Today. */
 const currentView = () => VIEWS.find((v) => !$(`view-${v}`).hidden) || "coach";
 const viewFromHash = (h) => { const v = h.replace("#", ""); return v === "tracker" ? "today" : VIEWS.includes(v) ? v : "coach"; };
@@ -270,6 +278,9 @@ function setView(view, { fromHistory = false } = {}) {
     if (view === "today" && state.history) requestAnimationFrame(() => renderStrip(state.selectedDate === todayKey()));
   }
   if (view === "you") renderYou();
+  if (view === "meals") renderMeals();
+  // The food card shows the day against the meal plan; fetch the plan once Today is opened.
+  if (view === "today") loadPlan().then(() => { if (state.history) renderDay(); }).catch(() => {});
 }
 
 // ---------- appearance ----------
@@ -673,7 +684,7 @@ function renderFuel(d, t) {
   } else {
     macros = el("div", { class: "macro-legend" }, el("div", { class: "ml" }, el("span", { class: "k" }, el("i", { class: "sw p" }), "Protein"), el("span", { class: "v" }, `${fmt(d.proteinG)}`, el("small", {}, " g"))));
   }
-  $("fuel-body").replaceChildren(...[top, meter, macros].filter(Boolean));
+  $("fuel-body").replaceChildren(...[top, meter, macros, planLineFor(d.date, () => setView("meals"))].filter(Boolean));
 
   $("meals").replaceChildren(
     ...(d.meals.length
@@ -3157,7 +3168,7 @@ function openSheet(kind, { fromHistory = false } = {}) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", pastDays: "Past days", chatDay: "" };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", pastDays: "Past days", chatDay: "", ...mealsTitles };
   const screen = !SHEET_ONLY.has(kind);
   const sheet = $("sheet");
   sheet.classList.toggle("screen", screen);
@@ -3199,6 +3210,8 @@ function submitter(fn) {
 const num = (v) => (v === "" || v == null ? undefined : Number(v));
 
 const SHEETS = {
+  dietSetup: setupScreen,
+  dietMeal: mealScreen,
   activity() {
     const date = state.activityDate || null;
     state.activityDate = null;
@@ -3580,6 +3593,8 @@ async function ensureOnboarded() {
   store.set(ONBOARDED_KEY, true);
   return true;
 }
+
+initMeals({ api, el, toast, openSheet, closeSheet, backSheet, setView, fmt, todayKey: () => todayKey() || localToday(), refresh });
 
 async function start() {
   if (!(await ensureOnboarded())) return;
