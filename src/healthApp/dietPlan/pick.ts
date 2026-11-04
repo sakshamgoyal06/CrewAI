@@ -5,6 +5,9 @@
  * - Pinned options are picked every day.
  * - Otherwise options go in rank order, skipping any eaten or planned in the 2 days before, so
  *   nothing repeats within 3 days while there are options left.
+ * - Among those, a familiar meal (popularity 3+) comes first, and one from a cuisine the day
+ *   doesn't have yet (South Indian lunch, then not a South Indian dinner); "everyday" home food
+ *   never counts as a repeat.
  * - A meal they usually eat out is planned as a budget ("Eating out, about 700 kcal").
  */
 import type { MealOption, Totals } from "./compose.js";
@@ -46,11 +49,16 @@ export function pickDays(input: {
 
   for (let d = 0; d < days; d++) {
     const date = dateOf(dayNumber(input.start) + d);
+    const dayCuisines = new Set<string>();
+    const note = (o: MealOption | undefined) => {
+      if (o?.cuisine && o.cuisine !== "everyday") dayCuisines.add(o.cuisine);
+    };
     for (const b of input.budgets) {
       const list = input.options[b.slot] ?? [];
       const prior = known.get(`${date}|${b.slot}`);
       if (prior) {
         const o = list.find((x) => x.id === prior.optionId);
+        note(o);
         if (o) out.push(pickOf(date, b.slot, o));
         else if (prior.optionId === null) out.push(eatOut(date, b));
         continue;
@@ -66,11 +74,17 @@ export function pickDays(input: {
           .filter((h) => h.slot === b.slot && h.optionId && dayNumber(h.date) < dayNumber(date) && dayNumber(h.date) >= dayNumber(date) - NO_REPEAT_DAYS)
           .map((h) => h.optionId!),
       );
+      const fresh = list.filter((o) => !recent.has(o.id));
+      const familiar = (o: MealOption) => (o.popularity ?? 3) >= 3;
+      const newCuisine = (o: MealOption) => !o.cuisine || o.cuisine === "everyday" || !dayCuisines.has(o.cuisine);
       const choice =
         list.find((o) => pinned.has(o.id)) ??
-        list.find((o) => !recent.has(o.id)) ??
+        fresh.find((o) => familiar(o) && newCuisine(o)) ??
+        fresh.find(familiar) ??
+        fresh[0] ??
         leastRecent(list, history, b.slot);
       out.push(pickOf(date, b.slot, choice));
+      note(choice);
       history.push({ date, slot: b.slot, optionId: choice.id });
     }
   }
