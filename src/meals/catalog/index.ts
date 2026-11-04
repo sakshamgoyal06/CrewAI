@@ -192,6 +192,14 @@ export function resolveCatalogItem(c: FoodComponent, cat: Catalog = catalog()): 
     serving = pickServing(entry, "piece", c.size) ?? defaultServing(entry);
   } else {
     serving = pickServing(entry, c.unit as ServingUnit, c.size);
+    if (!serving && c.unit === "plate") {
+      // "1 plate dosa", "half plate chole" when the food has no plate measure: a plate is about
+      // one and a half katori of a katori food, two of a piece food (dosa, paratha, samosa), or
+      // one usual serving of anything else.
+      const d = defaultServing(entry);
+      const factor = d.unit === "bowl" ? 1.5 : d.unit === "piece" ? 2 : 1;
+      serving = { unit: "plate", grams: Math.round(d.grams * factor), label: "1 plate" };
+    }
     if (!serving) {
       const generic = GENERIC_GRAMS[c.unit as ServingUnit];
       if (!generic) return null;

@@ -212,6 +212,15 @@ const GOLDEN: [meal: string, minKcal: number, maxKcal: number][] = [
   ["ghugni", 150, 200],
   ["kada prasad", 310, 410],
   ["meen curry", 180, 230],
+  ["1 packet maggi", 280, 340],
+  ["1 plate fish curry rice", 440, 580],
+  ["2 ragi roti, 1 katori urad dal", 330, 470],
+  ["1 bowl tomato soup", 55, 100],
+  ["1 plate schezwan rice", 400, 560],
+  ["tinda sabzi, 2 roti", 280, 400],
+  ["1 plate appam stew", 340, 500],
+  ["bengali khichuri", 150, 230],
+  ["1 slice banana bread", 150, 230],
 ];
 
 describe("golden meals from the catalog", () => {

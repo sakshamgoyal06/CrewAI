@@ -215,12 +215,32 @@ export function recipesAgree(a: RecipeRow, b: RecipeRow): boolean {
 }
 
 /**
+ * "fish curry rice", "dal rice", "chicken curry roti": two catalog foods typed together with no
+ * "with" or comma. Only when the whole name isn't a catalog food and both halves are; the amount
+ * goes to the first half and the second is one usual serving.
+ */
+function splitJoined(c: FoodComponent, cat: Catalog): FoodComponent[] | null {
+  if (c.unit === "per_100g" || c.unit === "per_100ml" || resolveCatalogItem(c, cat)) return null;
+  const words = c.name.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 5) return null;
+  for (let i = words.length - 1; i >= 1; i--) {
+    const a = words.slice(0, i).join(" ");
+    const b = words.slice(i).join(" ");
+    const first: FoodComponent = { ...c, phrase: a, name: a, foodKey: foodKeyFor(a) };
+    const second: FoodComponent = { phrase: b, name: b, foodKey: foodKeyFor(b), quantity: 1, unit: "serving", assumedQuantity: true };
+    if (resolveCatalogItem(first, cat) && resolveCatalogItem(second, cat)) return [first, second];
+  }
+  return null;
+}
+
+/**
  * "aloo paratha with curd" → aloo paratha + curd, but only when the whole phrase isn't a catalog
  * food and every part is ("coffee with milk" stays one item if it's known as a whole).
  */
 export function splitWithParts(comps: FoodComponent[], cat: Catalog): FoodComponent[] {
   return comps.flatMap((c) => {
-    if (!/\swith\s/i.test(c.phrase) || resolveCatalogItem(c, cat)) return [c];
+    if (!/\swith\s/i.test(c.phrase)) return splitJoined(c, cat) ?? [c];
+    if (resolveCatalogItem(c, cat)) return [c];
     const [first, ...rest] = c.phrase.split(/\s+with\s+/i);
     const parts = [first!, ...rest].map(parseFoodPhrase);
     if (parts.some((p) => !p) || parts.some((p) => !resolveCatalogItem(p!, cat))) return [c];
