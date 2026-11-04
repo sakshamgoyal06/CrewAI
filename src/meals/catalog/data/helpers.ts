@@ -1,5 +1,5 @@
 /** Compact builders for catalog data files. */
-import type { CatalogDish, CatalogFood, Category, Diet, Serving, ServingSize, ServingUnit, Source } from "../types.js";
+import type { CatalogDish, CatalogFood, Category, Diet, MealType, Serving, ServingSize, ServingUnit, Source } from "../types.js";
 
 export const usda = (description: string): Source => ({ kind: "usda", usda: description });
 export const ref = (note: string): Source => ({ kind: "reference", note });
@@ -16,7 +16,7 @@ export function s(unit: ServingUnit, grams: number, size?: ServingSize | null, i
   };
 }
 
-type Opts = { aliases?: string[]; basis?: "100ml" };
+type Opts = { aliases?: string[]; basis?: "100ml"; meals?: MealType[] };
 
 /** [kcal, protein, carbs, fat, fiber] per 100 g (or 100 ml). */
 export type M = [number, number, number, number, number];
