@@ -10,6 +10,8 @@
  */
 import { amountLabel, foodKeyFor, parseFoodPhrase, parseMealComponents, type FoodComponent, type FoodUnit } from "./foodParse.js";
 import {
+  confirmFoods,
+  confirmRecipes,
   knownFoodNames,
   loadFoodTables,
   markFoodsUsed,
@@ -20,7 +22,9 @@ import {
   type FoodTables,
   type RecipeRow,
 } from "./foodStore.js";
-import type { Breakdown, BreakdownRequestItem } from "./providers/webBreakdown.js";
+import type { Breakdown, BreakdownIngredient, BreakdownRequestItem } from "./providers/webBreakdown.js";
+import { logger } from "../logger.js";
+import { CONFIRMED_SOURCE, PENDING_SOURCE, splitPending, type FoodContributor } from "./foodTrust.js";
 import { catalog as defaultCatalog, resolveCatalogItem, type Catalog, type CatalogMatch } from "./catalog/index.js";
 import { recordFoodGaps } from "./foodGaps.js";
 import type { MealItemLine, MealNutritionEstimate } from "./types.js";
@@ -120,23 +124,28 @@ export function linesFromBreakdown(
   ingredients: NonNullable<ReturnType<Breakdown["items"]["get"]>>,
   tables: FoodTables,
   detail: Record<string, unknown>,
+  source: string = CONFIRMED_SOURCE,
 ): { lines: IngredientLine[]; newFoods: FoodRow[]; recipe: RecipeRow | null } {
   const lines: IngredientLine[] = [];
   const newFoods: FoodRow[] = [];
+  const contributor = typeof detail.contributor === "string" ? detail.contributor : null;
   for (const ing of ingredients) {
     const key = foodKeyFor(ing.food);
     if (!key) continue;
     // Keep numbers stable: an ingredient already in the table wins over a fresh web value.
     let row = rowFor(tables, key, ing.unit);
     if (!row) {
+      // One implausible new value sinks the item: a dish missing its oil is worse than no estimate.
+      if (!plausibleIngredient(ing)) return { lines: [], newFoods: [], recipe: null };
       row = {
         food_key: key,
         unit: ing.unit,
         display_name: ing.food,
         grams_per_unit: ing.grams_per_unit,
         ...ing.per_unit,
-        source: "web_research",
+        source,
         source_detail: detail,
+        contributor,
       };
       newFoods.push(row);
       tables.foods.set(key, [...(tables.foods.get(key) ?? []), row]);
@@ -153,10 +162,56 @@ export function linesFromBreakdown(
           unit: c.unit,
           display_name: c.name,
           components: lines.map((l) => ({ food_key: l.row.food_key, unit: l.row.unit, quantity: r1(l.quantity * per) })),
-          source: "web_research",
+          source,
           source_detail: detail,
+          contributor,
         };
   return { lines, newFoods, recipe };
+}
+
+const ALCOHOL = /\b(beer|wine|whisk(e)?y|vodka|rum|gin|brandy|tequila|liqueur|cocktail|sake|cider|alcohol|toddy|feni)\b/i;
+
+/**
+ * Sanity check on a web value before anyone eats by it or it is saved (OWASP LLM04/LLM09): energy
+ * within physical limits, macros that fit in the weight, and calories that match the macros
+ * (4/4/9 kcal per gram, alcohol aside).
+ */
+export function plausibleIngredient(ing: BreakdownIngredient): boolean {
+  const { calories: k, protein_g: p, carbs_g: c, fat_g: f } = ing.per_unit;
+  const mass = p + c + f;
+  if (isPer100(ing.unit)) {
+    if (k > 900 || mass > 105 || ing.quantity > 3000) return false;
+  } else {
+    if (k > 2500 || ing.quantity > 50) return false;
+    const g = ing.grams_per_unit;
+    if (g !== null && (g > 2000 || k > g * 9.5 + 5 || mass > g * 1.05 + 1)) return false;
+  }
+  const atwater = 4 * p + 4 * c + 9 * f;
+  if (ALCOHOL.test(ing.food)) return atwater <= k * 1.3 + 15;
+  return Math.abs(k - atwater) <= Math.max(25, 0.3 * Math.max(k, atwater));
+}
+
+const close = (x: number, y: number, rel: number, abs: number): boolean => Math.abs(x - y) <= Math.max(abs, rel * Math.max(x, y));
+
+/** Two lookups of the same food in the same unit give about the same numbers. */
+export function foodsAgree(a: FoodRow, b: FoodRow): boolean {
+  return (
+    close(a.calories, b.calories, 0.15, 15) &&
+    close(a.protein_g, b.protein_g, 0.25, 3) &&
+    close(a.carbs_g, b.carbs_g, 0.25, 4) &&
+    close(a.fat_g, b.fat_g, 0.25, 3) &&
+    (a.grams_per_unit === null || b.grams_per_unit === null || close(a.grams_per_unit, b.grams_per_unit, 0.25, 10))
+  );
+}
+
+/** Same ingredients, in about the same amounts. */
+export function recipesAgree(a: RecipeRow, b: RecipeRow): boolean {
+  if (a.components.length !== b.components.length) return false;
+  const bByKey = new Map(b.components.map((c) => [recipeKey(c.food_key, c.unit), c.quantity]));
+  return a.components.every((c) => {
+    const q = bByKey.get(recipeKey(c.food_key, c.unit));
+    return q !== undefined && close(c.quantity, q, 0.3, 5);
+  });
 }
 
 /**
@@ -184,6 +239,10 @@ export type FoodDbDeps = {
   /** The shipped catalog; tests pass their own. */
   catalog?: Catalog;
   recordGaps?: typeof recordFoodGaps;
+  confirmFoods?: typeof confirmFoods;
+  confirmRecipes?: typeof confirmRecipes;
+  /** Who is logging; decides which pending rows they see and how their lookups are saved. */
+  contributor?: FoodContributor;
 };
 
 /**
@@ -202,9 +261,11 @@ export async function estimateWithFoodDb(
   // The curated catalog first; only items it can't answer touch the database.
   const fromCatalog = comps.map((c) => resolveCatalogItem(c, cat));
   const dbKeys = comps.filter((_, i) => !fromCatalog[i]).map((c) => c.foodKey);
-  const tables: FoodTables = dbKeys.length
+  const loaded: FoodTables = dbKeys.length
     ? await (deps.load ?? loadFoodTables)(dbKeys)
     : { foods: new Map(), recipes: new Map() };
+  const contributor = deps.contributor;
+  const { visible: tables, pendingFoods, pendingRecipes } = splitPending(loaded, contributor?.id);
   const resolved = comps.map((c, i) => {
     const m = fromCatalog[i];
     return m ? [lineFromCatalog(m)] : resolveFromTables(c, tables);
@@ -231,20 +292,46 @@ export async function estimateWithFoodDb(
     const res = await breakdown(text, asked, known);
     if (!res || asked.some((a) => !res.items.get(a.index)?.length)) return null;
 
-    const detail = { meal_text: text.slice(0, 300), serving_assumption: res.serving_assumption, citations: res.citations };
+    const trusted = contributor?.trusted === true;
+    const source = trusted || !contributor ? CONFIRMED_SOURCE : PENDING_SOURCE;
+    const detail = {
+      meal_text: text.slice(0, 300),
+      serving_assumption: res.serving_assumption,
+      citations: res.citations,
+      ...(contributor ? { contributor: contributor.id } : {}),
+    };
     const newFoods: FoodRow[] = [];
     const recipes: RecipeRow[] = [];
     missing.forEach((ci, n) => {
-      const out = linesFromBreakdown(comps[ci]!, res.items.get(n + 1)!, tables, detail);
+      const out = linesFromBreakdown(comps[ci]!, res.items.get(n + 1)!, tables, detail, source);
       resolved[ci] = out.lines;
       newFoods.push(...out.newFoods);
       out.newFoods.forEach((f) => created.add(f));
       if (out.recipe) recipes.push(out.recipe);
     });
     if (resolved.some((r) => !r?.length)) return null;
+    // Someone else's pending rows for the same foods: confirmed when this lookup agrees (or is the owner's).
+    const confirmFoodRows: FoodRow[] = [];
+    for (const f of newFoods) {
+      const prior = pendingFoods.get(recipeKey(f.food_key, f.unit));
+      if (!prior) continue;
+      if (trusted) confirmFoodRows.push({ ...f, contributor: prior.contributor });
+      else if (foodsAgree(prior, f)) confirmFoodRows.push({ ...prior, source_detail: f.source_detail });
+      else logger.info({ food: f.food_key, unit: f.unit }, "food db: lookups disagree, row stays pending");
+    }
+    const confirmRecipeRows: RecipeRow[] = [];
+    for (const r of recipes) {
+      const prior = pendingRecipes.get(recipeKey(r.dish_key, r.unit));
+      if (!prior) continue;
+      if (trusted) confirmRecipeRows.push({ ...r, contributor: prior.contributor });
+      else if (recipesAgree(prior, r)) confirmRecipeRows.push({ ...prior, source_detail: r.source_detail });
+    }
+    const by = contributor?.id ?? "unknown";
     // Foods first so a recipe never points at an ingredient that failed to save.
     void (deps.saveFoods ?? saveFoods)(newFoods)
-      .then(() => (deps.saveRecipes ?? saveRecipes)(recipes))
+      .then(() => (deps.saveRecipes ?? saveRecipes)(recipes, trusted || !contributor))
+      .then(() => (confirmFoodRows.length ? (deps.confirmFoods ?? confirmFoods)(confirmFoodRows, by) : undefined))
+      .then(() => (confirmRecipeRows.length ? (deps.confirmRecipes ?? confirmRecipes)(confirmRecipeRows, by) : undefined))
       .catch(() => undefined);
     assumption = res.serving_assumption;
     providerRaw = {
