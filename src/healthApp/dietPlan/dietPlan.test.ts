@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { catalog } from "../../meals/catalog/index.js";
 import { closeDay, rebalanceDay } from "./adjust.js";
 import { buildPlanDraft } from "./build.js";
-import { composeOptions, dietAllows, FIT_TOLERANCE, MAX_OPTIONS, MIN_OPTIONS, pairingProblems, type MealOption, type PersonDiet } from "./compose.js";
+import { composeOptions, dietAllows, itemFor, FIT_TOLERANCE, MAX_OPTIONS, MIN_OPTIONS, pairingProblems, type MealOption, type PersonDiet } from "./compose.js";
 import { pickDays } from "./pick.js";
 import { defaultPrefs, dietPrefsInput, prepLimit } from "./prefs.js";
 import { parseReview, reviewInput } from "./review.js";
@@ -296,5 +296,20 @@ describe("review", () => {
     const draft = await buildPlanDraft({ calories: 2100, proteinG: 150, weightKg: 80, prefs: defaultPrefs(), diet: null, avoid: [], usual: [], hidden: [] });
     expect(draft.review).toBeNull();
     expect(Object.keys(draft.options)).toEqual(["breakfast", "lunch", "snack", "dinner"]);
+  });
+});
+
+describe("catalog batch 6 polish", () => {
+  it("says glasses, not glasss", () => {
+    const e = cat.entries.find((x) => x.servings.some((s) => (s.label ?? "").startsWith("1 glass")));
+    if (!e) return;
+    const s = e.servings.find((x) => (x.label ?? "").startsWith("1 glass"))!;
+    expect(itemFor(e, s, 2).text).toMatch(/^2 glasses /);
+  });
+  it("keeps Jain versions of dishes for Jain plans only", () => {
+    const jain = cat.entries.find((x) => x.key.startsWith("jain "));
+    if (!jain) return;
+    expect(dietAllows("vegetarian", jain)).toBe(false);
+    expect(dietAllows("jain", jain)).toBe(true);
   });
 });
