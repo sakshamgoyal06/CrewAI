@@ -215,6 +215,14 @@ describe("pickDays", () => {
     });
     expect(picks.find((p) => p.slot === "lunch")!.optionId).toBe("lunch2");
   });
+
+  it("prefers familiar meals and a cuisine the day doesn't have yet", () => {
+    const lunch = opts("lunch", 3).map((o, i) => ({ ...o, popularity: i === 0 ? 2 : 4, cuisine: i === 1 ? "south_indian" : "everyday" }));
+    const dinner = opts("dinner", 3).map((o, i) => ({ ...o, popularity: 4, cuisine: i === 0 ? "south_indian" : "north_indian" }));
+    const picks = pickDays({ start: "2026-11-04", days: 1, budgets, options: { lunch, dinner }, prefs });
+    // lunch0 is rarely eaten, so lunch1 (South Indian); dinner then skips the South Indian one.
+    expect(picks.map((p) => p.optionId)).toEqual(["lunch1", "dinner1"]);
+  });
 });
 
 describe("rebalanceDay", () => {
