@@ -4,7 +4,7 @@
  */
 import { composeOptions, type MealOption, type PersonDiet } from "./compose.js";
 import { prepLimit, shares, type DietPrefs } from "./prefs.js";
-import { budgetsAfterSupplements, supplementLines } from "./supplements.js";
+import { budgetsAfterSupplements, supplementLines, supplementsBySlot, withSupplements } from "./supplements.js";
 import type { PlanReview, ReviewIssue } from "./review.js";
 import { macroTargets, mealBudgets, type MacroTargets, type MealBudget, type PlanSlot } from "./targets.js";
 
@@ -34,11 +34,15 @@ export async function buildPlanDraft(input: {
   review?: ReviewFn;
 }): Promise<PlanDraft> {
   const targets = macroTargets({ calories: input.calories, proteinG: input.proteinG, weightKg: input.weightKg });
-  // Daily supplements come off the meal budgets; the day's targets stay whole.
-  const budgets = budgetsAfterSupplements(mealBudgets(targets, shares(input.prefs)), supplementLines(input.prefs.supplements));
+  // Supplements are meal items: the meal they go with is composed around them, then they're
+  // added to each of its options, so the option (and the log) carries their calories and macros.
+  const budgets = mealBudgets(targets, shares(input.prefs));
+  const bySlot = supplementsBySlot(supplementLines(input.prefs.supplements), budgets.map((b) => b.slot));
+  const foodBudgets = budgetsAfterSupplements(budgets, [...bySlot.values()].flat());
   const compose = (extraHidden: string[]) => {
     const out: Partial<Record<PlanSlot, MealOption[]>> = {};
-    for (const b of budgets) {
+    for (const b of foodBudgets) {
+      const supps = bySlot.get(b.slot) ?? [];
       out[b.slot] = composeOptions({
         budget: b,
         diet: input.diet,
@@ -50,7 +54,7 @@ export async function buildPlanDraft(input: {
         usual: input.usual.filter((u) => u.slot === b.slot),
         hidden: [...input.hidden, ...extraHidden],
         habits: input.prefs.habits,
-      });
+      }).map((o) => withSupplements(o, supps));
     }
     return out;
   };

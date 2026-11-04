@@ -459,11 +459,15 @@ export async function loadPlanView(ctx: ActionContext, now = new Date()): Promis
   const t = profile.targets;
   const needsTargets = !t.calorieTarget || !t.proteinTarget;
   const lines = supplementLines(prefs.prefs.supplements);
-  const takenToday = lines.length ? !!(await supplementSessionOn(ctx.userProfileId, today)) : false;
+  // Supplements are items in meals now; the old separate "Took them" log is no longer offered.
+  const takenToday = false;
   const base = { prefs: prefs.prefs, marks: { pinned: prefs.pinned, liked: prefs.liked, hidden: prefs.hidden }, reviewOn: reviewEnabled(), needsTargets, supplements: { lines, takenToday, choices: supplementChoices() } };
   if (!prefs.saved || needsTargets) return { ok: true, setup: prefs.saved, plan: null, days: [], ...base };
   let plan = await loadActivePlan(ctx.userProfileId);
-  const stale = plan && (plan.targets.calories !== Math.round(t.calorieTarget ?? 0) || plan.targets.proteinG !== Math.round(t.proteinTarget ?? 0));
+  // A plan built before supplements became meal items has none in its options: rebuild it once.
+  const suppKeys = new Set(lines.map((l) => l.key));
+  const missingSupps = !!plan && suppKeys.size > 0 && !Object.values(plan.options).flat().some((o) => o!.items.some((i) => i.key && suppKeys.has(i.key)));
+  const stale = plan && (missingSupps || plan.targets.calories !== Math.round(t.calorieTarget ?? 0) || plan.targets.proteinG !== Math.round(t.proteinTarget ?? 0));
   if (!plan || stale) {
     const r = await rebuildPlan(ctx, plan ? "target_change" : "setup", now);
     if (!r.ok) return r;
@@ -476,7 +480,7 @@ export async function loadPlanView(ctx: ActionContext, now = new Date()): Promis
   const { review: _r, ...rest } = plan;
   const dates = [...new Set(days.map((x) => x.date))];
   const loggedToday = await loggedOn(ctx.userProfileId, today);
-  const accounts = dates.map((date) => accountDay({ date, targets: plan!.targets, meals: days.filter((x) => x.date === date), supplements: lines, loggedActual: date === today ? loggedToday : null }));
+  const accounts = dates.map((date) => accountDay({ date, targets: plan!.targets, meals: days.filter((x) => x.date === date), supplements: [], loggedActual: date === today ? loggedToday : null }));
   return { ok: true, setup: true, plan: rest, days, accounts, ...base };
 }
 
