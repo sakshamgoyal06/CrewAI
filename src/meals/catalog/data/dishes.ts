@@ -116,7 +116,7 @@ const LIST: CatalogDish[] = [
   dish("Coconut chutney", "spice_condiment", "vegan", [["Coconut, fresh", 100], ["Chana dal, raw", 15], [OIL, 5]], 180, [s("tbsp", 15, null, true), s("bowl", 50, null, false, "1 small katori")],
     { aliases: ["chutney", "nariyal chutney"], meals: ["breakfast", "snack"] }),
   dish("Besan chilla", "breakfast", "vegan", [["Gram flour (besan)", 100], ["Onion", 30], ["Tomato", 30], [OIL, 15]], 230, [s("piece", 75, null, true)], { aliases: ["besan cheela", "chilla", "besan ka chilla"] }),
-  dish("Moong dal chilla", "breakfast", "vegan", [["Moong dal, raw", 100], ["Onion", 30], [OIL, 15]], 280, [s("piece", 90, null, true)], { aliases: ["moong chilla", "pesarattu", "moong cheela"] }),
+  dish("Moong dal chilla", "breakfast", "vegan", [["Moong dal, raw", 100], ["Onion", 30], [OIL, 15]], 280, [s("piece", 90, null, true)], { aliases: ["moong chilla", "moong cheela"] }),
   dish("Oats porridge", "breakfast", "veg", [["Rolled oats", 40], ["Toned milk", 200], ["Sugar", 5]], 260, [s("bowl", 260, null, true, "1 bowl")], { aliases: ["oats with milk", "oatmeal", "porridge"] }),
   dish("Veg sandwich", "snack", "veg", [["White bread", 50], ["Butter", 5], ["Cucumber", 30], ["Tomato", 30]], 115, [s("piece", 115, null, true)], { aliases: ["vegetable sandwich", "bread sandwich"] }),
 
@@ -270,6 +270,16 @@ const LIST: CatalogDish[] = [
   dish("Moong dal soup", "dal_curry", "veg", [["Moong dal, raw", 50], ["Tomato", 30], ["Ghee", 5]], 400, [s("bowl", 250, null, true, "1 bowl"), s("cup", 200)], { aliases: ["moong soup", "yellow dal soup"], meals: ["dinner", "lunch"] }),
   dish("Paneer salad bowl", "meal", "veg", [["Paneer", 100], ["Lettuce", 40], ["Cucumber", 50], ["Tomato", 40], ["Capsicum", 30], ["Olive oil", 5]], 265, [s("bowl", 265, null, true, "1 bowl")], { aliases: ["paneer salad"], meals: ["dinner", "lunch"] }),
   dish("Tofu salad bowl", "meal", "vegan", [["Tofu", 150], ["Lettuce", 40], ["Cucumber", 50], ["Tomato", 40], ["Capsicum", 30], ["Olive oil", 5]], 315, [s("bowl", 300, null, true, "1 bowl")], { aliases: ["tofu salad"], meals: ["dinner", "lunch"] }),
+  // ── Batch 5 (2026-11-04): higher-protein veg and vegan breakfasts ──
+  dish("Paneer moong chilla", "breakfast", "veg", [["Moong dal, raw", 100], ["Paneer", 80], ["Onion", 20], [OIL, 15]], 330, [s("piece", 110, null, true, "1 chilla with paneer")], { aliases: ["moong dal cheela with paneer", "paneer stuffed moong chilla", "moong chilla with paneer", "paneer cheela"] }),
+  dish("Besan tofu chilla", "breakfast", "vegan", [["Gram flour (besan)", 100], ["Tofu", 100], ["Tomato", 30], [OIL, 15]], 330, [s("piece", 110, null, true, "1 chilla with tofu")], { aliases: ["besan chilla with tofu", "tofu chilla", "tofu cheela"] }),
+  dish("Soya poha", "breakfast", "vegan", [["Poha, raw", 100], ["Soya chunks, dry", 30], ["Onion", 40], ["Green peas", 30], [OIL, 15]], 480, [plate(180), KATORI(150, false)], { aliases: ["soya chunks poha", "protein poha", "soya granules poha"] }),
+  dish("Sprouts poha", "breakfast", "vegan", [["Poha, raw", 100], ["Moong sprouts", 80], ["Onion", 40], ["Peanuts", 15], [OIL, 15]], 450, [plate(180), KATORI(150, false)], { aliases: ["sprout poha", "moong sprouts poha"] }),
+  dish("Protein upma", "breakfast", "vegan", [["Semolina (sooji)", 60], ["Moong dal, raw", 25], ["Soya chunks, dry", 15], ["Onion", 30], ["Green peas", 30], [OIL, 10]], 380, [KATORI(), plate(250, false)], { aliases: ["dal upma", "moong dal upma", "soya upma", "high protein upma"] }),
+  dish("Tofu scramble toast", "breakfast", "vegan", [["Tofu bhurji", 100], ["Brown bread", 60]], 160, [s("serving", 160, null, true, "2 toasts with tofu scramble")], { aliases: ["tofu toast", "tofu bhurji toast", "tofu bhurji sandwich"] }),
+  dish("Ragi dosa", "breakfast", "vegan", [["Ragi flour", 60], ["Rice flour", 20], ["Urad dal, raw", 20], [OIL, 10]], 220, [s("piece", 80, null, true)], { aliases: ["instant ragi dosa", "nachni dosa", "finger millet dosa"] }),
+  dish("Pesarattu", "breakfast", "vegan", [["Moong dal, raw", 100], [RICE_RAW, 15], ["Green chilli", 5], [OIL, 10]], 280, [s("piece", 95, null, true)], { aliases: ["pesarattu dosa", "green moong dosa", "jain pesarattu", "moong dosa"], note: "No onion or ginger, so it is Jain; ginger chutney is separate" }),
+  dish("Ginger chutney", "spice_condiment", "vegan", [["Ginger", 50], ["Jaggery", 30], ["Water", 30], [OIL, 10]], 110, [s("tbsp", 15, null, true)], { aliases: ["allam chutney", "allam pachadi", "inji chutney"], meals: ["breakfast"] }),
 ];
 
 /**
@@ -464,6 +474,16 @@ export const PREP: Record<string, PrepMinutes> = {
   "Paneer salad bowl": 10,
   "Tofu salad bowl": 10,
   "Dahi poha": 0,
+  // Batch 5
+  "Paneer moong chilla": 20,
+  "Besan tofu chilla": 20,
+  "Soya poha": 20,
+  "Sprouts poha": 20,
+  "Protein upma": 20,
+  "Ragi dosa": 20,
+  "Pesarattu": 20,
+  "Tofu scramble toast": 10,
+  "Ginger chutney": 10,
 };
 
 /** Dishes people usually buy or order rather than cook (restaurant breads, street food, mithai). */

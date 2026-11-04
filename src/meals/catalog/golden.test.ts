@@ -125,6 +125,13 @@ const GOLDEN: [meal: string, minKcal: number, maxKcal: number][] = [
   ["paneer salad bowl", 280, 380],
   ["1 protein bar", 210, 250],
   ["soya bhurji, 2 roti", 300, 420],
+  // Batch 5: protein breakfasts
+  ["2 paneer moong chilla", 380, 520],
+  ["soya poha", 230, 320],
+  ["protein upma", 180, 260],
+  ["tofu scramble toast", 200, 280],
+  ["2 pesarattu with ginger chutney", 300, 420],
+  ["2 ragi dosa", 240, 330],
 ];
 
 describe("golden meals from the catalog", () => {
