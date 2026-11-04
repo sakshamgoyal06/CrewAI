@@ -334,6 +334,13 @@ describe("card history notes", () => {
     );
   });
 
+  it("shows a planned meal card as the meal is now, after an edit or swap", () => {
+    const card = { type: "plan_meal" as const, date: "2026-11-04", slot: "lunch" as const, time: "13:30", title: "Roti, dal tadka", items: ["3 medium roti", "1 katori dal tadka"], kcal: 600, proteinG: 20 };
+    const st = { ...emptyCardStates(), planMeals: new Map([["2026-11-04|lunch", "planned"]]), planMealNow: new Map([["2026-11-04|lunch", { title: "Roti, dal tadka, curd", items: ["2 medium roti", "1 katori dal tadka", "1 katori curd"], kcal: 580, proteinG: 24 }]]) };
+    expect(hydrateCard(card, st)).toMatchObject({ status: "planned", items: ["2 medium roti", "1 katori dal tadka", "1 katori curd"], kcal: 580, proteinG: 24 });
+    expect(hydrateCard(card, emptyCardStates())).toEqual(card);
+  });
+
   it("folds the logged state into meal and activity cards for the app", () => {
     expect(hydrateCard(meal, states())).toEqual({ ...meal, saved: { calories: 760 } });
     expect(hydrateCard(meal, emptyCardStates())).toBe(meal);

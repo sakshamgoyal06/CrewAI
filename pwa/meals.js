@@ -8,7 +8,7 @@ const DEFAULT_TIMES = { breakfast: "08:30", lunch: "13:30", snack: "17:00", dinn
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 let d = null; // { api, el, toast, openSheet, closeSheet, backSheet, setView, fmt, todayKey, refresh }
-const ms = { view: null, loading: null, date: null, sel: null, qty: null, error: null };
+const ms = { view: null, loading: null, date: null, sel: null, edit: null, error: null };
 
 export function initMeals(deps) { d = deps; }
 
@@ -176,19 +176,32 @@ function mealCard(date, slot) {
       el("span", { class: "slot" }, SLOT_NAME[slot], timeOf(slot) ? el("small", {}, ` · ${clock(timeOf(slot))}`) : null),
       el("span", { class: "what" }, p.kind === "eat_out" ? p.title : items.map((i) => i.text).join(", ") || p.title),
       el("span", { class: "sub" }, sub, eaten ? el("b", { class: "tick" }, p.status === "partial" ? " · Eaten, portions changed" : " · Eaten") : null),
-      eaten ? null : el("span", { class: "edit-hint" }, p.kind === "eat_out" ? "Tap to log what you had" : "Change portions, swap or log your own", el("i", { class: "chev-r" }))));
+      eaten ? null : el("span", { class: "edit-cue" }, p.kind === "eat_out" ? "Tap to log what you had" : "Change portions, swap or log your own", el("i", { class: "chev-r" }))));
 }
 
 /** From a chat card: the plan's meal screen for one meal (loads the plan first if needed). */
 export async function openPlannedMeal(date, slot) {
-  try { await loadPlan(true); } catch (err) { d.toast(err.message); return; }
-  if (!pickOf(date, slot)) { d.setView("meals"); return; }
-  openMeal(date, slot);
+  // Open the screen straight away from what's in memory; the fresh plan repaints it.
+  const known = !!pickOf(date, slot);
+  if (known) openMeal(date, slot);
+  try { await loadPlan(true); } catch (err) { if (!known) d.toast(err.message); return; }
+  if (!pickOf(date, slot)) {
+    // An old card: that day has left the plan.
+    if (known) d.closeSheet();
+    d.toast(date < d.todayKey() ? "That meal's day has passed. Here's your plan now." : "That meal isn't in the plan any more.");
+    d.setView("meals");
+    return;
+  }
+  if (!known) openMeal(date, slot);
+  else if (stillOpen() && (!ms.edit || !editDirty(ms.edit))) { ms.edit = null; d.openSheet("dietMeal", { fromHistory: true }); }
 }
+
+/** The meal screen is still the one showing (they may have gone back while the plan loaded). */
+const stillOpen = () => !document.getElementById("sheet").hidden && document.getElementById("sheet-title").textContent.startsWith(SLOT_NAME[ms.sel?.slot] || "\u0000");
 
 function openMeal(date, slot) {
   ms.sel = { date, slot };
-  ms.qty = null;
+  ms.edit = null;
   d.openSheet("dietMeal");
 }
 
@@ -201,7 +214,11 @@ async function rebuild() {
   } catch (err) { d.toast(err.message); }
 }
 
-// ---------- one meal ----------
+// ---------- one meal: the meal editor ----------
+//
+// Change portions, remove items, add foods (searched from the catalog, already filtered by the
+// person's diet, foods to avoid and meat limits), or swap the whole meal for another option. The
+// numbers update as they edit; Save keeps the meal in the plan for that day.
 
 /** The household step for an item: 1 for pieces and slices, ½ for katoris, ¼ for a usual meal. */
 function stepOf(i) {
@@ -220,6 +237,8 @@ function fmtQty(q) {
 /** The item's text at a new quantity, e.g. "2 medium roti" → "3 medium roti". */
 function textAt(i, q) {
   if (q === i.qty) return i.text;
+  // A weighed serving ("100 g paneer") counts servings in front: "2 × 100 g paneer".
+  if (i.qty === 1 && /^\d+ ?(g|ml)\b/.test(i.text)) return `${fmtQty(q)} × ${i.text}`;
   const lead = /^[\d¼½¾]+(?:\s*×)?\s*/;
   return lead.test(i.text) ? i.text.replace(/^[\d¼½¾]+/, fmtQty(q)) : `${fmtQty(q)} × ${i.text}`;
 }
@@ -229,6 +248,49 @@ function scaled(i, q) {
   return { kcal: i.kcal * f, proteinG: i.proteinG * f, carbsG: i.carbsG * f, fatG: i.fatG * f };
 }
 
+/** The editor's rows for a planned meal: each planned item, kept at its portion. */
+function startEdit(date, slot, items) {
+  ms.edit = { date, slot, rows: items.map((base, k) => ({ keep: k, base, qty: base.qty })), adding: false, q: "", hits: null };
+}
+
+const editDirty = (e) => e.rows.length !== e.rows.filter((r) => r.keep != null).length
+  || e.rows.some((r, k) => r.keep !== k || r.qty !== r.base.qty)
+  || e.rows.length !== (pickOf(e.date, e.slot)?.items.length ?? 0);
+
+const editBody = (e) => JSON.stringify({ items: e.rows.map((r) => (r.keep != null ? { keep: r.keep, qty: r.qty } : { servingId: r.servingId, qty: r.qty })) });
+
+function totalsOf(rows) {
+  return rows.reduce((a, r) => { const s = scaled(r.base, r.qty); return { kcal: a.kcal + s.kcal, proteinG: a.proteinG + s.proteinG, carbsG: a.carbsG + s.carbsG, fatG: a.fatG + s.fatG }; }, { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 });
+}
+
+/** Meal totals against the meal's share of the day: calories big, then protein, carbs and fat bars. */
+function totalsPanel(t, budget) {
+  const { el, fmt } = d;
+  const bar = (label, val, target, cls) => {
+    const pct = target ? Math.min(100, Math.round((val / target) * 100)) : 0;
+    const over = target && val > target * 1.15;
+    return el("div", { class: `mt-macro${over ? " over" : ""}` },
+      el("span", { class: "k" }, el("i", { class: `sw ${cls}` }), label),
+      el("span", { class: "v" }, `${fmt(val)}`, target ? el("small", {}, ` / ${fmt(target)} g`) : el("small", {}, " g")),
+      el("div", { class: "meter thin" }, el("i", { style: `width:${pct}%` })));
+  };
+  const diff = budget ? Math.round(t.kcal - budget.calories) : 0;
+  const near = budget && Math.abs(diff) <= budget.calories * 0.1;
+  // Protein is what the plan protects most; say so when an edit leaves the meal well short.
+  const proteinShort = budget?.proteinG && t.proteinG < budget.proteinG * 0.85 ? Math.round(budget.proteinG - t.proteinG) : 0;
+  return el("div", { class: "meal-edit-totals" },
+    el("div", { class: "meal-totals" },
+      el("div", { class: "big" }, el("span", { class: "num" }, fmt(t.kcal)), el("span", { class: "unit" }, "kcal")),
+      budget ? el("div", { class: "side" },
+        el("div", { class: "muted" }, `Meal target ${fmt(budget.calories)} kcal`),
+        el("div", { class: near ? "good" : diff > 0 ? "warn" : "muted" }, near ? "On target" : diff > 0 ? `${fmt(diff)} over` : `${fmt(-diff)} under`),
+        proteinShort > 0 ? el("div", { class: "warn" }, `${fmt(proteinShort)} g protein short`) : null) : null),
+    el("div", { class: "mt-macros" },
+      bar("Protein", t.proteinG, budget?.proteinG, "p"),
+      bar("Carbs", t.carbsG, budget?.carbsG, "c"),
+      bar("Fat", t.fatG, budget?.fatG, "f")));
+}
+
 export function mealScreen() {
   const { el, fmt } = d;
   const { date, slot } = ms.sel;
@@ -236,8 +298,7 @@ export function mealScreen() {
   const wrap = el("div", { class: "stack meal-screen" });
   document.getElementById("sheet-title").textContent = `${SLOT_NAME[slot]} · ${dayLabel(date)}`;
   if (!p) { wrap.append(el("p", { class: "none" }, "This meal isn't in the plan any more.")); return wrap; }
-  const today = d.todayKey();
-  const canEat = date <= today;
+  const canEat = date <= d.todayKey();
   const eaten = isEaten(p);
   const budget = budgetOf(slot);
 
@@ -250,85 +311,150 @@ export function mealScreen() {
     return wrap;
   }
 
-  const items = eaten ? itemsOf(p) : p.items;
-  ms.qty = ms.qty || items.map((i) => i.qty);
-  const totalsBox = el("div", { class: "meal-totals" });
-  const list = el("ul", { class: "portion-list" });
+  if (eaten) {
+    const items = itemsOf(p);
+    const t = { kcal: sum(items, "kcal"), proteinG: sum(items, "proteinG"), carbsG: sum(items, "carbsG"), fatG: sum(items, "fatG") };
+    wrap.append(totalsPanel(t, budget),
+      el("ul", { class: "portion-list" }, ...items.map((i) => el("li", {}, el("span", { class: "iname" }, i.text, el("small", {}, `${fmt(i.kcal)} kcal · ${fmt(i.proteinG)} g protein`))))),
+      el("p", { class: "done-line" }, p.status === "partial" ? "Eaten, with your changes." : "Eaten as planned."),
+      el("button", { class: "link", type: "button", onclick: undo }, "Undo"));
+    return wrap;
+  }
 
-  const paintTotals = () => {
-    const t = items.reduce((a, i, k) => { const s = scaled(i, ms.qty[k]); return { kcal: a.kcal + s.kcal, proteinG: a.proteinG + s.proteinG, carbsG: a.carbsG + s.carbsG, fatG: a.fatG + s.fatG }; }, { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 });
-    totalsBox.replaceChildren(
-      el("div", { class: "big" }, el("span", { class: "num" }, fmt(t.kcal)), el("span", { class: "unit" }, "kcal")),
-      el("div", { class: "side" },
-        budget ? el("div", { class: "muted" }, `Meal target ${fmt(budget.calories)} kcal`) : null,
-        el("div", {}, `P ${fmt(t.proteinG)} · C ${fmt(t.carbsG)} · F ${fmt(t.fatG)} g`)));
-  };
+  if (!ms.edit || ms.edit.date !== date || ms.edit.slot !== slot) startEdit(date, slot, p.items);
+  const e = ms.edit;
+  const totalsBox = el("div");
+  const list = el("ul", { class: "portion-list edit-list" });
+  const action = el("div", { class: "stack meal-actions" });
+  const addBox = el("div", { class: "stack add-food" });
+
+  const repaint = () => { paintItems(); paintTotals(); paintAction(); };
+  const paintTotals = () => totalsBox.replaceChildren(totalsPanel(totalsOf(e.rows), budget));
   const paintItems = () => {
-    list.replaceChildren(...items.map((i, k) => {
-      const q = ms.qty[k];
+    if (!e.rows.length) { list.replaceChildren(el("li", { class: "none hint" }, "No items. Add a food below, or swap for another meal.")); return; }
+    list.replaceChildren(...e.rows.map((r, k) => {
+      const i = r.base;
       const step = stepOf(i);
+      const s = scaled(i, r.qty);
       const change = (dir) => {
-        const next = Math.round((q + dir * step) * 100) / 100;
-        if (next < 0 || next > 20) return;
-        ms.qty[k] = next;
-        paintItems();
-        paintTotals();
+        const next = Math.round((r.qty + dir * step) * 100) / 100;
+        if (next <= 0 || next > 20) return;
+        r.qty = next;
+        repaint();
       };
-      return el("li", { class: q === 0 ? "off" : "" },
-        el("span", { class: "iname" }, q === 0 ? `${i.text} (skipped)` : textAt(i, q), el("small", {}, `${fmt(scaled(i, q).kcal)} kcal`)),
-        eaten ? null : el("span", { class: "stepper small" },
-          el("button", { type: "button", "aria-label": `Less ${i.name}`, disabled: q <= 0, onclick: () => change(-1) }, "−"),
-          el("button", { type: "button", "aria-label": `More ${i.name}`, onclick: () => change(1) }, "+")));
+      return el("li", { class: r.keep == null ? "added" : "" },
+        el("span", { class: "iname" }, textAt(i, r.qty),
+          el("small", {}, `${fmt(s.kcal)} kcal · P ${fmt(s.proteinG)} · C ${fmt(s.carbsG)} · F ${fmt(s.fatG)} g`)),
+        el("span", { class: "stepper small" },
+          el("button", { type: "button", "aria-label": `Less ${i.name}`, disabled: r.qty - step <= 0, onclick: () => change(-1) }, "−"),
+          el("button", { type: "button", "aria-label": `More ${i.name}`, onclick: () => change(1) }, "+"),
+          el("button", { class: "remove", type: "button", "aria-label": `Remove ${i.name}`, onclick: () => { e.rows.splice(k, 1); repaint(); } }, "×")));
     }));
   };
-  paintItems();
-  paintTotals();
-  wrap.append(totalsBox);
-  if (!eaten) wrap.append(el("p", { class: "section-label" }, "Portions"), el("p", { class: "hint" }, "Use − and + to change an amount. The total updates, and \"Ate this\" logs your amounts."));
-  wrap.append(list);
-
-  const action = el("div", { class: "stack" });
   const paintAction = () => {
-    const cur = pickOf(date, slot);
-    if (isEaten(cur)) {
-      action.replaceChildren(
-        el("p", { class: "done-line" }, cur.status === "partial" ? "Eaten, with your portions." : "Eaten as planned."),
-        el("button", { class: "link", type: "button", onclick: undo }, "Undo"));
+    const dirty = editDirty(e);
+    const kids = [];
+    if (dirty) {
+      kids.push(el("button", { class: "btn primary block", type: "button", disabled: !e.rows.length, onclick: (ev) => save(ev, false) }, "Save changes"));
+      if (canEat) kids.push(el("button", { class: "btn block", type: "button", disabled: !e.rows.length, onclick: (ev) => save(ev, true) }, "Save and mark eaten"));
+      kids.push(el("button", { class: "link quiet", type: "button", onclick: () => { startEdit(date, slot, p.items); paintAdd(); repaint(); } }, "Discard changes"));
     } else if (canEat) {
-      action.replaceChildren(el("button", { class: "btn primary block", type: "button", onclick: eat }, "Ate this"),
+      kids.push(el("button", { class: "btn primary block", type: "button", onclick: (ev) => save(ev, true) }, "Ate this"),
         el("button", { class: "btn block", type: "button", onclick: () => d.logOwn(slot) }, "Log my own instead"));
     } else {
-      action.replaceChildren(el("p", { class: "hint" }, "You can log it on the day. Change the portions or swap it below."));
+      kids.push(el("p", { class: "hint" }, "Change it any time before the day. You can log it on the day."));
     }
+    action.replaceChildren(...kids);
   };
-  async function eat(e) {
-    e.target.disabled = true;
+
+  // Adding a food: a search box that lists foods (filtered by the server against their restrictions).
+  let timer = null;
+  let seq = 0;
+  const search = async () => {
+    const mine = ++seq;
     try {
-      await d.api(`/diet/days/${date}/${slot}/eat`, { method: "POST", body: JSON.stringify({ qty: ms.qty }) });
+      const r = await d.api(`/diet/foods?slot=${slot}&q=${encodeURIComponent(e.q)}`);
+      if (mine !== seq) return;
+      e.hits = r.foods;
+    } catch (err) { if (mine === seq) e.hits = []; d.toast(err.message); }
+    paintHits();
+  };
+  const hitsBox = el("ul", { class: "list food-hits" });
+  const paintHits = () => {
+    if (!e.hits) { hitsBox.replaceChildren(el("li", { class: "hint" }, "Loading…")); return; }
+    if (!e.hits.length) { hitsBox.replaceChildren(el("li", { class: "hint" }, e.q ? "Nothing that fits your diet matches that. Try another name." : "Type a food to add.")); return; }
+    hitsBox.replaceChildren(...e.hits.map((h) => el("li", {},
+      el("span", { class: "fname" }, h.name),
+      el("div", { class: "chips wrap" }, ...h.servings.map((s) => el("button", { class: "chip", type: "button", onclick: () => {
+        e.rows.push({ servingId: s.id, base: s.item, qty: 1 });
+        e.adding = false;
+        e.q = "";
+        paintAdd();
+        repaint();
+        d.toast(`Added ${s.item.text}.`);
+      } }, `${s.label} · ${fmt(s.item.kcal)} kcal`))))));
+  };
+  const paintAdd = () => {
+    if (!e.adding) {
+      addBox.replaceChildren(el("button", { class: "btn block add-btn", type: "button", disabled: e.rows.length >= 12, onclick: () => { e.adding = true; e.hits = null; paintAdd(); search(); } }, "+ Add a food"));
+      return;
+    }
+    const input = el("input", { class: "field", type: "search", placeholder: "Search foods: paneer, curd, apple…", value: e.q, "aria-label": "Search foods", enterkeyhint: "search" });
+    input.addEventListener("input", () => { e.q = input.value; clearTimeout(timer); timer = setTimeout(search, 250); });
+    addBox.replaceChildren(
+      el("div", { class: "row-input" }, input, el("button", { class: "btn small", type: "button", onclick: () => { e.adding = false; e.q = ""; paintAdd(); } }, "Done")),
+      el("p", { class: "hint" }, "Only foods that fit your diet and foods to avoid are shown."),
+      hitsBox);
+    paintHits();
+    setTimeout(() => input.focus(), 0);
+  };
+
+  async function save(ev, andEat) {
+    ev.target.disabled = true;
+    try {
+      if (editDirty(e)) await d.api(`/diet/days/${date}/${slot}/items`, { method: "PUT", body: editBody(e) });
+      if (andEat) await d.api(`/diet/days/${date}/${slot}/eat`, { method: "POST", body: "{}" });
+      ms.edit = null;
       await loadPlan(true);
-      d.toast("Logged.");
-      d.refresh?.();
+      d.toast(andEat ? "Logged." : "Saved. The plan keeps this meal for the day.");
+      if (andEat) d.refresh?.();
       d.openSheet("dietMeal", { fromHistory: true });
       paint();
-    } catch (err) { d.toast(err.message); e.target.disabled = false; }
+    } catch (err) {
+      d.toast(err.message);
+      ev.target.disabled = false;
+      // Saved but the log failed: what's on screen is now the plan.
+      if (andEat) { await loadPlan(true).catch(() => {}); }
+    }
   }
   async function undo() {
     try {
       await d.api(`/diet/days/${date}/${slot}/undo`, { method: "POST" });
+      ms.edit = null;
       await loadPlan(true);
-      ms.qty = null;
       d.toast("Removed from today's log.");
       d.refresh?.();
       d.openSheet("dietMeal", { fromHistory: true });
       paint();
     } catch (err) { d.toast(err.message); }
   }
-  paintAction();
-  wrap.append(action);
 
-  if (!eaten && p.optionId) wrap.append(optionMarks(p.optionId));
-  if (!eaten) wrap.append(otherOptions(date, slot, p.optionId));
+  paintAdd();
+  repaint();
+  wrap.append(...[totalsBox, list, addBox, suppNote(slot), action].filter(Boolean));
+  if (p.optionId && !p.edited) wrap.append(optionMarks(p.optionId));
+  wrap.append(otherOptions(date, slot, p.optionId));
   return wrap;
+}
+
+/** Supplements set for this meal: they count toward the day, so the meal's target is smaller. */
+function suppNote(slot) {
+  const { el, fmt } = d;
+  const lines = (ms.view?.supplements?.lines || []).filter((l) => l.slot === slot);
+  if (!lines.length) return null;
+  const kcal = lines.reduce((a, l) => a + l.kcal, 0);
+  const protein = lines.reduce((a, l) => a + l.proteinG, 0);
+  return el("p", { class: "hint supp-note" }, `With this meal: ${lines.map((l) => `${l.name} (${l.text})`).join(", ")}, ${fmt(kcal)} kcal and ${fmt(Math.round(protein))} g protein. They're counted on their own, so the meal target is already smaller.`);
 }
 
 /** Pin (every day), like, hide for the meal's current option. */
@@ -342,7 +468,7 @@ function optionMarks(optionId) {
       const r = await d.api(`/diet/options/${optionId}`, { method: "POST", body: JSON.stringify({ action }) });
       ms.view.marks = { pinned: r.pinned, liked: r.liked, hidden: r.hidden };
       if (done) d.toast(done);
-      if (action === "hide") { await loadPlan(true); paint(); d.backSheet(); return; }
+      if (action === "hide") { ms.edit = null; await loadPlan(true); paint(); d.backSheet(); return; }
       if (action === "pin" || action === "unpin") await loadPlan(true);
       d.openSheet("dietMeal", { fromHistory: true });
       paint();
@@ -354,26 +480,30 @@ function optionMarks(optionId) {
     el("button", { class: "chip", type: "button", onclick: () => mark("hide", "Hidden. It won't be suggested again.") }, "Don't suggest this"));
 }
 
+/** The other options for this meal; every one was built inside the person's restrictions. */
 function otherOptions(date, slot, currentId) {
   const { el, fmt } = d;
-  const others = optionsOf(slot).filter((o) => o.id !== currentId);
+  const others = optionsOf(slot).filter((o) => o.id !== currentId || pickOf(date, slot)?.edited);
   if (!others.length) return el("div");
+  const budget = budgetOf(slot);
   return el("div", { class: "stack" },
-    el("p", { class: "section-label" }, "Swap this meal for"),
+    el("p", { class: "section-label" }, "Swap for another meal"),
     el("ul", { class: "list option-list" }, ...others.map((o) =>
       el("li", {},
-        el("button", { class: "option-row", type: "button", onclick: async () => {
+        el("button", { class: "option-row", type: "button", onclick: async (ev) => {
+          ev.currentTarget.disabled = true;
           try {
             await d.api(`/diet/days/${date}/${slot}/swap`, { method: "POST", body: JSON.stringify({ optionId: o.id }) });
+            ms.edit = null;
             await loadPlan(true);
-            ms.qty = null;
-            d.toast("Swapped.");
+            d.toast("Swapped. You can still change the items.");
             d.openSheet("dietMeal", { fromHistory: true });
             paint();
-          } catch (err) { d.toast(err.message); }
+          } catch (err) { d.toast(err.message); ev.currentTarget.disabled = false; }
         } },
           el("span", { class: "what" }, o.items.map((i) => i.text).join(", ")),
-          el("span", { class: "sub" }, `${fmt(o.totals.kcal)} kcal · ${fmt(o.totals.proteinG)} g protein${o.prepMinutes ? ` · ${o.prepMinutes} min` : ""}${ms.view.marks.pinned.includes(o.id) ? " · ★" : ""}`))))));
+          el("span", { class: "sub" }, `${fmt(o.totals.kcal)} kcal · P ${fmt(o.totals.proteinG)} · C ${fmt(o.totals.carbsG)} · F ${fmt(o.totals.fatG)} g${o.prepMinutes ? ` · ${o.prepMinutes} min` : ""}${ms.view.marks.pinned.includes(o.id) ? " · ★" : ""}`),
+          budget && Math.abs(o.totals.kcal - budget.calories) > budget.calories * 0.1 ? el("span", { class: "sub" }, `Sized for ${fmt(budget.calories)} kcal`) : null)))));
 }
 
 // ---------- setup ----------
@@ -531,10 +661,13 @@ export function planLineFor(date, openTab) {
   const picks = SLOT_ORDER.map((s) => pickOf(date, s)).filter(Boolean);
   const next = picks.find((p) => !isEaten(p));
   const tot = dayTotals(date);
-  return el("button", { class: "plan-line", type: "button", onclick: openTab },
+  const line = el("button", { class: "plan-line", type: "button", onclick: openTab },
     el("span", {}, `Plan: ${tot.eatenCount} of ${tot.count} meals eaten`),
     next ? el("small", {}, `Next: ${SLOT_NAME[next.slot]}, ${next.kind === "eat_out" ? "eating out" : `${fmt(next.totals.kcal)} kcal`}`) : el("small", {}, "All planned meals eaten"),
     el("i", { class: "chev-r" }));
+  if (!next || next.kind === "eat_out") return line;
+  return el("div", { class: "plan-line-wrap" }, line,
+    el("button", { class: "btn small plan-change", type: "button", onclick: () => openPlannedMeal(next.date, next.slot) }, `Change or swap ${SLOT_NAME[next.slot].toLowerCase()}`));
 }
 
 export const mealsTitles = { dietSetup: "Your meals", dietMeal: "" };

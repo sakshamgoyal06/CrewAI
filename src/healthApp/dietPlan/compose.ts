@@ -296,6 +296,17 @@ export function dietAllows(diet: PersonDiet, e: CatalogEntry): boolean {
   return flag ?? !containsAny(e.key, JAIN_EXCLUDE);
 }
 
+/**
+ * The person's restrictions as one check: diet type, foods to avoid, and the meats their own words
+ * allow. The planner and the meal editor's food search share it, so a swap or an added food can
+ * never break a restriction the plan keeps.
+ */
+export function restrictionCheck(input: { diet: PersonDiet; avoid: string[]; dietNote?: string[] }): (e: CatalogEntry) => boolean {
+  const avoid = avoidWords(input.avoid);
+  const policy = allowedMeats(input.dietNote ?? []);
+  return (e) => dietAllows(input.diet, e) && meatPolicyAllows(e.key, e.diet, policy) && !containsAny(e.key, avoid);
+}
+
 const ROLES = new WeakMap<CatalogEntry, Role[]>();
 /** Roles are fixed per catalog entry; cached because compose asks for them once per combination. */
 function roleOf(e: CatalogEntry): Role[] {
@@ -404,6 +415,10 @@ export function itemFor(e: CatalogEntry, s: Serving, qty: number): PlanItem {
     text = `${fmtQty(qty)} ${s.size && s.size !== "medium" ? `${s.size} ` : ""}${name}`;
   } else {
     const unitLabel = label.replace(/\s*\(edible part\)/, "");
+    if (/^\d+ ?(g|ml)$/.test(unitLabel)) {
+      // A weighed serving ("100 g"): "100 g paneer", "2 × 100 g paneer".
+      return item(e, s, qty, `${qty === 1 ? "" : `${fmtQty(qty)} × `}${unitLabel} ${name}`);
+    }
     if (/^[2-9]\d* /.test(unitLabel)) {
       // A label that already counts ("2 slices with butter"): "bread butter (2 slices with butter)".
       text = `${qty === 1 ? "" : `${fmtQty(qty)} × `}${name} (${unitLabel})`;
@@ -614,7 +629,7 @@ function optionId(slot: PlanSlot, items: Array<{ key: string | null; name: strin
   return `opt_${slot}_${createHash("sha1").update(sig).digest("hex").slice(0, 12)}`;
 }
 
-function titleOf(items: PlanItem[]): string {
+export function titleOf(items: Array<Pick<PlanItem, "name">>): string {
   const t = items.map((i) => i.name.toLowerCase()).join(", ");
   return t.charAt(0).toUpperCase() + t.slice(1);
 }

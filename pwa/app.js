@@ -171,6 +171,10 @@ function friendlyError(code) {
     already_logged: "Already logged.",
     nothing_to_log: "Add at least one item.",
     nothing_to_undo: "Nothing to undo.",
+    not_allowed: "That food is outside your diet or foods to avoid.",
+    unknown_food: "That food isn't in the food list any more.",
+    unknown_item: "The meal changed on another screen. Open it again.",
+    eat_out: "That meal is a meal out. Log what you had instead.",
     hevy_key_invalid: "Hevy didn't accept that key. Copy it again from the link above (hevy.com/settings?developer).",
   }[code] || "Something went wrong. Try again.";
 }
@@ -1937,7 +1941,10 @@ function dayPlanFull(c) {
     c.yesterday ? sec("Yesterday", el("p", {}, c.yesterday)) : null,
     sec("This week", el("p", {}, c.week)),
     c.meals?.length ? sec("Meals",
-      el("ul", { class: "dp-plan" }, ...c.meals.map((m) => el("li", {}, el("span", { class: "dp-time" }, m.time ? clock(m.time) : SLOT_LABEL[m.slot]), el("span", {}, `${m.title} · ${fmt(m.kcal)} kcal`)))),
+      el("ul", { class: "dp-plan" }, ...c.meals.map((m) => el("li", {}, el("span", { class: "dp-time" }, m.time ? clock(m.time) : SLOT_LABEL[m.slot]),
+        m.status === "planned" && m.slot
+          ? el("button", { class: "link dp-meal", type: "button", onclick: () => openPlannedMeal(c.date, m.slot) }, `${m.title} · ${fmt(m.kcal)} kcal`)
+          : el("span", {}, `${m.title} · ${fmt(m.kcal)} kcal`)))),
       el("button", { class: "link", type: "button", onclick: () => { closeSheet(); afterClose(() => setView("meals")); } }, "Open meals")) : null,
     c.focus ? el("div", { class: "dp-focus" }, el("p", { class: "eyebrow" }, "Worth a look"), el("p", {}, c.focus)) : null,
     el("p", { class: "dp-motto" }, c.motivation),

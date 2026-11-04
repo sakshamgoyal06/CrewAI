@@ -16,6 +16,7 @@ import { loggableError } from "../util/loggableError.js";
 import { stableTurnId } from "../util/stableId.js";
 import { localClock } from "../util/time.js";
 import { hasFeature } from "./billing.js";
+import { foodPrefsLine, loadFoodPrefs } from "./onboarding.js";
 import { getPrefs, isQuiet, sendNotification } from "./push.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
 
@@ -76,7 +77,8 @@ const SYSTEM = `You are Magnus, a health coach, writing the person's end-of-day 
 Write 2 or 3 short sentences, second person, plain words, no lists, no emoji, no greeting:
 1. How the day went, quoting the numbers that matter most (good or bad).
 2. ONE specific thing to do tomorrow (a food, a time, an amount), chosen to fix today's biggest gap or keep a good streak. Use what tomorrow is (training or rest day).
-Never invent numbers. Under 400 characters.`;
+Never invent numbers. Under 400 characters.
+If the facts include foodRules, they are hard rules: any food you name must obey them (never name a meat, fish or food they rule out).`;
 
 type Create = (p: Record<string, unknown>) => Promise<Anthropic.Message>;
 
@@ -133,7 +135,9 @@ export async function runNightlyDigest(
   // A Pro feature once billing is on: the free plan keeps the plain evening push.
   if (!(await hasFeature(userProfileId, "digest", now))) return "not_included";
 
-  const { text, source } = await deps.write(digestFacts(s, weekday), fallbackDigest(s));
+  const food = await loadFoodPrefs(userProfileId).catch(() => null);
+  const foodRules = food ? foodPrefsLine({ diet: food.diet, diet_note: food.dietNote, food_avoid: food.foodAvoid }) : null;
+  const { text, source } = await deps.write({ ...digestFacts(s, weekday), ...(foodRules ? { foodRules } : {}) }, fallbackDigest(s));
   const { error } = await supabase
     .from("health_chat_messages")
     .insert({ user_profile_id: userProfileId, role: "assistant", content: text, cards: [], turn_id: turnId, status: "ok" });
