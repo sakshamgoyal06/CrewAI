@@ -39,6 +39,8 @@ import { failedAuthLimiter, userRequestLimiter } from "./rateLimit.js";
 import { connectHevy, disconnectHevy, hevyConnected, hevyKeyInput } from "./integrations.js";
 import { supabase } from "../tools/clients.js";
 import { needsSeed, seedUse, takeUse, type LimitedAction } from "./usageLimits.js";
+import { needsSpendSeed, seedSpend, spendMode, spentSince, type SpendMode } from "./spend.js";
+import { disabledResponse, isAccountDisabled } from "./accountStatus.js";
 import { usedSince } from "./usageSeed.js";
 import { deleteAccount, exportAccount } from "./privacy.js";
 import {
@@ -183,6 +185,15 @@ function fromResult(r: { ok: boolean; error?: string }): { status: number; body:
   return { status: clientErrors.has(r.error ?? "") ? 400 : 500, body: r };
 }
 
+/** Today's chat spend mode for this person (spend.ts): full coach, fast model only, or stopped. */
+async function chatSpendMode(ctx: { userProfileId: string; timezone: string }): Promise<SpendMode> {
+  const day = localDateKey(new Date(), ctx.timezone);
+  if (needsSpendSeed(ctx.userProfileId, day)) seedSpend(ctx.userProfileId, day, await spentSince(ctx.userProfileId, localDayRange(day, ctx.timezone).from));
+  return spendMode(ctx.userProfileId, day);
+}
+
+const BUSY_MESSAGE = "One message at a time: I'm still answering your last one.";
+
 /** Hevy history takes several requests; the tracker re-reads it at most every few minutes. */
 const TRAINING_CACHE_MS = 10 * 60_000;
 const trainingCache = new Map<string, { at: number; body: unknown }>();
@@ -247,6 +258,11 @@ export function createHealthAppRouter(): express.Router {
     }
     if (!userRequestLimiter.take(userProfileId)) {
       res.status(429).json({ error: "too_many_requests" });
+      return;
+    }
+    // A paused account (repeated off-topic use) gets a review-request draft instead of the app.
+    if (await isAccountDisabled(userProfileId)) {
+      res.status(403).json(disabledResponse(userProfileId));
       return;
     }
     (res.locals as Locals).userProfileId = userProfileId;
@@ -533,7 +549,9 @@ export function createHealthAppRouter(): express.Router {
       const { text, turnId } = chatInput.parse(req.body);
       const allowed = await allowUse(ctx, "chat");
       if (allowed !== true) return { status: 429, body: { error: allowed } };
-      const r = await runHealthChat(ctx, text, { turnId, sessionId: req.get("x-magnus-session") ?? undefined });
+      const spend = await chatSpendMode(ctx);
+      if (spend === "blocked") return { status: 429, body: { error: "spend_limit" } };
+      const r = await runHealthChat(ctx, text, { turnId, sessionId: req.get("x-magnus-session") ?? undefined, fastOnly: spend === "fast_only" });
       if ("error" in r) return { status: 409, body: r };
       return { body: r };
     }),
@@ -559,6 +577,11 @@ export function createHealthAppRouter(): express.Router {
       res.status(429).json({ error: allowed });
       return;
     }
+    const spend = await chatSpendMode(ctx);
+    if (spend === "blocked") {
+      res.status(429).json({ error: "spend_limit" });
+      return;
+    }
     res.status(200);
     res.setHeader("content-type", "text/event-stream; charset=utf-8");
     res.setHeader("cache-control", "no-cache, no-transform");
@@ -571,8 +594,8 @@ export function createHealthAppRouter(): express.Router {
       if (!res.writableEnded) res.write(": keepalive\n\n");
     }, 5_000);
     try {
-      const r = await runHealthChat(ctx, parsed.text, { turnId: parsed.turnId, sessionId: req.get("x-magnus-session") ?? undefined, onEvent: send });
-      if ("error" in r) send({ type: "error", error: r.error, message: "Still working on that one. The answer will show here in a moment." });
+      const r = await runHealthChat(ctx, parsed.text, { turnId: parsed.turnId, sessionId: req.get("x-magnus-session") ?? undefined, onEvent: send, fastOnly: spend === "fast_only" });
+      if ("error" in r) send({ type: "error", error: r.error, message: r.error === "busy" ? BUSY_MESSAGE : "Still working on that one. The answer will show here in a moment." });
       else send({ type: "done", reply: r });
     } catch (err) {
       const offline = isCoachOffline(err);
