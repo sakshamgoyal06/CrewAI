@@ -15,6 +15,7 @@ import { anthropic, supabase } from "../tools/clients.js";
 import { loggableError } from "../util/loggableError.js";
 import { stableTurnId } from "../util/stableId.js";
 import { localClock } from "../util/time.js";
+import { hasFeature } from "./billing.js";
 import { getPrefs, isQuiet, sendNotification } from "./push.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
 
@@ -120,7 +121,7 @@ export async function runNightlyDigest(
   userProfileId: string,
   now = new Date(),
   deps: DigestDeps = { snapshot: buildHealthSnapshot, write: writeDigest },
-): Promise<"off" | "not_yet" | "exists" | "nothing_logged" | "posted"> {
+): Promise<"off" | "not_yet" | "exists" | "nothing_logged" | "not_included" | "posted"> {
   if (process.env.MAGNUS_DIGEST === "off") return "off";
   const s = await deps.snapshot(userProfileId, now);
   const { minutes, weekday, hhmm } = localClock(now, s.timezone);
@@ -129,6 +130,8 @@ export async function runNightlyDigest(
   if (await alreadyPosted(userProfileId, turnId)) return "exists";
   // Without a single meal there is nothing to review; the plain evening push still goes out.
   if (!s.meals.length) return "nothing_logged";
+  // A Pro feature once billing is on: the free plan keeps the plain evening push.
+  if (!(await hasFeature(userProfileId, "digest", now))) return "not_included";
 
   const { text, source } = await deps.write(digestFacts(s, weekday), fallbackDigest(s));
   const { error } = await supabase

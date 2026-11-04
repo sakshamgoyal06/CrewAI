@@ -108,6 +108,51 @@ export function forgetProfile(userProfileId: string): void {
 
 // ---------- profiles ----------
 
+/**
+ * The deploy owner, by Google email (MAGNUS_OWNER_EMAIL), so it survives the owner wiping and
+ * recreating their account. The legacy MAGNUS_HEALTH_APP_USER_PROFILE_ID still counts if set.
+ */
+export function isOwnerProfileRow(userProfileId: string, email: string | null | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
+  return isOwnerEmail(email, env) || (!!env.MAGNUS_HEALTH_APP_USER_PROFILE_ID?.trim() && env.MAGNUS_HEALTH_APP_USER_PROFILE_ID.trim() === userProfileId);
+}
+
+export async function isOwnerProfile(userProfileId: string): Promise<boolean> {
+  const { data } = await supabase.from("user_profile").select("email").eq("id", userProfileId).maybeSingle();
+  return isOwnerProfileRow(userProfileId, (data as { email?: string | null } | null)?.email);
+}
+
+/**
+ * Owner only: wipe everything and start again as a brand-new user. The profile row is deleted
+ * (every table cascades from it) and a fresh one is created for the same Google sign-in, so the
+ * next request lands in onboarding. Returns the new profile id.
+ */
+export async function resetOwnAccount(userProfileId: string): Promise<{ ok: true; userProfileId: string } | { ok: false; error: string }> {
+  const { data, error } = await supabase
+    .from("user_profile")
+    .select("auth_user_id, email, display_name, timezone")
+    .eq("id", userProfileId)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  const row = data as { auth_user_id: string | null; email: string | null; display_name: string | null; timezone: string | null } | null;
+  if (!row) return { ok: false, error: "not_found" };
+  if (!isOwnerProfileRow(userProfileId, row.email)) return { ok: false, error: "owner_only" };
+  if (!row.auth_user_id) return { ok: false, error: "needs_google_sign_in" };
+
+  const del = await supabase.from("user_profile").delete().eq("id", userProfileId);
+  if (del.error) return { ok: false, error: del.error.message };
+  forgetProfile(userProfileId);
+  const created = await supabase
+    .from("user_profile")
+    .insert({ auth_user_id: row.auth_user_id, email: row.email, display_name: row.display_name, timezone: row.timezone ?? "Asia/Kolkata", allowlisted: true })
+    .select("id")
+    .single();
+  if (created.error) return { ok: false, error: created.error.message };
+  const id = String(created.data.id);
+  await supabase.from("user_health_profile").upsert({ user_profile_id: id }, { onConflict: "user_profile_id", ignoreDuplicates: true });
+  logger.info({ from: userProfileId, to: id }, "owner reset their account to a fresh start");
+  return { ok: true, userProfileId: id };
+}
+
 /** Finds or creates the profile for a signed-in Google account. Null when sign-up is closed to them. */
 export async function profileForAuthUser(user: AuthUser, timezone?: string): Promise<string | null> {
   const existing = await supabase.from("user_profile").select("id").eq("auth_user_id", user.id).maybeSingle();
