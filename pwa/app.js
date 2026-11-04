@@ -131,6 +131,7 @@ function friendlyError(code) {
     not_a_fact: "Coach memory is for facts about you, like a schedule or an injury, not instructions for the coach.",
     invalid_body: "Some values look off. Check and try again.",
     deadline_must_be_after_start: "The deadline needs to be after today.",
+    unsafe_pace: "That date needs a pace faster than is safe. Pick a later date.",
     no_items: "Add at least one item.",
     hevy_not_connected: "Hevy isn't connected for this account.",
     trial_running: "Something here is already on trial. Let's see how that goes first.",

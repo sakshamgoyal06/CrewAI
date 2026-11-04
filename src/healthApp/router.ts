@@ -171,6 +171,7 @@ function fromResult(r: { ok: boolean; error?: string; [k: string]: unknown }): {
   const clientErrors = new Set([
     "future_date",
     "deadline_must_be_after_start",
+    "unsafe_pace",
     "invalid_id",
     "no_items",
     "meal session not found",

@@ -118,7 +118,11 @@ export function runOnboarding(root, { api, el, toast }) {
         render();
         return;
       }
+      const unsafe = plan.cappedForSafety;
+      const longDate = (d) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+      // An unsafe date can't be started: the only way on is a later date (the safe one, in one tap, or their own).
       const start = el("button", { class: "btn primary block", type: "button" }, "Start");
+      start.disabled = unsafe;
       start.addEventListener("click", async () => {
         start.disabled = true;
         try {
@@ -137,12 +141,13 @@ export function runOnboarding(root, { api, el, toast }) {
           el("div", {}, el("strong", {}, fmt(plan.calorieTarget)), el("small", {}, "kcal a day")),
           el("div", {}, el("strong", {}, `${plan.proteinTarget} g`), el("small", {}, "protein")),
           el("div", {}, el("strong", {}, fmt(plan.stepTarget)), el("small", {}, "steps"))),
-        plan.cappedForSafety ? el("p", { class: "plan-warn" }, plan.safeDate
-          ? `That date needs a pace faster than is safe. At a safe pace you'll get there around ${new Date(`${plan.safeDate}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}.`
-          : "That date needs a pace faster than is safe, so the plan holds you at the safe limit.") : null,
+        unsafe ? el("p", { class: "plan-warn unsafe", role: "alert" }, plan.safeDate
+          ? `${longDate(a.deadline)} is too soon. It needs a pace that isn't safe. Pick a later date; ${longDate(plan.safeDate)} works.`
+          : `${longDate(a.deadline)} is too soon. It needs a pace that isn't safe. Pick a later date.`) : null,
         el("div", { class: "plan-lines" }, ...plan.lines.filter((l) => !(plan.cappedForSafety && l.includes("faster than is safe"))).map((l) => el("p", {}, l))),
-        start,
-        el("button", { class: "link", type: "button", onclick: () => { step = 0; render(); } }, "Change answers"),
+        unsafe && plan.safeDate ? el("button", { class: "btn primary block", type: "button", onclick: () => { a.deadline = plan.safeDate; reveal(); } }, `Use ${longDate(plan.safeDate)}`) : null,
+        unsafe ? el("button", { class: "btn block", type: "button", onclick: () => { step = 1; render(); } }, "Pick another date") : start,
+        unsafe ? null : el("button", { class: "link", type: "button", onclick: () => { step = 0; render(); } }, "Change answers"),
       ));
     }
 

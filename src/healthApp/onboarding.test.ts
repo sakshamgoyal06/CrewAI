@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 
-import { cleanAvoidList, foodPrefsLine, onboardingInput, startingPlan, weekFrom, type OnboardingInput } from "./onboarding.js";
+import { completeOnboarding, cleanAvoidList, foodPrefsLine, onboardingInput, startingPlan, weekFrom, type OnboardingInput } from "./onboarding.js";
 
 const TODAY = "2026-11-02";
 const base: OnboardingInput = {
@@ -127,5 +127,16 @@ describe("routine at onboarding", () => {
   it("accepts a routine in the input", () => {
     expect(onboardingInput.safeParse({ ...base, routine }).success).toBe(true);
     expect(onboardingInput.safeParse({ ...base, routine: [{ ...routine[0]!, days: [] }] }).success).toBe(false);
+  });
+});
+
+describe("completeOnboarding with an unsafe date", () => {
+  it("refuses to save and asks for a later date", async () => {
+    const r = await completeOnboarding(
+      { userProfileId: "u", timezone: "UTC", now: new Date("2026-11-02T10:00:00Z") },
+      { ...base, targetWeightKg: 65, deadline: "2026-12-28" },
+      new Date("2026-11-02T10:00:00Z"),
+    );
+    expect(r).toEqual({ ok: false, error: "unsafe_pace" });
   });
 });
