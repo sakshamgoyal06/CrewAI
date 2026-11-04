@@ -350,6 +350,10 @@ const toolDefinitions: Anthropic.Tool[] = [
           type: "integer",
           description: "Minutes after the gym slot to check Hevy for a workout (default 180).",
         },
+        weighInDay: {
+          type: ["integer", "null"],
+          description: "Weekday for the weekly weigh-in, 0 = Sunday … 6 = Saturday. null = 7 days after the last one.",
+        },
       },
     },
   },
