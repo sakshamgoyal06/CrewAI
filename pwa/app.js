@@ -2519,6 +2519,52 @@ async function checkHealthConnectPrompt() {
   } catch { /* offline: ask next time */ }
 }
 
+/** The Nutrition Summary CSV inside a MyFitnessPal export zip (or the CSV itself). */
+async function mfpCsvFromFile(file) {
+  if (!/\.zip$/i.test(file.name) && file.type !== "application/zip") return file.text();
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const dv = new DataView(buf.buffer);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("That file isn't a zip.");
+  let p = dv.getUint32(eocd + 16, true);
+  const count = dv.getUint16(eocd + 10, true);
+  for (let n = 0; n < count && dv.getUint32(p, true) === 0x02014b50; n++) {
+    const method = dv.getUint16(p + 10, true);
+    const size = dv.getUint32(p + 20, true);
+    const nameLen = dv.getUint16(p + 28, true);
+    const local = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(buf.subarray(p + 46, p + 46 + nameLen));
+    p += 46 + nameLen + dv.getUint16(p + 30, true) + dv.getUint16(p + 32, true);
+    if (!/(^|\/)Nutrition-Summary[^/]*\.csv$/i.test(name)) continue;
+    const start = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true);
+    const data = buf.subarray(start, start + size);
+    if (method === 0) return new TextDecoder().decode(data);
+    if (method !== 8 || typeof DecompressionStream === "undefined") throw new Error("Can't open this zip here. Unzip it and pick the Nutrition-Summary CSV.");
+    return new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+  }
+  throw new Error("No Nutrition Summary in that zip. Pick the file MyFitnessPal emailed you.");
+}
+
+async function importMfpFile(input) {
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  const fail = { not_mfp_summary: "That isn't a MyFitnessPal Nutrition Summary.", no_meals: "No meals from the last year in that file.", too_many_rows: "That file is too big. Export a shorter range." };
+  try {
+    const csv = await mfpCsvFromFile(file);
+    const send = (dryRun) => api("/import/myfitnesspal", { method: "POST", body: JSON.stringify({ csv, dryRun }) });
+    const preview = await send(true);
+    if (!preview.meals) { toast(preview.alreadyImported ? "Already imported." : "Nothing new to import: those days are already logged here."); return; }
+    const skipped = preview.skippedLoggedDays ? ` ${preview.skippedLoggedDays} day(s) you already logged here stay as they are.` : "";
+    if (!confirm(`Import ${preview.days} day(s) from ${fmtDay(preview.from)} to ${fmtDay(preview.to)}, about ${fmt(preview.avgCalories)} kcal a day?${skipped}`)) return;
+    const done = await send(false);
+    toast(`Imported ${done.days} day(s) from MyFitnessPal. They're in your Progress trends.`);
+  } catch (err) {
+    toast(fail[err.code] || err.message);
+  }
+}
+
 function accountSection() {
   const wrap = el("div", { class: "stack" }, el("p", { class: "section-label" }, "Account"));
   const who = el("p", { class: "hint" }, "Loading…");
@@ -2533,6 +2579,8 @@ function accountSection() {
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch (err) { toast(err.message); }
   } }, "Download my data");
+  const mfpFile = el("input", { type: "file", accept: ".zip,.csv,application/zip,text/csv", hidden: true, onchange: () => importMfpFile(mfpFile) });
+  const mfp = el("button", { class: "link", type: "button", onclick: () => mfpFile.click() }, "Import from MyFitnessPal");
   const remove = el("button", { class: "link danger", type: "button", onclick: async () => {
     const typed = prompt("This deletes your account and every meal, weigh-in and message. It can't be undone. Type DELETE to confirm.");
     if (typed !== "DELETE") return;
@@ -2546,7 +2594,8 @@ function accountSection() {
   planSection(plan);
   const food = el("div", { class: "stack" });
   wrap.append(who, plan, el("p", { class: "section-label" }, "Food"), food, el("p", { class: "section-label" }, "Hevy"), hevy, el("p", { class: "section-label" }, "Health Connect"), hc,
-    el("p", { class: "section-label" }, "Your data"), el("p", { class: "hint" }, "Your data is yours: download all of it, or delete it for good."), el("div", { class: "row-between" }, download, remove), out);
+    el("p", { class: "section-label" }, "Your data"), el("p", { class: "hint" }, "Your data is yours: download all of it, or delete it for good."), el("div", { class: "row-between" }, download, remove),
+    el("p", { class: "hint" }, "Coming from MyFitnessPal? Export your data there (Settings, then Export data) and pick the zip here. Your past days show up in your trends."), mfp, mfpFile, out);
 
   function paintFood(prefs) {
     if (!prefs) { food.replaceChildren(); return; }

@@ -106,6 +106,7 @@ import {
 import { cardFromReport, rcaResponseInput, respondToRca, runRca } from "./rca.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
 import { logWater, waterInput } from "./water.js";
+import { importMfp, mfpImportInput } from "./mfpImport.js";
 import { eatingOutInput, planEatingOut } from "./eatingOut.js";
 import { loadCalorieReview } from "./calorieTarget.js";
 import { cardFromIntervention, checkNewGoal, recordManualPlan, respond as respondToIntervention, revertToVersion } from "./interventions/engine.js";
@@ -414,6 +415,15 @@ export function createHealthAppRouter(): express.Router {
   router.get(
     "/account/export",
     route("account-export", async (ctx) => ({ body: await exportAccount(ctx.userProfileId) })),
+  );
+
+  /** Past meals from a MyFitnessPal export (the Nutrition Summary CSV). `dryRun` previews. */
+  router.post(
+    "/import/myfitnesspal",
+    route("import-mfp", async (ctx, req) => {
+      const r = await importMfp(ctx.userProfileId, mfpImportInput.parse(req.body), ctx.timezone);
+      return r.ok ? { body: r } : { status: r.error === "not_mfp_summary" || r.error === "no_meals" || r.error === "too_many_rows" ? 400 : 500, body: r };
+    }),
   );
 
   /** Deletes the account and all its data. The body must say `{ "confirm": "DELETE" }`. */
