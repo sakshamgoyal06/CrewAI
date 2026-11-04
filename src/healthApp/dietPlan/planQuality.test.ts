@@ -180,6 +180,14 @@ describe("day accounting", () => {
     expect(a.planned.kcal).toBe(500);
   });
 
+  it("eaten today matches everything logged, so taken supplements count", () => {
+    const logged = { kcal: 620, proteinG: 54, carbsG: 60, fatG: 15, meals: 2 }; // breakfast 500 + supplements 120
+    const a = accountDay({ date: "2026-11-05", targets, meals: [{ ...meal("breakfast", 500, 30, 57, 14), status: "logged" }], supplements: whey, loggedActual: logged });
+    expect(a.logged.kcal).toBe(620);
+    expect(a.logged.proteinG).toBe(54);
+    expect(a.planned.kcal).toBe(500 + Math.round(whey[0]!.kcal));
+  });
+
   it("built plans reconcile with 4/4/9 within the documented tolerance, supplements taken out of meal budgets once", async () => {
     const prefs = dietPrefsInput.parse({ ...defaultPrefs(), supplements: [{ name: "Whey protein", servings: 1, slot: "breakfast" }] });
     const d = await buildPlanDraft({ calories: 2232, proteinG: 165, weightKg: 80, prefs, diet: "non_vegetarian", avoid: [], dietNote: null, usual: [], hidden: [] } as never);
