@@ -40,6 +40,7 @@ export const POPULARITY: Record<string, 1 | 2 | 3 | 4 | 5> = Object.fromEntries(
     "Chilli paneer", "Veg pizza", "Veg burger", "Paneer tikka", "Onion pakora", "Aloo tikki", "Lemon rice",
     "Mango pickle", "Papad", "Rasam", "Rasam rice", "Pongal", "Dal palak", "Chicken fried rice", "Chicken roll",
     "Veg thali",
+    "Chicken fry", "Chicken burger", "Haldi doodh", "Aloo bonda", "Pancakes", "French toast", "Veg puff",
   ]),
   // Regular, but not weekly for most.
   ...tier(3, [
@@ -75,6 +76,7 @@ export const POPULARITY: Record<string, 1 | 2 | 3 | 4 | 5> = Object.fromEntries(
     "Chole kulche", "Amritsari kulcha", "Matar pulao", "Masala khichdi", "Veg korma", "Gobi matar", "Aloo bhindi",
     "Egg dosa", "Roasted makhana", "Mixed nuts", "Popcorn", "Butter popcorn", "Bun maska", "Fresh lime soda",
     "Falooda", "Chicken lollipop", "Thukpa", "Dal baati churma", "Soan papdi", "Watermelon juice",
+    "Jamun", "Chocolate milk", "Fruit yogurt", "Wheat flakes", "Pappu", "Mirchi bajji", "Kappa", "Beef curry", "Kerala beef fry", "Pork curry", "Puran poli", "Modak", "Gujiya", "Kada prasad", "Basundi", "Chicken pizza", "Chocolate milkshake", "Manchow soup", "Sweet corn soup", "Veg spring roll", "Chicken manchurian", "Egg puff", "Undhiyu", "Ghugni", "Kosha mangsho", "Chingri malai curry", "Avocado toast", "Cabbage thoran", "Bagara rice",
   ]),
   // Rarely asked for on their own: cooking ingredients and specialty items.
   ...tier(1, [
@@ -89,6 +91,7 @@ export const POPULARITY: Record<string, 1 | 2 | 3 | 4 | 5> = Object.fromEntries(
     "Mustard greens", "Ridge gourd", "Bitter gourd", "Bottle gourd", "Okra", "Brinjal", "Cauliflower", "Cabbage",
     "Radish", "Pumpkin", "Green beans", "Capsicum", "Onion", "Potato", "Spinach", "Lettuce", "Mushroom",
     "Ginger chutney", "Tamarind chutney",
+    "Tapioca", "Yam (suran)", "Bamboo shoot", "Lotus stem", "Spring onion", "Pigeon peas, fresh", "Dried peas (vatana)", "Coconut milk", "Pork, raw", "Beef, raw", "Crab, raw", "Squid, raw", "Chicken liver, raw",
   ]),
 ]);
 
@@ -102,6 +105,7 @@ export const CUISINE: Record<string, Cuisine> = Object.fromEntries([
     "Turai sabzi", "Arbi fry", "Paneer tikka masala", "Chicken tikka masala", "Kadai chicken", "Dal palak",
     "Sweet lassi", "Gajar halwa", "Kuttu puri", "Litti", "Chokha", "Litti chokha",
       "Veg thali", "Non-veg thali", "Chole kulche", "Amritsari kulcha", "Kashmiri pulao", "Matar pulao", "Gobi matar", "Aloo bhindi", "Lauki kofta", "Navratan korma", "Baati", "Churma", "Dal baati churma", "Thandai",
+    "Mutton yakhni", "Kahwa", "Kada prasad", "Lotus stem sabzi", "Gujiya",
   ].map((n) => [n, "north_indian" as const]),
   ...[
     "Idli", "Plain dosa", "Masala dosa", "Uttapam", "Medu vada", "Sambar", "Idli sambar", "Coconut chutney",
@@ -111,14 +115,17 @@ export const CUISINE: Record<string, Cuisine> = Object.fromEntries([
     "Vermicelli upma", "Tomato rice", "Coconut rice", "Ghee rice", "Murukku", "Masala vada", "Mysore pak",
     "Upma",
       "South Indian meals", "Kerala parotta", "Egg roast", "Chicken stew", "Fish moilee", "Chicken chettinad", "Pepper chicken", "Egg dosa", "Veg korma", "Rose milk",
+    "Pappu", "Gutti vankaya", "Bagara rice", "Punugulu", "Chicken fry", "Kappa", "Kappa and fish curry", "Cabbage thoran", "Olan", "Erissery", "Kerala beef fry", "Ada pradhaman", "Squid fry", "Crab curry",
   ].map((n) => [n, "south_indian" as const]),
   ...[
     "Thepla", "Dhokla", "Handvo", "Khandvi", "Dal dhokli", "Khakhra", "Thalipeeth", "Sabudana khichdi",
     "Sabudana vada", "Pithla", "Varan bhaat", "Misal", "Misal pav", "Usal", "Poha", "Shrikhand", "Besan gatte ki sabzi",
     "Jowar roti",
       "Goan fish curry", "Chicken xacuti", "Bun maska",
+    "Pork vindaloo", "Modak", "Puran poli", "Basundi", "Shakarpara", "Undhiyu", "Ghevar",
   ].map((n) => [n, "west_indian" as const]),
-  ...["Luchi", "Aloo posto", "Mishti doi", "Sandesh", "Rasgulla", "Bengali fish curry", "Fish fry"].map((n) => [n, "east_indian" as const]),
+  ...["Luchi", "Aloo posto", "Mishti doi", "Sandesh", "Rasgulla", "Bengali fish curry", "Fish fry",
+    "Pork bamboo shoot curry", "Pork momos", "Masor tenga", "Aloo pitika", "Chingri malai curry", "Kosha mangsho", "Ghugni", "Dalma", "Cham cham"].map((n) => [n, "east_indian" as const]),
   ...[
     "Chicken biryani", "Mutton biryani", "Veg biryani", "Prawn biryani", "Chicken korma", "Mutton rogan josh",
     "Seekh kebab", "Chicken seekh kebab", "Shami kebab", "Haleem", "Tandoori chicken", "Chicken tikka",
@@ -130,6 +137,7 @@ export const CUISINE: Record<string, Cuisine> = Object.fromEntries([
     "Hakka noodles", "Veg manchurian", "Chilli paneer", "Chilli chicken", "Veg fried rice", "Egg fried rice",
     "Chicken fried rice", "Veg momos", "Chicken momos", "Chicken 65",
       "Chicken lollipop", "Thukpa",
+    "Manchow soup", "Sweet corn soup", "Veg spring roll", "Chicken manchurian",
   ].map((n) => [n, "indo_chinese" as const]),
   ...[
     "Samosa", "Kachori", "Bhaji", "Onion pakora", "Bread pakora", "Paneer pakora", "Vada pav", "Pav bhaji",
@@ -138,6 +146,7 @@ export const CUISINE: Record<string, Cuisine> = Object.fromEntries([
     "Corn chaat", "Fruit chaat", "Chana chaat", "Sprouts chaat", "Sprouts bhel", "Jalebi", "Nimbu pani",
     "Jaljeera", "Aam panna", "Sugarcane juice",
       "Fresh lime soda", "Watermelon juice", "Masala peanuts",
+    "Mirchi bajji", "Aloo bonda",
   ].map((n) => [n, "street_food" as const]),
   ...[
     "Veg pizza", "Veg burger", "Red sauce pasta", "White sauce pasta", "Veg sandwich", "Cheese sandwich",
@@ -150,6 +159,7 @@ export const CUISINE: Record<string, Cuisine> = Object.fromEntries([
     "Cheese", "Peanut butter", "Chocolate spread", "Jam", "Salmon", "Tuna, canned", "Edamame", "Zucchini",
     "Broccoli", "Lettuce",
       "Garlic bread", "Butter popcorn", "Popcorn", "Blueberries", "Cherries", "Butter garlic prawns",
+    "French toast", "Pancakes", "Avocado toast", "Chicken burger", "Chicken pizza", "Chocolate milkshake", "Veg puff", "Egg puff",
   ].map((n) => [n, "western" as const]),
   ...[
     "Instant noodles (masala), dry", "Aloo bhujia", "Namkeen mixture", "Potato chips", "Banana chips",
@@ -158,5 +168,6 @@ export const CUISINE: Record<string, Cuisine> = Object.fromEntries([
     "Energy drink", "Malt drink powder", "Masala oats, dry", "Masala oats", "Protein bar", "Whey protein",
     "Whey shake", "Ketchup", "Mayonnaise", "Mango pickle", "Beer", "Wine", "Whisky",
       "Soan papdi",
+    "Chocolate milk", "Fruit yogurt", "Cheese spread", "Wheat flakes",
   ].map((n) => [n, "packaged" as const]),
 ]);
