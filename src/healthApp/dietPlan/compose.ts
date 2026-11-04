@@ -201,33 +201,57 @@ function meatOfWord(w: string): string | null {
  * eggs in non veg", "chicken and fish only", "no mutton or prawns" (everything but those).
  */
 export function allowedMeats(notes: string[]): { meats: Set<string>; egg: boolean } | null {
-  const text = notes.join(" . ").toLowerCase();
+  const text = notes.join(" . ").toLowerCase().replace(/non[\s-]?veg(etarian)?/g, "nonveg").replace(/can'?t|cannot/g, "no");
   if (!text.trim()) return null;
-  const sentences = text.split(/[.;\n]+/);
+  const meatsIn = (str: string): Set<string> => {
+    const out = new Set<string>();
+    if (/\bred meat\b/.test(str)) ["mutton", "pork", "beef"].forEach((m) => out.add(m));
+    for (const w of str.match(/[a-z]+/g) ?? []) {
+      const m = w === "keema" ? null : meatOfWord(w);
+      if (m) out.add(m);
+    }
+    return out;
+  };
+  const hasEgg = (str: string) => /\beggs?\b/.test(str);
+  const generic = /\b(meat|nonveg|non veg|flesh|animal)\b/;
   let allow: Set<string> | null = null;
   let egg = true;
   const banned = new Set<string>();
-  for (const sent of sentences) {
-    const words = sent.match(/[a-z]+/g) ?? [];
-    const found = new Set<string>();
-    for (const w of words) {
-      const m = meatOfWord(w);
-      if (m && w !== "keema") found.add(m);
-    }
-    const mentionsEgg = words.some((w) => w === "egg" || w === "eggs");
+  let limited = false;
+  for (const sent of text.split(/[.;\n]+/)) {
+    const negative = /\b(no|not|never|avoid|without|don'?t|dont|allergic|hate|skip|stop|quit)\b/.test(sent);
+    const ex = /\b(other [a-z]{3,10} than|other than|except|excluding|apart from|besides|but not|barring)\b/.exec(sent);
     const only = /\b(only|just|sirf)\b/.test(sent);
-    const negative = /\b(no|not|never|avoid|without|don'?t|dont|allergic|hate|skip)\b/.test(sent);
-    if (only && !negative && (found.size || mentionsEgg)) {
-      allow = new Set([...(allow ?? []), ...found]);
-      egg = mentionsEgg;
+    if (ex) {
+      // "no meat other than chicken", "nonveg except chicken and eggs": what follows is allowed, the rest is out.
+      const rest = sent.slice(ex.index + ex[0].length);
+      const lead = sent.slice(0, ex.index);
+      const kept = meatsIn(rest);
+      if (negative || generic.test(lead) || only) {
+        allow = new Set([...(allow ?? []), ...kept]);
+        egg = hasEgg(rest) ? egg : hasEgg(lead) ? false : egg;
+        if (!hasEgg(rest) && /\bnonveg\b|\beggs?\b/.test(lead)) egg = false;
+        limited = true;
+      }
+    } else if (!negative && /\bveg(etarian|gie|etables)?\b/.test(sent.replace(/nonveg/g, "")) && (meatsIn(sent).size || hasEgg(sent))) {
+      // "vegetarian + chicken + eggs": vegetarian, plus the meats named.
+      allow = new Set([...(allow ?? []), ...meatsIn(sent)]);
+      egg = egg && hasEgg(sent) ? true : hasEgg(sent);
+      limited = true;
+    } else if (only && (meatsIn(sent).size || hasEgg(sent))) {
+      allow = new Set([...(allow ?? []), ...meatsIn(sent)]);
+      egg = hasEgg(sent);
+      limited = true;
     } else if (negative) {
-      found.forEach((m) => banned.add(m));
-      if (mentionsEgg) egg = false;
+      const found = meatsIn(sent);
+      if (found.size) { found.forEach((m) => banned.add(m)); limited = true; }
+      if (generic.test(sent) && !found.size) { MEAT_NAMES.forEach((m) => banned.add(m)); limited = true; }
+      if (hasEgg(sent)) { egg = false; limited = true; }
     }
   }
-  if (!allow && !banned.size && egg) return null;
+  if (!limited) return null;
   const meats = new Set<string>(allow ?? MEAT_NAMES);
-  banned.forEach((m) => meats.delete(m));
+  banned.forEach((m) => { if (!allow) meats.delete(m); });
   return { meats, egg };
 }
 

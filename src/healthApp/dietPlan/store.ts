@@ -255,7 +255,8 @@ export async function rebuildPlan(ctx: ActionContext, reason: string, now = new 
   const previous = await loadActivePlan(ctx.userProfileId);
   const plan = await savePlan(ctx.userProfileId, draft, reason, previous);
   // Today keeps its picks (the same-day rebalance handles today); later days are picked again.
-  await dropFuturePicks(ctx.userProfileId, addDays(today, 1));
+  // After a diet or food-list change, today's meals not yet eaten go too, so nothing they ruled out stays.
+  await dropFuturePicks(ctx.userProfileId, reason === "food_prefs_changed" ? today : addDays(today, 1));
   logger.info({ userProfileId: ctx.userProfileId, version: plan.version, reason, reviewed: !!draft.review }, "diet plan built");
   return { ok: true, plan };
 }
@@ -314,7 +315,14 @@ export type PlannedMeal = DayPick & {
 export async function ensureDays(ctx: ActionContext, plan: ActivePlan, prefs: PrefsRow, today: string): Promise<PlannedMeal[]> {
   const to = addDays(today, PLAN_DAYS - 1);
   const rows = await loadEntries(ctx.userProfileId, addDays(today, -2), to);
-  const existing: PriorPick[] = rows.map((r) => ({ date: r.local_date, slot: r.meal_slot, optionId: (r.metadata?.option_id as string | null) ?? null }));
+  const existing: PriorPick[] = rows.map((r) => ({
+    date: r.local_date,
+    slot: r.meal_slot,
+    optionId: (r.metadata?.option_id as string | null) ?? null,
+    title: r.title,
+    totals: r.metadata?.totals as PriorPick["totals"],
+    kind: r.metadata?.kind as PriorPick["kind"],
+  }));
   const picks = pickDays({ start: today, budgets: plan.budgets, options: plan.options, prefs: prefs.prefs, pinned: prefs.pinned, existing });
   const byId = new Map(Object.values(plan.options).flat().map((o) => [o!.id, o!]));
   const known = new Map(rows.map((r) => [`${r.local_date}|${r.meal_slot}`, r]));
