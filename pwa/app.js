@@ -694,9 +694,13 @@ function renderDay() {
   renderMove(d, t, isToday);
   $("day-card-title").textContent = isToday ? "Today" : shortDate(d.date);
   $("today-score").textContent = d.onTrack ? "On track" : `${d.score}%`;
+  // A check that just turned green pops once; one already met when the day was first drawn doesn't.
+  const seen = (state.metSeen ||= new Map());
+  const before = seen.get(d.date);
+  seen.set(d.date, new Set(d.checks.filter((c) => c.met).map((c) => c.id)));
   $("checks").replaceChildren(
     ...d.checks.map((c) =>
-      el("li", { class: c.met ? "met" : "" },
+      el("li", { class: [c.met && "met", c.met && before && !before.has(c.id) && "pop"].filter(Boolean).join(" ") },
         el("span", { class: "dot" }),
         el("span", {}, c.label),
         el("span", { class: "detail" }, c.detail),
