@@ -283,6 +283,8 @@ export async function completeOnboarding(
   const today = localDateKey(now, ctx.timezone);
   if (dayNumber(input.deadline) <= dayNumber(today)) return { ok: false, error: "deadline_must_be_after_start" };
   const plan = startingPlan(input, today);
+  // An unsafe pace is never saved: the date has to change (the safe date is in the preview).
+  if (plan.cappedForSafety) return { ok: false, error: "unsafe_pace" };
 
   const row = {
     user_profile_id: ctx.userProfileId,

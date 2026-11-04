@@ -504,11 +504,15 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 
 /* Plan history */
 .plan-list { display: grid; gap: 10px; padding: 0; list-style: none; }
-.plan-version { padding: 12px 14px; border: 1px solid var(--hair); border-radius: 14px; display: grid; gap: 4px; }
-.plan-version p { margin: 0; }
+/* .list li is a flex row; a version is a stacked card, so these must beat it. */
+.plan-list li.plan-version { display: grid; align-items: start; justify-content: stretch; gap: 6px; padding: 14px 16px; border: 1px solid var(--hair); border-radius: var(--radius); background: var(--surface); min-width: 0; }
+.plan-list li.plan-version:first-child { padding-top: 14px; border-top: 1px solid var(--hair); }
+.plan-version p { margin: 0; min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
 .plan-version .btn { justify-self: start; margin-top: 6px; }
-.plan-head { display: flex; justify-content: space-between; align-items: baseline; }
+.plan-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.plan-head .hint { flex: none; margin: 0; font-variant-numeric: tabular-nums; }
 .plan-reason { font-weight: 600; }
+.plan-version .rca-status { font-size: 0.85rem; }
 
 /* Notification toggles */
 .toggles { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -688,7 +692,20 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .plan-nums div { display: grid; gap: 2px; padding: 14px 10px; border-radius: 14px; border: 1px solid var(--hair); text-align: center; }
 .plan-nums strong { font-family: var(--serif); font-weight: var(--num-w); font-size: 1.7rem; line-height: 1; }
 .plan-nums small { color: var(--muted); font-size: 0.75rem; }
+.plan-warn.unsafe { background: var(--warn-soft, rgba(208, 138, 43, 0.18)); color: var(--warn, #d08a2b); font-weight: 600; }
 .plan-warn { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); font-size: 0.9rem; }
+.replan-hero { display: grid; justify-items: center; gap: 4px; padding: 20px 16px; border-radius: var(--radius); border: 1px solid var(--hair); background: var(--surface); text-align: center; }
+.replan-hero small { color: var(--muted); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.replan-hero strong { font-family: var(--serif); font-weight: var(--num-w); font-size: 2.6rem; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.replan-from, .replan-pace { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.replan-changes { margin: 0; display: grid; gap: 10px; }
+.replan-changes .section-label { margin: 0; }
+.replan-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; font-size: 0.92rem; }
+.replan-label { color: var(--muted); }
+.replan-val { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.replan-val s { color: var(--muted); text-decoration: line-through; }
+.replan-val b { font-weight: 600; }
+.replan-note { margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
 .plan-lines p { margin: 0 0 10px; color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
 
 /* barcode scan */

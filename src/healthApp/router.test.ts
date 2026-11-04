@@ -15,8 +15,10 @@ vi.mock("./activityStore.js", () => ({
 vi.mock("./bodyStore.js", () => ({
   upsertBodyCheckin: checkinMock,
   setActiveGoal: vi.fn(async () => ({ ok: true, id: "g1" })),
+  getActiveGoal: vi.fn(async () => null),
   updateDailyTargets: vi.fn(async () => ({ ok: true })),
 }));
+vi.mock("./replan.js", () => ({ replanForGoal: vi.fn(async () => null) }));
 vi.mock("./meals.js", async (orig) => ({
   ...(await orig<typeof import("./meals.js")>()),
   saveConfirmedMeal: confirmMock,
