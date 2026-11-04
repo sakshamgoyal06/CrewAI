@@ -5,7 +5,6 @@
 import { logger } from "../logger.js";
 import { supabase } from "../tools/clients.js";
 import { forgetProfile } from "./accounts.js";
-import { healthAppAuthConfig } from "./auth.js";
 import { cancelRazorpaySubscription, razorpayConfig } from "./billing.js";
 
 /** Tables exported in full (every column), all keyed by user_profile_id. */
@@ -89,10 +88,6 @@ export async function exportAccount(userProfileId: string, now = new Date()): Pr
 
 /** Deletes the profile (and with it every row) and the Google sign-in. */
 export async function deleteAccount(userProfileId: string): Promise<{ ok: boolean; error?: string }> {
-  if (healthAppAuthConfig()?.userProfileId === userProfileId) {
-    // The deploy owner's profile is wired into env vars; deleting it from the app would break the deploy.
-    return { ok: false, error: "owner_account" };
-  }
   const { data } = await supabase.from("user_profile").select("auth_user_id").eq("id", userProfileId).maybeSingle();
   const authUserId = (data as { auth_user_id?: string | null } | null)?.auth_user_id ?? null;
 

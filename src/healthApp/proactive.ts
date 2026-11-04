@@ -17,6 +17,8 @@ import { runRoutineTick } from "./routineCheck.js";
 import { runInterventionTick } from "./interventions/engine.js";
 import { runDayClose, runMealTimeTick } from "./dietPlan/rhythm.js";
 import { runWorkoutChecks, SCHEDULER_INTERVAL_MS } from "./workoutCheck.js";
+import { runNightlyDigest } from "./nightlyDigest.js";
+import { hasFeature } from "./billing.js";
 import { postCoachMessage } from "./workoutCheckStore.js";
 import { DAY_MS, localClock } from "../util/time.js";
 
@@ -135,6 +137,7 @@ async function runRoutineWithLog(userProfileId: string, now: Date): Promise<void
 }
 
 async function maybeRunRca(userProfileId: string, now: Date): Promise<void> {
+  if (!(await hasFeature(userProfileId, "rca", now))) return;
   const snapshot = await buildHealthSnapshot(userProfileId, now);
   const days = snapshot.northStar.days;
   const lastTwo = days.slice(-3, -1);
@@ -184,6 +187,8 @@ export async function proactiveTick(userProfileId: string, now = new Date()): Pr
     ["day plan", () => loadHealthProfile(userProfileId).then(({ timezone }) => ensureDayPlan(userProfileId, timezone, now)).then(() => undefined)],
     ["workout check", () => runWorkoutCheckWithPush(userProfileId, now)],
     ["routine", () => runRoutineWithLog(userProfileId, now)],
+    // Before the nudges: a posted digest takes the evening push's dedupe key.
+    ["digest", () => runNightlyDigest(userProfileId, now).then(() => undefined)],
     ["nudges", () => runNudges(userProfileId, now)],
     ["rca", () => maybeRunRca(userProfileId, now)],
     ["interventions", () => runInterventionTick(userProfileId, now).then(() => undefined)],
