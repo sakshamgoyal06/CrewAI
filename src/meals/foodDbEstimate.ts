@@ -8,7 +8,7 @@
  * per natural unit (per 100 g, per piece, per slice …). New ingredients and dish breakdowns are
  * saved, so the same food never needs the web again. Totals are always the sum of ingredients.
  */
-import { amountLabel, foodKeyFor, parseMealComponents, type FoodComponent, type FoodUnit } from "./foodParse.js";
+import { amountLabel, foodKeyFor, parseFoodPhrase, parseMealComponents, type FoodComponent, type FoodUnit } from "./foodParse.js";
 import {
   knownFoodNames,
   loadFoodTables,
@@ -21,10 +21,35 @@ import {
   type RecipeRow,
 } from "./foodStore.js";
 import type { Breakdown, BreakdownRequestItem } from "./providers/webBreakdown.js";
+import { catalog as defaultCatalog, resolveCatalogItem, type Catalog, type CatalogMatch } from "./catalog/index.js";
+import { recordFoodGaps } from "./foodGaps.js";
 import type { MealItemLine, MealNutritionEstimate } from "./types.js";
 
 /** An ingredient amount: `quantity` in the row's unit (grams/ml for the per-100 units). */
-export type IngredientLine = { row: FoodRow; quantity: number };
+export type IngredientLine = { row: FoodRow; quantity: number; label?: string };
+
+/** Rows made from the shipped catalog (not stored in Supabase, so never marked used). */
+export const CATALOG_SOURCE = "magnus_catalog";
+
+/** A catalog match as an ingredient line: grams of the food on its per-100 basis. */
+export function lineFromCatalog(m: CatalogMatch): IngredientLine {
+  const p = m.entry.per100;
+  return {
+    row: {
+      food_key: m.entry.key,
+      unit: m.entry.basis === "100ml" ? "per_100ml" : "per_100g",
+      display_name: m.entry.name,
+      grams_per_unit: null,
+      calories: p.kcal,
+      protein_g: p.protein,
+      carbs_g: p.carbs,
+      fat_g: p.fat,
+      source: CATALOG_SOURCE,
+    },
+    quantity: m.grams,
+    label: `${m.entry.name} · ${m.amount}`,
+  };
+}
 
 const r1 = (n: number): number => Math.round(n * 10) / 10;
 const isPer100 = (u: FoodUnit): boolean => u === "per_100g" || u === "per_100ml";
@@ -82,6 +107,7 @@ export function lineMacros(l: IngredientLine) {
 }
 
 function lineLabel(l: IngredientLine): string {
+  if (l.label) return l.label;
   const q = Math.round(l.quantity * 10) / 10;
   if (l.row.unit === "per_100g") return `${l.row.display_name} · ${Math.round(l.quantity)} g`;
   if (l.row.unit === "per_100ml") return `${l.row.display_name} · ${Math.round(l.quantity)} ml`;
@@ -133,6 +159,20 @@ export function linesFromBreakdown(
   return { lines, newFoods, recipe };
 }
 
+/**
+ * "aloo paratha with curd" → aloo paratha + curd, but only when the whole phrase isn't a catalog
+ * food and every part is ("coffee with milk" stays one item if it's known as a whole).
+ */
+export function splitWithParts(comps: FoodComponent[], cat: Catalog): FoodComponent[] {
+  return comps.flatMap((c) => {
+    if (!/\swith\s/i.test(c.phrase) || resolveCatalogItem(c, cat)) return [c];
+    const [first, ...rest] = c.phrase.split(/\s+with\s+/i);
+    const parts = [first!, ...rest].map(parseFoodPhrase);
+    if (parts.some((p) => !p) || parts.some((p) => !resolveCatalogItem(p!, cat))) return [c];
+    return parts as FoodComponent[];
+  });
+}
+
 export type BreakdownFn = (mealText: string, items: BreakdownRequestItem[], known: string[]) => Promise<Breakdown | null>;
 
 export type FoodDbDeps = {
@@ -141,6 +181,9 @@ export type FoodDbDeps = {
   saveFoods?: typeof saveFoods;
   saveRecipes?: typeof saveRecipes;
   markUsed?: typeof markFoodsUsed;
+  /** The shipped catalog; tests pass their own. */
+  catalog?: Catalog;
+  recordGaps?: typeof recordFoodGaps;
 };
 
 /**
@@ -152,19 +195,33 @@ export async function estimateWithFoodDb(
   breakdown: BreakdownFn | null,
   deps: FoodDbDeps = {},
 ): Promise<MealNutritionEstimate | null> {
-  const comps = parseMealComponents(text);
+  const cat = deps.catalog ?? defaultCatalog();
+  const comps = splitWithParts(parseMealComponents(text), cat);
   if (comps.length === 0 || comps.length > 12) return null;
 
-  const tables = await (deps.load ?? loadFoodTables)(comps.map((c) => c.foodKey));
-  const resolved = comps.map((c) => resolveFromTables(c, tables));
+  // The curated catalog first; only items it can't answer touch the database.
+  const fromCatalog = comps.map((c) => resolveCatalogItem(c, cat));
+  const dbKeys = comps.filter((_, i) => !fromCatalog[i]).map((c) => c.foodKey);
+  const tables: FoodTables = dbKeys.length
+    ? await (deps.load ?? loadFoodTables)(dbKeys)
+    : { foods: new Map(), recipes: new Map() };
+  const resolved = comps.map((c, i) => {
+    const m = fromCatalog[i];
+    return m ? [lineFromCatalog(m)] : resolveFromTables(c, tables);
+  });
   const missing = comps.map((_, i) => i).filter((i) => resolved[i] === null);
   const fromDbCount = comps.length - missing.length;
 
   const created = new Set<FoodRow>();
   let assumption: string | null = null;
-  let providerRaw: Record<string, unknown> = { food_db_items: fromDbCount };
+  let providerRaw: Record<string, unknown> = {
+    food_db_items: fromDbCount,
+    catalog_items: fromCatalog.filter(Boolean).length,
+  };
 
   if (missing.length) {
+    // What the catalog should learn next (docs/FOOD_DB.md builds the most-missed foods first).
+    (deps.recordGaps ?? recordFoodGaps)(missing.map((i) => comps[i]!));
     if (!breakdown) return null;
     const known = await (deps.known ?? knownFoodNames)().catch(() => [] as string[]);
     const asked = missing.map((i, n) => ({
@@ -201,7 +258,7 @@ export async function estimateWithFoodDb(
   }
 
   const lines = resolved.flatMap((r) => r ?? []);
-  const stored = lines.filter((l) => !created.has(l.row));
+  const stored = lines.filter((l) => !created.has(l.row) && l.row.source !== CATALOG_SOURCE);
   if (stored.length) void (deps.markUsed ?? markFoodsUsed)(stored.map((l) => l.row)).catch(() => undefined);
 
   const items: MealItemLine[] = lines.map((l) => ({ name: lineLabel(l), ...lineMacros(l) }));

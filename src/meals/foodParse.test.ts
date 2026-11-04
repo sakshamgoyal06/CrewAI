@@ -23,6 +23,17 @@ describe("parseMealComponents", () => {
     ]);
   });
 
+  it("reads size words and household units without putting them in the key", () => {
+    const sized = (t: string) => parseMealComponents(t).map((c) => [c.foodKey, c.quantity, c.unit, c.size ?? null]);
+    expect(sized("2 large rotis, 1 small katori dal, a big bowl of rice, 2 ladles sambar, handful of almonds")).toEqual([
+      ["roti", 2, "piece", "large"],
+      ["dal", 1, "bowl", "small"],
+      ["rice", 1, "bowl", "large"],
+      ["sambar", 2, "ladle", null],
+      ["almond", 1, "handful", null],
+    ]);
+  });
+
   it("gives plural and singular the same key", () => {
     expect(foodKeyFor("Rotis")).toBe(foodKeyFor("roti"));
     expect(foodKeyFor("2 boiled eggs!".replace(/^\d+\s*/, ""))).toBe("boiled egg");
