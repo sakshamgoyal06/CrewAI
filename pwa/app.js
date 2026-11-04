@@ -3645,7 +3645,7 @@ function openSheet(kind, { fromHistory = false } = {}) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", dayPlan: "Day plan", ...mealsTitles };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", replan: "Your updated plan", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", dayPlan: "Day plan", ...mealsTitles };
   const screen = !SHEET_ONLY.has(kind);
   const sheet = $("sheet");
   sheet.classList.toggle("screen", screen);
@@ -3866,22 +3866,25 @@ const SHEETS = {
     const save = el("button", { class: "btn primary block", type: "submit", disabled: true }, "Save");
     const when = el("p", { class: "hint date-line" });
     const goalFields = ["tw", "tbf", "tmm", "deadline"], targetFields = ["kcal", "prot", "steps"];
-    let start = null;
+    let start = null, replan = null;
     const form = el("form", { class: "stack settings-form", onsubmit: submitter(async (fd) => {
       const changed = (names) => names.some((n) => (fd.get(n) ?? "") !== start[n]);
       const saved = [];
       if (changed(goalFields)) {
-        await api("/goal", { method: "POST", body: JSON.stringify({ targetWeightKg: num(fd.get("tw")), targetBodyFatPct: num(fd.get("tbf")), targetMuscleMassKg: num(fd.get("tmm")), deadline: fd.get("deadline") }) });
+        const res = await api("/goal", { method: "POST", body: JSON.stringify({ targetWeightKg: num(fd.get("tw")), targetBodyFatPct: num(fd.get("tbf")), targetMuscleMassKg: num(fd.get("tmm")), deadline: fd.get("deadline") }) });
         saved.push("Goal");
+        replan = res?.replan?.changed ? res.replan : null;
       }
       if (changed(targetFields)) {
+        replan = null; // typed targets win over the recomputed one
         await api("/targets", { method: "POST", body: JSON.stringify({ calorieTarget: num(fd.get("kcal")), proteinTarget: num(fd.get("prot")), stepTarget: num(fd.get("steps")) }) });
         saved.push(saved.length ? "targets" : "Targets");
       }
-      toast(`${saved.join(" and ")} saved.`);
       start = snapshotForm();
       setTimeout(sync); // after the submit helper re-enables the button
       refresh();
+      if (replan) { state.replan = replan; replan = null; openSheet("replan"); return; }
+      toast(`${saved.join(" and ")} saved.`);
     }) },
       el("p", { class: "section-label" }, "Outcome goal"),
       el("div", { class: "grid3" },
@@ -3917,6 +3920,19 @@ const SHEETS = {
     form.addEventListener("change", sync);
     sync();
     return el("div", {}, form, weighInDayForm(t));
+  },
+
+  replan() {
+    const r = state.replan;
+    if (!r) return el("p", { class: "none" }, "Nothing changed.");
+    return el("div", { class: "stack" },
+      r.cappedForSafety ? el("p", { class: "hint warn" }, r.lines[0]) : null,
+      el("p", { class: "section-label" }, "What changed"),
+      ...r.changes.map((c) => el("p", { class: "hint" }, el("b", {}, c.label + ": "), c.from ? `${c.from} → ${c.to}` : c.to)),
+      ...r.lines.slice(r.cappedForSafety ? 1 : 0).map((l) => el("p", {}, l)),
+      el("p", { class: "hint" }, r.source === "formula" ? "Based on a formula estimate. It sharpens as you log meals and weigh in." : "Based on your logged meals and weigh-ins."),
+      el("button", { class: "btn primary block", type: "button", onclick: closeSheet }, "Got it"),
+    );
   },
 
   notifications() {

@@ -75,6 +75,8 @@ import { loadWeeklyReview } from "./weeklyReview.js";
 import { eatInput, eatPlanned, undoPlanned, unlinkDeletedMeal } from "./dietPlan/log.js";
 import { rebalanceToday } from "./dietPlan/rhythm.js";
 import { loadDietPrefs, loadPlanView, markOption, OPTION_ACTIONS, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
+import { replanForGoal } from "./replan.js";
+import { getActiveGoal } from "./bodyStore.js";
 import { PLAN_SLOTS } from "./dietPlan/targets.js";
 import {
   applyRazorpayEvent,
@@ -164,7 +166,7 @@ function route(name: string, handler: Handler): express.RequestHandler {
 }
 
 /** Maps an action result to an HTTP response: validation-style failures are 400s. */
-function fromResult(r: { ok: boolean; error?: string }): { status: number; body: unknown } {
+function fromResult(r: { ok: boolean; error?: string; [k: string]: unknown }): { status: number; body: unknown } {
   if (r.ok) return { status: 200, body: r };
   const clientErrors = new Set([
     "future_date",
@@ -759,12 +761,15 @@ export function createHealthAppRouter(): express.Router {
   router.post(
     "/goal",
     route("goal", async (ctx, req) => {
-      const r = await setGoal(ctx, goalInput.parse(req.body));
-      if (r.ok) {
-        void recordManualPlan(ctx.userProfileId, "You set a new goal");
-        void checkNewGoal(ctx.userProfileId);
-      }
-      return fromResult(r);
+      const input = goalInput.parse(req.body);
+      const before = await getActiveGoal(ctx.userProfileId).catch(() => null);
+      const r = await setGoal(ctx, input);
+      if (!r.ok) return fromResult(r);
+      // New date or target: recompute the calorie target and meal plan, and say what moved.
+      const replan = await replanForGoal(ctx, before, async (kcal) => (await setTargets(ctx, { calorieTarget: kcal })).ok);
+      void recordManualPlan(ctx.userProfileId, "You set a new goal");
+      void checkNewGoal(ctx.userProfileId);
+      return fromResult({ ...r, replan });
     }),
   );
 
