@@ -12,7 +12,9 @@ vi.mock("../tools/clients.js", () => {
 import {
   createRazorpaySubscription,
   entitlementFrom,
+  experienceFor,
   mergeRazorpayUpdate,
+  previewEntitlement,
   limitFor,
   razorpayConfig,
   verifyCheckoutSignature,
@@ -124,5 +126,41 @@ describe("trial start", () => {
     expect(early).toMatchObject({ tier: "trial", trialEndsAt: "2026-11-13T00:00:00.000Z" });
     const late = entitlementFrom({ createdAt: "2026-11-08T00:00:00Z", sub: null, isOwner: false, now, env });
     expect(late.trialEndsAt).toBe("2026-11-15T00:00:00.000Z");
+  });
+});
+
+describe("experienceFor", () => {
+  const on = { MAGNUS_BILLING: "on" };
+  const ent = (over: Record<string, unknown>) => ({ tier: "free", trialEndsAt: null, periodEndsAt: null, status: null, plan: null, provider: null, ...over }) as never;
+  const at = (d: number) => new Date(now.getTime() + d * 86_400_000).toISOString();
+
+  it("gives everyone everything, with no banner, while billing is off", () => {
+    expect(experienceFor(ent({ tier: "free" }), now, {})).toMatchObject({ features: { digest: true, rca: true }, banner: null });
+  });
+
+  it("keeps the model-paid extras off the free plan only", () => {
+    expect(experienceFor(ent({ tier: "free" }), now, on).features).toEqual({ digest: false, rca: false, photo: true });
+    expect(experienceFor(ent({ tier: "trial", trialEndsAt: at(5) }), now, on).features.digest).toBe(true);
+    expect(experienceFor(ent({ tier: "pro", status: "active", periodEndsAt: at(30) }), now, on).features.rca).toBe(true);
+    // Preview shows banners but enforces nothing.
+    expect(experienceFor(ent({ tier: "free" }), now, { MAGNUS_BILLING: "preview" }).features.digest).toBe(true);
+  });
+
+  it("warns as the trial or a cancelled plan runs out, and right after the trial", () => {
+    expect(experienceFor(ent({ tier: "trial", trialEndsAt: at(5) }), now, on).banner).toBeNull();
+    expect(experienceFor(ent({ tier: "trial", trialEndsAt: at(2) }), now, on).banner).toMatchObject({ kind: "trial_ending", action: "plans" });
+    expect(experienceFor(ent({ tier: "free", trialEndsAt: at(-1) }), now, on).banner?.kind).toBe("trial_ended");
+    expect(experienceFor(ent({ tier: "free", trialEndsAt: at(-10) }), now, on).banner).toBeNull();
+    expect(experienceFor(ent({ tier: "pro", status: "cancelled", periodEndsAt: at(2) }), now, on).banner?.kind).toBe("ending");
+    expect(experienceFor(ent({ tier: "pro", status: "cancelled", periodEndsAt: at(20) }), now, on).banner).toBeNull();
+  });
+
+  it("keeps a payment-issue banner up until it's fixed", () => {
+    expect(experienceFor(ent({ tier: "pro", status: "past_due", periodEndsAt: at(-1) }), now, on).banner).toMatchObject({ kind: "payment_issue", action: "managePlan", dismissible: false });
+  });
+
+  it("previews each state with its banner", () => {
+    const kinds = (["trial", "free", "pro", "past_due", "cancelled"] as const).map((st) => experienceFor(previewEntitlement(st, now), now, { MAGNUS_BILLING: "preview" }).banner?.kind ?? null);
+    expect(kinds).toEqual(["trial_ending", "trial_ended", null, "payment_issue", "ending"]);
   });
 });
