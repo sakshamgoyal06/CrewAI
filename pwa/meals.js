@@ -129,33 +129,89 @@ function paint() {
   const leftLine = isToday && left.length && left.length < order.length
     ? el("p", { class: "hint left-line" }, left.length === 1 ? `Only ${SLOT_NAME[left[0]].toLowerCase()} is left today.` : `Left today: ${left.map((s) => SLOT_NAME[s].toLowerCase()).join(", ")}.`)
     : null;
-  host.replaceChildren(...[strip, summary, leftLine, suppRow(ms.date), list,
+  host.replaceChildren(...[strip, summary, leftLine, list,
     el("div", { class: "fresh-plan" },
       el("button", { class: "btn block", type: "button", onclick: rebuild }, "Make me a fresh plan"),
       el("p", { class: "hint" }, "New options from your current food settings. Meals you've already eaten stay."))].filter(Boolean));
 }
 
 /**
- * The day's numbers, each labelled for what it is: the target, what's planned (meals plus
- * supplements, counted once), an eating-out allowance (calories only, macros unknown), what's
- * not planned yet, and on today what's been eaten. All from the server's day account.
+ * The day at a glance: a calorie ring with the key number big, a colour bar per macro, and up to
+ * two status tags. On today the solid fill is what's been eaten and the faint fill what's planned;
+ * on other days the fill is what's planned. Target, planned (meals plus supplements, counted
+ * once), any eating-out allowance and the supplements themselves sit in a fold. All numbers come
+ * from the server's day account.
  */
 function daySummary(date, t, isToday) {
   const { el, fmt } = d;
   const a = (ms.view.accounts || []).find((x) => x.date === date);
-  if (!a) return el("div", { class: "meal-summary" }, el("div", { class: "big" }, el("span", { class: "num" }, fmt(t.calories)), el("span", { class: "unit" }, "kcal target")));
-  const lines = [
-    `Target ${fmt(a.target.kcal)} kcal · P ${fmt(a.target.proteinG)} · C ${fmt(a.target.carbsG)} · F ${fmt(a.target.fatG)} g`,
-    `Planned ${fmt(a.planned.kcal)} kcal · P ${fmt(a.planned.proteinG)} · C ${fmt(a.planned.carbsG)} · F ${fmt(a.planned.fatG)} g${a.supplements.kcal ? ` (incl. supplements ${fmt(a.supplements.kcal)} kcal)` : ""}`,
-    a.allowanceKcal ? `Eating out: about ${fmt(a.allowanceKcal)} kcal allowance, food not known yet` : null,
-    Math.abs(a.unallocatedKcal) >= 50 ? (a.unallocatedKcal > 0 ? `Not planned yet: ${fmt(a.unallocatedKcal)} kcal` : `Over target by ${fmt(-a.unallocatedKcal)} kcal`) : null,
-    a.proteinShortG >= 10 ? `Protein still to find: ${fmt(a.proteinShortG)} g${a.allowanceKcal ? " (pick a protein dish when eating out)" : " (add curd, an egg or a scoop of whey)"}` : null,
+  if (!a) return el("div", { class: "day-glance" }, ring(0, 0, fmt(t.calories), "kcal target"));
+  const tgt = a.target;
+  const plannedKcal = a.planned.kcal + a.allowanceKcal;
+  const main = isToday ? a.logged.kcal : plannedKcal;
+  const macro = (key, name, cls) => {
+    const goal = tgt[key] || 0;
+    const now = isToday ? a.logged[key] : a.planned[key];
+    const pct = goal ? now / goal : 0;
+    const ghost = isToday && goal ? Math.min(1, a.planned[key] / goal) : 0;
+    const state = pct > 1.12 ? "over" : !isToday && pct < 0.9 ? "short" : "";
+    return el("li", { class: `mac ${cls} ${state}` },
+      el("span", { class: "mac-name" }, name),
+      el("span", { class: "mac-val" }, el("b", {}, fmt(now)), el("small", {}, ` / ${fmt(goal)} g`)),
+      el("span", { class: "mac-bar" },
+        ghost ? el("i", { class: "ghost", style: `width:${ghost * 100}%` }) : null,
+        el("i", { class: "fill", style: `width:${Math.min(1, pct) * 100}%` })));
+  };
+  const tags = [];
+  if (Math.abs(a.unallocatedKcal) < 50) tags.push(["good", isToday ? "Plan on target" : "Calories on target"]);
+  if (a.unallocatedKcal <= -50) tags.push(["bad", `${fmt(-a.unallocatedKcal)} kcal over`]);
+  if (a.proteinShortG >= 10) tags.push(["warn", `${fmt(a.proteinShortG)} g protein short`]);
+  if (a.unallocatedKcal >= 50) tags.push(["warn", `${fmt(a.unallocatedKcal)} kcal unplanned`]);
+  const left = Math.round(tgt.kcal - a.logged.kcal);
+  return el("div", { class: "day-glance" },
+    el("div", { class: "glance-top" },
+      ring(tgt.kcal ? main / tgt.kcal : 0, isToday && tgt.kcal ? plannedKcal / tgt.kcal : 0, fmt(main), isToday ? `of ${fmt(tgt.kcal)} eaten` : `of ${fmt(tgt.kcal)} kcal`),
+      el("div", { class: "glance-side" },
+        el("div", { class: "glance-tags" }, ...tags.slice(0, 2).map(([k, txt]) => el("span", { class: `tag ${k}` }, txt))),
+        isToday ? el("p", { class: "glance-left" }, left >= 0 ? el("b", {}, fmt(left)) : el("b", { class: "over" }, fmt(-left)), left >= 0 ? " kcal left today" : " kcal over today") : null,
+        el("ul", { class: "macs" }, macro("proteinG", "Protein", "p"), macro("carbsG", "Carbs", "c"), macro("fatG", "Fat", "f")))),
+    dayDetails(a, date, isToday));
+}
+
+/** The calorie ring: a solid arc for the main number and, on today, a faint arc for what's planned. */
+function ring(frac, ghost, value, label) {
+  const { el, svg } = d;
+  const C = 2 * Math.PI * 52;
+  const arc = (f, cls) => svg("circle", { class: cls, cx: 60, cy: 60, r: 52, "stroke-dasharray": `${C}`, "stroke-dashoffset": `${C * (1 - Math.max(0, Math.min(1, f)))}` });
+  const g = svg("svg", { viewBox: "0 0 120 120", "aria-hidden": "true" });
+  g.append(svg("circle", { class: "track", cx: 60, cy: 60, r: 52 }));
+  if (ghost) g.append(arc(ghost, "ghost"));
+  g.append(arc(frac, frac > 1.05 ? "fill over" : "fill"));
+  return el("div", { class: "kcal-ring" }, g,
+    el("div", { class: "ring-mid" }, el("b", {}, value), el("small", {}, label)));
+}
+
+/** The fold under the ring: the numbers behind it, in short rows, and the supplements. */
+function dayDetails(a, date, isToday) {
+  const { el, fmt } = d;
+  const m = (x) => `P ${fmt(x.proteinG)} · C ${fmt(x.carbsG)} · F ${fmt(x.fatG)}`;
+  const row = (k, v, sub) => el("li", {}, el("span", { class: "k" }, k), el("span", { class: "v" }, v, sub ? el("small", {}, sub) : null));
+  const rows = [
+    row("Target", `${fmt(a.target.kcal)} kcal`, m(a.target)),
+    row("Planned", `${fmt(a.planned.kcal)} kcal`, m(a.planned)),
+    a.allowanceKcal ? row("Eating out", `~${fmt(a.allowanceKcal)} kcal`, "food not known yet") : null,
+    isToday ? row("Eaten", `${fmt(a.logged.kcal)} kcal`, m(a.logged)) : null,
   ].filter(Boolean);
-  return el("div", { class: "meal-summary day-account" },
-    el("div", { class: "big" },
-      el("span", { class: "num" }, fmt(isToday ? a.logged.kcal : a.planned.kcal + a.allowanceKcal)),
-      el("span", { class: "unit" }, isToday ? `kcal eaten of ${fmt(a.target.kcal)}` : `kcal planned of ${fmt(a.target.kcal)}`)),
-    el("ul", { class: "acct" }, ...lines.map((l) => el("li", {}, l))));
+  const tip = a.proteinShortG >= 10
+    ? el("p", { class: "glance-tip" }, a.allowanceKcal ? "Pick a protein dish when you eat out." : "Close the protein gap with curd, an egg or a scoop of whey.")
+    : null;
+  const sup = ms.view?.supplements;
+  const suppPending = isToday && sup?.lines?.length && !sup.takenToday;
+  return el("details", { class: "glance-more" },
+    el("summary", {}, el("span", {}, "Details"), suppPending ? el("span", { class: "tag warn" }, "Supplements not logged") : null, el("i", { class: "chev" })),
+    el("ul", { class: "glance-rows" }, ...rows),
+    tip,
+    suppRow(date));
 }
 
 /** One row for the day's supplements: what they are and a tap to log them (today only). */
@@ -178,7 +234,7 @@ function suppRow(date) {
   };
   return el("div", { class: "supp-line" },
     el("span", { class: "what" }, sup.lines.map((l) => `${l.name} (${l.text})`).join(", ")),
-    el("small", { class: "sub" }, `${fmt(kcal)} kcal · ${fmt(Math.round(protein))} g protein, counted in the day's totals (meals are sized around them)`),
+    el("small", { class: "sub" }, `${fmt(kcal)} kcal · ${fmt(Math.round(protein))} g protein · counted once, in Planned`),
     isToday ? el("button", { class: "btn small", type: "button", onclick: act }, taken ? "Undo" : "Took them") : null);
 }
 
