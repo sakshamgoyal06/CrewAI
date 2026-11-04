@@ -358,6 +358,8 @@ export type PlanView = {
   plan: Omit<ActivePlan, "review"> | null;
   days: PlannedMeal[];
   reviewOn: boolean;
+  /** No calorie or protein target yet: the plan has nothing to split, so the tab asks for them first. */
+  needsTargets: boolean;
 };
 
 /**
@@ -367,10 +369,11 @@ export type PlanView = {
 export async function loadPlanView(ctx: ActionContext, now = new Date()): Promise<PlanView | { ok: false; error: string }> {
   const today = localDateKey(now, ctx.timezone);
   const [prefs, profile] = await Promise.all([loadDietPrefs(ctx.userProfileId), loadHealthProfile(ctx.userProfileId)]);
-  const base = { prefs: prefs.prefs, marks: { pinned: prefs.pinned, liked: prefs.liked, hidden: prefs.hidden }, reviewOn: reviewEnabled() };
-  if (!prefs.saved) return { ok: true, setup: false, plan: null, days: [], ...base };
-  let plan = await loadActivePlan(ctx.userProfileId);
   const t = profile.targets;
+  const needsTargets = !t.calorieTarget || !t.proteinTarget;
+  const base = { prefs: prefs.prefs, marks: { pinned: prefs.pinned, liked: prefs.liked, hidden: prefs.hidden }, reviewOn: reviewEnabled(), needsTargets };
+  if (!prefs.saved || needsTargets) return { ok: true, setup: prefs.saved, plan: null, days: [], ...base };
+  let plan = await loadActivePlan(ctx.userProfileId);
   const stale = plan && (plan.targets.calories !== Math.round(t.calorieTarget ?? 0) || plan.targets.proteinG !== Math.round(t.proteinTarget ?? 0));
   if (!plan || stale) {
     const r = await rebuildPlan(ctx, plan ? "target_change" : "setup", now);
