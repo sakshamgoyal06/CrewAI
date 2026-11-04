@@ -6,7 +6,7 @@ import { runOnboarding } from "./onboarding.js";
 import { scanView } from "./scan.js";
 import { foodPrefsEditor } from "./foodprefs.js";
 import { fromServer, routineEditor, toPayload } from "./routine.js";
-import { initMeals, loadPlan, mealScreen, mealsTitles, planLineFor, renderMeals, setupScreen } from "./meals.js";
+import { initMeals, loadPlan, mealScreen, mealsTitles, openPlannedMeal, planLineFor, renderMeals, setupScreen } from "./meals.js";
 import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
 const TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } })();
@@ -1494,11 +1494,14 @@ function renderHistory(messages) {
   requestAnimationFrame(() => { t.scrollTop = t.scrollHeight; t.style.scrollBehavior = prevBehavior; });
 }
 
-/** Messages and their cards into a thread. The day's plan is a card, so its text bubble is skipped. */
+/** Cards that say everything their message says: the text bubble is skipped (the model still reads it). */
+const CARD_ONLY = new Set(["day_plan", "plan_meal", "plan_adjust"]);
+
+/** Messages and their cards into a thread. */
 function renderMessages(messages, into, { retry = false } = {}) {
   for (const m of messages) {
     const cards = m.cards || [];
-    if (!cards.some((c) => c.type === "day_plan")) addMessage(m.role === "user" ? "user" : "coach", m.content, into);
+    if (!cards.some((c) => CARD_ONLY.has(c.type))) addMessage(m.role === "user" ? "user" : "coach", m.content, into);
     for (const c of cards) appendCard(c, into);
     if (retry && m.role === "user" && unanswered(m)) {
       failedTurn("That one didn't get a reply.", m.turnId ? () => send(m.content, m.turnId, () => {}) : null);
@@ -1783,6 +1786,8 @@ function appendCard(c, into = $("thread")) {
   else if (c.type === "calorie_review") into.append(calorieReviewCard(c.review));
   else if (c.type === "day_plan") into.append(dayPlanCard(c));
   else if (c.type === "eating_out") into.append(eatingOutCard(c));
+  else if (c.type === "plan_meal") into.append(planMealCard(c));
+  else if (c.type === "plan_adjust") into.append(planAdjustCard(c));
 }
 
 // ---------- the day's plan ----------
@@ -1803,8 +1808,65 @@ function dayPlanCard(c) {
     c.goal ? sec("Goal", el("p", {}, c.goal)) : null,
     c.yesterday ? sec("Yesterday", el("p", {}, c.yesterday)) : null,
     sec("This week", el("p", {}, c.week)),
+    c.meals?.length ? sec("Meals",
+      el("ul", { class: "dp-plan" }, ...c.meals.map((m) => el("li", {}, el("span", { class: "dp-time" }, m.time ? clock(m.time) : SLOT_LABEL[m.slot]), el("span", {}, `${m.title} · ${fmt(m.kcal)} kcal`)))),
+      el("button", { class: "link", type: "button", onclick: () => setView("meals") }, "Open meals")) : null,
     c.focus ? el("div", { class: "dp-focus" }, el("p", { class: "eyebrow" }, "Worth a look"), el("p", {}, c.focus)) : null,
     el("p", { class: "dp-motto" }, c.motivation),
+  );
+}
+
+
+/** A planned meal at its time: eat it in one tap, or open it to change portions or swap. */
+function planMealCard(c) {
+  const card = el("div", { class: "draft planmeal" });
+  const eaten = (s) => s === "logged" || s === "partial";
+  function render(cur) {
+    const head = el("p", { class: "eyebrow" }, `${SLOT_LABEL[cur.slot]}${cur.time ? ` · ${clock(cur.time)}` : ""} · on your plan`);
+    const body = [
+      head,
+      el("ul", { class: "pm-items" }, ...cur.items.map((t) => el("li", {}, t))),
+      el("p", { class: "pm-sub" }, `${fmt(cur.kcal)} kcal · ${cur.proteinG} g protein`),
+    ];
+    if (eaten(cur.status)) {
+      card.replaceChildren(...body, el("div", { class: "done-line" }, cur.status === "partial" ? "✓ Eaten, portions changed" : "✓ Eaten"));
+      return;
+    }
+    const ate = el("button", { class: "btn primary", type: "button" }, "Ate this");
+    const change = el("button", { class: "btn", type: "button", onclick: () => openPlannedMeal(cur.date, cur.slot) }, "Change or swap");
+    ate.addEventListener("click", async () => {
+      ate.disabled = change.disabled = true;
+      try {
+        await api(`/diet/days/${cur.date}/${cur.slot}/eat`, { method: "POST", body: "{}" });
+        c.status = "logged";
+        render(c);
+        toast("Logged as planned.");
+        loadPlan(true).catch(() => {});
+        refresh();
+      } catch (err) {
+        if (err.code === "already_logged") { c.status = "logged"; render(c); return; }
+        ate.disabled = change.disabled = false;
+        toast(err.message);
+      }
+    });
+    card.replaceChildren(...body, el("div", { class: "draft-actions" }, ate, change));
+  }
+  render(c);
+  return card;
+}
+
+/** The plan moved: the rest of today resized after an off-plan meal, or the night's day close. */
+function planAdjustCard(c) {
+  const close = c.kind === "day_close";
+  const meals = c.next?.meals || [];
+  return el("div", { class: "draft planadjust" },
+    el("p", { class: "eyebrow" }, close ? "Day close" : "Rest of today"),
+    el("p", { class: "pa-head" }, c.headline),
+    c.lines?.length ? el("ul", { class: "pa-lines" }, ...c.lines.map((l) => el("li", {}, l))) : null,
+    close && meals.length ? el("div", { class: "dp-sec" },
+      el("p", { class: "eyebrow" }, "Tomorrow"),
+      el("ul", { class: "dp-plan" }, ...meals.map((m) => el("li", {}, el("span", { class: "dp-time" }, m.time ? clock(m.time) : SLOT_LABEL[m.slot]), el("span", {}, `${m.title} · ${fmt(m.kcal)} kcal`))))) : null,
+    el("button", { class: "link", type: "button", onclick: () => setView("meals") }, close ? "See tomorrow's meals" : "See today's meals"),
   );
 }
 
@@ -2185,6 +2247,7 @@ const NUDGES = [
   ["weigh_in", "Weekly weigh-in"],
   ["rca", "Root-cause reviews"],
   ["intervention", "Plan check-ins"],
+  ["plan_meal", "Planned meals"],
 ];
 
 /** Settings: the weekly routine. Saving replaces it, and training days follow from it. */

@@ -2,6 +2,7 @@
  * Storage and the service calls behind the diet plan API: setup answers, plan versions, option
  * marks, and the rolling 3-day picks in `meal_plan_entries`.
  */
+import { applyCarries } from "./carry.js";
 import { logger } from "../../logger.js";
 import { localDateKey } from "../../nutrition/localDate.js";
 import { supabase } from "../../tools/clients.js";
@@ -305,6 +306,10 @@ export async function ensureDays(ctx: ActionContext, plan: ActivePlan, prefs: Pr
     for (const r of (data ?? []) as EntryRow[]) known.set(`${r.local_date}|${r.meal_slot}`, r);
     if (error) for (const r of await loadEntries(ctx.userProfileId, today, to)) known.set(`${r.local_date}|${r.meal_slot}`, r);
   }
+  // A day close moved calories onto these days: resize any meal that hasn't taken it yet.
+  if (await applyCarries(ctx.userProfileId, plan.budgets, today, to).catch(() => false)) {
+    for (const r of await loadEntries(ctx.userProfileId, today, to)) known.set(`${r.local_date}|${r.meal_slot}`, r);
+  }
   return picks.map((p) => {
     const r = known.get(`${p.date}|${p.slot}`);
     const items = (r?.metadata?.items as MealOption["items"] | undefined) ?? (p.optionId ? byId.get(p.optionId)?.items : undefined) ?? [];
@@ -314,7 +319,9 @@ export async function ensureDays(ctx: ActionContext, plan: ActivePlan, prefs: Pr
     const saved = r && r.metadata?.option_id !== p.optionId
       ? { optionId: (r.metadata?.option_id as string | null) ?? null, title: r.title, totals: (r.metadata?.totals as DayPick["totals"]) ?? p.totals, kind: (r.metadata?.kind as DayPick["kind"]) ?? p.kind }
       : {};
-    return { ...p, ...saved, entryId: r?.id ?? null, status: r?.status ?? "planned", items, ...(eatenItems ? { eatenItems } : {}), ...(loggedSessionId ? { loggedSessionId } : {}) };
+    // Totals follow the saved items (a day-close carry or rebalance resized them).
+    const totals = (r?.metadata?.totals as DayPick["totals"] | undefined) ?? p.totals;
+    return { ...p, totals, ...saved, entryId: r?.id ?? null, status: r?.status ?? "planned", items, ...(eatenItems ? { eatenItems } : {}), ...(loggedSessionId ? { loggedSessionId } : {}) };
   });
 }
 
