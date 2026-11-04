@@ -5,7 +5,7 @@
 import { foodKeyFor, type FoodComponent } from "../foodParse.js";
 import { DISHES } from "./data/dishes.js";
 import { FOODS } from "./data/foods.js";
-import type { Category, CatalogDish, CatalogFood, Macros, MealType, Serving, ServingSize, ServingUnit } from "./types.js";
+import type { Category, CatalogDish, CatalogFood, Macros, MealType, PrepMinutes, Serving, ServingSize, ServingUnit } from "./types.js";
 
 export type CatalogEntry = {
   /** Stable id: the normalized name ("dal tadka"). Plans and logs may reference it. */
@@ -18,7 +18,14 @@ export type CatalogEntry = {
   diet: CatalogFood["diet"];
   category: CatalogFood["category"];
   meals: MealType[];
+  /** Minutes to make at home (0, 10, 20, 30 = 30+); null for ingredients that aren't eaten alone. */
+  prepMinutes: PrepMinutes | null;
 };
+
+/** Whole foods that are eaten as they are. */
+const READY: Category[] = ["fruit", "dairy", "nut_seed", "drink", "supplement", "sweet"];
+const foodPrep = (f: CatalogFood): PrepMinutes | null =>
+  f.prepMinutes ?? (READY.includes(f.category) && (f.meals ?? MEALS_BY_CATEGORY[f.category]).length ? 0 : null);
 
 const MAINS: MealType[] = ["lunch", "dinner"];
 /** Usual meals per category; an entry's own `meals` wins. Ingredients get none. */
@@ -92,7 +99,7 @@ export function buildCatalog(foods: CatalogFood[] = FOODS, dishes: CatalogDish[]
   for (const f of foods) {
     const e: CatalogEntry = {
       key: foodKeyFor(f.name), name: f.name, kind: "food", basis: f.basis ?? "100g", per100: f.per100,
-      servings: f.servings, diet: f.diet, category: f.category, meals: f.meals ?? MEALS_BY_CATEGORY[f.category],
+      servings: f.servings, diet: f.diet, category: f.category, meals: f.meals ?? MEALS_BY_CATEGORY[f.category], prepMinutes: foodPrep(f),
     };
     ingredients.set(e.key, e);
     add(e, f.aliases);
@@ -101,7 +108,7 @@ export function buildCatalog(foods: CatalogFood[] = FOODS, dishes: CatalogDish[]
   for (const d of dishes) {
     const e: CatalogEntry = {
       key: foodKeyFor(d.name), name: d.name, kind: "dish", basis: d.basis ?? "100g", per100: dishPer100(d, ingredients),
-      servings: d.servings, diet: d.diet, category: d.category, meals: d.meals ?? MEALS_BY_CATEGORY[d.category],
+      servings: d.servings, diet: d.diet, category: d.category, meals: d.meals ?? MEALS_BY_CATEGORY[d.category], prepMinutes: d.prepMinutes ?? null,
     };
     ingredients.set(e.key, e);
     add(e, d.aliases);

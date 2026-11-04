@@ -67,6 +67,9 @@ export type Diet = "veg" | "egg" | "nonveg" | "vegan";
 /** When a food is usually eaten; the diet planner uses it to build options. */
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 
+/** Minutes to make it at home: 0 ready to eat (or ordered), 10, 20, or 30 meaning 30 or more. */
+export type PrepMinutes = 0 | 10 | 20 | 30;
+
 /** Per 100 g (or 100 ml). */
 export type Macros = { kcal: number; protein: number; carbs: number; fat: number; fiber: number };
 
@@ -86,6 +89,8 @@ type Base = {
   diet: Diet;
   /** Overrides the category's usual meals (catalog/index.ts MEALS_BY_CATEGORY). */
   meals?: MealType[];
+  /** Overrides the category's usual prep time; every dish sets it (data/dishes.ts PREP). */
+  prepMinutes?: PrepMinutes;
   basis?: "100g" | "100ml";
   servings: Serving[];
 };

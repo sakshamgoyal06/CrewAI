@@ -30,6 +30,9 @@ requests, and is checked by tests. Plan and sizing:
   `default` (used when no amount is given).
 - `meals`: when it's usually eaten (breakfast, lunch, dinner, snack). Defaults come from the
   category (`MEALS_BY_CATEGORY`); set it only when a food differs. The diet planner uses it.
+- `prepMinutes`: home prep time, 0 (ready to eat or ordered), 10, 20 or 30 (meaning 30+). Every
+  dish has one in `PREP` (data/dishes.ts); fruit, nuts, dairy and drinks default to 0. The diet
+  planner filters options by it.
 - Stable ids: a food's id is its normalized name (`key`, e.g. "dal tadka") and a serving's id is
   `servingId()` ("roti:piece:medium"). Don't rename a food once plans may reference it; add the
   old name as an alias instead.

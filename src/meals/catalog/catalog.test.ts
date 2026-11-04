@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { foodKeyFor } from "../foodParse.js";
 import { buildCatalog, servingId } from "./index.js";
-import { DISHES } from "./data/dishes.js";
+import { DISHES, PREP } from "./data/dishes.js";
 import { FOODS } from "./data/foods.js";
 import type { CatalogDish, CatalogFood, ServingUnit } from "./types.js";
 
@@ -95,6 +95,12 @@ describe("food catalog", () => {
       return ids.filter((id, i) => ids.indexOf(id) !== i);
     });
     expect(dupes).toEqual([]);
+  });
+
+  it("every dish has a prep time, and the prep list names only real dishes", () => {
+    expect(cat.entries.filter((e) => e.kind === "dish" && e.prepMinutes === null).map((e) => e.name)).toEqual([]);
+    const names = new Set(DISHES.map((d) => d.name));
+    expect(Object.keys(PREP).filter((n) => !names.has(n))).toEqual([]);
   });
 
   it("every dish has at least one meal type", () => {

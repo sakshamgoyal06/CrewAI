@@ -6,7 +6,7 @@
  * per 100 g are computed from the ingredients (catalog/index.ts), so they always add up.
  * Spices, salt and herbs used by the pinch are left out (under 10 kcal a batch).
  */
-import type { CatalogDish } from "../types.js";
+import type { CatalogDish, PrepMinutes } from "../types.js";
 import { dish, KATORI, s } from "./helpers.js";
 
 const ATTA = "Whole wheat flour (atta)";
@@ -15,7 +15,7 @@ const RICE = "White rice, cooked";
 const OIL = "Vegetable oil";
 const plate = (grams: number, isDefault = true) => s("plate", grams, null, isDefault);
 
-export const DISHES: CatalogDish[] = [
+const LIST: CatalogDish[] = [
   // ── Breads ───────────────────────────────────────────────────────────────
   dish("Roti", "bread", "vegan", [[ATTA, 100]], 135,
     [s("piece", 40, "medium", true, "1 medium roti"), s("piece", 30, "small", false, "1 small roti"), s("piece", 55, "large", false, "1 large roti")],
@@ -152,3 +152,95 @@ export const DISHES: CatalogDish[] = [
   dish("Sooji halwa", "sweet", "veg", [["Semolina (sooji)", 100], ["Ghee", 60], ["Sugar", 100]], 400, [KATORI(100)], { aliases: ["halwa", "suji halwa", "sheera", "rava kesari"] }),
   dish("Gulab jamun", "sweet", "veg", [["Khoya", 100], ["Refined flour (maida)", 20], [OIL, 20], ["Sugar", 60]], 220, [s("piece", 40, null, true)], { aliases: ["gulabjamun", "gulab jamuns"], note: "Sugar is the syrup each piece soaks up" }),
 ];
+
+/**
+ * Home prep time per dish in minutes (0 ready or ordered, 10, 20, 30 = 30 or more), for the
+ * diet planner's "time to cook" filter. Assumes everyday shortcuts: cooked rice or dosa batter
+ * on hand, pressure cooker for dals.
+ */
+export const PREP: Record<string, PrepMinutes> = {
+  "Aloo paratha": 30,
+  "Paneer paratha": 30,
+  "Gobi paratha": 30,
+  "Puri": 30,
+  "Bhatura": 30,
+  "Thepla": 30,
+  "Veg pulao": 30,
+  "Veg biryani": 30,
+  "Chicken biryani": 30,
+  "Mutton biryani": 30,
+  "Dal tadka": 30,
+  "Dal makhani": 30,
+  "Chole": 30,
+  "Rajma": 30,
+  "Sambar": 30,
+  "Kadhi": 30,
+  "Aloo gobi": 30,
+  "Baingan bharta": 30,
+  "Mix veg": 30,
+  "Palak paneer": 30,
+  "Paneer butter masala": 30,
+  "Matar paneer": 30,
+  "Kadai paneer": 30,
+  "Chicken curry": 30,
+  "Butter chicken": 30,
+  "Chicken tikka": 30,
+  "Egg curry": 30,
+  "Fish curry": 30,
+  "Mutton curry": 30,
+  "Masala dosa": 30,
+  "Medu vada": 30,
+  "Samosa": 30,
+  "Bhaji": 30,
+  "Pav bhaji": 30,
+  "Vada pav": 30,
+  "Aloo tikki": 30,
+  "Paneer tikka": 30,
+  "Rajma chawal": 30,
+  "Dal chawal": 30,
+  "Chole bhature": 30,
+  "Chole chawal": 30,
+  "Kadhi chawal": 30,
+  "Idli sambar": 30,
+  "Kheer": 30,
+  "Gulab jamun": 30,
+  "Roti": 20,
+  "Plain paratha": 20,
+  "Bajra roti": 20,
+  "Jowar roti": 20,
+  "Makki roti": 20,
+  "Jeera rice": 20,
+  "Khichdi": 20,
+  "Egg fried rice": 20,
+  "Veg fried rice": 20,
+  "Moong dal": 20,
+  "Masoor dal": 20,
+  "Bhindi masala": 20,
+  "Aloo sabzi": 20,
+  "Lauki sabzi": 20,
+  "Cabbage sabzi": 20,
+  "Poha": 20,
+  "Upma": 20,
+  "Idli": 20,
+  "Plain dosa": 20,
+  "Uttapam": 20,
+  "Besan chilla": 20,
+  "Moong dal chilla": 20,
+  "Sooji halwa": 20,
+  "Curd rice": 10,
+  "Lemon rice": 10,
+  "Paneer bhurji": 10,
+  "Egg bhurji": 10,
+  "Omelette": 10,
+  "Coconut chutney": 10,
+  "Oats porridge": 10,
+  "Veg sandwich": 10,
+  "Raita": 10,
+  "Chai": 10,
+  "Chai without sugar": 10,
+  "Coffee": 10,
+  "Sweet lassi": 10,
+  "Buttermilk": 10,
+};
+
+export const DISHES: CatalogDish[] = LIST.map((d) => ({ ...d, prepMinutes: d.prepMinutes ?? PREP[d.name] }));
