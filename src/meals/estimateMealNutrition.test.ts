@@ -40,3 +40,29 @@ describe("estimateMealNutrition cache", () => {
     expect(estimateCacheKey("1.5 cups rice")).toBe("1.5 cups rice");
   });
 });
+
+describe("web lookup cap and per-person cache", () => {
+  it("skips the web when the person's lookups are used up", async () => {
+    const onWebLookup = vi.fn();
+    const r = await estimateMealNutrition("poha", { webAllowed: false, onWebLookup });
+    expect(r.source).toBe("unavailable");
+    expect(web.estimateViaWebResearch).not.toHaveBeenCalled();
+    expect(onWebLookup).not.toHaveBeenCalled();
+  });
+
+  it("counts each web lookup", async () => {
+    web.estimateViaWebResearch.mockResolvedValue(found);
+    const onWebLookup = vi.fn();
+    await estimateMealNutrition("poha", { onWebLookup });
+    expect(onWebLookup).toHaveBeenCalledTimes(1);
+  });
+
+  it("never serves one person's web result to another", async () => {
+    web.estimateViaWebResearch.mockResolvedValue(found);
+    await estimateMealNutrition("poha", { contributor: { id: "a", trusted: false } });
+    await estimateMealNutrition("poha", { contributor: { id: "a", trusted: false } });
+    expect(web.estimateViaWebResearch).toHaveBeenCalledTimes(1);
+    await estimateMealNutrition("poha", { contributor: { id: "b", trusted: false } });
+    expect(web.estimateViaWebResearch).toHaveBeenCalledTimes(2);
+  });
+});

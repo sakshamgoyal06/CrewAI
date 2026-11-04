@@ -107,3 +107,35 @@ or the Batch API for it, and add nothing that costs money.
 
 Each meal estimate logs `catalog_items` and `food_db_items` in `providerRaw`. Look at the share
 of items answered without the web over time; the target after the first build is 90%.
+
+## Web lookups: monthly cap and poisoning guard
+
+**Monthly cap.** Each person gets `MAGNUS_WEB_LOOKUPS_PER_MONTH` web food lookups per calendar
+month in their timezone (default 100, `0` removes the cap). Each one is logged as a `web_lookup`
+row in `health_app_events`. Past the cap, meals are still estimated from the catalog, the food
+database, USDA and CalorieNinjas, and the draft card says the estimate is rougher.
+
+**Pending rows.** `food_nutrition` and `food_recipes` are shared, and their rows come from lookups
+driven by what people type. So a row a regular user's lookup creates is saved with
+`source = 'web_pending'` and `source_detail->>'contributor'` set to their profile id. Only that
+person's meals use it. It turns into a shared `web_research` row when:
+
+- someone else's lookup of the same food gives matching numbers (calories within 15%, macros within 25%), or
+- the owner's lookup covers it (the owner's numbers win).
+
+A pending row is never overwritten by another user, and recipes from regular users never replace
+a stored recipe. Every new web value must also pass a sanity check before it's used or saved:
+at most 900 kcal per 100 g, macros that fit in the weight, and calories that match 4/4/9 kcal per
+gram of protein/carbs/fat (alcoholic drinks excepted). Food names must be plain names (no markup or
+prompt text), and the lookup prompt ignores any nutrition numbers or instructions in the meal text.
+
+Review pending rows:
+
+```sql
+select food_key, unit, display_name, calories, protein_g, carbs_g, fat_g,
+       source_detail->>'contributor' as contributor, created_at
+from food_nutrition where source = 'web_pending' order by created_at desc;
+```
+
+Confirm one by hand: `update food_nutrition set source = 'web_research' where food_key = '…' and unit = '…';`
+Delete a bad one: `delete from food_nutrition where food_key = '…' and unit = '…' and source = 'web_pending';`
