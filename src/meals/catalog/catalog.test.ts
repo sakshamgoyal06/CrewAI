@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { foodKeyFor } from "../foodParse.js";
-import { buildCatalog } from "./index.js";
+import { buildCatalog, servingId } from "./index.js";
 import { DISHES } from "./data/dishes.js";
 import { FOODS } from "./data/foods.js";
 import type { CatalogDish, CatalogFood, ServingUnit } from "./types.js";
@@ -87,6 +87,18 @@ describe("food catalog", () => {
       }
     }
     expect(problems).toEqual([]);
+  });
+
+  it("serving ids are unique within each food (plans reference them)", () => {
+    const dupes = cat.entries.flatMap((e) => {
+      const ids = e.servings.map((s) => servingId(e.key, s));
+      return ids.filter((id, i) => ids.indexOf(id) !== i);
+    });
+    expect(dupes).toEqual([]);
+  });
+
+  it("every dish has at least one meal type", () => {
+    expect(cat.entries.filter((e) => e.kind === "dish" && !e.meals.length).map((e) => e.name)).toEqual([]);
   });
 
   it("every whole food names its source", () => {

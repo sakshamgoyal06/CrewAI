@@ -114,7 +114,7 @@ export const DISHES: CatalogDish[] = [
   dish("Uttapam", "breakfast", "vegan", [[RICE_RAW, 100], ["Urad dal, raw", 33], ["Onion", 40], ["Tomato", 40], [OIL, 20]], 440, [s("piece", 110, null, true)], { aliases: ["uthappam", "onion uttapam"] }),
   dish("Medu vada", "breakfast", "vegan", [["Urad dal, raw", 100], [OIL, 35]], 220, [s("piece", 45, null, true)], { aliases: ["vada", "medu wada", "uzhunnu vada"] }),
   dish("Coconut chutney", "spice_condiment", "vegan", [["Coconut, fresh", 100], ["Chana dal, raw", 15], [OIL, 5]], 180, [s("tbsp", 15, null, true), s("bowl", 50, null, false, "1 small katori")],
-    { aliases: ["chutney", "nariyal chutney"] }),
+    { aliases: ["chutney", "nariyal chutney"], meals: ["breakfast", "snack"] }),
   dish("Besan chilla", "breakfast", "vegan", [["Gram flour (besan)", 100], ["Onion", 30], ["Tomato", 30], [OIL, 15]], 230, [s("piece", 75, null, true)], { aliases: ["besan cheela", "chilla", "besan ka chilla"] }),
   dish("Moong dal chilla", "breakfast", "vegan", [["Moong dal, raw", 100], ["Onion", 30], [OIL, 15]], 280, [s("piece", 90, null, true)], { aliases: ["moong chilla", "pesarattu", "moong cheela"] }),
   dish("Oats porridge", "breakfast", "veg", [["Rolled oats", 40], ["Toned milk", 200], ["Sugar", 5]], 260, [s("bowl", 260, null, true, "1 bowl")], { aliases: ["oats with milk", "oatmeal", "porridge"] }),

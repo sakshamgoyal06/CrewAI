@@ -28,6 +28,11 @@ requests, and is checked by tests. Plan and sizing:
 - Every entry has 1–5 `servings` in the way it's measured at home (katori, piece, plate, glass,
   cup, tbsp, tsp, ladle, handful, scoop, slice), each with its weight, and exactly one
   `default` (used when no amount is given).
+- `meals`: when it's usually eaten (breakfast, lunch, dinner, snack). Defaults come from the
+  category (`MEALS_BY_CATEGORY`); set it only when a food differs. The diet planner uses it.
+- Stable ids: a food's id is its normalized name (`key`, e.g. "dal tadka") and a serving's id is
+  `servingId()` ("roti:piece:medium"). Don't rename a food once plans may reference it; add the
+  old name as an alias instead.
 - `aliases`: Hindi and regional names, common spellings, and generic words that should mean
   this food ("dal" → dal tadka, "rice" → cooked white rice). An alias may point at only one food.
 
