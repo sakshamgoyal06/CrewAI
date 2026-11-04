@@ -69,7 +69,7 @@ function dayTotals(date) {
 export async function renderMeals() {
   const host = document.getElementById("meals-body");
   const { el } = d;
-  if (!ms.view) host.replaceChildren(el("p", { class: "none" }, "Loading…"));
+  if (!ms.view) host.replaceChildren(el("div", { class: "skel", "aria-label": "Loading" }, el("i", { class: "big" }), el("i"), el("i", { class: "short" }), el("i"), el("i", { class: "short" })));
   try {
     await loadPlan(!!ms.view);
   } catch (err) {
