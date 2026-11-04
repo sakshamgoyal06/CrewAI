@@ -95,6 +95,12 @@ describe("food preferences", () => {
     expect(cleanAvoidList([" Peanuts ", "peanuts", "tree  nuts", ""])).toEqual(["Peanuts", "tree nuts"]);
   });
 
+  it("makes the diet note a hard rule for the coach", () => {
+    const line = foodPrefsLine({ diet: "custom", diet_note: "no meat other than chicken", food_avoid: [] })!;
+    expect(line).toContain("HARD RULE");
+    expect(line).toContain("only chicken");
+  });
+
   it("tells the coach the diet and what never to suggest", () => {
     expect(foodPrefsLine({ diet: "custom", diet_note: "pescatarian", food_avoid: ["Peanuts", "Dairy"] })).toBe(
       "diet (their words): pescatarian; must avoid (allergy, intolerance or won't eat; never suggest these or dishes containing them): Peanuts, Dairy",

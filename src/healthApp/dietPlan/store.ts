@@ -14,7 +14,8 @@ import { FREQUENT_WINDOW_DAYS, loadLoggedSessions, rankUsualMeals } from "../fre
 import { loadFoodPrefs } from "../onboarding.js";
 import { loadHealthProfile } from "../snapshot.js";
 import { buildPlanDraft, type PlanDraft } from "./build.js";
-import type { MealOption, PersonDiet } from "./compose.js";
+import { restrictionCheck, type MealOption, type PersonDiet } from "./compose.js";
+import { catalog } from "../../meals/catalog/index.js";
 import { pickDays, PLAN_DAYS, type DayPick, type PriorPick } from "./pick.js";
 import { defaultPrefs, dietPrefsInput, type DietPrefs, type DietPrefsInput } from "./prefs.js";
 import { reviewEnabled, reviewPlan } from "./review.js";
@@ -255,9 +256,25 @@ export async function rebuildPlan(ctx: ActionContext, reason: string, now = new 
   const previous = await loadActivePlan(ctx.userProfileId);
   const plan = await savePlan(ctx.userProfileId, draft, reason, previous);
   // Today keeps its picks (the same-day rebalance handles today); later days are picked again.
-  await dropFuturePicks(ctx.userProfileId, addDays(today, 1));
+  // After a diet or food-list change, or "Make me a fresh plan", today's meals not yet eaten go too, so nothing they ruled out stays.
+  await dropFuturePicks(ctx.userProfileId, reason === "food_prefs_changed" || reason === "rebuild" ? today : addDays(today, 1));
   logger.info({ userProfileId: ctx.userProfileId, version: plan.version, reason, reviewed: !!draft.review }, "diet plan built");
   return { ok: true, plan };
+}
+
+/** What the person's food settings allow right now (diet, avoid list, diet note, plan restrictions). */
+async function allowsFor(userProfileId: string, restrictions: string[]) {
+  const food = await loadFoodPrefs(userProfileId);
+  return restrictionCheck({ diet: food.diet as PersonDiet, avoid: food.foodAvoid, dietNote: [food.dietNote ?? "", ...restrictions].filter(Boolean) });
+}
+
+/** True when every catalog food in the items passes. Usual-meal items outside the catalog can't be checked here. */
+function itemsAllowed(items: Array<{ key: string | null }> | undefined, allows: ReturnType<typeof restrictionCheck>): boolean {
+  const cat = catalog();
+  return (items ?? []).every((i) => {
+    const e = i.key ? cat.byKey.get(i.key) : undefined;
+    return !e || allows(e);
+  });
 }
 
 // ---------- the 3-day picks ----------
@@ -315,7 +332,15 @@ export type PlannedMeal = DayPick & {
 /** Today and the next two days, picking and saving any meal not yet planned. */
 export async function ensureDays(ctx: ActionContext, plan: ActivePlan, prefs: PrefsRow, today: string): Promise<PlannedMeal[]> {
   const to = addDays(today, PLAN_DAYS - 1);
-  const rows = await loadEntries(ctx.userProfileId, addDays(today, -2), to);
+  let rows = await loadEntries(ctx.userProfileId, addDays(today, -2), to);
+  // A planned meal made before they changed their diet or note, with food it now rules out, is picked again.
+  const allows = await allowsFor(ctx.userProfileId, prefs.prefs.restrictions);
+  const stale = rows.filter((r) => r.status === "planned" && !itemsAllowed(r.metadata?.items as Array<{ key: string | null }> | undefined, allows));
+  if (stale.length) {
+    await supabase.from("meal_plan_entries").delete().in("id", stale.map((r) => r.id)).eq("status", "planned");
+    const gone = new Set(stale.map((r) => r.id));
+    rows = rows.filter((r) => !gone.has(r.id));
+  }
   const existing: PriorPick[] = rows.map((r) => ({
     date: r.local_date,
     slot: r.meal_slot,
@@ -364,6 +389,8 @@ export async function swapPick(ctx: ActionContext, date: string, slot: PlanSlot,
   const plan = await loadActivePlan(ctx.userProfileId);
   const option = plan?.options[slot]?.find((o) => o.id === optionId);
   if (!plan || !option) return { ok: false, error: "option_not_found" };
+  const prefsNow = await loadDietPrefs(ctx.userProfileId);
+  if (!itemsAllowed(option.items, await allowsFor(ctx.userProfileId, prefsNow.prefs.restrictions))) return { ok: false, error: "not_allowed" };
   const { data, error } = await supabase
     .from("meal_plan_entries")
     .update({
@@ -418,6 +445,9 @@ export async function loadPlanView(ctx: ActionContext, now = new Date()): Promis
     if (!r.ok) return r;
     plan = r.plan;
   }
+  // Options saved in an older plan version may include food they have since ruled out: never show them.
+  const allows = await allowsFor(ctx.userProfileId, prefs.prefs.restrictions);
+  plan = { ...plan, options: Object.fromEntries(Object.entries(plan.options).map(([slot, list]) => [slot, (list ?? []).filter((o) => itemsAllowed(o.items, allows))])) as typeof plan.options };
   const days = await ensureDays(ctx, plan, prefs, today);
   const { review: _r, ...rest } = plan;
   return { ok: true, setup: true, plan: rest, days, ...base };

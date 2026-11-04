@@ -81,9 +81,9 @@ const MEAL_TYPE = { breakfast: "breakfast", lunch: "lunch", snack: "snack", dinn
  * Foods to add to a meal. Typed text searches the whole catalog; an empty box suggests what's
  * usually eaten at this meal. Anything the person's restrictions rule out is left out. Pure.
  */
-export function searchMealFoods(q: string, slot: PlanSlot | undefined, allows: (e: CatalogEntry) => boolean, limit = 12, cat: Catalog = catalog()): FoodHit[] {
+export function searchMealFoods(q: string, slot: PlanSlot, allows: (e: CatalogEntry) => boolean, limit = 12, cat: Catalog = catalog()): FoodHit[] {
   const typed = q.trim().length > 0;
-  const hits = searchCatalog(q, { limit: 80, ...(typed || !slot ? {} : { meal: MEAL_TYPE[slot] }) }, cat);
+  const hits = searchCatalog(q, { limit: 80, ...(typed ? {} : { meal: MEAL_TYPE[slot] }) }, cat);
   return hits
     .filter((h) => allows(h.entry))
     .slice(0, limit)

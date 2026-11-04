@@ -6,7 +6,8 @@ import { runOnboarding } from "./onboarding.js";
 import { scanView } from "./scan.js";
 import { foodPrefsEditor } from "./foodprefs.js";
 import { fromServer, routineEditor, toPayload } from "./routine.js";
-import { foodPicker, initMeals, loadPlan, logOwn, mealScreen, mealsTitles, openPlannedMeal, planLineFor, renderMeals, setupScreen } from "./meals.js";
+import { initMeals, loadPlan, mealScreen, mealsTitles, openPlannedMeal, planLineFor, renderMeals, setupScreen } from "./meals.js";
+import { foodPicker } from "./foodpicker.js";
 import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
 const TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } })();
@@ -1966,8 +1967,8 @@ function planMealCard(c) {
       card.replaceChildren(...body, el("div", { class: "done-line" }, cur.status === "partial" ? "✓ Eaten, portions changed" : "✓ Eaten"));
       return;
     }
-    const ate = el("button", { class: "btn primary small", type: "button" }, "Ate this");
-    const change = el("button", { class: "btn small", type: "button", onclick: () => openPlannedMeal(cur.date, cur.slot) }, "✎ Edit or swap");
+    const ate = el("button", { class: "btn primary", type: "button" }, "Ate this");
+    const change = el("button", { class: "btn", type: "button", onclick: () => openPlannedMeal(cur.date, cur.slot) }, "Change or swap");
     ate.addEventListener("click", async () => {
       ate.disabled = change.disabled = true;
       try {
@@ -1983,8 +1984,7 @@ function planMealCard(c) {
         toast(err.message);
       }
     });
-    const own = el("button", { class: "btn small", type: "button", onclick: () => logOwn({ slot: cur.slot, date: cur.date }) }, "Log your own");
-    card.replaceChildren(...body, el("div", { class: "draft-actions" }, ate, change, own));
+    card.replaceChildren(...body, el("div", { class: "draft-actions" }, ate, change));
   }
   render(c);
   return card;
@@ -3763,7 +3763,7 @@ const SHEETS = {
     const tile = (label, d, onclick) => el("button", { class: "log-tile", type: "button", onclick }, icon(d), el("span", {}, label));
     return el("div", { class: "stack" },
       el("div", { class: "log-grid" },
-        tile("Meal", '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M16 3c-1.7 1-2.5 3-2.5 6s1 4 2.5 4v8"/>', () => openSheet("meal")),
+        tile("Meal", '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M16 3c-1.7 1-2.5 3-2.5 6s1 4 2.5 4v8"/>', () => { state.mealSlot = null; openSheet("meal"); }),
         tile("Photo", '<path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', () => { closeSheet(); $("photo-input").click(); }),
         tile("Barcode", '<path d="M4 6v12M7 6v12M11 6v12M14 6v12M17 6v12M20 6v12"/>', () => openSheet("scan")),
         tile("Steps", '<path d="M8 4c1.5 0 2.5 2 2.5 4.5S9.5 13 8 13s-2.5-2-2.5-4.5S6.5 4 8 4zM6 16h4v2a2 2 0 0 1-4 0zM16 8c1.5 0 2.5 2 2.5 4.5S17.5 17 16 17s-2.5-2-2.5-4.5S14.5 8 16 8z"/>', () => openSheet("steps")),
@@ -3793,56 +3793,50 @@ const SHEETS = {
   },
 
   meal() {
-    // The food list comes first: free and instant. The AI and web lookup (it costs) only opens when a
-    // search of the list finds nothing, or from a usual meal / photo the person chose.
-    const ctx = state.mealCtx || {};
-    state.mealCtx = null;
     const holder = el("div");
-    const pickerBox = el("div", { class: "stack" });
-    const lookupBox = el("div", { hidden: true });
-
-    const showPicker = () => { lookupBox.hidden = true; pickerBox.hidden = false; };
-    const openLookup = (text) => { pickerBox.hidden = true; lookupBox.hidden = false; lookupBox.replaceChildren(lookupForm(text)); lookupBox.querySelector("textarea")?.focus(); };
-
-    function lookupForm(text) {
-      const form = el("form", { class: "stack", onsubmit: submitter(async (fd) => {
-        const btn = form.querySelector("button[type=submit]");
-        btn.textContent = "Estimating… (checks the web, ~10 s)";
-        let draft;
-        try {
-          draft = await api("/meals/draft", { method: "POST", body: JSON.stringify({ text: fd.get("text"), ...(ctx.slot ? { slot: ctx.slot } : {}) }) });
-        } finally {
-          btn.textContent = "Estimate";
-        }
-        form.hidden = true;
-        holder.replaceChildren(mealDraftCard(draft, { onDone: () => setTimeout(closeSheet, 700) }));
-      }) },
-        el("p", { class: "hint" }, "Not in the food list, so this one is looked up with AI and web search."),
-        el("textarea", { class: "field", name: "text", rows: "3", required: true, minlength: "2", placeholder: "e.g. 2 rotis, a bowl of dal, 100 g paneer bhurji" }, text || ""),
-        el("button", { class: "btn primary block", type: "submit" }, "Estimate"),
-        el("p", { class: "hint" }, "You'll see the estimate and can fix any line before it's logged."),
-        el("button", { class: "link", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, "Or snap a photo of the plate"),
-        el("button", { class: "link", type: "button", onclick: showPicker }, "Back to the food list"));
-      return form;
-    }
-
-    pickerBox.append(...[
-      (state.usual || []).length && !ctx.slot
-        ? el("div", { class: "usual-list" },
-            el("p", { class: "section-label" }, "Your usual"),
-            ...state.usual.slice(0, 5).map((m) =>
-              el("button", { class: "usual-row", type: "button", onclick: () => {
-                pickerBox.hidden = true;
-                holder.replaceChildren(mealDraftCard(usualDraft(m), { onDone: () => setTimeout(closeSheet, 700) }));
-              } },
-                el("span", {}, m.text),
-                el("small", {}, `${fmt(m.totals.calories)} kcal · ${m.count}×`))))
-        : null,
-      el("p", { class: "section-label" }, "Pick from the food list"),
-      foodPicker({ slot: ctx.slot, date: ctx.date, onLookup: openLookup, onDone: () => setTimeout(closeSheet, 400) }),
-      el("button", { class: "link", type: "button", onclick: () => openSheet("scan") }, "Or scan a packet's barcode")].filter(Boolean));
-    holder.append(pickerBox, lookupBox);
-    return holder;
+    const slotNow = () => {
+      if (state.mealSlot) return state.mealSlot;
+      const h = new Date().getHours();
+      return h < 11 ? "breakfast" : h < 16 ? "lunch" : h < 18 ? "snack" : "dinner";
+    };
+    const show = (draft) => {
+      form.hidden = true;
+      picker.hidden = true;
+      holder.replaceChildren(mealDraftCard(draft, { onDone: () => setTimeout(closeSheet, 700) }));
+    };
+    // 1) Pick from the food database. 2) Only if it isn't there, describe it and let the chat estimate.
+    const picker = foodPicker({ api, el, fmt }, {
+      onReview: (items) => show({ draftId: crypto.randomUUID(), text: items.map((i) => i.name).join(", "), slot: slotNow(), source: "food_db", items, estimated: true, servingAssumption: null }),
+      onDescribe: (text) => { picker.hidden = true; form.hidden = false; if (text) form.querySelector("textarea").value = text; form.querySelector("textarea").focus(); },
+    });
+    const form = el("form", { class: "stack", hidden: true, onsubmit: submitter(async (fd) => {
+      const btn = form.querySelector("button[type=submit]");
+      btn.textContent = "Estimating… (checks the web, ~10 s)";
+      let draft;
+      try {
+        draft = await api("/meals/draft", { method: "POST", body: JSON.stringify({ text: fd.get("text") }) });
+      } finally {
+        btn.textContent = "Estimate";
+      }
+      if (state.mealSlot) draft.slot = state.mealSlot;
+      show(draft);
+    }) },
+      el("p", { class: "hint" }, "Describe it in your own words. I'll estimate it and you can fix any line before it's logged."),
+      el("textarea", { class: "field", name: "text", rows: "3", required: true, placeholder: "e.g. 2 rotis, a bowl of dal, 100 g paneer bhurji", minlength: "2" }),
+      el("button", { class: "btn primary block", type: "submit" }, "Estimate"),
+      el("button", { class: "link", type: "button", onclick: () => { form.hidden = true; picker.hidden = false; } }, "Back to the food list"),
+      el("button", { class: "link", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, "Or snap a photo of the plate"),
+      el("button", { class: "link", type: "button", onclick: () => openSheet("scan") }, "Or scan a packet's barcode"),
+    );
+    const usual = (state.usual || []).length
+      ? el("div", { class: "usual-list" },
+          el("p", { class: "section-label" }, "Your usual"),
+          ...state.usual.slice(0, 3).map((m) =>
+            el("button", { class: "usual-row", type: "button", onclick: () => show({ ...usualDraft(m), slot: state.mealSlot || usualDraft(m).slot }) },
+              el("span", {}, m.text),
+              el("small", {}, `${fmt(m.totals.calories)} kcal · ${m.count}×`))))
+      : null;
+    return el("div", { class: "stack" }, usual, picker, form, holder);
   },
 
   steps() {
@@ -4159,7 +4153,7 @@ async function ensureOnboarded() {
   return true;
 }
 
-initMeals({ api, el, toast, openSheet, closeSheet, backSheet, setView, fmt, logMeal: (ctx) => { state.mealCtx = ctx; openSheet("meal"); }, todayKey: () => todayKey() || localToday(), refresh });
+initMeals({ api, el, toast, logOwn: (slot) => { state.mealSlot = slot || null; openSheet("meal"); }, openSheet, closeSheet, backSheet, setView, fmt, todayKey: () => todayKey() || localToday(), refresh });
 
 async function start() {
   if (!(await ensureOnboarded())) return;

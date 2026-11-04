@@ -19,6 +19,7 @@ import { localDateKey } from "../nutrition/localDate.js";
 import { supabase } from "../tools/clients.js";
 import { logCheckin, setGoal, setTargets, type ActionContext } from "./actions.js";
 import { KCAL_PER_KG } from "./calorieTarget.js";
+import { allowedMeats } from "./dietPlan/compose.js";
 import { postCoachMessage } from "./workoutCheckStore.js";
 import { gymTimeOf, liftingGap, MAX_ROUTINE_ITEMS, normalizeRoutine, routineItemInput, trainingDaysOf } from "./routine.js";
 import { saveRoutine } from "./routineStore.js";
@@ -239,10 +240,15 @@ export function foodPrefsLine(d: { diet?: unknown; diet_note?: unknown; food_avo
     : d.diet
       ? `diet: ${DIET_LABEL[d.diet as (typeof DIETS)[number]] ?? String(d.diet)}${d.diet_note ? ` (${String(d.diet_note)})` : ""}`
       : null;
+  // The diet note is a hard rule for the coach, spelled out so it can't be read as a preference.
+  const policy = allowedMeats([d.diet_note ? String(d.diet_note) : ""]);
+  const rule = policy
+    ? `HARD RULE from their diet note (never break it, in any suggestion, swap or recipe): meat allowed is only ${[...policy.meats].join(", ") || "none"}; eggs ${policy.egg ? "allowed" : "not allowed"}. Never suggest any other meat or fish, or a dish made with it`
+    : null;
   const avoid = Array.isArray(d.food_avoid) && d.food_avoid.length
     ? `must avoid (allergy, intolerance or won't eat; never suggest these or dishes containing them): ${d.food_avoid.map(String).join(", ")}`
     : null;
-  return [diet, avoid].filter(Boolean).join("; ") || null;
+  return [diet, rule, avoid].filter(Boolean).join("; ") || null;
 }
 
 export async function isOnboarded(userProfileId: string): Promise<boolean> {

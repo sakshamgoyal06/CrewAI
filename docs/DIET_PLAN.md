@@ -34,7 +34,7 @@ API (bearer auth, under `/api/health`):
 - `POST /diet/options/:id` with `{ action: pin | unpin | like | unlike | hide | unhide }`
 - `POST /diet/days/:date/:slot/swap` with `{ optionId }`
 - `PUT /diet/days/:date/:slot/items` with `{ items: [{ keep: index, qty } | { servingId, qty }] }`: saves an edited planned meal (not yet eaten). Refuses a food outside the person's restrictions (`not_allowed`).
-- `GET /diet/foods?q=&slot=&restricted=1`: the food list, free (no model or web call). `restricted=1` (meal editor) keeps only foods inside the person's restrictions; logging leaves it off. An empty `q` suggests foods usually eaten at that meal.
+- `GET /diet/foods?slot=&q=`: foods to add to a meal, filtered by the person's restrictions; an empty `q` suggests foods usually eaten at that meal.
 
 In the app, every "Change or swap" (the chat meal card, the Today food card, each meal on the Meals tab, the day plan's meal list) opens the same meal editor: live calories and protein/carbs/fat against the meal's target, portions, remove, add a food, swap for another option, Save or Save and mark eaten.
 
@@ -43,9 +43,3 @@ Checking plan quality without API spend: `npx tsx scripts/dietPlanSample.ts` (ne
 Settings:
 
 - `MAGNUS_PLAN_REVIEW=on` switches on the model review. Off by default: it adds about ₹15 per user a month (estimate) and needs Saksham's OK on cost first.
-
-## Logging your own
-
-Wherever food is logged (a meal card's "Log your own", "Pick what I ate" on an eating-out meal, the chat meal card, and the + Log screen) the food list picker comes first: search, tap a household serving, adjust, log through `/meals/confirm` with source `food_db`. The AI and web lookup (costs money) is offered only after a typed search finds nothing, with "Look it up instead". Logging a meal for a planned slot marks that planned meal eaten off plan and resizes the rest of the day, as before.
-
-A stored pick whose option has left the plan (a rebuild re-sized the options) stays in the day with its saved title and numbers (`pick.ts`), so a day never loses meals.

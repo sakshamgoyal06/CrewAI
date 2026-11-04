@@ -8,6 +8,7 @@ import { z } from "zod";
 import { logger } from "../logger.js";
 import { localDateKey } from "../nutrition/localDate.js";
 import { loggableError } from "../util/loggableError.js";
+import { searchFoods } from "./foodPick.js";
 import {
   checkinInput,
   confirmMeal,
@@ -347,6 +348,8 @@ export function createHealthAppRouter(): express.Router {
     "/account/food",
     route("account-food", async (ctx, req) => {
       const r = await saveFoodPrefs(ctx.userProfileId, foodPrefsInput.parse(req.body));
+      // The plan was built from the old diet, note and avoid list: build it again so nothing they just ruled out stays on it.
+      if (r.ok) await rebuildPlan(ctx, "food_prefs_changed").catch(() => null);
       return r.ok ? { body: r } : { status: 500, body: r };
     }),
   );
@@ -414,19 +417,14 @@ export function createHealthAppRouter(): express.Router {
       return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );
-  /**
-   * The food list, for adding to a planned meal and for logging. A meal's editor passes
-   * `restricted=1`: only foods inside the person's diet, avoid list and meat limits. Logging
-   * leaves it off, because what they ate is what they ate. Free: no model or web call.
-   */
+  /** Foods to add to a meal, already filtered by the person's diet, avoid list and meat limits. */
   router.get(
     "/diet/foods",
     route("diet-foods", async (ctx, req) => {
       const q = z.string().max(60).default("").parse(req.query.q ?? "");
-      const slot = z.enum(PLAN_SLOTS).optional().parse(req.query.slot || undefined);
-      const restricted = req.query.restricted === "1";
-      const allows = restricted ? await restrictionsFor(ctx.userProfileId) : () => true;
-      return { body: { ok: true, foods: searchMealFoods(q, slot, allows) } };
+      const slot = z.enum(PLAN_SLOTS).parse(req.query.slot);
+      const foods = searchMealFoods(q, slot, await restrictionsFor(ctx.userProfileId));
+      return { body: { ok: true, foods } };
     }),
   );
 
@@ -748,6 +746,15 @@ export function createHealthAppRouter(): express.Router {
     route("meal-confirm", async (ctx, req) =>
       fromResult(await confirmMeal(ctx, mealConfirmInput.parse(req.body))),
     ),
+  );
+
+  /** Picks from the food database for "log my own": ranked matches with their household servings and macros per serving. */
+  router.get(
+    "/foods/search",
+    route("foods-search", async (_ctx, req) => {
+      const q = typeof req.query.q === "string" ? req.query.q.slice(0, 60) : "";
+      return { body: { foods: searchFoods(q, 20) } };
+    }),
   );
 
   router.get(

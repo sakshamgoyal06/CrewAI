@@ -129,9 +129,15 @@ function paint() {
 
   const order = SLOT_ORDER.filter((s) => v.prefs.meals.some((m) => m.slot === s));
   const list = el("ul", { class: "list meal-plan" }, ...order.map((slot) => mealCard(ms.date, slot)).filter(Boolean));
-  host.replaceChildren(...[strip, summary, suppRow(ms.date), list].filter(Boolean),
-    el("div", { class: "block-links" },
-      el("button", { class: "link quiet", type: "button", onclick: rebuild }, "Make me a fresh plan")));
+  // What is still to eat today, by name ("Only dinner is left today").
+  const left = isToday ? order.filter((s) => { const p = pickOf(ms.date, s); return p && !isEaten(p); }) : [];
+  const leftLine = isToday && left.length && left.length < order.length
+    ? el("p", { class: "hint left-line" }, left.length === 1 ? `Only ${SLOT_NAME[left[0]].toLowerCase()} is left today.` : `Left today: ${left.map((s) => SLOT_NAME[s].toLowerCase()).join(", ")}.`)
+    : null;
+  host.replaceChildren(...[strip, summary, leftLine, suppRow(ms.date), list,
+    el("div", { class: "fresh-plan" },
+      el("button", { class: "btn block", type: "button", onclick: rebuild }, "Make me a fresh plan"),
+      el("p", { class: "hint" }, "New options from your current food settings. Meals you've already eaten stay."))].filter(Boolean));
 }
 
 /** One row for the day's supplements: what they are and a tap to log them (today only). */
@@ -163,20 +169,15 @@ function mealCard(date, slot) {
   if (!p) return null;
   const eaten = isEaten(p);
   const items = itemsOf(p);
-  const out = p.kind === "eat_out";
-  const sub = out
+  const sub = p.kind === "eat_out"
     ? "Eating out"
     : `${fmt(eaten ? sum(items, "kcal") : p.totals.kcal)} kcal · ${fmt(eaten ? sum(items, "proteinG") : p.totals.proteinG)} g protein`;
-  const canLog = date <= d.todayKey();
   return el("li", {},
-    el("div", { class: `meal-card${eaten ? " eaten" : ""}` },
-      el("button", { class: "meal-main", type: "button", onclick: () => openMeal(date, slot) },
-        el("span", { class: "slot" }, SLOT_NAME[slot], timeOf(slot) ? el("small", {}, ` · ${clock(timeOf(slot))}`) : null),
-        el("span", { class: "what" }, out ? p.title : items.map((i) => i.text).join(", ") || p.title),
-        el("span", { class: "sub" }, sub, eaten ? el("b", { class: "tick" }, p.status === "partial" ? " · Eaten, portions changed" : " · Eaten") : null)),
-      eaten ? null : el("div", { class: "card-actions" },
-        out ? null : el("button", { class: "btn small", type: "button", onclick: () => openMeal(date, slot) }, "✎ Edit meal"),
-        canLog ? el("button", { class: "btn small", type: "button", onclick: () => logOwn({ slot, date }) }, out ? "Pick what I ate" : "Log your own") : null)));
+    el("button", { class: `meal-card${eaten ? " eaten" : ""}`, type: "button", onclick: () => openMeal(date, slot) },
+      el("span", { class: "slot" }, SLOT_NAME[slot], timeOf(slot) ? el("small", {}, ` · ${clock(timeOf(slot))}`) : null),
+      el("span", { class: "what" }, p.kind === "eat_out" ? p.title : items.map((i) => i.text).join(", ") || p.title),
+      el("span", { class: "sub" }, sub, eaten ? el("b", { class: "tick" }, p.status === "partial" ? " · Eaten, portions changed" : " · Eaten") : null),
+      eaten ? null : el("span", { class: "edit-cue" }, p.kind === "eat_out" ? "Tap to log what you had" : "Change portions, swap or log your own", el("i", { class: "chev-r" }))));
 }
 
 /** From a chat card: the plan's meal screen for one meal (loads the plan first if needed). */
@@ -205,13 +206,18 @@ function openMeal(date, slot) {
   d.openSheet("dietMeal");
 }
 
-async function rebuild() {
+async function rebuild(ev) {
+  const btn = ev?.currentTarget;
+  if (btn) { btn.disabled = true; btn.textContent = "Making your plan…"; }
   try {
     await d.api("/diet/plan/rebuild", { method: "POST" });
-    d.toast("New plan ready. Today stays as it is.");
     await loadPlan(true);
+    d.toast("Fresh plan ready.");
     paint();
-  } catch (err) { d.toast(err.message); }
+  } catch (err) {
+    d.toast(err.message);
+    if (btn) { btn.disabled = false; btn.textContent = "Make me a fresh plan"; }
+  }
 }
 
 // ---------- one meal: the meal editor ----------
@@ -306,7 +312,8 @@ export function mealScreen() {
     wrap.append(
       el("p", {}, p.title),
       el("p", { class: "hint" }, "Pick a dish with a protein (paneer, dal, chicken, eggs) and go easy on fried sides and refined bread. Log what you had and the rest of the day adjusts."),
-      canEat ? el("button", { class: "btn primary block", type: "button", onclick: () => logOwn({ slot, date }) }, "Pick what I ate from the food list") : el("p", { class: "hint" }, "You can log it on the day."));
+      el("button", { class: "btn primary block", type: "button", onclick: () => d.logOwn(slot) }, "Log what I ate"),
+      el("p", { class: "hint" }, "Search the food list first. If something isn't there, describe it and I'll estimate it."));
     return wrap;
   }
 
@@ -359,7 +366,7 @@ export function mealScreen() {
       kids.push(el("button", { class: "link quiet", type: "button", onclick: () => { startEdit(date, slot, p.items); paintAdd(); repaint(); } }, "Discard changes"));
     } else if (canEat) {
       kids.push(el("button", { class: "btn primary block", type: "button", onclick: (ev) => save(ev, true) }, "Ate this"),
-        el("button", { class: "btn block", type: "button", onclick: () => logOwn({ slot, date }) }, "Log your own instead"));
+        el("button", { class: "btn block", type: "button", onclick: () => d.logOwn(slot) }, "Log my own instead"));
     } else {
       kids.push(el("p", { class: "hint" }, "Change it any time before the day. You can log it on the day."));
     }
@@ -372,7 +379,7 @@ export function mealScreen() {
   const search = async () => {
     const mine = ++seq;
     try {
-      const r = await d.api(`/diet/foods?restricted=1&slot=${slot}&q=${encodeURIComponent(e.q)}`);
+      const r = await d.api(`/diet/foods?slot=${slot}&q=${encodeURIComponent(e.q)}`);
       if (mine !== seq) return;
       e.hits = r.foods;
     } catch (err) { if (mine === seq) e.hits = []; d.toast(err.message); }
@@ -441,7 +448,7 @@ export function mealScreen() {
   paintAdd();
   repaint();
   wrap.append(...[totalsBox, list, addBox, suppNote(slot), action].filter(Boolean));
-  if (p.optionId && !p.edited && optionsOf(slot).some((o) => o.id === p.optionId)) wrap.append(optionMarks(p.optionId));
+  if (p.optionId && !p.edited) wrap.append(optionMarks(p.optionId));
   wrap.append(otherOptions(date, slot, p.optionId));
   return wrap;
 }
@@ -503,99 +510,6 @@ function otherOptions(date, slot, currentId) {
           el("span", { class: "what" }, o.items.map((i) => i.text).join(", ")),
           el("span", { class: "sub" }, `${fmt(o.totals.kcal)} kcal · P ${fmt(o.totals.proteinG)} · C ${fmt(o.totals.carbsG)} · F ${fmt(o.totals.fatG)} g${o.prepMinutes ? ` · ${o.prepMinutes} min` : ""}${ms.view.marks.pinned.includes(o.id) ? " · ★" : ""}`),
           budget && Math.abs(o.totals.kcal - budget.calories) > budget.calories * 0.1 ? el("span", { class: "sub" }, `Sized for ${fmt(budget.calories)} kcal`) : null)))));
-}
-
-
-// ---------- log your own: pick from the food list ----------
-//
-// The first and main way to log food: search the built-in food list (free, no model or web call),
-// tap a household serving, adjust, log. Only when a typed search finds nothing is the lookup
-// (AI and web search, which costs) offered, and `onLookup` opens it.
-
-const SLOT_CHOICES = ["breakfast", "lunch", "snack", "dinner"];
-const guessSlot = () => { const h = new Date().getHours(); return h < 11 ? "breakfast" : h < 16 ? "lunch" : h < 18 ? "snack" : "dinner"; };
-
-/** Opens the log screen for a meal slot on a day (or the general log when none is given). */
-export function logOwn({ slot = null, date = null } = {}) { d.logMeal({ slot, date }); }
-
-export function foodPicker({ slot: slot0 = null, date = null, onLookup, onDone }) {
-  const { el, fmt } = d;
-  const st = { slot: slot0 && SLOT_CHOICES.includes(slot0) ? slot0 : guessSlot(), rows: [], q: "", hits: null, seq: 0 };
-  const wrap = el("div", { class: "stack food-picker" });
-  const totalsBox = el("div");
-  const list = el("ul", { class: "portion-list edit-list" });
-  const hitsBox = el("ul", { class: "list food-hits" });
-  const action = el("div", { class: "stack" });
-  let timer = null;
-
-  const slotPick = el("select", { class: "slot-pick", "aria-label": "Meal", onchange: (e) => { st.slot = e.target.value; search(); } },
-    ...SLOT_CHOICES.map((k) => el("option", { value: k, ...(k === st.slot ? { selected: "" } : {}) }, SLOT_NAME[k])));
-
-  const paintTotals = () => totalsBox.replaceChildren(st.rows.length ? totalsPanel(totalsOf(st.rows), null) : el("p", { class: "hint" }, "Pick foods below. Calories and macros add up here."));
-  const paintItems = () => {
-    list.replaceChildren(...st.rows.map((r, k) => {
-      const i = r.base, step = stepOf(i), s2 = scaled(i, r.qty);
-      const change = (dir) => { const next = Math.round((r.qty + dir * step) * 100) / 100; if (next > 0 && next <= 20) { r.qty = next; paintAll(); } };
-      return el("li", {},
-        el("span", { class: "iname" }, textAt(i, r.qty), el("small", {}, `${fmt(s2.kcal)} kcal · P ${fmt(s2.proteinG)} · C ${fmt(s2.carbsG)} · F ${fmt(s2.fatG)} g`)),
-        el("span", { class: "stepper small" },
-          el("button", { type: "button", "aria-label": `Less ${i.name}`, disabled: r.qty - step <= 0, onclick: () => change(-1) }, "−"),
-          el("button", { type: "button", "aria-label": `More ${i.name}`, onclick: () => change(1) }, "+"),
-          el("button", { class: "remove", type: "button", "aria-label": `Remove ${i.name}`, onclick: () => { st.rows.splice(k, 1); paintAll(); } }, "×")));
-    }));
-  };
-  const paintAction = () => {
-    const btn = el("button", { class: "btn primary block", type: "button", disabled: !st.rows.length, onclick: log }, st.rows.length ? `Log ${SLOT_NAME[st.slot].toLowerCase()} · ${fmt(totalsOf(st.rows).kcal)} kcal` : "Log this meal");
-    action.replaceChildren(btn);
-  };
-  const paintAll = () => { paintItems(); paintTotals(); paintAction(); };
-
-  const search = () => {
-    const mine = ++st.seq;
-    d.api(`/diet/foods?slot=${st.slot}&q=${encodeURIComponent(st.q)}`)
-      .then((r) => { if (mine === st.seq) { st.hits = r.foods; paintHits(); } })
-      .catch((err) => { if (mine === st.seq) { st.hits = []; paintHits(); d.toast(err.message); } });
-  };
-  const paintHits = () => {
-    if (!st.hits) { hitsBox.replaceChildren(el("li", { class: "hint" }, "Loading…")); return; }
-    if (!st.hits.length) {
-      hitsBox.replaceChildren(el("li", { class: "stack lookup" },
-        el("p", { class: "hint" }, st.q ? `"${st.q}" isn't in the food list.` : "Type a food to search."),
-        st.q && onLookup ? el("button", { class: "btn small", type: "button", onclick: () => onLookup(st.q) }, "Look it up instead (uses AI and web search)") : null));
-      return;
-    }
-    hitsBox.replaceChildren(...st.hits.map((h) => el("li", {},
-      el("span", { class: "fname" }, h.name),
-      el("div", { class: "chips wrap" }, ...h.servings.map((sv) => el("button", { class: "chip", type: "button", onclick: () => {
-        const found = st.rows.find((r) => r.servingId === sv.id);
-        if (found) found.qty += stepOf(found.base); else st.rows.push({ servingId: sv.id, base: sv.item, qty: 1 });
-        paintAll();
-        d.toast(`Added ${sv.item.text}.`);
-      } }, `${sv.label} · ${fmt(sv.item.kcal)} kcal`))))));
-  };
-
-  async function log(ev) {
-    ev.target.disabled = true;
-    const t = totalsOf(st.rows);
-    const items = st.rows.map((r) => { const x = scaled(r.base, r.qty); return { name: textAt(r.base, r.qty), calories: Math.round(x.kcal), protein_g: Math.round(x.proteinG * 10) / 10, carbs_g: Math.round(x.carbsG * 10) / 10, fat_g: Math.round(x.fatG * 10) / 10 }; });
-    try {
-      await d.api("/meals/confirm", { method: "POST", body: JSON.stringify({ draftId: crypto.randomUUID(), text: items.map((i) => i.name).join(", ").slice(0, 500), slot: st.slot, source: "food_db", items, edited: false, ...(date ? { date } : {}) }) });
-      d.toast(`Logged ${SLOT_NAME[st.slot].toLowerCase()}, ${fmt(t.kcal)} kcal.`);
-      d.refresh?.();
-      loadPlan(true).then(() => { if (!document.getElementById("view-meals").hidden) paint(); }).catch(() => {});
-      onDone?.();
-    } catch (err) { d.toast(err.message); ev.target.disabled = false; }
-  }
-
-  const input = el("input", { class: "field", type: "search", placeholder: "Search foods: dal, roti, paneer, apple…", "aria-label": "Search foods", enterkeyhint: "search" });
-  input.addEventListener("input", () => { st.q = input.value.trim(); clearTimeout(timer); timer = setTimeout(search, 250); });
-  wrap.append(
-    el("div", { class: "row-input" }, input, slotPick),
-    el("p", { class: "hint" }, "Pick from the food list. It's free and instant."),
-    totalsBox, list, action, hitsBox);
-  paintAll();
-  search();
-  return wrap;
 }
 
 // ---------- setup ----------
@@ -746,38 +660,20 @@ export function setupScreen() {
 
 // ---------- Today ----------
 
-/**
- * The day's planned meals for the Today food card: every meal with what's left, each one tappable
- * to edit it. Says plainly which meal is left ("Only dinner is left today") or that none is.
- */
+/** One line for the Today food card: eaten against the plan, and the next planned meal. */
 export function planLineFor(date, openTab) {
   const { el, fmt } = d;
   if (!ms.view?.setup || !days().includes(date)) return null;
   const picks = SLOT_ORDER.map((s) => pickOf(date, s)).filter(Boolean);
-  const left = picks.filter((p) => !isEaten(p));
+  const next = picks.find((p) => !isEaten(p));
   const tot = dayTotals(date);
-  const isToday = date === d.todayKey();
-  const names = left.map((p) => SLOT_NAME[p.slot].toLowerCase());
-  const note = !left.length
-    ? (isToday ? "All of today's planned meals are done." : "All of this day's planned meals are done.")
-    : left.length === 1
-      ? `Only ${names[0]} is left ${isToday ? "today" : "this day"}.`
-      : `${left.length} meals left: ${names.slice(0, -1).join(", ")} and ${names.at(-1)}.`;
-  const head = el("button", { class: "plan-line", type: "button", onclick: openTab },
+  const line = el("button", { class: "plan-line", type: "button", onclick: openTab },
     el("span", {}, `Plan: ${tot.eatenCount} of ${tot.count} meals eaten`),
-    el("small", {}, note),
+    next ? el("small", {}, `Next: ${SLOT_NAME[next.slot]}, ${next.kind === "eat_out" ? "eating out" : `${fmt(next.totals.kcal)} kcal`}`) : el("small", {}, "All planned meals eaten"),
     el("i", { class: "chev-r" }));
-  const rows = picks.map((p) => {
-    const eaten = isEaten(p);
-    const out = p.kind === "eat_out";
-    const what = out ? "Eating out" : itemsOf(p).map((i) => i.text).join(", ") || p.title;
-    return el("li", { class: eaten ? "done" : "" },
-      el("button", { class: "pl-row", type: "button", onclick: () => (eaten || out ? openTab() : openPlannedMeal(p.date, p.slot)) },
-        el("span", { class: "pl-slot" }, SLOT_NAME[p.slot]),
-        el("span", { class: "pl-what" }, what),
-        el("span", { class: "pl-kcal" }, eaten ? "✓ eaten" : out ? `~${fmt(p.totals.kcal)} kcal` : el("b", {}, `${fmt(p.totals.kcal)} kcal · Edit`))));
-  });
-  return el("div", { class: "plan-line-wrap" }, head, el("ul", { class: "pl-list" }, ...rows));
+  if (!next || next.kind === "eat_out") return line;
+  return el("div", { class: "plan-line-wrap" }, line,
+    el("button", { class: "btn small plan-change", type: "button", onclick: () => openPlannedMeal(next.date, next.slot) }, `Change or swap ${SLOT_NAME[next.slot].toLowerCase()}`));
 }
 
 export const mealsTitles = { dietSetup: "Your meals", dietMeal: "" };

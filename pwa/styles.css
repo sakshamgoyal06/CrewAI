@@ -889,12 +889,9 @@ body.screen-open { overflow: hidden; }
 .meal-summary .unit, .meal-totals .unit { color: var(--muted); font-size: 0.86rem; }
 .meal-summary .side, .meal-totals .side { text-align: right; font-size: 0.86rem; display: grid; gap: 2px; }
 .list.meal-plan li { display: block; padding: 0; }
-.option-row, .meal-card .meal-main {
+.meal-card, .option-row {
   display: grid; gap: 4px; width: 100%; text-align: left; padding: 14px 0; border: 0; background: none; color: var(--text); font: inherit;
 }
-.meal-card { display: grid; }
-.meal-card .meal-main { padding-bottom: 8px; }
-.card-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 0 14px; }
 .meal-card .slot { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 700; } /* gold is for actions */
 .meal-card .slot small { letter-spacing: 0; text-transform: none; color: var(--faint); font-size: 0.8rem; }
 .meal-card .what, .option-row .what { font-size: 1rem; line-height: 1.35; }
@@ -1063,7 +1060,18 @@ body.screen-open { overflow: hidden; }
 .supp-row { padding: 6px 0; }
 .supp-row .row-right { gap: 8px; align-items: center; }
 
+/* Meals: make editable cards obvious */
+.meal-card .edit-cue { display: flex; align-items: center; gap: 6px; }
+.meal-card .edit-cue .chev-r { margin-left: auto; }
+.food-picker .pick-results, .food-picker .pick-basket { list-style: none; margin: 0; padding: 0; }
+.pick-row, .pick-basket li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--hair); }
+.pick-row:first-child, .pick-basket li:first-child { border-top: 0; }
+.pick-row .iname, .pick-basket .iname { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.pick-row .slot-pick { max-width: 52%; }
+.pick-total { color: var(--muted); font-size: 0.9rem; margin: 0; }
+.left-line { margin: 0; }
 /* Meal editor (one planned meal): live totals, items with portions, add a food, swap. */
+.meal-card .edit-cue { margin-top: 2px; color: var(--accent); font-size: 0.82rem; font-weight: 600; }
 .meal-edit-totals { display: grid; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--hair); }
 .meal-edit-totals .meal-totals { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
 .meal-totals .side .good { color: var(--good); font-weight: 600; }
@@ -1092,18 +1100,5 @@ body.screen-open { overflow: hidden; }
 .plan-line-wrap .plan-change { justify-self: start; }
 .dp-plan .dp-meal { text-align: left; font-weight: 500; }
 
-/* Today: every meal of the day, tappable to edit */
-.pl-list { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--hair); border-radius: 14px; overflow: hidden; }
-.pl-list li { border-top: 1px solid var(--hair); }
-.pl-list li:first-child { border-top: 0; }
-.pl-row { display: grid; grid-template-columns: 4.6em 1fr auto; align-items: baseline; gap: 4px 10px; width: 100%; padding: 11px 14px; border: 0; background: none; color: var(--text); font: inherit; text-align: left; }
-.pl-slot { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
-.pl-what { font-size: 0.88rem; line-height: 1.3; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.pl-kcal { font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
-.pl-kcal b { color: var(--accent); font-weight: 600; }
-.pl-list li.done .pl-what { color: var(--muted); }
-.pl-list li.done .pl-kcal { color: var(--good); }
-
-/* Log your own: food list picker */
-.food-picker .row-input .slot-pick { flex: none; }
-.food-picker .lookup { padding: 8px 0; }
+.fresh-plan { display: grid; gap: 6px; margin-top: 20px; }
+.fresh-plan .hint { margin: 0; text-align: center; }
