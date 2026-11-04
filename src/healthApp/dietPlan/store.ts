@@ -277,7 +277,14 @@ function entryRow(userProfileId: string, planId: string, p: DayPick, option: Mea
   };
 }
 
-export type PlannedMeal = DayPick & { entryId: string | null; status: string; items: MealOption["items"] };
+export type PlannedMeal = DayPick & {
+  entryId: string | null;
+  status: string;
+  items: MealOption["items"];
+  /** When eaten with changed portions: what they ate. */
+  eatenItems?: MealOption["items"];
+  loggedSessionId?: string;
+};
 
 /** Today and the next two days, picking and saving any meal not yet planned. */
 export async function ensureDays(ctx: ActionContext, plan: ActivePlan, prefs: PrefsRow, today: string): Promise<PlannedMeal[]> {
@@ -301,7 +308,13 @@ export async function ensureDays(ctx: ActionContext, plan: ActivePlan, prefs: Pr
   return picks.map((p) => {
     const r = known.get(`${p.date}|${p.slot}`);
     const items = (r?.metadata?.items as MealOption["items"] | undefined) ?? (p.optionId ? byId.get(p.optionId)?.items : undefined) ?? [];
-    return { ...p, entryId: r?.id ?? null, status: r?.status ?? "planned", items };
+    const eatenItems = r?.metadata?.eaten_items as MealOption["items"] | undefined;
+    const loggedSessionId = r?.metadata?.logged_session_id as string | undefined;
+    // A picked-again day keeps what was saved for it (a swap, or the pick it had before a rebuild).
+    const saved = r && r.metadata?.option_id !== p.optionId
+      ? { optionId: (r.metadata?.option_id as string | null) ?? null, title: r.title, totals: (r.metadata?.totals as DayPick["totals"]) ?? p.totals, kind: (r.metadata?.kind as DayPick["kind"]) ?? p.kind }
+      : {};
+    return { ...p, ...saved, entryId: r?.id ?? null, status: r?.status ?? "planned", items, ...(eatenItems ? { eatenItems } : {}), ...(loggedSessionId ? { loggedSessionId } : {}) };
   });
 }
 

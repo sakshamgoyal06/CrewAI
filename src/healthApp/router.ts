@@ -67,6 +67,7 @@ import { listMealsForDate } from "./meals.js";
 import { draftMealFromPhoto } from "./mealCards.js";
 import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
 import { loadWeeklyReview } from "./weeklyReview.js";
+import { eatInput, eatPlanned, undoPlanned, unlinkDeletedMeal } from "./dietPlan/log.js";
 import { loadDietPrefs, loadPlanView, markOption, OPTION_ACTIONS, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
 import { PLAN_SLOTS } from "./dietPlan/targets.js";
 import {
@@ -362,6 +363,26 @@ export function createHealthAppRouter(): express.Router {
     }),
   );
 
+  /** "Ate this" on a planned meal, with any portion changes; and its undo. */
+  router.post(
+    "/diet/days/:date/:slot/eat",
+    route("diet-eat", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
+      const r = await eatPlanned(ctx, date, slot, eatInput.parse(req.body ?? {}));
+      return r.ok ? { body: r } : { status: r.error === "already_logged" ? 409 : 400, body: r };
+    }),
+  );
+  router.post(
+    "/diet/days/:date/:slot/undo",
+    route("diet-undo", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
+      const r = await undoPlanned(ctx, date, slot);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+
   /** The plan the interview answers would give, without saving anything (live preview). */
   router.post(
     "/onboarding/preview",
@@ -623,7 +644,12 @@ export function createHealthAppRouter(): express.Router {
 
   router.delete(
     "/meals/:id",
-    route("meal-delete", async (ctx, req) => fromResult(await removeMeal(ctx, String(req.params.id)))),
+    route("meal-delete", async (ctx, req) => {
+      const id = String(req.params.id);
+      const r = await removeMeal(ctx, id);
+      if (r.ok) await unlinkDeletedMeal(ctx.userProfileId, id);
+      return fromResult(r);
+    }),
   );
 
   /** Steps ingest: manual entry and phone automations. */

@@ -30,19 +30,24 @@ function carbHeavy(i: PlanItem, cat: Catalog): boolean {
   return i.kcal > 0 && (i.proteinG * 4) / i.kcal < 0.25;
 }
 
-function step(i: PlanItem, dir: 1 | -1, cat: Catalog): PlanItem | null {
+/** The household step for an item: 1 for pieces and slices, ½ for katoris and the like, ¼ of the usual for a usual-meal item. */
+export function qtyStep(i: PlanItem, cat: Catalog = catalog()): number {
+  const s = servingOf(i, cat);
+  if (s) return s.unit === "piece" || s.unit === "slice" ? 1 : 0.5;
+  return 0.25;
+}
+
+function servingOf(i: PlanItem, cat: Catalog) {
   const e = i.key ? cat.byKey.get(i.key) : undefined;
   const s = e && i.servingId ? e.servings.find((x) => [e.key, x.unit, x.size].filter(Boolean).join(":") === i.servingId) : undefined;
-  if (e && s) {
-    const unit = s.unit === "piece" || s.unit === "slice" ? 1 : 0.5;
-    const qty = i.qty + dir * unit;
-    if (qty < unit) return null;
-    return itemFor(e, s, qty);
-  }
-  // A usual-meal item without a catalog serving: quarter steps of how they usually eat it.
-  const qty = Math.round((i.qty + dir * 0.25) * 100) / 100;
-  if (qty < 0.5) return null;
-  const f = qty / i.qty;
+  return e && s ? { e, s, unit: s.unit } : null;
+}
+
+/** The same item at a new quantity: catalog items are re-portioned exactly, others scaled. */
+export function setQty(i: PlanItem, qty: number, cat: Catalog = catalog()): PlanItem {
+  const sv = servingOf(i, cat);
+  if (sv) return itemFor(sv.e, sv.s, qty);
+  const f = i.qty ? qty / i.qty : 1;
   return {
     ...i,
     qty,
@@ -53,6 +58,13 @@ function step(i: PlanItem, dir: 1 | -1, cat: Catalog): PlanItem | null {
     fatG: Math.round(i.fatG * f * 10) / 10,
     fiberG: Math.round(i.fiberG * f * 10) / 10,
   };
+}
+
+function step(i: PlanItem, dir: 1 | -1, cat: Catalog): PlanItem | null {
+  const unit = qtyStep(i, cat);
+  const qty = Math.round((i.qty + dir * unit) * 100) / 100;
+  if (qty < (servingOf(i, cat) ? unit : 0.5)) return null;
+  return setQty(i, qty, cat);
 }
 
 /** Resizes one meal toward `goal` kcal, stepping its carb-heavy items, within its floor and ceiling. */
