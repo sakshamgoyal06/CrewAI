@@ -28,7 +28,7 @@ function loadTrend() {
   const saved = store.get(TREND_KEY, null) || {};
   return {
     metric: TREND_METRICS.includes(saved.metric) ? saved.metric : "calories",
-    range: [7, 30].includes(saved.range) ? saved.range : 30,
+    range: [7, 30, 84].includes(saved.range) ? saved.range : 30,
     bodyRange: [30, 90, 180].includes(saved.bodyRange) ? saved.bodyRange : 90,
   };
 }
@@ -516,6 +516,8 @@ async function loadDays() {
   try {
     state.history = await api("/history?days=30");
     store.set(HISTORY_CACHE_KEY, state.history);
+    // Something may have been logged: the 12-week view refetches in the background next time.
+    if (state.longHistory) state.longHistory.at = 0;
     renderDays();
   } catch (err) {
     if (!state.history) $("fuel-body").replaceChildren(el("p", { class: "none" }, "Couldn't load your days. Pull down or reopen to retry."));
@@ -976,7 +978,8 @@ function renderTrend() {
   const h = state.history;
   if (!h) return;
   if (BODY_TREND[metric]) return renderBodyTrend(metric);
-  renderRange([[7, "7D"], [30, "30D"]], range, (v) => { state.trend.range = v; });
+  renderRange([[7, "7D"], [30, "30D"], [84, "12W"]], range, (v) => { state.trend.range = v; });
+  if (range === 84) return renderWeeklyTrend(metric);
   const cfg = TREND[metric];
   const days = h.days.slice(-range);
   const t = h.targets || {};
@@ -1058,10 +1061,10 @@ function barChart(host, days, cfg, target, onPick) {
     if (!totals[i]) g.append(svg("circle", { class: "zero", cx: String(cx), cy: String(y(0) - 1.5), r: "1.5" }));
     s.append(g);
     bars.push(g);
-    const showLabel = days.length <= 7 || (days.length - 1 - i) % 7 === 0;
+    const showLabel = d.week ? (days.length - 1 - i) % 3 === 0 : days.length <= 7 || (days.length - 1 - i) % 7 === 0;
     if (showLabel) {
       const tx = svg("text", { class: `axis${d.date === state.selectedDate ? " strong" : ""}`, x: String(cx), y: String(H - 6), "text-anchor": "middle" });
-      tx.textContent = days.length <= 7 ? WD[d.weekday] : String(dateOf(d.date).getUTCDate());
+      tx.textContent = d.week ? dateOf(d.startDate || d.date).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" }) : days.length <= 7 ? WD[d.weekday] : String(dateOf(d.date).getUTCDate());
       s.append(tx);
     }
   });
@@ -1095,6 +1098,113 @@ function barChart(host, days, cfg, target, onPick) {
 }
 
 for (const b of document.querySelectorAll("#trend-tabs button")) b.addEventListener("click", () => { state.trend.metric = b.dataset.metric; saveTrend(); renderTrend(); });
+
+// ---------- 12-week view ----------
+// Twelve bars, one per week (oldest left), from a longer /history read fetched only when asked for.
+
+const LONG_DAYS = 84;
+const LONG_TTL_MS = 10 * 60_000;
+
+async function loadLongHistory() {
+  const cur = state.longHistory;
+  if (cur && Date.now() - cur.at < LONG_TTL_MS && cur.data.today === todayKey()) return cur.data;
+  if (loadLongHistory.running) return loadLongHistory.running;
+  loadLongHistory.running = api(`/history?days=${LONG_DAYS}`)
+    .then((data) => { state.longHistory = { at: Date.now(), data }; return data; })
+    .finally(() => { loadLongHistory.running = null; });
+  return loadLongHistory.running;
+}
+
+/** Average over the days that have a reading; 0 when none do. */
+const avgOf = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+
+/**
+ * Seven-day blocks ending today, shaped like a day so the bar chart and TREND configs read them:
+ * food and burn are daily averages over the days with data, steps over days with steps, and
+ * training is the week's total minutes.
+ */
+function weeksOf(days) {
+  const out = [];
+  for (let end = days.length; end > 0; end -= 7) {
+    const block = days.slice(Math.max(0, end - 7), end);
+    const fed = block.filter((d) => d.calories > 0);
+    const walked = block.filter((d) => d.steps > 0);
+    const burned = block.filter((d) => d.burn);
+    out.unshift({
+      week: true,
+      date: block[0].date,
+      endDate: block[block.length - 1].date,
+      dates: block.map((d) => d.date),
+      fedDays: fed.length,
+      calories: avgOf(fed.map((d) => d.calories)),
+      proteinG: avgOf(fed.map((d) => d.proteinG || 0)),
+      carbsG: avgOf(fed.map((d) => d.carbsG || 0)),
+      fatG: avgOf(fed.map((d) => d.fatG || 0)),
+      steps: avgOf(walked.map((d) => d.steps)),
+      burn: burned.length ? { kcal: avgOf(burned.map((d) => d.burn.kcal)), source: burned.every((d) => d.burn.source === "estimate") ? "estimate" : "mixed" } : null,
+      workouts: block.flatMap((d) => d.workouts),
+      onTrack: block.filter((d) => d.onTrack).length,
+    });
+  }
+  return out;
+}
+
+const WEEK_TIP = {
+  calories: (w) => [`${fmt(w.calories)} kcal a day`, `${w.fedDays} day${w.fedDays === 1 ? "" : "s"} logged`],
+  macros: (w) => [`${fmt(w.proteinG)} g protein a day`, `carbs ${fmt(w.carbsG)} g`, `fat ${fmt(w.fatG)} g`],
+  steps: (w) => [`${fmt(w.steps)} steps a day`],
+  burn: (w) => (w.burn ? [`${fmt(w.burn.kcal)} kcal a day`, "active calories"] : ["No data"]),
+  training: (w) => [`${w.workouts.length} workout${w.workouts.length === 1 ? "" : "s"}`, `${fmt(w.workouts.reduce((a, x) => a + (x.durationMin || 0), 0))} min`, `${fmt(w.workouts.reduce((a, x) => a + x.volumeKg, 0))} kg lifted`],
+};
+
+async function renderWeeklyTrend(metric) {
+  const summary = $("trend-summary");
+  const cfg = TREND[metric];
+  let h = state.longHistory?.data;
+  if (!h || h.today !== todayKey()) {
+    summary.classList.remove("picked");
+    summary.replaceChildren(el("span", { class: "ts" }, "Loading 12 weeks…"));
+    $("trend-legend").replaceChildren();
+    $("trend-chart").replaceChildren();
+    try { h = await loadLongHistory(); } catch (err) {
+      summary.replaceChildren(el("span", { class: "ts" }, "Couldn't load 12 weeks just now."));
+      return;
+    }
+    // The person may have switched away while it loaded.
+    if (state.trend.range !== LONG_DAYS || state.trend.metric !== metric) return;
+  } else if (Date.now() - state.longHistory.at > LONG_TTL_MS) {
+    // Refetch quietly; redraw only if the numbers moved, so a tapped week isn't reset for nothing.
+    const before = JSON.stringify(h.days);
+    loadLongHistory()
+      .then((fresh) => { if (JSON.stringify(fresh.days) !== before && state.trend.range === LONG_DAYS && state.trend.metric === metric) renderWeeklyTrend(metric); })
+      .catch(() => {});
+  }
+  const t = h.targets || {};
+  const weeks = weeksOf(h.days);
+  const [headline, sub] = cfg.summary(h.days, t);
+  const showSummary = () => {
+    summary.classList.remove("picked");
+    summary.replaceChildren(el("span", { class: "tv" }, headline), ...(sub ? [el("span", { class: "ts" }, `${sub} · last 12 weeks`)] : [el("span", { class: "ts" }, "last 12 weeks")]));
+  };
+  const showWeek = (w) => {
+    if (!w) return showSummary();
+    const [first, ...rest] = WEEK_TIP[metric](w);
+    summary.classList.add("picked");
+    summary.replaceChildren(
+      el("span", { class: "tv" }, first),
+      el("span", { class: "ts" }, [`${shortDate(w.date)} – ${dayName(w.endDate)}`, ...rest, `${w.onTrack}/7 on track`].join(" · ")),
+    );
+  };
+  showSummary();
+  $("trend-note").textContent = metric === "training" ? "Each bar is a week's total. Tap one to see it." : "Each bar is a week's daily average. Tap one to see it.";
+  const target = metric === "training" ? null : cfg.target ? cfg.target(t) : null;
+  $("trend-legend").replaceChildren(
+    ...(metric === "macros" ? MACROS.map(([, label, , cls]) => el("span", { class: "lg" }, el("i", { class: `sw ${cls}` }), label)) : []),
+    ...(target ? [el("span", { class: "lg" }, el("i", { class: "key-target" }), `Target ${fmt(target)}`)] : []),
+  );
+  const weekCfg = { ...cfg, unit: `${cfg.unit} per week`, estimated: metric === "burn" ? (w) => w.burn?.source === "estimate" : undefined };
+  barChart($("trend-chart"), weeks.map((w) => ({ ...w, date: w.dates.includes(state.selectedDate) ? state.selectedDate : w.date, startDate: w.date })), weekCfg, target, (w) => showWeek(w && { ...w, date: w.startDate }));
+}
 
 /** The range buttons: days for daily metrics, months for weight and body fat. */
 function renderRange(options, current, set) {

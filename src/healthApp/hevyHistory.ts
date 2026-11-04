@@ -5,7 +5,15 @@
 import type { HevyWorkout } from "../pillars/health/workouts/hevy/index.js";
 import { hevyKey, loadWorkoutHistory } from "./training.js";
 
-export const HEVY_HISTORY_WEEKS = 8;
+/** Enough for the 12-week Progress view; the lift analysis still reads its own 8 weeks. */
+export const HEVY_HISTORY_WEEKS = 12;
+export const TRAINING_ANALYSIS_WEEKS = 8;
+
+/** The cached workouts inside the analysis window, so "a usual session" means the same as before the cache grew. */
+export function withinAnalysisWindow(workouts: HevyWorkout[], now: Date = new Date()): HevyWorkout[] {
+  const cutoff = now.getTime() - TRAINING_ANALYSIS_WEEKS * 7 * 86_400_000;
+  return workouts.filter((w) => !w.start_time || Date.parse(w.start_time) >= cutoff);
+}
 const CACHE_MS = 10 * 60_000;
 
 type Entry = { at: number; workouts: HevyWorkout[] };

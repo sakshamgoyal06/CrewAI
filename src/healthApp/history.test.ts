@@ -88,7 +88,7 @@ describe("clampDays", () => {
   it("defaults and caps the range", () => {
     expect(clampDays(undefined)).toBe(30);
     expect(clampDays("7")).toBe(7);
-    expect(clampDays("500")).toBe(56);
+    expect(clampDays("500")).toBe(84);
     expect(clampDays("-3")).toBe(30);
   });
 });

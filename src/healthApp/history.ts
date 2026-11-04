@@ -9,7 +9,7 @@ import { supabase } from "../tools/clients.js";
 import { burnForDay, trainingActivity, typicalTrainingBurn, type Activity, type Burn, type NotCounted, type StepBucket, type TimedWorkout } from "./activities.js";
 import { FALLBACK_WEIGHT_KG, getActivities } from "./activityLog.js";
 import { getBodyCheckins } from "./bodyStore.js";
-import { hevyHistoryCached } from "./hevyHistory.js";
+import { hevyHistoryCached, withinAnalysisWindow } from "./hevyHistory.js";
 import { scoreDay, type DayCheck, type HealthTargets } from "./northStar.js";
 import { loadHealthProfile, weekdayOfDate, windowDates } from "./snapshot.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
@@ -18,7 +18,8 @@ import { checksOn, getRoutineChecks } from "./routineStore.js";
 import { DAY_MS } from "../util/time.js";
 
 export const DEFAULT_HISTORY_DAYS = 30;
-export const MAX_HISTORY_DAYS = 56;
+/** 12 weeks, for the Progress charts' weekly view. */
+export const MAX_HISTORY_DAYS = 84;
 export { stepsBurn, workoutBurn, burnForDay } from "./activities.js";
 export type { Burn } from "./activities.js";
 
@@ -264,7 +265,7 @@ export async function buildHealthHistory(
   const weightKg = [...checkins].reverse().find((c) => c.weight_kg != null)?.weight_kg ?? null;
   const kg = weightKg ?? FALLBACK_WEIGHT_KG;
   const allMinutes = hevy.connected && hevy.ok
-    ? hevy.workouts.map((w) => (w.start_time && w.end_time ? Math.round((Date.parse(w.end_time) - Date.parse(w.start_time)) / 60_000) : 0))
+    ? withinAnalysisWindow(hevy.workouts, now).map((w) => (w.start_time && w.end_time ? Math.round((Date.parse(w.end_time) - Date.parse(w.start_time)) / 60_000) : 0))
     : [];
   const typicalBurn = typicalTrainingBurn(allMinutes, kg);
 

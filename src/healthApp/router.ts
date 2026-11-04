@@ -87,7 +87,7 @@ import { liftingGap, routineInput } from "./routine.js";
 import { answerRoutineCheck, routineCheckAnswerInput, setRoutine } from "./routineCheck.js";
 import { applyProposal, discardProposal } from "./hevyProposals.js";
 import { analyzeTraining } from "./training.js";
-import { HEVY_HISTORY_WEEKS, hevyHistoryCached, invalidateHevyHistory } from "./hevyHistory.js";
+import { TRAINING_ANALYSIS_WEEKS, hevyHistoryCached, invalidateHevyHistory } from "./hevyHistory.js";
 import { buildHealthHistory, clampDays } from "./history.js";
 import {
   deleteSubscription,
@@ -858,7 +858,7 @@ export function createHealthAppRouter(): express.Router {
       const h = await hevyHistoryCached(ctx.userProfileId, { fresh: req.query.fresh === "1", now });
       if (!h.connected) return { body: { connected: false, analysis: null } };
       if (!h.ok) return { status: 502, body: { error: "hevy_unavailable" } };
-      const body = { connected: true, analysis: analyzeTraining(h.workouts, now, ctx.timezone, HEVY_HISTORY_WEEKS) };
+      const body = { connected: true, analysis: analyzeTraining(h.workouts, now, ctx.timezone, TRAINING_ANALYSIS_WEEKS) };
       trainingCache.set(ctx.userProfileId, { at: Date.now(), body });
       return { body };
     }),
