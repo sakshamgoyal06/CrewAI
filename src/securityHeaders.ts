@@ -24,8 +24,8 @@ export function appCsp(scriptHashes: string[], supabaseUrl?: string): string {
     "default-src 'self'",
     `script-src 'self' ${scriptHashes.join(" ")} https://checkout.razorpay.com`.replace(/\s+/g, " "),
     // Inline style attributes are set from JS; no inline <style> needs more than this.
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
     "img-src 'self' data: blob: https:",
     `connect-src 'self' ${supabase} https://*.razorpay.com`,
     "frame-src https://*.razorpay.com",

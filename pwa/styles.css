@@ -1,5 +1,11 @@
 /* Magnus: royal and quiet. Deep aubergine, one antique-gold accent, ivory text, Lato throughout.
    Light mode is ivory with a royal-plum accent. One level of card; hierarchy from type, not boxes. */
+/* Lato, served with the app (SIL Open Font License, fonts/OFL.txt): no Google Fonts request at startup. Latin only. */
+@font-face { font-family: "Lato"; font-style: normal; font-weight: 300; font-display: swap; src: url("fonts/lato-latin-300-normal.woff2") format("woff2"); }
+@font-face { font-family: "Lato"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/lato-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Lato"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/lato-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Lato"; font-style: normal; font-weight: 900; font-display: swap; src: url("fonts/lato-latin-900-normal.woff2") format("woff2"); }
+
 :root {
   --bg: #160f1d;
   --surface: #1f1628;
