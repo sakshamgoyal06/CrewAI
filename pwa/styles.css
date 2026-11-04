@@ -504,11 +504,15 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 
 /* Plan history */
 .plan-list { display: grid; gap: 10px; padding: 0; list-style: none; }
-.plan-version { padding: 12px 14px; border: 1px solid var(--hair); border-radius: 14px; display: grid; gap: 4px; }
-.plan-version p { margin: 0; }
+/* .list li is a flex row; a version is a stacked card, so these must beat it. */
+.plan-list li.plan-version { display: grid; align-items: start; justify-content: stretch; gap: 6px; padding: 14px 16px; border: 1px solid var(--hair); border-radius: var(--radius); background: var(--surface); min-width: 0; }
+.plan-list li.plan-version:first-child { padding-top: 14px; border-top: 1px solid var(--hair); }
+.plan-version p { margin: 0; min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
 .plan-version .btn { justify-self: start; margin-top: 6px; }
-.plan-head { display: flex; justify-content: space-between; align-items: baseline; }
+.plan-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.plan-head .hint { flex: none; margin: 0; font-variant-numeric: tabular-nums; }
 .plan-reason { font-weight: 600; }
+.plan-version .rca-status { font-size: 0.85rem; }
 
 /* Notification toggles */
 .toggles { display: flex; flex-wrap: wrap; gap: 6px; }
