@@ -827,7 +827,7 @@ body.screen-open { overflow: hidden; }
 
 /* The day's plan: the first card of each day's thread. */
 .dayplan { display: grid; gap: 14px; border-color: var(--hair-strong); }
-.dayplan > .eyebrow { margin: 0; color: var(--accent); }
+.dayplan > .eyebrow { margin: 0; color: var(--muted); }
 .dp-greet { margin: -8px 0 0; font-family: var(--serif); font-weight: 700; font-size: 1.35rem; line-height: 1.2; }
 .dp-sec .eyebrow { margin-bottom: 4px; }
 .dp-sec p { margin: 0; line-height: 1.5; }
@@ -972,3 +972,25 @@ body.screen-open { overflow: hidden; }
 .water-block:has(> .water[hidden]) { display: none; }
 .routine-today[hidden] + .stats { border-top: 0; padding-top: 0; }
 .fold.open .fold-head .key { visibility: hidden; }
+
+/* Compact day plan in chat: timeline, targets, one tip, "Full plan" opens the rest as a screen. */
+.dayplan.compact { gap: 12px; }
+.dayplan.compact .dp-targets { padding: 10px 0; }
+.dp-kind { margin: 0; }
+.dp-tip { margin: 0; font-size: 0.92rem; line-height: 1.5; color: var(--muted); }
+.dp-tip b { color: var(--text); font-weight: 700; }
+.dp-more { justify-self: start; font-size: 0.92rem; }
+.dayplan.full { padding: 4px 0 24px; }
+.dayplan.full .dp-greet { margin: -6px 0 0; }
+
+/* Meal estimate card: the slot as a small pill picker, Discard as a quiet link beside the one button. */
+.slot-pick {
+  appearance: none; -webkit-appearance: none; font: inherit; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--text); background: var(--raised) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23998da6' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center / 9px 6px;
+  border: 1px solid var(--hair); border-radius: 999px; padding: 5px 26px 5px 12px; cursor: pointer;
+}
+.slot-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.draft .draft-top { align-items: center; margin-bottom: 10px; }
+.draft-actions.split { align-items: center; justify-content: space-between; }
+.draft-actions.split .link { flex: none; padding: 8px 4px; }
+.draft-actions.split .btn { flex: 0 1 60%; }
