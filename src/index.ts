@@ -12,6 +12,9 @@ import { ensureFoodSeed } from "./meals/indianFoodSeed.js";
 async function main(): Promise<void> {
   const server = await startHealthServer();
   const owner = healthAppAuthConfig()?.userProfileId;
+  if (process.env.MAGNUS_HEALTH_APP_TOKEN?.trim() && !owner) {
+    logger.error("MAGNUS_HEALTH_APP_USER_PROFILE_ID is not set: the owner token, the owner's Google claim and owner billing are off until it is");
+  }
   const stopProactive = startProactiveScheduler(owner ? [owner] : []);
   // Everyday Indian foods, so a new account's first meals resolve from our own table.
   void ensureFoodSeed().catch(() => {});
