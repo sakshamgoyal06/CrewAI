@@ -21,9 +21,22 @@ const store = {
   },
 };
 
+// The Progress tab's last chart choice (metric and ranges), so a refresh or reopen lands where you left it.
+const TREND_KEY = "magnus-trend-view";
+const TREND_METRICS = ["calories", "macros", "steps", "burn", "training", "weight", "bodyfat"];
+function loadTrend() {
+  const saved = store.get(TREND_KEY, null) || {};
+  return {
+    metric: TREND_METRICS.includes(saved.metric) ? saved.metric : "calories",
+    range: [7, 30].includes(saved.range) ? saved.range : 30,
+    bodyRange: [30, 90, 180].includes(saved.bodyRange) ? saved.bodyRange : 90,
+  };
+}
+const saveTrend = () => store.set(TREND_KEY, state.trend);
+
 const state = {
   snapshot: null, sending: false, sheetStack: [], overlayDepth: 0, ignorePop: false, historySig: null, trainingLoaded: false,
-  history: null, selectedDate: null, open: new Set(), trend: { metric: "calories", range: 30, bodyRange: 90 },
+  history: null, selectedDate: null, open: new Set(), trend: loadTrend(),
 };
 // Last good responses, so a cold open paints instantly and the network only fills in changes.
 const CHAT_CACHE_KEY = "magnus-chat-cache";
@@ -923,10 +936,10 @@ function niceMax(v) {
 const compact = (v) => (v >= 10000 ? `${fmt(v / 1000)}K` : v >= 1000 ? `${fmt(v / 1000, 1)}K` : fmt(v));
 
 function renderTrend() {
-  const h = state.history;
-  if (!h) return;
   const { metric, range } = state.trend;
   for (const b of document.querySelectorAll("#trend-tabs button")) b.classList.toggle("on", b.dataset.metric === metric);
+  const h = state.history;
+  if (!h) return;
   if (BODY_TREND[metric]) return renderBodyTrend(metric);
   renderRange([[7, "7D"], [30, "30D"]], range, (v) => { state.trend.range = v; });
   const cfg = TREND[metric];
@@ -1046,12 +1059,12 @@ function barChart(host, days, cfg, target, onPick) {
   hit.addEventListener("pointerleave", (e) => { if (hover && e.pointerType === "mouse") show(-1); });
 }
 
-for (const b of document.querySelectorAll("#trend-tabs button")) b.addEventListener("click", () => { state.trend.metric = b.dataset.metric; renderTrend(); });
+for (const b of document.querySelectorAll("#trend-tabs button")) b.addEventListener("click", () => { state.trend.metric = b.dataset.metric; saveTrend(); renderTrend(); });
 
 /** The range buttons: days for daily metrics, months for weight and body fat. */
 function renderRange(options, current, set) {
   $("trend-range").replaceChildren(...options.map(([v, label]) =>
-    el("button", { type: "button", class: v === current ? "on" : "", onclick: () => { set(v); renderTrend(); } }, label)));
+    el("button", { type: "button", class: v === current ? "on" : "", onclick: () => { set(v); saveTrend(); renderTrend(); } }, label)));
 }
 
 // ---------- weight & body fat trend ----------
