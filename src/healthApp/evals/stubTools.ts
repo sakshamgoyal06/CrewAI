@@ -109,6 +109,8 @@ export function stubTools(snapshot: HealthSnapshot | null, options: { failing?: 
         return {
           result: { status: "ok", maintenanceKcal: 2350, avgIntakeKcal: 1780, loggedDays: 18, weighIns: 3, trendWeightKg: 81.9, actualKgPerWeek: -0.55, neededKgPerWeek: -0.62, plannedKgPerWeek: -0.6, suggestedTarget: 1750, currentTarget: 1800, change: -50, recommend: false, confidence: "medium", cappedForSafety: false, safeDate: null, targetWeightKg: 74, deadline: "2027-01-31", summary: "On pace; keep 1800." },
         };
+      case "decline_off_topic":
+        return { result: { ok: true, declinedToday: 1 } };
       default:
         return { result: { ok: false, error: `unknown tool ${name}` } };
     }

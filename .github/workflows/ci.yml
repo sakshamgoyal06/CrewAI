@@ -21,6 +21,9 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci
+      # Supply chain (OWASP LLM03): fail on a known high or critical hole in what ships to Railway.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
       - name: Syntax-check the PWA (plain JS, no build step)
         run: for f in pwa/*.js; do node --check "$f"; done
       - run: npm run build
