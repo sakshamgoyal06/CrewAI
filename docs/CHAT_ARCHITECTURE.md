@@ -124,4 +124,4 @@ change ships only with a run at or above the bars pasted into its PR.
 Railway deploys `main`. Migrations are additive and applied to the `magnus-ai` Supabase project
 before the PR merges, so the running code is never ahead of the schema. Rolling back a chat PR is
 a revert; columns and tables stay (defaults keep them inert). Env switches: `MAGNUS_CHAT_PROMPT=legacy`,
-`MAGNUS_HEALTH_CHAT_ROUTING=off` (everything on the main model), `MAGNUS_CHAT_WALL_MS` and friends.
+`MAGNUS_HEALTH_CHAT_ROUTING=off` (everything on the main model) or `=haiku-first` (everything on the fast model, coaching included; the main model only for refusals and logs the fast model failed to save), `MAGNUS_CHAT_WALL_MS` and friends.

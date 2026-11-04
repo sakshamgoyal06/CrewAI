@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const saved = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 const events = vi.hoisted(() => [] as Array<Record<string, unknown>>);
@@ -460,6 +460,22 @@ describe("escalation from the fast model", () => {
   });
 });
 
+describe("haiku-first routing", () => {
+  afterEach(() => {
+    delete process.env.MAGNUS_HEALTH_CHAT_ROUTING;
+  });
+
+  it("keeps a coaching-tool turn on the fast model", async () => {
+    process.env.MAGNUS_HEALTH_CHAT_ROUTING = "haiku-first";
+    const create = vi
+      .fn()
+      .mockResolvedValueOnce(msg([{ type: "tool_use", id: "t1", name: "get_routines", input: {} } as Anthropic.ToolUseBlock], "tool_use"))
+      .mockResolvedValueOnce(msg([{ type: "text", text: "Your push day has 5 exercises.", citations: null } as Anthropic.TextBlock], "end_turn"));
+    await runHealthChat(ctx, "why is my bench stuck?", { create, history: [], turnId: TURN });
+    expect(create.mock.calls.map((c) => c[0].model)).toEqual(["claude-haiku-5-5", "claude-haiku-5-5"]);
+  });
+});
+
 describe("streaming events", () => {
   it("reports tool progress and text deltas while the turn runs, and still returns the full reply", async () => {
     const events: unknown[] = [];
@@ -564,6 +580,23 @@ describe("history window and cache", () => {
     expect(marked[0]).toBe(history[0]);
     expect(history[1]!.content).toBe("hello");
     expect(withHistoryCacheMarker([])).toEqual([]);
+  });
+
+  it("caches each tool round of a turn, staying within four cache markers", async () => {
+    const create = vi
+      .fn()
+      .mockResolvedValueOnce(msg([{ type: "tool_use", id: "t1", name: "log_steps", input: { steps: 9000 } } as Anthropic.ToolUseBlock], "tool_use"))
+      .mockResolvedValueOnce(msg([{ type: "text", text: "Saved 9,000 steps.", citations: null } as Anthropic.TextBlock], "end_turn"));
+    await runHealthChat(ctx, "9000 steps today", { create, history: [{ role: "user", content: "earlier" }, { role: "assistant", content: "reply" }], turnId: TURN });
+    const markers = (call: number) => {
+      const messages = create.mock.calls[call]![0].messages as Anthropic.MessageParam[];
+      return messages.flatMap((m) => (typeof m.content === "string" ? [] : m.content)).filter((b) => "cache_control" in b && b.cache_control).length;
+    };
+    const second = create.mock.calls[1]![0].messages as Anthropic.MessageParam[];
+    const tail = second.at(-1)!.content as Anthropic.ContentBlockParam[];
+    expect(tail.at(-1)).toMatchObject({ type: "tool_result", cache_control: { type: "ephemeral" } });
+    // History marker only on the first round; history + newest tool results on the second.
+    expect(markers(1)).toBe(2);
   });
 
   it("logs how big each prompt layer was", async () => {

@@ -109,14 +109,26 @@ export function fastModelDodgedLog(userText: string, toolCalls: number, round: n
   return round === 0 && toolCalls === 0 && LOGGABLE.test(userText);
 }
 
+/** How turns are split between the two models; `MAGNUS_HEALTH_CHAT_ROUTING`. */
+export type ChatRouting = "auto" | "off" | "haiku-first";
+
+export function chatRouting(env: NodeJS.ProcessEnv = process.env): ChatRouting {
+  const v = env.MAGNUS_HEALTH_CHAT_ROUTING?.trim().toLowerCase();
+  return v === "off" || v === "haiku-first" ? v : "auto";
+}
+
 /**
  * Which model answers this turn. Short, plain logs ("2 roti and dal for lunch", "walked 6k steps",
  * "82.4 this morning") go to the fast model; anything that asks a question or wants coaching goes
- * to the main one. `MAGNUS_HEALTH_CHAT_ROUTING=off` sends everything to the main model.
+ * to the main one. `MAGNUS_HEALTH_CHAT_ROUTING=off` sends everything to the main model;
+ * `haiku-first` sends everything to the fast model, coaching included (a cost trial: the main model
+ * then only steps in for a refusal or a log the fast model answered without saving).
  */
 export function pickChatModel(text: string, env: NodeJS.ProcessEnv = process.env): string {
   const main = chatModel(env);
-  if (env.MAGNUS_HEALTH_CHAT_ROUTING?.trim().toLowerCase() === "off") return main;
+  const routing = chatRouting(env);
+  if (routing === "off") return main;
+  if (routing === "haiku-first") return chatFastModel(env);
   const t = text.trim();
   if (t.length > 160 || COACHING.test(t)) return main;
   return chatFastModel(env);
@@ -1410,7 +1422,10 @@ async function answerTurn(
             max_tokens: budget.maxTokens,
             system: [{ type: "text", text: systemPrompt(), cache_control: { type: "ephemeral" } }],
             tools,
-            messages,
+            // From the second round on, a marker on the newest tool results caches this turn's
+            // own rounds too, so a three-tool turn stops re-sending earlier results at full price.
+            // Four breakpoints in all: system, tools, history, this round.
+            messages: round > 0 ? withHistoryCacheMarker(messages) : messages,
           },
           {
             signal: abort.signal,
@@ -1472,7 +1487,7 @@ async function answerTurn(
       done = true;
       break;
     }
-    if (model !== healthChatModel() && toolUses.some((tu) => COACHING_TOOLS.has(tu.name))) {
+    if (model !== healthChatModel() && chatRouting() !== "haiku-first" && toolUses.some((tu) => COACHING_TOOLS.has(tu.name))) {
       // The fast model reached for analysis or a Hevy change: the main model writes the rest.
       stats.escalated = "coaching_tool";
       model = healthChatModel();
