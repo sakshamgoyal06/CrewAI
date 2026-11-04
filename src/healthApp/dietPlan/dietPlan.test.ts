@@ -82,11 +82,12 @@ describe("composeOptions", () => {
   it("reads real phrasings of a diet note, including 'no meat other than chicken'", () => {
     const chicken = { meats: new Set(["chicken"]), egg: true };
     expect(allowedMeats(["no meat other than chicken"])).toEqual(chicken);
+    expect(allowedMeats(["Vegetarian + chicken + eggs. No other meat than chicken"])).toEqual(chicken);
     expect(allowedMeats(["No non-veg except chicken and eggs"])).toEqual(chicken);
     expect(allowedMeats(["no meat"])!.meats.size).toBe(0);
     expect(allowedMeats(["no red meat"])!.meats.has("mutton")).toBe(false);
     expect(allowedMeats(["no onion on Tuesdays"])).toBeNull();
-    const all = ["breakfast", "lunch", "snack", "dinner"].flatMap((s) => compose(s, "custom", { dietNote: ["no meat other than chicken"] }));
+    const all = ["breakfast", "lunch", "snack", "dinner"].flatMap((s) => compose(s, "custom", { dietNote: ["Vegetarian + chicken + eggs. No other meat than chicken"] }));
     const text = all.flatMap((o) => o.items.map((i) => i.name.toLowerCase())).join(" | ");
     expect(text).not.toMatch(/mutton|prawn|fish|lamb|keema|mangsho|rogan|pork|beef|crab/);
   });

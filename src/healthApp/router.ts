@@ -8,6 +8,7 @@ import { z } from "zod";
 import { logger } from "../logger.js";
 import { localDateKey } from "../nutrition/localDate.js";
 import { loggableError } from "../util/loggableError.js";
+import { searchFoods } from "./foodPick.js";
 import {
   checkinInput,
   confirmMeal,
@@ -723,6 +724,15 @@ export function createHealthAppRouter(): express.Router {
     route("meal-confirm", async (ctx, req) =>
       fromResult(await confirmMeal(ctx, mealConfirmInput.parse(req.body))),
     ),
+  );
+
+  /** Picks from the food database for "log my own": ranked matches with their household servings and macros per serving. */
+  router.get(
+    "/foods/search",
+    route("foods-search", async (_ctx, req) => {
+      const q = typeof req.query.q === "string" ? req.query.q.slice(0, 60) : "";
+      return { body: { foods: searchFoods(q, 20) } };
+    }),
   );
 
   router.get(

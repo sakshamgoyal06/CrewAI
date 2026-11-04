@@ -1059,3 +1059,14 @@ body.screen-open { overflow: hidden; }
 .supp-line .sub { flex: 1; color: var(--muted); font-size: 0.8rem; }
 .supp-row { padding: 6px 0; }
 .supp-row .row-right { gap: 8px; align-items: center; }
+
+/* Meals: make editable cards obvious */
+.meal-card .edit-hint { display: flex; align-items: center; gap: 6px; color: var(--gold, var(--accent)); font-size: 0.82rem; font-weight: 600; margin-top: 2px; }
+.meal-card .edit-hint .chev-r { margin-left: auto; }
+.food-picker .pick-results, .food-picker .pick-basket { list-style: none; margin: 0; padding: 0; }
+.pick-row, .pick-basket li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--hair); }
+.pick-row:first-child, .pick-basket li:first-child { border-top: 0; }
+.pick-row .iname, .pick-basket .iname { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.pick-row .slot-pick { max-width: 46%; }
+.pick-total { color: var(--muted); font-size: 0.9rem; margin: 0; }
+.left-line { margin: 0; }

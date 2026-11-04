@@ -129,7 +129,12 @@ function paint() {
 
   const order = SLOT_ORDER.filter((s) => v.prefs.meals.some((m) => m.slot === s));
   const list = el("ul", { class: "list meal-plan" }, ...order.map((slot) => mealCard(ms.date, slot)).filter(Boolean));
-  host.replaceChildren(strip, summary, suppRow(ms.date), list,
+  // What is still to eat today, by name ("Only dinner is left today").
+  const left = isToday ? order.filter((s) => { const p = pickOf(ms.date, s); return p && !isEaten(p); }) : [];
+  const leftLine = isToday && left.length && left.length < order.length
+    ? el("p", { class: "hint left-line" }, left.length === 1 ? `Only ${SLOT_NAME[left[0]].toLowerCase()} is left today.` : `Left today: ${left.map((s) => SLOT_NAME[s].toLowerCase()).join(", ")}.`)
+    : null;
+  host.replaceChildren(strip, summary, leftLine, suppRow(ms.date), list,
     el("div", { class: "block-links" },
       el("button", { class: "link quiet", type: "button", onclick: rebuild }, "Make me a fresh plan")));
 }
@@ -170,7 +175,8 @@ function mealCard(date, slot) {
     el("button", { class: `meal-card${eaten ? " eaten" : ""}`, type: "button", onclick: () => openMeal(date, slot) },
       el("span", { class: "slot" }, SLOT_NAME[slot], timeOf(slot) ? el("small", {}, ` · ${clock(timeOf(slot))}`) : null),
       el("span", { class: "what" }, p.kind === "eat_out" ? p.title : items.map((i) => i.text).join(", ") || p.title),
-      el("span", { class: "sub" }, sub, eaten ? el("b", { class: "tick" }, p.status === "partial" ? " · Eaten, portions changed" : " · Eaten") : null)));
+      el("span", { class: "sub" }, sub, eaten ? el("b", { class: "tick" }, p.status === "partial" ? " · Eaten, portions changed" : " · Eaten") : null),
+      eaten ? null : el("span", { class: "edit-hint" }, p.kind === "eat_out" ? "Tap to log what you had" : "Change portions, swap or log your own", el("i", { class: "chev-r" }))));
 }
 
 /** From a chat card: the plan's meal screen for one meal (loads the plan first if needed). */
@@ -239,7 +245,8 @@ export function mealScreen() {
     wrap.append(
       el("p", {}, p.title),
       el("p", { class: "hint" }, "Pick a dish with a protein (paneer, dal, chicken, eggs) and go easy on fried sides and refined bread. Log what you had and the rest of the day adjusts."),
-      el("button", { class: "btn primary block", type: "button", onclick: () => d.openSheet("meal") }, "Log what I ate"));
+      el("button", { class: "btn primary block", type: "button", onclick: () => d.logOwn(slot) }, "Log what I ate"),
+      el("p", { class: "hint" }, "Search the food list first. If something isn't there, describe it and I'll estimate it."));
     return wrap;
   }
 
@@ -276,7 +283,9 @@ export function mealScreen() {
   };
   paintItems();
   paintTotals();
-  wrap.append(totalsBox, list);
+  wrap.append(totalsBox);
+  if (!eaten) wrap.append(el("p", { class: "section-label" }, "Portions"), el("p", { class: "hint" }, "Use − and + to change an amount. The total updates, and \"Ate this\" logs your amounts."));
+  wrap.append(list);
 
   const action = el("div", { class: "stack" });
   const paintAction = () => {
@@ -287,7 +296,7 @@ export function mealScreen() {
         el("button", { class: "link", type: "button", onclick: undo }, "Undo"));
     } else if (canEat) {
       action.replaceChildren(el("button", { class: "btn primary block", type: "button", onclick: eat }, "Ate this"),
-        el("button", { class: "link quiet", type: "button", onclick: () => d.openSheet("meal") }, "I ate something else"));
+        el("button", { class: "btn block", type: "button", onclick: () => d.logOwn(slot) }, "Log my own instead"));
     } else {
       action.replaceChildren(el("p", { class: "hint" }, "You can log it on the day. Change the portions or swap it below."));
     }
@@ -350,7 +359,7 @@ function otherOptions(date, slot, currentId) {
   const others = optionsOf(slot).filter((o) => o.id !== currentId);
   if (!others.length) return el("div");
   return el("div", { class: "stack" },
-    el("p", { class: "section-label" }, "Or swap for"),
+    el("p", { class: "section-label" }, "Swap this meal for"),
     el("ul", { class: "list option-list" }, ...others.map((o) =>
       el("li", {},
         el("button", { class: "option-row", type: "button", onclick: async () => {
