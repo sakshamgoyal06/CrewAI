@@ -54,7 +54,7 @@ export const FOODS: CatalogFood[] = [
   food("Lentils, boiled", "pulse", "vegan", [115, 9, 20, 0.4, 7.9], usda("Lentils, from dried, no added fat"), [s("bowl", 150, null, true, "1 katori"), s("cup", 198)], { aliases: ["boiled dal", "plain dal", "boiled lentils"] }),
   food("Moong sprouts", "pulse", "vegan", [30, 3, 5.9, 0.2, 1.8], usda("Mung beans, mature seeds, sprouted, raw"), [s("bowl", 100, null, true, "1 katori"), s("cup", 104)], { aliases: ["sprouts", "bean sprouts", "sprouted moong"] , prepMinutes: 0 }),
   food("Soya chunks, dry", "pulse", "vegan", [345, 52, 33, 0.5, 13], label("Typical soya chunks label, per dry weight"), [s("serving", 30, null, true, "30 g dry"), s("cup", 50)], { aliases: ["soya chunks", "soya nuggets", "meal maker", "nutrela"] }),
-  food("Tofu", "pulse", "vegan", [83, 10, 1.2, 5.3, 1], usda("Tofu, extra firm, prepared with nigari"), [PER100(), s("piece", 25, null, false, "1 cube")], { aliases: ["bean curd"] }),
+  food("Tofu", "pulse", "vegan", [83, 10, 1.2, 5.3, 1], usda("Tofu, extra firm, prepared with nigari"), [PER100(), s("piece", 25, null, false, "1 cube")], { aliases: ["bean curd"], meals: ["breakfast", "lunch", "dinner"], prepMinutes: 10 }),
 
   // ── Vegetables (raw weight) ──────────────────────────────────────────────
   food("Potato", "vegetable", "vegan", [77, 2, 17.5, 0.1, 2.1], usda("Potatoes, flesh and skin, raw"), [s("piece", 150, "medium", true), s("piece", 100, "small"), s("piece", 220, "large")], { aliases: ["aloo", "potatoes", "boiled potato", "batata"] }),
@@ -112,7 +112,7 @@ export const FOODS: CatalogFood[] = [
   food("Curd", "dairy", "veg", [61, 3.5, 4.7, 3.2, 0], usda("Yogurt, plain, whole milk"), [s("bowl", 150, null, true, "1 katori"), s("cup", 245), s("tbsp", 15)], { aliases: ["dahi", "yogurt", "yoghurt", "plain curd"] }),
   food("Greek yogurt", "dairy", "veg", [73, 9.9, 3.9, 1.9, 0], usda("Yogurt, Greek, plain, lowfat"), [s("bowl", 100, null, true, "1 small cup (100 g)"), s("tbsp", 15)], { aliases: ["hung curd", "greek curd"] }),
   food("Paneer", "dairy", "veg", [265, 18.3, 1.2, 20.8, 0], ref("Typical full-fat paneer values; no USDA entry"),
-    [PER100(), s("piece", 25, null, false, "1 cube"), s("bowl", 100, null, false, "1 katori, cubed")], { aliases: ["cottage cheese", "panir", "malai paneer"] }),
+    [PER100(), s("piece", 25, null, false, "1 cube"), s("bowl", 100, null, false, "1 katori, cubed")], { aliases: ["cottage cheese", "panir", "malai paneer"], meals: ["breakfast", "lunch", "dinner", "snack"] }),
   food("Ghee", "fat_oil", "veg", [900, 0, 0, 100, 0], usda("Butter, Clarified butter (ghee)"), [s("tsp", 4.5, null, true), s("tbsp", 13)], { aliases: ["desi ghee", "clarified butter"] }),
   food("Butter", "fat_oil", "veg", [717, 0.8, 0.1, 81.1, 0], usda("Butter, salted"), [s("tsp", 5, null, true), s("tbsp", 14), s("piece", 10, null, false, "1 small cube")], { aliases: ["makhan", "amul butter"] }),
   food("Fresh cream", "dairy", "veg", [250, 2.2, 3.4, 25, 0], ref("Typical Indian fresh cream (25% fat)"), [s("tbsp", 15, null, true)], { aliases: ["cream", "malai"], meals: [] }),
@@ -125,7 +125,7 @@ export const FOODS: CatalogFood[] = [
   food("Egg white", "egg", "egg", [52, 10.9, 0.7, 0.2, 0], usda("Egg, white, raw, fresh"), [s("piece", 33, null, true, "1 egg white")], { aliases: ["egg whites", "boiled egg white"] }),
   food("Fried egg", "egg", "egg", [196, 13.6, 0.8, 14.8, 0], usda("Egg, whole, cooked, fried"), [s("piece", 46, null, true, "1 egg")], { aliases: ["egg fried", "sunny side up", "half fry", "bull's eye"] , prepMinutes: 10 }),
   food("Chicken breast, raw", "meat", "nonveg", [112, 22.5, 0, 1.9, 0], usda("Chicken, breast, boneless, skinless, raw"), [PER100()], { aliases: ["raw chicken breast"] }),
-  food("Chicken breast, cooked", "meat", "nonveg", [149, 28, 0, 3.3, 0], usda("Chicken breast, stewed, skin not eaten"), [PER100(), s("piece", 120, null, false, "1 breast fillet")], { aliases: ["chicken breast", "chicken", "grilled chicken", "boiled chicken", "chicken boiled"] , prepMinutes: 20 }),
+  food("Chicken breast, cooked", "meat", "nonveg", [149, 28, 0, 3.3, 0], usda("Chicken breast, stewed, skin not eaten"), [PER100(), s("piece", 120, null, false, "1 breast fillet")], { aliases: ["chicken breast", "chicken", "boiled chicken", "chicken boiled"], meals: ["lunch", "dinner"], prepMinutes: 20 }),
   food("Chicken thigh, raw", "meat", "nonveg", [149, 18.6, 0, 7.9, 0], usda("Chicken, thigh, boneless, skinless, raw"), [PER100()], { aliases: ["chicken curry cut raw", "raw chicken"] }),
   food("Mutton, raw", "meat", "nonveg", [109, 20.6, 0, 2.3, 0], ref("USDA 'Game meat, goat, raw' values (entry missing from the bulk mirror)"), [PER100()], { aliases: ["goat meat raw", "raw mutton"] }),
   food("Mutton, cooked", "meat", "nonveg", [142, 26.9, 0, 3, 0], usda("Goat"), [PER100()], { aliases: ["goat meat", "mutton boiled"] }),
@@ -180,6 +180,8 @@ export const FOODS: CatalogFood[] = [
   food("Glucose biscuit", "snack", "veg", [450, 7, 76, 13, 1.5], label("Typical glucose biscuit label"), [s("piece", 7, null, true, "1 biscuit")], { aliases: ["parle g", "biscuit", "biscuits", "glucose biscuits"], prepMinutes: 0 }),
   food("Rusk", "snack", "veg", [407, 11, 73, 7.5, 3], label("Typical toast rusk label"), [s("piece", 12, null, true, "1 rusk")], { aliases: ["toast rusk", "suji rusk", "cake rusk"], prepMinutes: 0 }),
   food("Chocolate chip cookie", "snack", "veg", [492, 5.1, 65.4, 24.7, 2], usda("Cookie, chocolate chip"), [s("piece", 15, null, true, "1 cookie")], { aliases: ["cookie", "cookies", "choco chip cookie"], prepMinutes: 0 }),
+  food("Roasted chana", "pulse", "vegan", [369, 22.5, 58.8, 5.2, 16.8], ref("Typical roasted Bengal gram values; no USDA entry"), [s("handful", 30, null, true), s("bowl", 50, null, false, "1 small bowl")], { aliases: ["bhuna chana", "roasted gram", "chana roasted", "phutana", "roasted chickpeas"], meals: ["snack"], prepMinutes: 0 }),
+  food("Sattu", "grain", "vegan", [387, 22.4, 57.8, 6.7, 10.8], ref("Roasted gram flour; values as USDA 'Chickpea flour (besan)'"), [s("tbsp", 10, null, true), s("cup", 100)], { aliases: ["sattu flour", "chana sattu"] }),
   food("Water", "drink", "vegan", [0, 0, 0, 0, 0], ref("Plain drinking water"), [s("glass", 250, null, true)], { basis: "100ml", aliases: ["drinking water", "paani", "pani"], prepMinutes: 0 }),
   food("Muesli", "grain", "veg", [380, 10, 66, 7.5, 8], label("Typical fruit and nut muesli label"), [s("serving", 40, null, true, "40 g (½ cup)"), s("bowl", 40, null, false, "1 bowl"), s("cup", 80)], { aliases: ["granola"], meals: ["breakfast"], prepMinutes: 0 }),
 ];

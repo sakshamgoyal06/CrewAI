@@ -128,7 +128,7 @@ const LIST: CatalogDish[] = [
   dish("Vada pav", "snack", "vegan", [["Pav", 50], ["Potato", 70], ["Gram flour (besan)", 15], [OIL, 10]], 145, [s("piece", 145, null, true)], { aliases: ["wada pav", "vadapav"] }),
   dish("Aloo tikki", "snack", "vegan", [["Potato", 250], ["Green peas", 30], [OIL, 25]], 280, [s("piece", 60, null, true)], { aliases: ["tikki", "potato tikki", "aloo patty"] }),
   dish("Paneer tikka", "snack", "veg", [["Paneer", 250], ["Curd", 50], ["Capsicum", 50], ["Onion", 50], [OIL, 10]], 360,
-    [s("serving", 180, null, true, "1 serving (6 pieces)"), s("piece", 30)], { aliases: ["paneer tikka dry", "tandoori paneer"] }),
+    [s("serving", 180, null, true, "1 serving (6 pieces)"), s("piece", 30)], { aliases: ["paneer tikka dry", "tandoori paneer"], meals: ["lunch", "dinner", "snack"] }),
   dish("Raita", "dal_curry", "veg", [["Curd", 150], ["Cucumber", 50]], 200, [KATORI(100)], { aliases: ["cucumber raita", "boondi raita", "kheera raita"] }),
 
   // ── Combos ───────────────────────────────────────────────────────────────
@@ -204,6 +204,19 @@ const LIST: CatalogDish[] = [
   dish("Cheese sandwich", "snack", "veg", [["White bread", 50], ["Cheese", 20], ["Butter", 8]], 75, [s("piece", 75, null, true)], { aliases: ["grilled cheese sandwich", "cheese toast", "grilled sandwich"] }),
   dish("Red sauce pasta", "meal", "veg", [["Pasta, cooked", 200], ["Tomato", 120], ["Onion", 30], ["Olive oil", 10], ["Cheese", 10]], 330, [plate(250), KATORI(150, false)], { aliases: ["pasta", "arrabbiata", "tomato pasta", "penne arrabbiata"] }),
   dish("White sauce pasta", "meal", "veg", [["Pasta, cooked", 200], ["Toned milk", 120], ["Butter", 15], ["Refined flour (maida)", 10], ["Cheese", 15]], 340, [plate(250), KATORI(150, false)], { aliases: ["alfredo pasta", "white pasta", "creamy pasta"] }),
+  // ── Batch 3b (2026-11-04): protein-dense home dishes for the diet planner ──
+  dish("Soya chunk curry", "dal_curry", "vegan", [["Soya chunks, dry", 60], ["Onion", 60], ["Tomato", 100], [OIL, 15]], 400, [KATORI()], { aliases: ["soya curry", "soya chunks curry", "meal maker curry", "soya chunks sabzi", "nutrela curry"] }),
+  dish("Soya pulao", "rice_dish", "vegan", [[RICE_RAW, 80], ["Soya chunks, dry", 40], ["Onion", 40], ["Green peas", 30], [OIL, 15]], 380, [KATORI(), plate(250, false)], { aliases: ["soya chunks pulao", "soya rice", "soya biryani"] }),
+  dish("Tofu bhurji", "breakfast", "vegan", [["Tofu", 200], ["Onion", 40], ["Tomato", 40], ["Capsicum", 30], [OIL, 10]], 280, [s("serving", 150, null, true, "1 serving"), KATORI(100, false)], { aliases: ["tofu scramble", "scrambled tofu"], meals: ["breakfast", "lunch", "dinner"] }),
+  dish("Tofu curry", "dal_curry", "vegan", [["Tofu", 200], ["Onion", 60], ["Tomato", 100], [OIL, 15]], 380, [KATORI()], { aliases: ["tofu masala", "tofu sabzi"] }),
+  dish("Chana chaat", "snack", "vegan", [["Chickpeas, boiled", 150], ["Onion", 30], ["Tomato", 30], ["Lemon juice", 5]], 215, [KATORI()], { aliases: ["chickpea salad", "chana salad", "kabuli chana chaat", "chole chaat"], meals: ["snack", "lunch", "dinner"] }),
+  dish("Sattu drink", "drink", "vegan", [["Sattu", 30], ["Water", 220], ["Lemon juice", 5]], 255, [s("glass", 250, null, true)], { basis: "100ml", aliases: ["sattu sharbat", "sattu shake", "sattu sherbet"] }),
+  dish("Egg white omelette", "breakfast", "egg", [["Egg white", 132], ["Onion", 20], [OIL, 3]], 140, [s("piece", 140, null, true, "1 omelette (4 whites)")], { aliases: ["egg white omelet", "white omelette"], meals: ["breakfast", "lunch", "dinner"] }),
+  dish("Egg white bhurji", "breakfast", "egg", [["Egg white", 165], ["Onion", 30], ["Tomato", 30], [OIL, 5]], 200, [s("serving", 150, null, true, "1 serving (4 whites)")], { aliases: ["egg white scramble", "scrambled egg whites"], meals: ["breakfast", "lunch", "dinner"] }),
+  dish("Grilled chicken breast", "meal", "nonveg", [["Chicken breast, raw", 500], ["Curd", 50], [OIL, 10]], 380, [s("piece", 120, null, true, "1 fillet"), s("serving", 150, null, false, "150 g")], { aliases: ["grilled chicken", "chicken steak", "pan grilled chicken"] }),
+  dish("Chicken keema", "dal_curry", "nonveg", [["Chicken breast, raw", 400], ["Onion", 100], ["Tomato", 100], ["Green peas", 50], [OIL, 25]], 550, [KATORI()], { aliases: ["keema", "chicken kheema", "kheema", "chicken mince"] }),
+  dish("Fish tikka", "meal", "nonveg", [["Fish (rohu), raw", 400], ["Curd", 60], [OIL, 10]], 330, [s("serving", 150, null, true, "1 serving (5 pieces)"), s("piece", 30)], { aliases: ["tandoori fish", "fish tikka dry"], meals: ["lunch", "dinner", "snack"] }),
+  dish("Egg pulao", "rice_dish", "egg", [[RICE_RAW, 100], ["Egg, boiled", 100], ["Onion", 40], [OIL, 15]], 380, [plate(300), KATORI(150, false)], { aliases: ["egg biryani", "anda pulao", "egg rice"] }),
 ];
 
 /**
@@ -339,6 +352,18 @@ export const PREP: Record<string, PrepMinutes> = {
   "Bread butter": 10,
   "Bread omelette": 10,
   "Cheese sandwich": 10,
+  "Soya chunk curry": 30,
+  "Soya pulao": 30,
+  "Tofu curry": 30,
+  "Chicken keema": 30,
+  "Fish tikka": 30,
+  "Egg pulao": 30,
+  "Grilled chicken breast": 30,
+  "Tofu bhurji": 10,
+  "Chana chaat": 10,
+  "Sattu drink": 10,
+  "Egg white omelette": 10,
+  "Egg white bhurji": 10,
 };
 
 export const DISHES: CatalogDish[] = LIST.map((d) => ({ ...d, prepMinutes: d.prepMinutes ?? PREP[d.name] }));

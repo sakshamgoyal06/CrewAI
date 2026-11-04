@@ -93,6 +93,17 @@ const GOLDEN: [meal: string, minKcal: number, maxKcal: number][] = [
   ["5 marie biscuits and chai", 190, 260],
   ["chicken roll", 400, 510],
   ["2 onion pakora, 1 cup tea", 160, 220],
+  // Batch 3b: protein dishes
+  ["soya chunk curry, 2 roti", 300, 420],
+  ["tofu bhurji", 130, 190],
+  ["egg white omelette", 80, 130],
+  ["grilled chicken breast", 190, 260],
+  ["chicken keema, 2 roti", 380, 520],
+  ["fish tikka", 240, 320],
+  ["chana chaat", 180, 260],
+  ["sattu drink", 90, 140],
+  ["handful of roasted chana", 95, 125],
+  ["egg pulao", 400, 560],
 ];
 
 describe("golden meals from the catalog", () => {
