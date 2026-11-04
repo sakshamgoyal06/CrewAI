@@ -1,6 +1,15 @@
 /**
- * Meal options for the diet plan: 5 to 8 per meal, each portioned in household units to fit its
- * meal's budget, built from the person's usual meals and the food catalog. Pure, no model call.
+ * Meal options for the diet plan: 4 to 6 everyday options per meal, plus up to 2 marked "Try
+ * something new", each portioned in household units to land near its meal's budget, built from
+ * the person's usual meals and the food catalog. Pure, no model call.
+ *
+ * Order of decisions (nutrition is last, not first):
+ *   1. restrictions and exclusions (diet, avoid list, meat limits, dishes they never cook);
+ *   2. familiar, feasible food only (familiarity.ts: what they eat, not just what's allowed);
+ *   3. coherence: one base + one main + a compatible side, no two gravies, a simple side
+ *      beside a rich main, no redundant ingredients, few separately cooked dishes when quick;
+ *   4. practical portions (whole eggs, whole slices, roti counts, grams for divisible food);
+ *   5. nutrition: within a range of the meal budget, ranked against it, never forced to match.
  *
  * How a lunch or dinner is put together (pairing rules; the model review catches what these miss):
  * - one base (roti-type bread or rice) + a main (dal, curry, paneer dish) + optionally a sabzi,
@@ -17,12 +26,18 @@ import { DISHES } from "../../meals/catalog/data/dishes.js";
 import { FOODS } from "../../meals/catalog/data/foods.js";
 import type { Diet, MealType, Serving } from "../../meals/catalog/types.js";
 import { foodKeyFor } from "../../meals/foodParse.js";
+import { proteinFrequencies, proteinGroupOf, tierOf, type FamiliarityContext, type Habits, type ProteinGroup, type Tier } from "./familiarity.js";
+import { mealPrep, type MealPrep } from "./prep.js";
 import type { MealBudget, PlanSlot } from "./targets.js";
 
-export const MIN_OPTIONS = 5;
-export const MAX_OPTIONS = 8;
+export const MIN_OPTIONS = 4;
+export const MAX_OPTIONS = 6;
+/** Extra options from food they don't usually eat, marked "Try something new"; never picked for them. */
+export const MAX_NEW_OPTIONS = 2;
 /** An option fits its meal when its calories are within this share of the budget. */
-export const FIT_TOLERANCE = 0.1;
+export const FIT_TOLERANCE = 0.15;
+/** Inside this share of the budget, calories count as on target: no reason to bend a portion. */
+export const FIT_BAND = 0.07;
 
 export type Totals = { kcal: number; proteinG: number; carbsG: number; fatG: number; fiberG: number };
 
@@ -45,8 +60,14 @@ export type MealOption = {
   items: PlanItem[];
   totals: Totals;
   origin: "usual" | "catalog";
-  /** Minutes to make it at home (the slowest dish in it). */
+  /** Minutes to make it at home (the slowest dish in it, catalog scale 0/10/20/30+). */
   prepMinutes: number;
+  /** Hands-on and total time, and what must be ready first (prep.ts). */
+  prep?: MealPrep;
+  /** From food they don't usually eat: shown under "Try something new", never picked for them. */
+  novelty?: boolean;
+  /** The protein the meal is built around ("chicken", "dal"), for variety across options. */
+  proteinGroup?: string | null;
   /** For a usual meal: its key in frequentMeals, so logging it can reuse the usual items. */
   usualKey?: string;
   /** How familiar the meal is: its least logged dish's popularity, 1 (rare) to 5 (most days). */
@@ -72,6 +93,8 @@ export type ComposeInput = {
   usual?: Array<{ key: string; text: string; items: Array<{ name: string; calories: number; protein_g: number; carbs_g: number; fat_g: number }> }>;
   /** Option ids the person hid; never offered again. */
   hidden?: string[];
+  /** What they actually eat (familiarity.ts). Missing answers use a starter set for the diet. */
+  habits?: Habits;
 };
 
 // ---------- catalog roles ----------
@@ -79,8 +102,6 @@ export type ComposeInput = {
 type Role = "bread" | "rice" | "main" | "side" | "cool" | "complete" | "breakfast" | "breakfastBread" | "toast" | "egg" | "accompaniment" | "addon" | "protein" | "snack" | "fruit" | "nut" | "porridge" | "buttermilk";
 
 const RICE_BASE = new Set(["white rice cooked", "brown rice cooked", "jeera rice", "millet cooked", "quinoa cooked"]);
-/** Bases most Indian homes don't cook daily: offered only when they love them. */
-const NICHE_BASE = new Set(["millet cooked", "quinoa cooked"]);
 const STUFFED = new Set(["aloo paratha", "gobi paratha", "paneer paratha", "thepla", "plain paratha"]);
 /** Stuffed parathas are a meal with curd, not a base for dal. */
 const STUFFED_ONLY = new Set(["aloo paratha", "gobi paratha", "paneer paratha"]);
@@ -114,7 +135,7 @@ const HEAVY = new Set(["puri", "samosa", "medu vada", "vada pav", "bhaji", "plai
 const ONLY_IF_LOVED_CATEGORIES = new Set(["sweet", "supplement"]);
 const ONLY_IF_LOVED = new Set(["instant noodle masala dry"]);
 /** Shared main ingredients that make a main and a side too alike. */
-const PRIMARY = ["paneer", "potato", "chickpea", "chicken", "mutton", "egg", "rajma", "kidney bean"];
+const PRIMARY = ["paneer", "potato", "chickpea", "chicken", "mutton", "egg", "rajma", "kidney bean", "moong", "soya", "tofu", "fish", "prawn"];
 
 /** Every word-key a food stands for: its name, aliases and (for dishes) its ingredients, all the way down. */
 function buildTerms(): Map<string, Set<string>> {
@@ -369,24 +390,38 @@ function steps(role: Role, s: Serving): number[] {
     case "rice":
       return [0.5, 1, 1.5, 2];
     case "main":
-      return [1, 1.5, 2];
+      // One katori of a curry, or one and a half: two katoris of mutton curry is not a portion, it's a target being chased.
+      return [1, 1.5];
     case "side":
-      return [0.5, 1, 1.5];
+      return [0.5, 1];
     case "cool":
       return [1];
     case "addon":
       return [1];
     case "complete":
-      return [0.75, 1, 1.25, 1.5];
+      return [1, 1.5];
     case "breakfast":
     case "porridge":
     case "egg":
-      return [0.75, 1, 1.25, 1.5, 2];
+      return [1, 1.5, 2];
     case "nut":
       return [0.5, 1];
     default:
       return [0.5, 1, 1.5, 2];
   }
+}
+
+/** The count a serving's label holds: "2-egg serving" → 2, "2 toasts with tofu scramble" → 2; else 1. */
+export function labelCount(s: Serving): number {
+  const m = /^(\d+)[- ]/.exec(s.label ?? "");
+  return m ? Number(m[1]) : 1;
+}
+
+/** Portions that make sense as said: 3 eggs, not 2½; whole toasts and slices. */
+function practicalSteps(role: Role, s: Serving): number[] {
+  const n = labelCount(s);
+  const list = steps(role, s);
+  return n > 1 ? list.filter((q) => Number.isInteger(n * q)) : list;
 }
 
 function fmtQty(q: number): string {
@@ -411,17 +446,25 @@ export function itemFor(e: CatalogEntry, s: Serving, qty: number): PlanItem {
   } else if (eggs) {
     // "1 2-egg serving egg bhurji" reads badly: "egg bhurji (2 eggs)".
     text = `${name} (${fmtQty(Number(eggs[1]) * qty)} ${eggs[2] === "whites" ? "whites" : "eggs"})`;
-  } else if (!s.label && (s.unit === "piece" || s.unit === "serving")) {
+  } else if (!s.label && s.unit === "piece") {
     text = `${fmtQty(qty)} ${s.size && s.size !== "medium" ? `${s.size} ` : ""}${name}`;
   } else {
     const unitLabel = label.replace(/\s*\(edible part\)/, "");
     if (/^\d+ ?(g|ml)$/.test(unitLabel)) {
-      // A weighed serving ("100 g"): "100 g paneer", "2 × 100 g paneer".
-      return item(e, s, qty, `${qty === 1 ? "" : `${fmtQty(qty)} × `}${unitLabel} ${name}`);
+      // A weighed serving ("100 g"): "100 g paneer", "200 g paneer".
+      const [, n, u] = /^(\d+) ?(g|ml)$/.exec(unitLabel)!;
+      return item(e, s, qty, `${Math.round(Number(n) * qty)} ${u} ${name}`);
     }
-    if (/^[2-9]\d* /.test(unitLabel)) {
-      // A label that already counts ("2 slices with butter"): "bread butter (2 slices with butter)".
-      text = `${qty === 1 ? "" : `${fmtQty(qty)} × `}${name} (${unitLabel})`;
+    if (/^1 serving$/.test(unitLabel) || (s.unit === "serving" && !/^\d/.test(unitLabel))) {
+      // "1 serving" says nothing about the amount: give the weight. "Butter garlic prawns (about 150 g)".
+      return item(e, s, qty, `${name} (about ${Math.round((s.grams * qty) / 5) * 5} ${e.basis === "100ml" ? "ml" : "g"})`);
+    }
+    const count = labelCount(s);
+    if (count > 1) {
+      // A label that already counts ("2 slices with butter", "2 toasts with tofu scramble"): multiply the count.
+      const rest = unitLabel.replace(/^\d+[- ]/, "");
+      const total = count * qty;
+      text = Number.isInteger(total) ? `${name} (${total} ${rest})` : `${fmtQty(qty)} × ${name} (${unitLabel})`;
       return item(e, s, qty, text);
     }
     text = unitLabel.startsWith("1 ") ? `${fmtQty(qty)} ${unitLabel.slice(2)}` : `${fmtQty(qty)} ${unitLabel}`;
@@ -431,8 +474,10 @@ export function itemFor(e: CatalogEntry, s: Serving, qty: number): PlanItem {
     const unitWord = unitWords[unitWords.length - 1]!;
     // "1 chilla with paneer" for paneer moong chilla: the dish name already says it.
     const describes = unitWords.length > 1 && name.split(" ").includes(unitWords[0]!) && unitWords.slice(1).some((w) => name.includes(w) && w.length > 3);
-    if (/ breast fillet$/.test(unitLabel) || describes || (unitLabel.split(" ").length <= 2 && name.endsWith(unitWord))) text = `${fmtQty(qty)} ${qty > 1 ? plural(name) : name}`;
-    else if (qty > 1) text = text.replace(/^(\S+) (bowl|jar|plate)\b/, "$1 $2s").replace(/^(\S+) glass\b/, "$1 glasses");
+    // "1 seekh" of seekh kebab: the unit is the dish's first word, so "3 seekh kebabs", not "3 seekh seekh kebab".
+    const namesUnit = unitWords.length === 1 && name.split(" ")[0] === unitWord;
+    if (/ breast fillet$/.test(unitLabel) || describes || namesUnit || (unitLabel.split(" ").length <= 2 && name.endsWith(unitWord))) text = `${fmtQty(qty)} ${qty > 1 ? plural(name) : name}`;
+    else if (qty > 1) text = text.replace(/^(\S+) (bowl|jar|plate|handful|scoop|cup|ladle|piece)\b/, "$1 $2s").replace(/^(\S+) glass\b/, "$1 glasses");
     const words = name.split(/\s+/).filter((w) => w.length > 2);
     if (!words.every((w) => text.toLowerCase().includes(w.replace(/s$/, "")))) text = `${text} ${name}`;
   }
@@ -484,6 +529,17 @@ const isHeavyProtein = (key: string): boolean => {
   return h;
 };
 
+/** A wet dish: dals, curries, gravies. Two in one meal compete. */
+const GRAVY_WORDS = /\b(masala|curry|kofta|korma|makhani|kadai|kadhai|saag|gravy|dum|kadhi|do pyaza|kolhapuri|butter|shahi|matar|palak|posto|olan|erissery|avial|undhiyu|gatte|sambar|rasam)\b/;
+const DRY_WORDS = /\b(fry|poriyal|thoran|bhaji|bhurji|bharta|salad|chokha|sukha|dry|stir|tikka|jeera aloo|aloo gobi|aloo methi|aloo bhindi|beans|cabbage)\b/;
+export const isGravy = (e: CatalogEntry): boolean =>
+  !DRY_WORDS.test(e.key) && (e.category === "dal_curry" || (e.category === "sabzi" && GRAVY_WORDS.test(e.key)));
+/** Rich or strongly flavoured mains: meat and fish curries, cream or butter gravies, anything oily. */
+export const isRichMain = (e: CatalogEntry): boolean =>
+  (e.diet === "nonveg" && e.category !== "bread") || HEAVY.has(e.key) || e.per100.fat >= 9 || /\b(butter|makhani|malai|shahi|korma|kofta)\b/.test(e.key);
+/** Sides that sit quietly beside a rich main. */
+const SIMPLE_SIDES = new Set(["green salad", "raita", "curd", "cucumber", "onion", "moong sprout"]);
+
 export function pairingProblems(keys: string[], cat: Catalog = catalog()): string[] {
   const entries = keys.map((k) => cat.byKey.get(k)).filter((e): e is CatalogEntry => !!e);
   const roles = entries.map((e) => ({ e, r: roleOf(e) }));
@@ -534,7 +590,17 @@ export function pairingProblems(keys: string[], cat: Catalog = catalog()): strin
   const eggAddon = roles.find((x) => x.e.key === "egg boiled" && x.r.includes("addon"));
   const eggy = roles.find((x) => x !== eggAddon && (x.e.diet === "nonveg" || x.e.diet === "egg" || containsAny(x.e.key, ["egg"])));
   if (eggAddon && eggy) problems.push(`${eggAddon.e.name} on top of ${eggy.e.name} is too much`);
-  const mains = roles.filter((x) => x.r.includes("main") || x.r.includes("side") || x.r.includes("protein"));
+  // Two competing gravies (a meat curry with matar mushroom): one wet dish per meal, plus a dry side or salad.
+  // Dal with a sabzi is the everyday thali, so that pair never counts.
+  const wetRoles = roles.filter((x) => (x.r.includes("main") || x.r.includes("side")) && isGravy(x.e) && x.e.key !== "raita" && !x.r.includes("accompaniment"));
+  const dalSabzi = wetRoles.length === 2 && wetRoles.some((x) => x.e.category === "dal_curry") && wetRoles.some((x) => x.e.category === "sabzi");
+  const wet = dalSabzi ? [] : [...new Set(wetRoles.map((x) => x.e.name))];
+  if (wet.length > 1) problems.push(`${wet[0]} and ${wet[1]} are two gravies`);
+  // A rich main wants a simple side (salad, raita), not another elaborate dish.
+  const rich = roles.find((x) => x.r.includes("main") && isRichMain(x.e));
+  const fancySide = rich && roles.find((x) => x !== rich && x.r.includes("side") && !SIMPLE_SIDES.has(x.e.key) && !x.r.includes("main"));
+  if (rich && fancySide) problems.push(`${fancySide.e.name} is too much beside ${rich.e.name}; a salad or raita goes better`);
+  const mains = roles.filter((x) => x.r.includes("main") || x.r.includes("side") || x.r.includes("protein") || x.r.includes("addon") || x.r.includes("breakfast") || x.r.includes("egg"));
   for (let i = 0; i < mains.length; i++) {
     for (let j = i + 1; j < mains.length; j++) {
       const a = mains[i]!.e.key;
@@ -542,7 +608,7 @@ export function pairingProblems(keys: string[], cat: Catalog = catalog()): strin
       if (a === b) continue;
       const pb = primariesOf(b);
       const shared = primariesOf(a).find((p) => pb.includes(p));
-      if (shared) problems.push(`${mains[i]!.e.name} and ${mains[j]!.e.name} are both ${shared}`);
+      if (shared && !(wet.includes(mains[i]!.e.name) && wet.includes(mains[j]!.e.name))) problems.push(`${mains[i]!.e.name} and ${mains[j]!.e.name} are both ${shared}`);
     }
   }
   return problems;
@@ -550,7 +616,7 @@ export function pairingProblems(keys: string[], cat: Catalog = catalog()): strin
 
 // ---------- building options ----------
 
-type Slotted = { role: Role; e: CatalogEntry; s: Serving };
+type Slotted = { role: Role; e: CatalogEntry; s: Serving; tier: Tier };
 
 /** The templates a meal is built from: each is a list of roles, optional ones marked with `?`. */
 const TEMPLATES: Record<PlanSlot, Array<Array<Role | `${Role}?`>>> = {
@@ -562,7 +628,46 @@ const TEMPLATES: Record<PlanSlot, Array<Array<Role | `${Role}?`>>> = {
 
 const MEAL_TYPE: Record<PlanSlot, MealType> = { breakfast: "breakfast", lunch: "lunch", dinner: "dinner", snack: "snack" };
 
-function candidates(input: ComposeInput, cat: Catalog): Map<Role, Slotted[]> {
+/** A dish's protein group, cached: fit asks once per combination. */
+const GROUP_CACHE = new Map<string, ProteinGroup | null>();
+function groupOfEntry(e: CatalogEntry): ProteinGroup | null {
+  let g = GROUP_CACHE.get(e.key);
+  if (g === undefined) GROUP_CACHE.set(e.key, (g = proteinGroupOf(e, termsOf(e.key))));
+  return g;
+}
+
+/** The household's familiarity check, built once per compose. */
+export function familiarityFor(input: Pick<ComposeInput, "diet" | "habits" | "loves" | "usual">, cat: Catalog = catalog()): FamiliarityContext {
+  const loves = input.loves.map(foodKeyFor).filter(Boolean);
+  const usualKeys = new Set<string>();
+  const usualCuisines = new Set<string>();
+  for (const u of input.usual ?? []) {
+    for (const i of u.items) {
+      const e = cat.byKey.get(foodKeyFor(i.name));
+      if (e) { usualKeys.add(e.key); usualCuisines.add(e.cuisine); }
+    }
+  }
+  for (const l of loves) { const e = cat.byKey.get(l); if (e) usualCuisines.add(e.cuisine); }
+  const freq = proteinFrequencies({
+    diet: input.diet,
+    habits: input.habits,
+    loves: input.loves,
+    usualTexts: (input.usual ?? []).flatMap((u) => [u.text, ...u.items.map((i) => i.name)]),
+  });
+  const groups = new Map<string, ProteinGroup | null>();
+  return {
+    freq,
+    cuisines: new Set(["everyday", ...(input.habits?.cuisines ?? []), ...usualCuisines]),
+    neverCook: new Set((input.habits?.neverCook ?? []).map(foodKeyFor)),
+    known: (e) => usualKeys.has(e.key) || loves.some((l) => containsAny(e.key, [l])),
+    groupOf: (e) => {
+      if (!groups.has(e.key)) groups.set(e.key, groupOfEntry(e));
+      return groups.get(e.key)!;
+    },
+  };
+}
+
+function candidates(input: ComposeInput, cat: Catalog, fam: FamiliarityContext = familiarityFor(input, cat)): Map<Role, Slotted[]> {
   const avoid = avoidWords(input.avoid);
   const loves = input.loves.map(foodKeyFor).filter(Boolean);
   const loved = (e: CatalogEntry) => loves.some((l) => containsAny(e.key, [l]));
@@ -575,7 +680,10 @@ function candidates(input: ComposeInput, cat: Catalog): Map<Role, Slotted[]> {
     // (`ordered` comes with the food catalog's batch 3; read loosely so this works before and after it.)
     if ((e as { ordered?: boolean }).ordered) continue;
     if (containsAny(e.key, avoid)) continue;
-    if ((ONLY_IF_LOVED_CATEGORIES.has(e.category) || ONLY_IF_LOVED.has(e.key) || NICHE_BASE.has(e.key)) && !loved(e)) continue;
+    if ((ONLY_IF_LOVED_CATEGORIES.has(e.category) || ONLY_IF_LOVED.has(e.key)) && !loved(e)) continue;
+    // Allowed is not the same as eaten: dishes they never cook are out; specialities are only "try something new".
+    const tier = tierOf(e, fam);
+    if (tier === "excluded") continue;
     const def = defaultServing(e);
     // A bare "100 g" serving isn't a household portion; protein sides use their piece serving (cubes, a fillet).
     const plain100 = !def || (def.unit === "serving" && def.grams === 100 && e.kind === "food" && e.key !== "egg boiled");
@@ -586,6 +694,12 @@ function candidates(input: ComposeInput, cat: Catalog): Map<Role, Slotted[]> {
       if (!s) continue;
       // Tofu cubes beside dal suit a vegan; a vegetarian gets paneer unless they like tofu.
       if (role === "protein" && e.key === "tofu" && input.diet !== "vegan" && !loved(e)) continue;
+      // A plain chicken breast beside dal and roti isn't how homes eat; only for people who ask for it.
+      if (role === "protein" && e.diet === "nonveg" && !loved(e)) continue;
+      // Fruit beside a meal: a common fruit by the piece (a banana, a guava), not 1½ katori of jackfruit.
+      if (role === "fruit" && (e.popularity < 4 || s.unit !== "piece") && !loved(e)) continue;
+      // Greek yogurt is a breakfast or snack thing; at lunch and dinner it's curd or raita.
+      if (role === "addon" && e.key === "greek yogurt" && (input.budget.slot === "lunch" || input.budget.slot === "dinner")) continue;
       // Accompaniments, rice and add-ons follow the meal; everything else must be eaten at this meal.
       const followsMeal = ["buttermilk", "rice", "accompaniment", "addon", "protein", "cool", "toast", "fruit", "nut"].includes(role);
       if (!followsMeal && !e.meals.includes(MEAL_TYPE[input.budget.slot]) && !(role === "snack" && input.budget.slot === "snack")) continue;
@@ -594,7 +708,7 @@ function candidates(input: ComposeInput, cat: Catalog): Map<Role, Slotted[]> {
       // Milk goes with breakfast and snacks, not with dal and roti.
       if (role === "addon" && e.key.endsWith("milk") && (input.budget.slot === "lunch" || input.budget.slot === "dinner")) continue;
       const list = out.get(role) ?? [];
-      list.push({ role, e, s });
+      list.push({ role, e, s, tier });
       out.set(role, list);
     }
   }
@@ -618,9 +732,22 @@ function combos(template: Array<Role | `${Role}?`>, pool: Map<Role, Slotted[]>):
   return acc.filter((c) => c.length);
 }
 
-type Scored = { option: MealOption; score: number; anchor: string; base: string | null; highProtein: boolean; rice: boolean; dal: boolean };
-/** How much a protein shortfall costs in an option's score, against 2 for its calorie error. */
-const PROTEIN_WEIGHT = 3;
+type Scored = {
+  option: MealOption;
+  score: number;
+  anchor: string;
+  base: string | null;
+  highProtein: boolean;
+  rice: boolean;
+  dal: boolean;
+  /** Built on food they don't usually eat. */
+  novelty: boolean;
+  /** Built on a protein they eat only sometimes. */
+  occasional: boolean;
+  group: ProteinGroup | null;
+};
+/** How much a protein shortfall (beyond 10%) costs, against 3 per unit of calorie error outside the band. */
+const PROTEIN_WEIGHT = 1.2;
 /** No add-on or side in more than this many of a meal's options. */
 const MAX_ITEM_REPEATS = 2;
 
@@ -639,7 +766,7 @@ export function titleOf(items: Array<Pick<PlanItem, "name">>): string {
 type ItemCache = WeakMap<Slotted, PlanItem[]>;
 function itemsFor(cache: ItemCache, x: Slotted): PlanItem[] {
   let l = cache.get(x);
-  if (!l) cache.set(x, (l = steps(x.role, x.s).map((q) => itemFor(x.e, x.s, q))));
+  if (!l) cache.set(x, (l = practicalSteps(x.role, x.s).map((q) => itemFor(x.e, x.s, q))));
   return l;
 }
 
@@ -649,32 +776,51 @@ function itemsFor(cache: ItemCache, x: Slotted): PlanItem[] {
  */
 const popularityOf = (e: CatalogEntry): number => (e as { popularity?: number }).popularity ?? 3;
 const cuisineOf = (e: CatalogEntry): string => (e as { cuisine?: string }).cuisine ?? "everyday";
-/** Score per popularity point below 3 (or bonus above it), against 2 per unit of calorie error. */
-const POPULARITY_WEIGHT = 0.05;
+/** Score per popularity point away from 3: familiar food outranks a closer macro fit. */
+const POPULARITY_WEIGHT = 0.12;
+/** Score per serving away from the usual portion (2 rotis, 1 katori): bend portions only when it helps. */
+const PORTION_WEIGHT = 0.05;
 /** Roles whose dish defines the meal; accompaniments and add-ons don't make a meal unfamiliar. */
 const CORE_ROLES: Role[] = ["main", "complete", "breakfast", "egg", "porridge", "breakfastBread", "snack", "side", "bread", "rice"];
 
-function fit(combo: Slotted[], input: ComposeInput, lovedKeys: string[], cache: ItemCache = new WeakMap()): Scored | null {
+/** The portion a person would serve without thinking: 2 medium rotis, 1 katori, 1 piece. */
+function typicalQty(x: Slotted): number {
+  if ((x.role === "bread" || x.role === "breakfastBread") && x.s.unit === "piece" && x.s.grams <= 60) return 2;
+  if (x.role === "toast" && labelCount(x.s) === 1) return 2;
+  return 1;
+}
+
+type FitContext = { lovedKeys: string[]; tooMuchEffort: Set<string> };
+
+function fit(combo: Slotted[], input: ComposeInput, ctx: FitContext, cache: ItemCache = new WeakMap()): Scored | null {
   const b = input.budget;
+  const entries = combo.map((x) => x.e);
+  const prepInfo = mealPrep(entries);
+  // A quick meal is one or two things to cook, not three separately cooked dishes.
+  const cookedDishes = entries.filter((e) => (e.prepMinutes ?? (RICE_BASE.has(e.key) ? 20 : 0)) > 0 && e.key !== "green salad").length;
+  if (input.prepLimit !== null && input.prepLimit <= 20 && cookedDishes > 2) return null;
+
   const itemLists = combo.map((x) => itemsFor(cache, x));
+  const portionPen = combo.map((x, i) => itemLists[i]!.map((it) => Math.abs(it.qty - typicalQty(x)) * PORTION_WEIGHT));
   let best: { score: number; idx: number[] } | null = null;
   const idx = combo.map(() => 0);
   const n = combo.length;
   for (;;) {
     // Plain sums here (no objects): this loop runs for every portion of every combination.
-    let kcal = 0, protein = 0, fat = 0;
+    let kcal = 0, protein = 0, fat = 0, portion = 0;
     for (let i = 0; i < n; i++) {
       const it = itemLists[i]![idx[i]!]!;
       kcal += it.kcal;
       protein += it.proteinG;
       fat += it.fatG;
+      portion += portionPen[i]![idx[i]!]!;
     }
     const kcalErr = Math.abs(Math.round(kcal) - b.calories) / b.calories;
     if (kcalErr <= FIT_TOLERANCE) {
       const pr = b.proteinG ? r1(protein) / b.proteinG : 1;
       const fatOver = b.fatG ? Math.max(0, r1(fat) / b.fatG - 1.25) : 0;
-      // Protein counts most: plans fell short on protein far more often than on calories.
-      const score = kcalErr * 2 + Math.max(0, 1 - pr) * PROTEIN_WEIGHT + fatOver * 0.6;
+      // A range, not a number: inside the band calories don't matter, so portions stay usual.
+      const score = Math.max(0, kcalErr - FIT_BAND) * 3 + Math.max(0, 0.9 - pr) * PROTEIN_WEIGHT + fatOver * 0.6 + portion;
       if (!best || score < best.score) best = { score, idx: [...idx] };
     }
     let i = 0;
@@ -687,21 +833,31 @@ function fit(combo: Slotted[], input: ComposeInput, lovedKeys: string[], cache: 
 
   let score = best.score;
   const keys = combo.map((x) => x.e.key);
-  if (keys.some((k) => lovedKeys.some((l) => containsAny(k, [l])))) score -= 0.15;
+  if (keys.some((k) => ctx.lovedKeys.some((l) => containsAny(k, [l])))) score -= 0.2;
   if (keys.some((k) => HEAVY.has(k))) score += 0.3;
+  if (keys.some((k) => ctx.tooMuchEffort.has(k))) score += 0.5;
   const base = combo.find((x) => x.role === "bread" || x.role === "rice") ?? null;
   if (base && input.staples !== "both") score += (input.staples === "roti") === (base.role === "bread") ? -0.1 : 0.15;
   const prep = Math.max(0, ...combo.map((x) => x.e.prepMinutes ?? 20));
-  score += prep * 0.002;
+  // Effort counts: hands-on minutes, not just the slowest dish.
+  score += prepInfo.activeMinutes * 0.004;
   // HealthifyMe-style plans put a vegetable (sabzi or salad) in nearly every lunch and dinner.
   if ((b.slot === "lunch" || b.slot === "dinner") && !combo.some((x) => x.role === "complete")) score += combo.some((x) => x.role === "side") ? -0.12 : 0.08;
   // Familiar food first: a meal is as familiar as its least logged core dish.
   const core = combo.filter((x) => CORE_ROLES.includes(x.role));
   const popularity = Math.min(...(core.length ? core : combo).map((x) => popularityOf(x.e)));
   score += (3 - popularity) * POPULARITY_WEIGHT;
+  // "Try something new" means one new dish on a familiar plate, not quinoa with sarson ka saag.
+  const newCount = combo.filter((x) => x.tier === "new").length;
+  if (newCount > 1) return null;
+  const novelty = newCount === 1;
+  const occasional = combo.some((x) => x.tier === "occasional");
+  if (occasional) score += 0.15;
 
   const anchorX = combo.find((x) => ["main", "complete", "breakfast", "egg", "porridge", "breakfastBread", "snack", "fruit", "addon"].includes(x.role)) ?? combo[0]!;
   const anchor = anchorX.e.key;
+  // The meal's protein: its main dish's, else a protein side's (dal + paneer cubes is a paneer meal for variety).
+  const group = groupOfEntry(anchorX.e) ?? combo.map((x) => groupOfEntry(x.e)).find((g) => g) ?? null;
   return {
     option: {
       id: optionId(b.slot, bestItems),
@@ -711,8 +867,11 @@ function fit(combo: Slotted[], input: ComposeInput, lovedKeys: string[], cache: 
       totals: bestTotals,
       origin: "catalog",
       prepMinutes: prep,
+      prep: prepInfo,
       popularity,
       cuisine: cuisineOf(anchorX.e),
+      proteinGroup: group,
+      ...(novelty ? { novelty: true } : {}),
     },
     score,
     anchor,
@@ -720,6 +879,9 @@ function fit(combo: Slotted[], input: ComposeInput, lovedKeys: string[], cache: 
     highProtein: b.proteinG > 0 && bestTotals.proteinG >= b.proteinG * 0.9,
     rice: base?.role === "rice" || combo.some((x) => x.e.category === "rice_dish" || x.e.key.endsWith("chawal")),
     dal: combo.some((x) => x.role === "main" && isPlainDal(x.e)),
+    novelty,
+    occasional,
+    group,
   };
 }
 
@@ -763,79 +925,98 @@ export function usualOption(
 }
 
 /**
- * 5 to 8 options for one meal: usual meals that fit first, then catalog meals by score, no main
- * dish twice, and at least two that cover the meal's protein when the catalog has them.
+ * 4 to 6 everyday options for one meal, then up to 2 marked "Try something new": usual meals that
+ * fit first, then catalog meals by score; no main dish twice, at most two built on the same
+ * protein, and at least two that cover the meal's protein when familiar food allows it.
  */
 export function composeOptions(input: ComposeInput, cat: Catalog = catalog()): MealOption[] {
   let limit = input.prepLimit;
-  const out = composeWithin(input, cat, limit === null);
+  const first = composeWithin(input, cat, limit === null);
+  const out = first.everyday;
+  let novel = first.novel;
   // Too few meals fit their cooking time (10 minutes for lunch): step the limit up until there
   // are enough, keeping the quick ones first. Repeats of one dish only as a last resort.
   while (out.length < MIN_OPTIONS && limit !== null) {
     limit = PREP_LADDER.find((m) => m > limit!) ?? null;
-    for (const o of composeWithin({ ...input, prepLimit: limit }, cat, limit === null)) {
+    const next = composeWithin({ ...input, prepLimit: limit }, cat, limit === null);
+    for (const o of next.everyday) {
       if (out.length >= MIN_OPTIONS) break;
       if (!out.some((x) => x.id === o.id || x.title === o.title)) out.push(o);
     }
+    if (!novel.length) novel = next.novel;
   }
-  return out;
+  const seen = new Set(out.map((o) => o.id));
+  return [...out, ...novel.filter((o) => !seen.has(o.id)).slice(0, MAX_NEW_OPTIONS)];
 }
 
 const PREP_LADDER = [10, 20, 30];
+/** Options built on one protein (chicken, dal, paneer): enough to choose, not a list of near copies. */
+const MAX_PER_GROUP = 2;
+/** Options built on a protein they eat only sometimes. */
+const MAX_OCCASIONAL = 1;
 
-function composeWithin(input: ComposeInput, cat: Catalog, pad: boolean): MealOption[] {
+function composeWithin(input: ComposeInput, cat: Catalog, pad: boolean): { everyday: MealOption[]; novel: MealOption[] } {
   const hidden = new Set(input.hidden ?? []);
   const lovedKeys = input.loves.map(foodKeyFor).filter(Boolean);
   const out: MealOption[] = [];
   const anchors = new Set<string>();
 
   const policy = allowedMeats(input.dietNote ?? []);
+  const fam = familiarityFor(input, cat);
   const usualOk = (u: NonNullable<ComposeInput["usual"]>[number]) =>
     !policy || u.items.every((i) => {
       const e = cat.byKey.get(foodKeyFor(i.name));
       return e ? meatPolicyAllows(e.key, e.diet, policy) : !MEAT_NAMES.some((m) => meatOfWord(m) && containsAny(foodKeyFor(i.name), [m, ...MEATS[m]!]) && !policy.meats.has(m));
     });
-  for (const u of (input.usual ?? []).filter(usualOk)) {
+  const usualNotRuledOut = (u: NonNullable<ComposeInput["usual"]>[number]) =>
+    u.items.every((i) => !fam.neverCook.has(cat.byKey.get(foodKeyFor(i.name))?.key ?? ""));
+  for (const u of (input.usual ?? []).filter(usualOk).filter(usualNotRuledOut)) {
     const o = usualOption(input.budget.slot, input.budget, u, cat);
     if (o && !hidden.has(o.id) && out.length < 3) out.push(o);
   }
   for (const o of out) for (const i of o.items) if (i.key) anchors.add(i.key);
 
-  const pool = candidates(input, cat);
+  const pool = candidates(input, cat, fam);
   const scored: Scored[] = [];
   const cache: ItemCache = new WeakMap();
+  const ctx: FitContext = { lovedKeys, tooMuchEffort: new Set((input.habits?.tooMuchEffort ?? []).map(foodKeyFor)) };
   for (const t of TEMPLATES[input.budget.slot]) {
     for (const c of combos(t, pool)) {
       if (pairingProblems(c.map((x) => x.e.key), cat).length) continue;
-      const s = fit(c, input, lovedKeys, cache);
+      const s = fit(c, input, ctx, cache);
       if (s && !hidden.has(s.option.id)) scored.push(s);
     }
   }
   scored.sort((a, b) => a.score - b.score || a.option.id.localeCompare(b.option.id));
+  const everyday = scored.filter((x) => !x.novelty);
 
   const picked: Scored[] = [];
   const bases = new Map<string, number>();
   const uses = new Map<string, number>();
+  const groups = new Map<string, number>();
   const take = (s: Scored) => {
     picked.push(s);
     anchors.add(s.anchor);
     if (s.base) bases.set(s.base, (bases.get(s.base) ?? 0) + 1);
+    if (s.group) groups.set(s.group, (groups.get(s.group) ?? 0) + 1);
     for (const i of s.option.items) if (i.key && i.key !== s.base && i.key !== s.anchor) uses.set(i.key, (uses.get(i.key) ?? 0) + 1);
   };
   const overused = (s: Scored) => s.option.items.some((i) => i.key && i.key !== s.base && i.key !== s.anchor && (uses.get(i.key) ?? 0) >= MAX_ITEM_REPEATS);
+  const groupFull = (s: Scored) => !!s.group && (groups.get(s.group) ?? 0) >= MAX_PER_GROUP;
+  const occasionalFull = (s: Scored) => s.occasional && picked.filter((p) => p.occasional).length >= MAX_OCCASIONAL;
   const room = () => MAX_OPTIONS - out.length - picked.length;
-  for (const s of scored) {
+  for (const s of everyday) {
     if (room() <= 0) break;
     if (anchors.has(s.anchor)) continue;
     // Variety: the same base (roti) at most three times.
     if (s.base && (bases.get(s.base) ?? 0) >= 3) continue;
-    if (overused(s)) continue;
+    if (overused(s) || groupFull(s) || occasionalFull(s)) continue;
     if (s.dal && picked.filter((p) => p.dal).length >= MAX_DAL_OPTIONS) continue;
     take(s);
   }
   // Rice eaters get at least one rice option.
   if (input.staples !== "roti" && !picked.some((p) => p.rice) && !out.some((o) => o.items.some((i) => i.key && RICE_BASE.has(i.key)))) {
-    const rice = scored.find((s) => s.rice && !anchors.has(s.anchor));
+    const rice = everyday.find((s) => s.rice && !anchors.has(s.anchor) && !occasionalFull(s));
     if (rice) {
       if (room() <= 0) picked.pop();
       take(rice);
@@ -843,17 +1024,28 @@ function composeWithin(input: ComposeInput, cat: Catalog, pad: boolean): MealOpt
   }
   // At least two options that cover the meal's protein, swapping out the weakest picks.
   const high = () => out.filter((o) => o.totals.proteinG >= input.budget.proteinG * 0.9).length + picked.filter((p) => p.highProtein).length;
-  for (const s of scored) {
+  for (const s of everyday) {
     if (high() >= 2) break;
-    if (!s.highProtein || picked.includes(s) || anchors.has(s.anchor)) continue;
+    if (!s.highProtein || picked.includes(s) || anchors.has(s.anchor) || groupFull(s) || occasionalFull(s)) continue;
     const weakest = [...picked].reverse().find((p) => !p.highProtein);
     if (weakest && room() <= 0) picked.splice(picked.indexOf(weakest), 1);
     take(s);
   }
   // Short of the minimum: relax variety (a second option with the same main, different base).
-  for (const s of pad ? scored : []) {
+  for (const s of pad ? everyday : []) {
     if (out.length + picked.length >= MIN_OPTIONS) break;
     if (!picked.includes(s)) take(s);
   }
-  return [...out, ...picked.map((p) => p.option)];
+
+  // "Try something new": the best-ranked meals built on food they don't usually eat, each on a different protein.
+  const novel: MealOption[] = [];
+  const novelGroups = new Set<string>();
+  for (const s of scored) {
+    if (novel.length >= MAX_NEW_OPTIONS) break;
+    if (!s.novelty || anchors.has(s.anchor) || (s.group && novelGroups.has(s.group))) continue;
+    novel.push(s.option);
+    anchors.add(s.anchor);
+    if (s.group) novelGroups.add(s.group);
+  }
+  return { everyday: [...out, ...picked.map((p) => p.option)], novel };
 }

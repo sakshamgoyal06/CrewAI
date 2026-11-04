@@ -48,6 +48,8 @@ export function pickDays(input: {
   pinned?: string[];
   /** Picks already stored for the window or before it (for the no-repeat rule). */
   existing?: PriorPick[];
+  /** "Ingredients unavailable today": skip these options on these dates only. */
+  unavailable?: Array<{ date: string; optionId: string }>;
 }): DayPick[] {
   const pinned = new Set(input.pinned ?? []);
   const days = input.days ?? PLAN_DAYS;
@@ -84,7 +86,12 @@ export function pickDays(input: {
           .filter((h) => h.slot === b.slot && h.optionId && dayNumber(h.date) < dayNumber(date) && dayNumber(h.date) >= dayNumber(date) - NO_REPEAT_DAYS)
           .map((h) => h.optionId!),
       );
-      const fresh = list.filter((o) => !recent.has(o.id));
+      // "Try something new" options wait to be chosen; the plan never picks them for anyone.
+      const everyday = list.filter((o) => !o.novelty || pinned.has(o.id));
+      const skip = new Set(input.unavailable?.filter((u) => u.date === date).map((u) => u.optionId) ?? []);
+      const usable = everyday.filter((o) => !skip.has(o.id));
+      const pool = usable.length ? usable : everyday.length ? everyday : list;
+      const fresh = pool.filter((o) => !recent.has(o.id));
       const familiar = (o: MealOption) => (o.popularity ?? 3) >= 3;
       const newCuisine = (o: MealOption) => !o.cuisine || o.cuisine === "everyday" || !dayCuisines.has(o.cuisine);
       const choice =
@@ -92,7 +99,7 @@ export function pickDays(input: {
         fresh.find((o) => familiar(o) && newCuisine(o)) ??
         fresh.find(familiar) ??
         fresh[0] ??
-        leastRecent(list, history, b.slot);
+        leastRecent(pool, history, b.slot);
       out.push(pickOf(date, b.slot, choice));
       note(choice);
       history.push({ date, slot: b.slot, optionId: choice.id });
@@ -118,6 +125,7 @@ function eatOut(date: string, b: MealBudget): DayPick {
     kind: "eat_out",
     optionId: null,
     title: `Eating out, about ${b.calories} kcal`,
-    totals: { kcal: b.calories, proteinG: b.proteinG, carbsG: b.carbsG, fatG: b.fatG, fiberG: 0 },
+    // An allowance, not a known meal: its protein, carbs and fat are unknown, so they're 0 here and dayAccount.ts never counts them.
+    totals: { kcal: b.calories, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
   };
 }

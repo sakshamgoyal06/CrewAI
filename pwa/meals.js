@@ -119,13 +119,8 @@ function paint() {
       onclick: () => { ms.date = date; paint(); } }, dayLabel(date))));
 
   const t = v.plan.targets;
-  const tot = dayTotals(ms.date);
   const isToday = ms.date === d.todayKey();
-  const summary = el("div", { class: "meal-summary" },
-    el("div", { class: "big" }, el("span", { class: "num" }, fmt(isToday ? tot.eatenKcal : tot.plannedKcal)), el("span", { class: "unit" }, isToday ? "kcal eaten" : "kcal planned")),
-    el("div", { class: "side" },
-      el("div", {}, `of ${fmt(t.calories)} kcal`),
-      el("div", { class: "muted" }, `P ${fmt(t.proteinG)} · C ${fmt(t.carbsG)} · F ${fmt(t.fatG)} g`)));
+  const summary = daySummary(ms.date, t, isToday);
 
   const order = SLOT_ORDER.filter((s) => v.prefs.meals.some((m) => m.slot === s));
   const list = el("ul", { class: "list meal-plan" }, ...order.map((slot) => mealCard(ms.date, slot)).filter(Boolean));
@@ -138,6 +133,29 @@ function paint() {
     el("div", { class: "fresh-plan" },
       el("button", { class: "btn block", type: "button", onclick: rebuild }, "Make me a fresh plan"),
       el("p", { class: "hint" }, "New options from your current food settings. Meals you've already eaten stay."))].filter(Boolean));
+}
+
+/**
+ * The day's numbers, each labelled for what it is: the target, what's planned (meals plus
+ * supplements, counted once), an eating-out allowance (calories only, macros unknown), what's
+ * not planned yet, and on today what's been eaten. All from the server's day account.
+ */
+function daySummary(date, t, isToday) {
+  const { el, fmt } = d;
+  const a = (ms.view.accounts || []).find((x) => x.date === date);
+  if (!a) return el("div", { class: "meal-summary" }, el("div", { class: "big" }, el("span", { class: "num" }, fmt(t.calories)), el("span", { class: "unit" }, "kcal target")));
+  const lines = [
+    `Target ${fmt(a.target.kcal)} kcal · P ${fmt(a.target.proteinG)} · C ${fmt(a.target.carbsG)} · F ${fmt(a.target.fatG)} g`,
+    `Planned ${fmt(a.planned.kcal)} kcal · P ${fmt(a.planned.proteinG)} · C ${fmt(a.planned.carbsG)} · F ${fmt(a.planned.fatG)} g${a.supplements.kcal ? ` (incl. supplements ${fmt(a.supplements.kcal)} kcal)` : ""}`,
+    a.allowanceKcal ? `Eating out: about ${fmt(a.allowanceKcal)} kcal allowance, food not known yet` : null,
+    Math.abs(a.unallocatedKcal) >= 50 ? (a.unallocatedKcal > 0 ? `Not planned yet: ${fmt(a.unallocatedKcal)} kcal` : `Over target by ${fmt(-a.unallocatedKcal)} kcal`) : null,
+    a.proteinShortG >= 10 ? `Protein still to find: ${fmt(a.proteinShortG)} g${a.allowanceKcal ? " (pick a protein dish when eating out)" : " (add curd, an egg or a scoop of whey)"}` : null,
+  ].filter(Boolean);
+  return el("div", { class: "meal-summary day-account" },
+    el("div", { class: "big" },
+      el("span", { class: "num" }, fmt(isToday ? a.logged.kcal : a.planned.kcal + a.allowanceKcal)),
+      el("span", { class: "unit" }, isToday ? `kcal eaten of ${fmt(a.target.kcal)}` : `kcal planned of ${fmt(a.target.kcal)}`)),
+    el("ul", { class: "acct" }, ...lines.map((l) => el("li", {}, l))));
 }
 
 /** One row for the day's supplements: what they are and a tap to log them (today only). */
@@ -311,6 +329,7 @@ export function mealScreen() {
   if (p.kind === "eat_out") {
     wrap.append(
       el("p", {}, p.title),
+      el("p", { class: "hint" }, "This is a calorie allowance, not a planned meal: its protein, carbs and fat aren't known until you log what you had."),
       el("p", { class: "hint" }, "Pick a dish with a protein (paneer, dal, chicken, eggs) and go easy on fried sides and refined bread. Log what you had and the rest of the day adjusts."),
       el("button", { class: "btn primary block", type: "button", onclick: () => d.logOwn(slot, date) }, "Log what I ate"),
       el("p", { class: "hint" }, "Search the food list first. If something isn't there, describe it and I'll estimate it."));
@@ -486,15 +505,49 @@ function optionMarks(optionId) {
     el("button", { class: "chip", type: "button", onclick: () => mark("hide", "Hidden. It won't be suggested again.") }, "Don't suggest this"));
 }
 
+/** "Why swap?": each reason means something different; only the first two are remembered. */
+function swapReasons(date, slot) {
+  const { el } = d;
+  const reasons = [
+    ["want_different", "Want something different"],
+    ["unavailable_today", "Ingredients not there today"],
+    ["too_much_effort", "Too much effort"],
+    ["dislike_combo", "Don't like this combination"],
+    ["dont_cook", "We don't cook this"],
+  ];
+  const send = async (reason, btn) => {
+    btn.disabled = true;
+    try {
+      const r = await d.api(`/diet/days/${date}/${slot}/feedback`, { method: "POST", body: JSON.stringify({ reason }) });
+      ms.edit = null;
+      await loadPlan(true);
+      d.toast(reason === "dont_cook" ? "Got it. That dish won't be planned again." : reason === "too_much_effort" ? "Got it. Quicker meals first from now on." : reason === "dislike_combo" ? "That combination won't come back. Its foods still can." : "Swapped for today only.");
+      d.openSheet("dietMeal", { fromHistory: true });
+      paint();
+      return r;
+    } catch (err) { d.toast(err.message); btn.disabled = false; }
+  };
+  return el("div", { class: "stack" },
+    el("p", { class: "section-label" }, "Or tell me why, and I'll pick"),
+    el("div", { class: "chips wrap" }, ...reasons.map(([k, label]) => el("button", { class: "chip", type: "button", onclick: (e) => send(k, e.currentTarget) }, label))));
+}
+
+function optionSub(o, budget) {
+  const { fmt } = d;
+  const prep = o.prep ? (o.prep.totalMinutes ? ` · about ${o.prep.totalMinutes} min${o.prep.activeMinutes && o.prep.activeMinutes < o.prep.totalMinutes ? `, ${o.prep.activeMinutes} hands-on` : ""}` : " · no cooking") : o.prepMinutes ? ` · ${o.prepMinutes} min` : "";
+  const needs = o.prep?.needs?.length ? ` · uses ${o.prep.needs.join(", ")}` : "";
+  return `${fmt(o.totals.kcal)} kcal · P ${fmt(o.totals.proteinG)} · C ${fmt(o.totals.carbsG)} · F ${fmt(o.totals.fatG)} g${prep}${needs}${ms.view.marks.pinned.includes(o.id) ? " · ★" : ""}`;
+}
+
 /** The other options for this meal; every one was built inside the person's restrictions. */
 function otherOptions(date, slot, currentId) {
-  const { el, fmt } = d;
-  const others = optionsOf(slot).filter((o) => o.id !== currentId || pickOf(date, slot)?.edited);
-  if (!others.length) return el("div");
+  const { el } = d;
+  const all = optionsOf(slot).filter((o) => o.id !== currentId || pickOf(date, slot)?.edited);
+  const others = all.filter((o) => !o.novelty);
+  const novel = all.filter((o) => o.novelty);
+  if (!all.length) return el("div");
   const budget = budgetOf(slot);
-  return el("div", { class: "stack" },
-    el("p", { class: "section-label" }, "Swap for another meal"),
-    el("ul", { class: "list option-list" }, ...others.map((o) =>
+  const row = (o) =>
       el("li", {},
         el("button", { class: "option-row", type: "button", onclick: async (ev) => {
           ev.currentTarget.disabled = true;
@@ -508,8 +561,15 @@ function otherOptions(date, slot, currentId) {
           } catch (err) { d.toast(err.message); ev.currentTarget.disabled = false; }
         } },
           el("span", { class: "what" }, o.items.map((i) => i.text).join(", ")),
-          el("span", { class: "sub" }, `${fmt(o.totals.kcal)} kcal · P ${fmt(o.totals.proteinG)} · C ${fmt(o.totals.carbsG)} · F ${fmt(o.totals.fatG)} g${o.prepMinutes ? ` · ${o.prepMinutes} min` : ""}${ms.view.marks.pinned.includes(o.id) ? " · ★" : ""}`),
-          budget && Math.abs(o.totals.kcal - budget.calories) > budget.calories * 0.1 ? el("span", { class: "sub" }, `Sized for ${fmt(budget.calories)} kcal`) : null)))));
+          el("span", { class: "sub" }, optionSub(o, budget))));
+  return el("div", { class: "stack" },
+    el("p", { class: "section-label" }, "Swap for another meal"),
+    el("ul", { class: "list option-list" }, ...others.map(row)),
+    novel.length ? el("details", { class: "try-new" },
+      el("summary", {}, "Try something new"),
+      el("p", { class: "hint" }, "Dishes you don't usually cook. Never planned unless you pick one."),
+      el("ul", { class: "list option-list" }, ...novel.map(row))) : null,
+    date >= d.todayKey() && !isEaten(pickOf(date, slot) || {}) ? swapReasons(date, slot) : null);
 }
 
 // ---------- setup ----------
