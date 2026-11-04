@@ -10,7 +10,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { logger } from "../logger.js";
 import { supabase } from "../tools/clients.js";
-import { healthAppAuthConfig } from "./auth.js";
+import { isOwnerProfileRow } from "./accounts.js";
 import type { LimitedAction } from "./usageLimits.js";
 import { DAY_MS } from "../util/time.js";
 
@@ -39,36 +39,138 @@ export type Entitlement = {
 };
 
 export function billingEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.MAGNUS_BILLING?.trim().toLowerCase() === "on";
+  return billingMode(env) === "on";
+}
+
+/**
+ * off: no plan UI, nothing enforced. preview: the plan and payment screens show (with a
+ * simulated payment when Razorpay isn't linked) but nothing is enforced. on: live.
+ */
+export function billingMode(env: NodeJS.ProcessEnv = process.env): "off" | "preview" | "on" {
+  const v = env.MAGNUS_BILLING?.trim().toLowerCase();
+  return v === "on" ? "on" : v === "preview" ? "preview" : "off";
 }
 
 /** A grace period on failed renewals: past_due keeps Pro this long after the period ends. */
 const GRACE_MS = 3 * DAY_MS;
+
+/**
+ * When the trial starts: sign-up, or MAGNUS_TRIAL_FROM (YYYY-MM-DD) for people who signed up
+ * before billing went live, so turning billing on doesn't end everyone's trial on day one.
+ */
+export function trialStart(createdAt: string | null, env: NodeJS.ProcessEnv = process.env): number | null {
+  const signedUp = createdAt ? Date.parse(createdAt) : NaN;
+  if (!Number.isFinite(signedUp)) return null;
+  const from = Date.parse(`${env.MAGNUS_TRIAL_FROM?.trim() ?? ""}T00:00:00Z`);
+  return Number.isFinite(from) ? Math.max(signedUp, from) : signedUp;
+}
+
+/** True while this row pays for Pro (incl. a cancelled period running out and the grace). */
+export function paidThrough(sub: SubscriptionRow | null, now: Date): boolean {
+  if (!sub?.current_period_end) return false;
+  const end = Date.parse(sub.current_period_end);
+  return ((sub.status === "active" || sub.status === "cancelled") && end > now.getTime()) || (sub.status === "past_due" && end + GRACE_MS > now.getTime());
+}
 
 export function entitlementFrom(input: {
   createdAt: string | null;
   sub: SubscriptionRow | null;
   isOwner: boolean;
   now: Date;
+  env?: NodeJS.ProcessEnv;
 }): Entitlement {
   const { sub, now } = input;
+  const start = trialStart(input.createdAt, input.env);
   const base = {
-    trialEndsAt: input.createdAt ? new Date(Date.parse(input.createdAt) + TRIAL_DAYS * DAY_MS).toISOString() : null,
+    trialEndsAt: start !== null ? new Date(start + TRIAL_DAYS * DAY_MS).toISOString() : null,
     periodEndsAt: sub?.current_period_end ?? null,
     status: sub?.status ?? null,
     plan: sub?.plan ?? null,
     provider: sub?.provider ?? null,
   };
   if (input.isOwner) return { tier: "pro", ...base };
-  if (sub && sub.current_period_end) {
-    const end = Date.parse(sub.current_period_end);
-    const paid =
-      ((sub.status === "active" || sub.status === "cancelled") && end > now.getTime()) ||
-      (sub.status === "past_due" && end + GRACE_MS > now.getTime());
-    if (paid) return { tier: "pro", ...base };
-  }
+  if (paidThrough(sub, now)) return { tier: "pro", ...base };
   if (base.trialEndsAt && Date.parse(base.trialEndsAt) > now.getTime()) return { tier: "trial", ...base };
   return { tier: "free", ...base };
+}
+
+// ---------- what each status does to the app ----------
+
+/** Pro-only features that cost model calls. Logging, Today, trends, reminders and data stay free. */
+export type ProFeature = "digest" | "rca" | "photo";
+
+export type Banner = {
+  kind: "trial_ending" | "trial_ended" | "payment_issue" | "ending";
+  text: string;
+  /** Which screen the banner's button opens. */
+  action: "plans" | "managePlan";
+  /** False for a banner that needs action (payment issue): it stays until resolved. */
+  dismissible: boolean;
+};
+
+export type Experience = {
+  tier: Tier;
+  features: Record<ProFeature, boolean>;
+  banner: Banner | null;
+};
+
+const TRIAL_WARN_DAYS = 2;
+const ENDING_WARN_DAYS = 3;
+
+/**
+ * The one place that maps a subscription state to what the person gets and sees:
+ * - trial and Pro: everything; free: logging and tracking, with the daily chat/photo allowance
+ *   and no model-paid extras (nightly digest, root-cause analysis);
+ * - banners: trial ending in 2 days or less, trial just ended (first 3 days on free), renewal
+ *   failed (stays until fixed), cancelled plan ending in 3 days or less.
+ * With billing off everyone gets everything and no banners.
+ */
+export function experienceFor(ent: Entitlement, now: Date, env: NodeJS.ProcessEnv = process.env): Experience {
+  const all = { digest: true, rca: true, photo: true };
+  if (billingMode(env) === "off") return { tier: ent.tier, features: all, banner: null };
+  const days = (iso: string | null) => (iso ? Math.ceil((Date.parse(iso) - now.getTime()) / DAY_MS) : null);
+  let banner: Banner | null = null;
+  if (ent.tier === "trial") {
+    const left = days(ent.trialEndsAt);
+    if (left !== null && left <= TRIAL_WARN_DAYS) {
+      banner = { kind: "trial_ending", text: left <= 1 ? "Your free trial ends tomorrow. Pick a plan to keep everything." : `Your free trial ends in ${left} days.`, action: "plans", dismissible: true };
+    }
+  } else if (ent.tier === "free") {
+    const since = days(ent.trialEndsAt);
+    if (since !== null && since > -ENDING_WARN_DAYS && ent.status !== "cancelled") {
+      banner = { kind: "trial_ended", text: "Your free trial has ended. Logging and tracking stay free; Pro brings back the full coach.", action: "plans", dismissible: true };
+    }
+  } else if (ent.status === "past_due") {
+    banner = { kind: "payment_issue", text: "Your Magnus Pro renewal didn't go through. Check your autopay to keep Pro.", action: "managePlan", dismissible: false };
+  } else if (ent.status === "cancelled") {
+    const left = days(ent.periodEndsAt);
+    if (left !== null && left <= ENDING_WARN_DAYS) {
+      banner = { kind: "ending", text: `Magnus Pro ends ${left <= 1 ? "tomorrow" : `in ${left} days`}. Pick a plan to keep it.`, action: "plans", dismissible: true };
+    }
+  }
+  const pro = ent.tier !== "free" || billingMode(env) !== "on";
+  return { tier: ent.tier, features: { digest: pro, rca: pro, photo: true }, banner };
+}
+
+export const PREVIEW_STATES = ["trial", "free", "pro", "past_due", "cancelled"] as const;
+
+/** Preview mode: a made-up entitlement in one of the states, to see its banner and limits. */
+export function previewEntitlement(state: (typeof PREVIEW_STATES)[number], now: Date): Entitlement {
+  const at = (d: number) => new Date(now.getTime() + d * DAY_MS).toISOString();
+  const base: Entitlement = { tier: "free", trialEndsAt: null, periodEndsAt: null, status: null, plan: null, provider: null };
+  switch (state) {
+    case "trial": return { ...base, tier: "trial", trialEndsAt: at(2) };
+    case "free": return { ...base, tier: "free", trialEndsAt: at(-1) };
+    case "pro": return { ...base, tier: "pro", status: "active", plan: "yearly", provider: "razorpay", periodEndsAt: at(365) };
+    case "past_due": return { ...base, tier: "pro", status: "past_due", plan: "monthly", provider: "razorpay", periodEndsAt: at(-1) };
+    case "cancelled": return { ...base, tier: "pro", status: "cancelled", plan: "monthly", provider: "razorpay", periodEndsAt: at(2) };
+  }
+}
+
+/** Whether this person gets a model-paid feature right now. True whenever billing isn't on. */
+export async function hasFeature(userProfileId: string, feature: ProFeature, now = new Date()): Promise<boolean> {
+  if (!billingEnabled()) return true;
+  return experienceFor(await loadEntitlement(userProfileId, now), now).features[feature];
 }
 
 /** The free plan's daily allowance; Pro and the trial use the normal caps (undefined). */
@@ -90,7 +192,7 @@ export async function loadEntitlement(userProfileId: string, now = new Date()): 
   const hit = cache.get(userProfileId);
   if (hit && now.getTime() - hit.at < CACHE_MS) return hit.ent;
   const [profile, sub] = await Promise.all([
-    supabase.from("user_profile").select("created_at").eq("id", userProfileId).maybeSingle(),
+    supabase.from("user_profile").select("created_at, email").eq("id", userProfileId).maybeSingle(),
     supabase
       .from("user_subscriptions")
       .select("provider, provider_subscription_id, plan, status, current_period_end")
@@ -101,7 +203,7 @@ export async function loadEntitlement(userProfileId: string, now = new Date()): 
   const ent = entitlementFrom({
     createdAt: (profile.data as { created_at?: string } | null)?.created_at ?? null,
     sub: sub.error ? null : ((sub.data as SubscriptionRow | null) ?? null),
-    isOwner: healthAppAuthConfig()?.userProfileId === userProfileId,
+    isOwner: isOwnerProfileRow(userProfileId, (profile.data as { email?: string | null } | null)?.email),
     now,
   });
   cache.set(userProfileId, { at: now.getTime(), ent });
@@ -128,9 +230,18 @@ export function razorpayConfig(env: NodeJS.ProcessEnv = process.env): RazorpayCo
 
 export function priceLabels(env: NodeJS.ProcessEnv = process.env): Record<PlanId, string> {
   return {
-    monthly: env.MAGNUS_PRICE_MONTHLY_LABEL?.trim() || "₹299 / month",
-    yearly: env.MAGNUS_PRICE_YEARLY_LABEL?.trim() || "₹1,999 / year",
+    monthly: env.MAGNUS_PRICE_MONTHLY_LABEL?.trim() || "₹649 / month",
+    yearly: env.MAGNUS_PRICE_YEARLY_LABEL?.trim() || "₹6,999 / year",
   };
+}
+
+/** Plan prices in whole rupees, for the plan screen's per-month and savings lines. */
+export function priceAmounts(env: NodeJS.ProcessEnv = process.env): Record<PlanId, number> {
+  const rupees = (v: string | undefined, d: number) => {
+    const n = Number.parseInt(v?.trim() ?? "", 10);
+    return Number.isFinite(n) && n > 0 ? n : d;
+  };
+  return { monthly: rupees(env.MAGNUS_PRICE_MONTHLY, 649), yearly: rupees(env.MAGNUS_PRICE_YEARLY, 6999) };
 }
 
 const hmac = (secret: string, data: string | Buffer) => createHmac("sha256", secret).update(data).digest("hex");
@@ -153,12 +264,28 @@ export function verifyWebhookSignature(rawBody: Buffer, signature: string, webho
 /** Months of renewals Razorpay will bill before the subscription completes. */
 const TOTAL_COUNT: Record<PlanId, number> = { monthly: 120, yearly: 10 };
 
+async function currentSubscription(userProfileId: string): Promise<SubscriptionRow | null> {
+  const { data, error } = await supabase
+    .from("user_subscriptions")
+    .select("provider, provider_subscription_id, plan, status, current_period_end")
+    .eq("user_profile_id", userProfileId)
+    .maybeSingle();
+  if (error) throw new Error(`read subscription: ${error.message}`);
+  return (data as SubscriptionRow | null) ?? null;
+}
+
 export async function createRazorpaySubscription(
   userProfileId: string,
   plan: PlanId,
   cfg: RazorpayConfig,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ ok: true; subscriptionId: string; keyId: string } | { ok: false; error: "billing_unavailable" }> {
+  now = new Date(),
+  /** First charge at this time instead of today (the end of a running trial). */
+  startAt: Date | null = null,
+): Promise<{ ok: true; subscriptionId: string; keyId: string } | { ok: false; error: "billing_unavailable" | "already_subscribed" }> {
+  // A new checkout replaces the one row: never do that while it still pays for Pro, or a second
+  // tap on "Subscribe" would turn Pro off and leave the first subscription billing in Razorpay.
+  if (paidThrough(await currentSubscription(userProfileId), now)) return { ok: false, error: "already_subscribed" };
   const res = await fetchImpl("https://api.razorpay.com/v1/subscriptions", {
     method: "POST",
     headers: {
@@ -169,6 +296,7 @@ export async function createRazorpaySubscription(
       plan_id: cfg.plans[plan],
       total_count: TOTAL_COUNT[plan],
       customer_notify: 1,
+      ...(startAt && startAt.getTime() > now.getTime() + 3600_000 ? { start_at: Math.floor(startAt.getTime() / 1000) } : {}),
       notes: { user_profile_id: userProfileId, plan },
     }),
   });
@@ -197,12 +325,17 @@ export const confirmInput = z.object({
 
 const PERIOD_MS: Record<PlanId, number> = { monthly: 31 * DAY_MS, yearly: 366 * DAY_MS };
 
-/** Checkout said it was paid: verify, then turn Pro on. The webhook sets the exact period later. */
+/**
+ * Checkout said it was paid: verify, then turn Pro on. The webhook sets the exact period later.
+ * A subscription that starts at the end of the trial is paid through `startAt`: Pro from now,
+ * first charge then.
+ */
 export async function confirmRazorpayCheckout(
   userProfileId: string,
   input: z.infer<typeof confirmInput>,
   cfg: RazorpayConfig,
   now = new Date(),
+  startAt: Date | null = null,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!verifyCheckoutSignature(input.razorpay_payment_id, input.razorpay_subscription_id, input.razorpay_signature, cfg.keySecret)) {
     return { ok: false, error: "invalid_signature" };
@@ -219,7 +352,7 @@ export async function confirmRazorpayCheckout(
     provider_subscription_id: input.razorpay_subscription_id,
     plan: row.plan,
     status: "active",
-    current_period_end: new Date(now.getTime() + PERIOD_MS[row.plan]).toISOString(),
+    current_period_end: (startAt && startAt > now ? startAt : new Date(now.getTime() + PERIOD_MS[row.plan])).toISOString(),
   });
   return { ok: true };
 }
@@ -240,8 +373,27 @@ type RazorpayEvent = {
   payload?: { subscription?: { entity?: { id?: string; status?: string; current_end?: number | null; plan_id?: string; notes?: Record<string, string> } } };
 };
 
+/**
+ * What a webhook should leave in the row, or null to ignore it. Webhooks can arrive late, out of
+ * order, or for an older checkout the person abandoned, so:
+ * - an event for another subscription never replaces one that pays for Pro, and only an
+ *   activation replaces an unpaid one;
+ * - a late "pending" (created/authenticated) never undoes a later state;
+ * - a subscription cancelled here at cycle end stays cancelled while Razorpay still says active;
+ * - an event without a period end keeps the one already stored.
+ */
+export function mergeRazorpayUpdate(current: SubscriptionRow | null, incoming: SubscriptionRow, now: Date): SubscriptionRow | null {
+  if (current && current.provider_subscription_id !== incoming.provider_subscription_id) {
+    if (paidThrough(current, now) || incoming.status !== "active") return null;
+    return incoming;
+  }
+  if (incoming.status === "pending" && current && current.status !== "pending") return null;
+  const status = current?.status === "cancelled" && incoming.status === "active" ? "cancelled" : incoming.status;
+  return { ...incoming, status, current_period_end: incoming.current_period_end ?? current?.current_period_end ?? null };
+}
+
 /** Subscription webhooks: keep status and the paid-through date in step with Razorpay. */
-export async function applyRazorpayEvent(event: RazorpayEvent, cfg: RazorpayConfig): Promise<"applied" | "ignored"> {
+export async function applyRazorpayEvent(event: RazorpayEvent, cfg: RazorpayConfig, now = new Date()): Promise<"applied" | "ignored"> {
   const sub = event.payload?.subscription?.entity;
   if (!sub?.id || !sub.status) return "ignored";
   const status = RAZORPAY_STATUS[sub.status];
@@ -258,14 +410,19 @@ export async function applyRazorpayEvent(event: RazorpayEvent, cfg: RazorpayConf
   }
   if (!userProfileId) return "ignored";
   const plan: PlanId = sub.plan_id === cfg.plans.yearly ? "yearly" : "monthly";
-  await saveSubscription(userProfileId, {
+  const next = mergeRazorpayUpdate(await currentSubscription(userProfileId), {
     provider: "razorpay",
     provider_subscription_id: sub.id,
     plan,
     status,
     current_period_end: sub.current_end ? new Date(sub.current_end * 1000).toISOString() : null,
-  });
-  logger.info({ userProfileId, event: event.event, status }, "razorpay subscription updated");
+  }, now);
+  if (!next) {
+    logger.warn({ userProfileId, event: event.event, subscriptionId: sub.id, status }, "razorpay event ignored: stale or for another subscription");
+    return "ignored";
+  }
+  await saveSubscription(userProfileId, next);
+  logger.info({ userProfileId, event: event.event, status: next.status }, "razorpay subscription updated");
   return "applied";
 }
 
@@ -275,12 +432,7 @@ export async function cancelRazorpaySubscription(
   cfg: RazorpayConfig,
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { data } = await supabase
-    .from("user_subscriptions")
-    .select("provider, provider_subscription_id, plan, status, current_period_end")
-    .eq("user_profile_id", userProfileId)
-    .maybeSingle();
-  const row = data as SubscriptionRow | null;
+  const row = await currentSubscription(userProfileId);
   if (!row || row.provider !== "razorpay" || !row.provider_subscription_id) return { ok: false, error: "no_subscription" };
   const res = await fetchImpl(`https://api.razorpay.com/v1/subscriptions/${row.provider_subscription_id}/cancel`, {
     method: "POST",

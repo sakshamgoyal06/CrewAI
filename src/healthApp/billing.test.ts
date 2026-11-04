@@ -1,11 +1,20 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
+const db = vi.hoisted(() => ({ row: null as Record<string, unknown> | null }));
+vi.mock("../tools/clients.js", () => {
+  const chain: Record<string, unknown> = {};
+  for (const k of ["select", "eq"]) chain[k] = () => chain;
+  chain.maybeSingle = async () => ({ data: db.row, error: null });
+  return { supabase: { from: () => chain }, anthropic: {} };
+});
 
 import {
   createRazorpaySubscription,
   entitlementFrom,
+  experienceFor,
+  mergeRazorpayUpdate,
+  previewEntitlement,
   limitFor,
   razorpayConfig,
   verifyCheckoutSignature,
@@ -81,5 +90,77 @@ describe("razorpayConfig", () => {
     expect(await createRazorpaySubscription("p1", "monthly", cfg, f)).toEqual({ ok: false, error: "billing_unavailable" });
     const [, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toMatchObject({ plan_id: "m", notes: { user_profile_id: "p1" } });
+  });
+
+  it("won't start a second checkout while a subscription pays for Pro", async () => {
+    const cfg = { keyId: "k", keySecret: "s", webhookSecret: null, plans: { monthly: "m", yearly: "y" } };
+    const f = vi.fn();
+    db.row = sub("active", "2026-12-01T00:00:00Z");
+    expect(await createRazorpaySubscription("p1", "yearly", cfg, f as never, now)).toEqual({ ok: false, error: "already_subscribed" });
+    expect(f).not.toHaveBeenCalled();
+    db.row = null;
+  });
+});
+
+describe("mergeRazorpayUpdate", () => {
+  const other = (status: "active" | "pending", end: string | null) => ({ ...sub(status as "active", end), provider_subscription_id: "sub_2" });
+
+  it("never lets another subscription replace a paid one, and only an activation replace an unpaid one", () => {
+    expect(mergeRazorpayUpdate(sub("active", "2026-12-01T00:00:00Z"), other("active", "2027-01-01T00:00:00Z"), now)).toBeNull();
+    expect(mergeRazorpayUpdate(sub("pending", null), other("pending", null), now)).toBeNull();
+    expect(mergeRazorpayUpdate(sub("pending", null), other("active", "2026-12-10T00:00:00Z"), now)?.provider_subscription_id).toBe("sub_2");
+  });
+
+  it("ignores a late pending, keeps a cancel, and keeps the period end when the event has none", () => {
+    expect(mergeRazorpayUpdate(sub("active", "2026-12-01T00:00:00Z"), sub("pending", null), now)).toBeNull();
+    expect(mergeRazorpayUpdate(sub("cancelled", "2026-12-01T00:00:00Z"), sub("active", "2026-12-01T00:00:00Z"), now)?.status).toBe("cancelled");
+    expect(mergeRazorpayUpdate(sub("active", "2026-12-01T00:00:00Z"), sub("past_due", null), now)).toMatchObject({ status: "past_due", current_period_end: "2026-12-01T00:00:00Z" });
+    expect(mergeRazorpayUpdate(null, sub("active", "2026-12-01T00:00:00Z"), now)?.status).toBe("active");
+  });
+});
+
+describe("trial start", () => {
+  it("starts the trial at MAGNUS_TRIAL_FROM for people who signed up earlier", () => {
+    const env = { MAGNUS_TRIAL_FROM: "2026-11-06" };
+    const early = entitlementFrom({ createdAt: "2026-10-01T00:00:00Z", sub: null, isOwner: false, now, env });
+    expect(early).toMatchObject({ tier: "trial", trialEndsAt: "2026-11-13T00:00:00.000Z" });
+    const late = entitlementFrom({ createdAt: "2026-11-08T00:00:00Z", sub: null, isOwner: false, now, env });
+    expect(late.trialEndsAt).toBe("2026-11-15T00:00:00.000Z");
+  });
+});
+
+describe("experienceFor", () => {
+  const on = { MAGNUS_BILLING: "on" };
+  const ent = (over: Record<string, unknown>) => ({ tier: "free", trialEndsAt: null, periodEndsAt: null, status: null, plan: null, provider: null, ...over }) as never;
+  const at = (d: number) => new Date(now.getTime() + d * 86_400_000).toISOString();
+
+  it("gives everyone everything, with no banner, while billing is off", () => {
+    expect(experienceFor(ent({ tier: "free" }), now, {})).toMatchObject({ features: { digest: true, rca: true }, banner: null });
+  });
+
+  it("keeps the model-paid extras off the free plan only", () => {
+    expect(experienceFor(ent({ tier: "free" }), now, on).features).toEqual({ digest: false, rca: false, photo: true });
+    expect(experienceFor(ent({ tier: "trial", trialEndsAt: at(5) }), now, on).features.digest).toBe(true);
+    expect(experienceFor(ent({ tier: "pro", status: "active", periodEndsAt: at(30) }), now, on).features.rca).toBe(true);
+    // Preview shows banners but enforces nothing.
+    expect(experienceFor(ent({ tier: "free" }), now, { MAGNUS_BILLING: "preview" }).features.digest).toBe(true);
+  });
+
+  it("warns as the trial or a cancelled plan runs out, and right after the trial", () => {
+    expect(experienceFor(ent({ tier: "trial", trialEndsAt: at(5) }), now, on).banner).toBeNull();
+    expect(experienceFor(ent({ tier: "trial", trialEndsAt: at(2) }), now, on).banner).toMatchObject({ kind: "trial_ending", action: "plans" });
+    expect(experienceFor(ent({ tier: "free", trialEndsAt: at(-1) }), now, on).banner?.kind).toBe("trial_ended");
+    expect(experienceFor(ent({ tier: "free", trialEndsAt: at(-10) }), now, on).banner).toBeNull();
+    expect(experienceFor(ent({ tier: "pro", status: "cancelled", periodEndsAt: at(2) }), now, on).banner?.kind).toBe("ending");
+    expect(experienceFor(ent({ tier: "pro", status: "cancelled", periodEndsAt: at(20) }), now, on).banner).toBeNull();
+  });
+
+  it("keeps a payment-issue banner up until it's fixed", () => {
+    expect(experienceFor(ent({ tier: "pro", status: "past_due", periodEndsAt: at(-1) }), now, on).banner).toMatchObject({ kind: "payment_issue", action: "managePlan", dismissible: false });
+  });
+
+  it("previews each state with its banner", () => {
+    const kinds = (["trial", "free", "pro", "past_due", "cancelled"] as const).map((st) => experienceFor(previewEntitlement(st, now), now, { MAGNUS_BILLING: "preview" }).banner?.kind ?? null);
+    expect(kinds).toEqual(["trial_ending", "trial_ended", null, "payment_issue", "ending"]);
   });
 });
