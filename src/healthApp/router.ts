@@ -75,6 +75,10 @@ import {
   applyRazorpayEvent,
   billingEnabled,
   billingMode,
+  experienceFor,
+  hasFeature,
+  PREVIEW_STATES,
+  previewEntitlement,
   priceAmounts,
   cancelRazorpaySubscription,
   confirmInput,
@@ -726,13 +730,20 @@ export function createHealthAppRouter(): express.Router {
   /** Plan, trial and what can be bought. */
   router.get(
     "/billing",
-    route("billing", async (ctx) => {
+    route("billing", async (ctx, req) => {
       const cfg = razorpayConfig();
+      const now = new Date();
+      const as = String(req.query.as ?? "");
+      const ent =
+        billingMode() === "preview" && (PREVIEW_STATES as readonly string[]).includes(as)
+          ? previewEntitlement(as as (typeof PREVIEW_STATES)[number], now)
+          : await loadEntitlement(ctx.userProfileId);
       return {
         body: {
           enabled: billingEnabled(),
           mode: billingMode(),
-          entitlement: await loadEntitlement(ctx.userProfileId),
+          entitlement: ent,
+          experience: experienceFor(ent, now),
           prices: priceLabels(),
           amounts: priceAmounts(),
           razorpay: cfg ? { keyId: cfg.keyId } : null,
@@ -953,6 +964,7 @@ export function createHealthAppRouter(): express.Router {
   router.post(
     "/rca",
     route("rca", async (ctx) => {
+      if (!(await hasFeature(ctx.userProfileId, "rca"))) return { status: 402, body: { ok: false, error: "pro_feature" } };
       if ((await allowUse(ctx, "rca")) !== true) return { status: 429, body: { ok: false, error: "rca_limit" } };
       const r = await runRca(ctx.userProfileId, "manual");
       return r ? { body: { ok: true, card: cardFromReport(r.report) } } : { status: 400, body: { ok: false, error: "not_enough_data" } };

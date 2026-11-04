@@ -149,6 +149,7 @@ function friendlyError(code) {
     barcode_lookup_failed: "Couldn't reach the food database just now. Try again in a minute, or type what you had.",
     free_limit: "That's today's free allowance. Pro has no daily cap, or you can keep logging from Today.",
     already_subscribed: "You're already on Pro.",
+    pro_feature: "That's part of Magnus Pro. See plans in You → Magnus Pro.",
     billing_unavailable: "Payments aren't available right now. Try again later.",
     invalid_signature: "The payment couldn't be verified. If you were charged, it will show up within a few minutes.",
     daily_limit: "You've hit today's limit for the coach. Log from Today, or try again tomorrow.",
@@ -2538,7 +2539,7 @@ function previewSwitch(b, repaint) {
     el("p", { class: "hint" }, "Preview: payments are simulated and nothing is charged or saved."),
     el("div", { class: "seg", role: "radiogroup", "aria-label": "Preview as" }, ...PREVIEW_STATES.map(([k, l]) =>
       el("button", { type: "button", class: (pay.previewAs || "") === k ? "on" : "", role: "radio", "aria-checked": String((pay.previewAs || "") === k),
-        onclick: () => { pay.previewAs = k || null; repaint(); paintPlanSection(); } }, l))));
+        onclick: () => { pay.previewAs = k || null; repaint(); paintPlanSection(); paintPlanBanner(); } }, l))));
 }
 
 function checkoutScreen() {
@@ -2590,7 +2591,7 @@ function checkoutScreen() {
 
 function payResultScreen() {
   const r = pay.result || { kind: "failed", message: "Nothing to show." };
-  const done = el("button", { class: "btn primary block", type: "button", onclick: () => { closeSheet(); paintPlanSection(); } }, "Done");
+  const done = el("button", { class: "btn primary block", type: "button", onclick: () => { closeSheet(); paintPlanSection(); paintPlanBanner(); } }, "Done");
   if (r.kind === "success") {
     return el("div", { class: "stack pay pay-result" },
       el("div", { class: "pay-badge good", "aria-hidden": "true" }, "✓"),
@@ -2663,6 +2664,31 @@ function managePlanScreen() {
   };
   withCache("/billing", paint, () => box.replaceChildren(el("p", { class: "hint" }, "Couldn't load your plan.")));
   return box;
+}
+
+/**
+ * The plan banner on Coach and Today, from the server's experience (trial ending, trial ended,
+ * payment issue, Pro ending). In preview, the "Preview as" state's banner. Dismissed per day.
+ */
+async function paintPlanBanner() {
+  const nodes = document.querySelectorAll("[data-plan-banner]");
+  let b = billingNow();
+  if (b?.mode === "preview" && pay.previewAs) {
+    try { b = await api(`/billing?as=${encodeURIComponent(pay.previewAs)}`); } catch { return; }
+  }
+  const banner = b?.experience?.banner;
+  const key = banner ? `plan-banner:${banner.kind}:${localToday()}` : null;
+  const show = banner && (!banner.dismissible || !store.get(key, false));
+  for (const n of nodes) {
+    n.hidden = !show;
+    if (!show) { n.replaceChildren(); continue; }
+    n.classList.toggle("warn", banner.kind === "payment_issue");
+    n.replaceChildren(
+      el("span", {}, banner.text),
+      el("div", { class: "plan-banner-actions" },
+        el("button", { class: "link", type: "button", onclick: () => openSheet(banner.action) }, banner.action === "plans" ? "See plans" : "Fix"),
+        banner.dismissible ? el("button", { class: "icon-btn ghost small", type: "button", "aria-label": "Hide for today", onclick: () => { store.set(key, true); paintPlanBanner(); } }, "×") : null));
+  }
 }
 
 /** The Magnus Pro row on You: one status line, opening Plans or Your plan. */
@@ -3935,6 +3961,7 @@ async function start() {
   refresh();
   flushQueue();
   checkHealthConnectPrompt();
+  withCache("/billing", () => { paintPlanSection(); paintPlanBanner(); }, () => {});
 }
 
 window.addEventListener("online", flushQueue);
