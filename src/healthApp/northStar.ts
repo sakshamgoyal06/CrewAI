@@ -31,6 +31,8 @@ export type HealthTargets = {
   /** Weekdays with a planned workout; empty means every day is a rest day for scoring. */
   trainingDays: number[];
   minMealSessions: number;
+  /** Weekday (0 = Sunday) the person weighs in on; null or missing means "7 days after the last one". */
+  weighInDay?: number | null;
 };
 
 export type CheckId = "meals_logged" | "calories" | "protein" | "steps" | "workout" | "routine";

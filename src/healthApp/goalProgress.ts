@@ -60,6 +60,22 @@ const TREND_WINDOW_DAYS = 28;
 /** Within this share of the required pace counts as on pace. */
 const PACE_TOLERANCE = 0.15;
 export const CHECKIN_INTERVAL_DAYS = 7;
+/** On the chosen weigh-in day, a reading at least this many days old asks for a new one. */
+export const WEIGH_IN_DAY_MIN_GAP = 3;
+
+/**
+ * Whether this week's weigh-in is due. Without a chosen day: 7 days after the last one. With a
+ * chosen weekday: on that day (unless they weighed in within the last few days), and on any day
+ * once the last reading is more than a week old, so a missed weigh-in day still gets caught up.
+ */
+export function weighInDue(lastCheckinDate: string | null, today: string, weighInDay?: number | null): boolean {
+  if (lastCheckinDate === null) return true;
+  const gap = dayNumber(today) - dayNumber(lastCheckinDate);
+  if (weighInDay == null) return gap >= CHECKIN_INTERVAL_DAYS;
+  if (gap > CHECKIN_INTERVAL_DAYS) return true;
+  const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+  return weekday === weighInDay && gap >= WEIGH_IN_DAY_MIN_GAP;
+}
 
 const dateFromDayNumber = dateOf;
 
@@ -172,6 +188,7 @@ export function computeGoalProgress(
   goal: HealthGoal,
   checkins: BodyCheckin[],
   today: string,
+  weighInDay?: number | null,
 ): GoalProgress {
   const metrics: MetricProgress[] = [];
   for (const metric of ["weight_kg", "body_fat_pct", "muscle_mass_kg"] as const) {
@@ -189,8 +206,6 @@ export function computeGoalProgress(
     weeksLeft: round(daysLeft / 7, 1),
     metrics,
     lastCheckinDate,
-    checkinDue:
-      lastCheckinDate === null ||
-      dayNumber(today) - dayNumber(lastCheckinDate) >= CHECKIN_INTERVAL_DAYS,
+    checkinDue: weighInDue(lastCheckinDate, today, weighInDay),
   };
 }

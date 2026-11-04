@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeGoalProgress, slopePerDay, type BodyCheckin, type HealthGoal } from "./goalProgress.js";
+import { computeGoalProgress, slopePerDay, weighInDue, type BodyCheckin, type HealthGoal } from "./goalProgress.js";
 
 const goal: HealthGoal = {
   id: "g1",
@@ -92,5 +92,32 @@ describe("computeGoalProgress", () => {
     const m = p.metrics[0]!;
     expect(m.progress).toBeCloseTo(0.3, 2);
     expect(m.requiredPerWeek).toBeGreaterThan(0);
+  });
+});
+
+describe("weighInDue", () => {
+  // 2026-11-08 is a Sunday (0).
+  it("without a chosen day, is due 7 days after the last weigh-in", () => {
+    expect(weighInDue(null, "2026-11-04")).toBe(true);
+    expect(weighInDue("2026-11-01", "2026-11-07")).toBe(false);
+    expect(weighInDue("2026-11-01", "2026-11-08")).toBe(true);
+  });
+  it("with a chosen day, is due on that weekday", () => {
+    expect(weighInDue("2026-11-01", "2026-11-08", 0)).toBe(true);
+    // Five days in, but not Sunday yet.
+    expect(weighInDue("2026-11-03", "2026-11-07", 0)).toBe(false);
+  });
+  it("skips the chosen day when they weighed in a day or two before", () => {
+    expect(weighInDue("2026-11-07", "2026-11-08", 0)).toBe(false);
+    expect(weighInDue("2026-11-05", "2026-11-08", 0)).toBe(true);
+  });
+  it("catches up the day after a missed weigh-in day", () => {
+    expect(weighInDue("2026-11-01", "2026-11-09", 0)).toBe(true);
+    expect(weighInDue("2026-11-01", "2026-11-08", 3)).toBe(false);
+  });
+  it("is threaded through computeGoalProgress", () => {
+    const g: HealthGoal = { id: "g", targets: { weight_kg: 80 }, deadline: "2027-01-01", startedOn: "2026-10-01" } as HealthGoal;
+    expect(computeGoalProgress(g, [c("2026-11-03", 84)], "2026-11-08", 0).checkinDue).toBe(true);
+    expect(computeGoalProgress(g, [c("2026-11-03", 84)], "2026-11-08").checkinDue).toBe(false);
   });
 });

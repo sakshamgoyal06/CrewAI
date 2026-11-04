@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 
 import { checkTime, formatTime, zonedInstant } from "./gymSlot.js";
-import { answerWorkoutCheck, dueWorkoutChecks, missedWorkoutMessage, runWorkoutChecks } from "./workoutCheck.js";
+import { answerWorkoutCheck, dueWorkoutChecks, missedWorkoutMessage, noHevyWorkoutMessage, runWorkoutChecks } from "./workoutCheck.js";
 import type { WorkoutCheck } from "./workoutCheckStore.js";
 
 const TZ = "Asia/Kolkata";
@@ -165,6 +165,23 @@ describe("runWorkoutChecks", () => {
     expect(inserts).toHaveLength(0);
   });
 
+  it("asks plainly when there's no Hevy linked, with no Hevy wording on the card", async () => {
+    const { d, posted, inserts } = deps({ hevy: { connected: false, fetched: false, workouts: [] } });
+    const out = await runWorkoutChecks("u1", DUE_NOW, d);
+    expect(out).toEqual([{ date: "2026-10-28", status: "missing" }]);
+    expect(inserts[0]).toMatchObject({ status: "missing" });
+    expect(posted[0]!.content).toBe("Your 6:30 pm gym slot has passed. Did you train? Tap below so it counts.");
+    expect(posted[0]!.content).not.toContain("Hevy");
+    expect(posted[0]!.cards[0]).toMatchObject({ type: "workout_check", hevy: false, status: "missing" });
+  });
+
+  it("without Hevy, a sport that stood in still counts and nothing is asked", async () => {
+    const { d, posted } = deps({ hevy: { connected: false, fetched: false, workouts: [] } });
+    const out = await runWorkoutChecks("u1", DUE_NOW, { ...d, sportOn: async () => "Football · 75 min" });
+    expect(out).toEqual([{ date: "2026-10-28", status: "found" }]);
+    expect(posted).toHaveLength(0);
+  });
+
   it("does nothing before the check time", async () => {
     const { d } = deps();
     expect(await runWorkoutChecks("u1", new Date("2026-10-28T12:00:00Z"), d)).toEqual([]);
@@ -177,6 +194,13 @@ describe("missedWorkoutMessage", () => {
     expect(missedWorkoutMessage("2026-10-28", "2026-10-29", { time: "22:00", checkDelayMin: 180 })).toMatch(
       /^Yesterday's 10:00 pm gym slot/,
     );
+  });
+});
+
+describe("noHevyWorkoutMessage", () => {
+  it("asks about yesterday, and about an untimed gym day", () => {
+    expect(noHevyWorkoutMessage("2026-10-28", "2026-10-29", { time: "22:00", checkDelayMin: 180 })).toMatch(/^Yesterday's 10:00 pm gym slot has passed/);
+    expect(noHevyWorkoutMessage("2026-10-28", "2026-10-28", { time: "20:00", checkDelayMin: 0 })).toBe("Did you train today? Tap below so it counts.");
   });
 });
 
@@ -215,6 +239,19 @@ describe("answerWorkoutCheck", () => {
     const { d, saved } = answerDeps();
     expect(await answerWorkoutCheck(ctx, { answer: "recheck" }, d)).toEqual({ ok: true, status: "missing" });
     expect(saved).toHaveLength(0);
+  });
+
+  it("marks a day trained without needing Hevy", async () => {
+    const { d, saved } = answerDeps();
+    expect(await answerWorkoutCheck(ctx, { answer: "trained_unlogged" }, d)).toEqual({ ok: true, status: "trained_unlogged" });
+    expect(saved[0]).toMatchObject({ localDate: "2026-10-28", status: "trained_unlogged", reason: null });
+    expect(d.recentWorkouts).not.toHaveBeenCalled();
+  });
+
+  it("undo puts the day back to not answered", async () => {
+    const { d, saved } = answerDeps();
+    expect(await answerWorkoutCheck(ctx, { answer: "undo" }, d)).toEqual({ ok: true, status: "missing" });
+    expect(saved[0]).toMatchObject({ status: "missing", reason: null, hevyWorkoutId: null });
   });
 
   it("rejects future dates", async () => {

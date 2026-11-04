@@ -133,7 +133,7 @@ export async function loadHealthProfile(
   /** The weekly routine; null when the routine table isn't there yet (legacy gym slot only). */
   routine: RoutineItem[] | null;
 }> {
-  const [profile, health, routineRows] = await Promise.all([
+  const [profile, health, routineRows, weighIn] = await Promise.all([
     supabase.from("user_profile").select("timezone").eq("id", userProfileId).maybeSingle(),
     supabase
       .from("user_health_profile")
@@ -143,6 +143,10 @@ export async function loadHealthProfile(
       .eq("user_profile_id", userProfileId)
       .maybeSingle(),
     loadRoutine(userProfileId).catch(() => null),
+    // Its own read, so a database without the column yet still loads every other setting.
+    Promise.resolve(
+      supabase.from("user_health_profile").select("weigh_in_day").eq("user_profile_id", userProfileId).maybeSingle(),
+    ).then((r) => (r.error ? null : (r.data as { weigh_in_day?: unknown } | null)?.weigh_in_day ?? null), () => null),
   ]);
   // A failed read must not quietly become UTC: every "today" downstream (day plan, checks,
   // nudges) would be computed on the wrong day.
@@ -167,6 +171,7 @@ export async function loadHealthProfile(
       stepTarget: num(h.daily_step_target) ?? DEFAULT_STEP_TARGET,
       trainingDays,
       minMealSessions: DEFAULT_MIN_MEAL_SESSIONS,
+      weighInDay: typeof weighIn === "number" && Number.isInteger(weighIn) && weighIn >= 0 && weighIn <= 6 ? weighIn : null,
     },
     gym: {
       time: typeof h.gym_time === "string" && /^\d{2}:\d{2}/.test(h.gym_time) ? h.gym_time.slice(0, 5) : null,
@@ -361,7 +366,7 @@ export async function buildHealthSnapshot(
     gym: { ...gym, checkAt: checkTime(gym) },
     workoutChecks: [...workoutChecks.values()].sort((a, b) => b.localDate.localeCompare(a.localDate)),
     recentSkips: recentSkips(routineByDate, [...workoutChecks.values()]),
-    goal: goal ? computeGoalProgress(goal, checkins, to) : null,
+    goal: goal ? computeGoalProgress(goal, checkins, to, targets.weighInDay) : null,
     checkins,
     activities,
     meals: todayMealList.map((m) => ({

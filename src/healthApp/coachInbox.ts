@@ -47,6 +47,7 @@ export function mergedCheckText(cards: CheckCard[]): string {
   if (first.type === "routine_check") {
     return `${first.label}: nothing logged for ${list(dates)}. Did you get them in? Answer each below.`;
   }
+  if (first.hevy === false) return `Gym slots on ${list(dates)}: did you train? Answer each below.`;
   return `No Hevy workout after your gym slot on ${list(dates)}. Trained and didn't log, or skipped? Answer each below.`;
 }
 

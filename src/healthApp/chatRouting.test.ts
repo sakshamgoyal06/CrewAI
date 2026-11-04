@@ -55,6 +55,7 @@ describe("pickChatModel", () => {
 
   it("can be switched off or pointed at other models", () => {
     expect(pickChatModel("poha", { MAGNUS_HEALTH_CHAT_ROUTING: "off" } as NodeJS.ProcessEnv)).toBe("claude-sonnet-5-5");
+    expect(pickChatModel("why am I not losing weight?", { MAGNUS_HEALTH_CHAT_ROUTING: "haiku-first" } as NodeJS.ProcessEnv)).toBe("claude-haiku-5-5");
     expect(pickChatModel("poha", { MAGNUS_HEALTH_CHAT_FAST_MODEL: "claude-sonnet-5-5" } as NodeJS.ProcessEnv)).toBe("claude-sonnet-5-5");
   });
 });
