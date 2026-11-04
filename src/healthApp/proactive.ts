@@ -19,6 +19,7 @@ import { runDayClose, runMealTimeTick } from "./dietPlan/rhythm.js";
 import { runWorkoutChecks, SCHEDULER_INTERVAL_MS } from "./workoutCheck.js";
 import { runNightlyDigest } from "./nightlyDigest.js";
 import { hasFeature } from "./billing.js";
+import { isAccountDisabled } from "./accountStatus.js";
 import { postCoachMessage } from "./workoutCheckStore.js";
 import { DAY_MS, localClock } from "../util/time.js";
 
@@ -182,6 +183,8 @@ async function maybeRunRca(userProfileId: string, now: Date): Promise<void> {
 
 /** One pass of everything proactive. Each part fails on its own without stopping the others. */
 export async function proactiveTick(userProfileId: string, now = new Date()): Promise<void> {
+  // A paused account gets no pushes, digests or analyses (and costs nothing) until it's re-enabled.
+  if (await isAccountDisabled(userProfileId)) return;
   for (const [name, fn] of [
     // First, so the day's thread opens with the plan before any check lands in it.
     ["day plan", () => loadHealthProfile(userProfileId).then(({ timezone }) => ensureDayPlan(userProfileId, timezone, now)).then(() => undefined)],

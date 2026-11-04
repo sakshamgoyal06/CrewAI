@@ -4,6 +4,7 @@
  * a log from the dashboard are the same row.
  */
 import { z } from "zod";
+import { mealContext } from "../meals/mealPhrases.js";
 
 import { localDateKey } from "../nutrition/localDate.js";
 import { logger } from "../logger.js";
@@ -190,9 +191,11 @@ export async function startMealDraft(
     webGateFor(ctx.userProfileId, ctx.timezone, ctx.now),
     isOwnerProfile(ctx.userProfileId).catch(() => false),
   ]);
+  // "I had poha for breakfast": the food is "poha" and the slot is breakfast.
+  const typed = mealContext(input.text);
   const draft = await draftMeal({
-    text: input.text,
-    slot: input.slot,
+    text: typed.text,
+    slot: input.slot ?? typed.slot,
     timezone: ctx.timezone,
     now: ctx.now,
     options: { webAllowed: gate.allowed, onWebLookup: gate.onLookup, contributor: { id: ctx.userProfileId, trusted } },
