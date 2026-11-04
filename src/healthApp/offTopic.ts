@@ -15,6 +15,32 @@ export const OFF_TOPIC_REPLY = "I only help with your health: food, training, st
 export const OFF_TOPIC_BRAKE_REPLY =
   "I'm sticking to your health today, so I won't answer other questions. Log a meal, steps, a workout or a weigh-in and I'm right here.";
 
+/** Off-topic asks allowed after the brake turns on, before the account is paused. */
+export function strikesBeforePause(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.MAGNUS_OFF_TOPIC_PAUSE_AFTER?.trim();
+  const n = raw ? Number.parseInt(raw, 10) : 3;
+  return Number.isFinite(n) && n >= 0 ? n : 3;
+}
+
+/**
+ * Where a person stands after today's `count`th decline: fine, warned (with how many are left
+ * before a pause), or to be paused now. 0 for either setting turns this off.
+ */
+export function strikeState(count: number, env: NodeJS.ProcessEnv = process.env): { kind: "ok" } | { kind: "warn"; left: number } | { kind: "pause" } {
+  const limit = offTopicLimit(env);
+  const strikes = strikesBeforePause(env);
+  if (limit === 0 || count < limit) return { kind: "ok" };
+  if (strikes === 0) return { kind: "ok" };
+  const left = limit + strikes - count;
+  return left > 0 ? { kind: "warn", left } : { kind: "pause" };
+}
+
+export function warningLine(left: number): string {
+  return `Heads up: Magnus is for your health only. ${left === 1 ? "One more" : `${left} more`} off-topic ${left === 1 ? "request" : "requests"} and this account will be paused. If you think that's unfair, you can ask for a review.`;
+}
+
+export const PAUSED_REPLY = "This account is now paused for repeated off-topic use. If you think that's a mistake, open the app to send a review request and we'll look at it.";
+
 /** Words that make a message worth the coach's time even when the brake is on. */
 const HEALTH_SIGNAL =
   /\b(ate|had|eat|eating|food|meal|breakfast|lunch|dinner|snack|protein|carb|fat|fibre|fiber|calorie|kcal|diet|roti|rice|dal|chai|coffee|water|drank|piya|khaya|khaana|khana|walk(ed|ing)?|ran|running|swam|swim|cycle|cycled|gym|workout|exercise|train(ing)?|lift(ed)?|yoga|sport|cricket|football|badminton|steps?|weigh(ed|t)?|kg|body ?fat|muscle|sleep|slept|tired|stress|sore|pain|injur\w*|hevy|routine|recipe|supplement|creatine|vitamin|hungry|craving|health)\b/i;

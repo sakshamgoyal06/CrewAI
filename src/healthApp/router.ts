@@ -40,6 +40,7 @@ import { connectHevy, disconnectHevy, hevyConnected, hevyKeyInput } from "./inte
 import { supabase } from "../tools/clients.js";
 import { needsSeed, seedUse, takeUse, type LimitedAction } from "./usageLimits.js";
 import { needsSpendSeed, seedSpend, spendMode, spentSince, type SpendMode } from "./spend.js";
+import { disabledResponse, isAccountDisabled } from "./accountStatus.js";
 import { usedSince } from "./usageSeed.js";
 import { deleteAccount, exportAccount } from "./privacy.js";
 import {
@@ -257,6 +258,11 @@ export function createHealthAppRouter(): express.Router {
     }
     if (!userRequestLimiter.take(userProfileId)) {
       res.status(429).json({ error: "too_many_requests" });
+      return;
+    }
+    // A paused account (repeated off-topic use) gets a review-request draft instead of the app.
+    if (await isAccountDisabled(userProfileId)) {
+      res.status(403).json(disabledResponse(userProfileId));
       return;
     }
     (res.locals as Locals).userProfileId = userProfileId;

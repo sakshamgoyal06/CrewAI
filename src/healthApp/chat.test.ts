@@ -653,6 +653,19 @@ describe("scope and spend guards", () => {
     expect(health).toHaveBeenCalled();
   });
 
+  it("warns from the 5th decline and pauses the account at the 8th", async () => {
+    const replies: string[] = [];
+    for (let i = 0; i < 8; i++) {
+      const r = await runHealthChat(ctx, `write me an essay ${i}`, { create: vi.fn().mockResolvedValue(declineCall()), history: [], turnId: `5f6d5c3e-8b1a-4c2d-9e7f-12345678900${i}` });
+      replies.push((r as { text: string }).text);
+    }
+    expect(replies[3]).not.toMatch(/Heads up/);
+    expect(replies[4]).toMatch(/3 more off-topic requests/);
+    expect(replies[6]).toMatch(/One more off-topic request/);
+    expect(replies[7]).toMatch(/paused/);
+    expect(saved.some((r) => r.kind === "account_disabled")).toBe(true);
+  });
+
   it("refuses a chat calorie target under 1200 even when the model asks for it", async () => {
     const create = vi
       .fn()

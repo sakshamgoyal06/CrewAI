@@ -58,7 +58,8 @@ import { loadCalorieReview, type CalorieReview } from "./calorieTarget.js";
 import { loadPersonalDetails } from "./onboarding.js";
 import { forgetLine, loadCoachMemory, memoryToday, neutralizeAppTags, rememberLine, type MemoryLine } from "./coachMemory.js";
 import { enqueueEvents } from "./events.js";
-import { brakeOn, countDecline, declinesSince, needsDeclineSeed, OFF_TOPIC_BRAKE_REPLY, OFF_TOPIC_REPLY, seedDeclines } from "./offTopic.js";
+import { brakeOn, countDecline, declinesSince, declinesToday, needsDeclineSeed, OFF_TOPIC_BRAKE_REPLY, OFF_TOPIC_REPLY, PAUSED_REPLY, seedDeclines, strikeState, warningLine } from "./offTopic.js";
+import { disableAccount } from "./accountStatus.js";
 import { addSpend, turnCostUsd } from "./spend.js";
 import { randomUUID } from "node:crypto";
 import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
@@ -183,6 +184,39 @@ export const TURN_BUDGET = {
 function envInt(name: string, fallback: number): number {
   const n = Number.parseInt(process.env[name]?.trim() || "", 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/** Counts one off-topic ask for today and logs it (kind off_topic). Returns today's count. */
+function recordDecline(ctx: ActionContext, kind: string): number {
+  const day = localDateKey(new Date(ctx.now ?? Date.now()), ctx.timezone);
+  const count = countDecline(ctx.userProfileId, day);
+  enqueueEvents([
+    {
+      user_profile_id: ctx.userProfileId,
+      session_id: null,
+      source: "server",
+      kind: "off_topic",
+      name: kind.slice(0, 20),
+      duration_ms: null,
+      status: 200,
+      props: { count },
+      app_version: null,
+      user_agent: null,
+      occurred_at: new Date().toISOString(),
+    },
+  ]);
+  return count;
+}
+
+/**
+ * After an off-topic ask: past the day's limit, a warning with the strikes left; at the last
+ * strike the account is paused (accountStatus.ts). Returns the line to add to the reply, if any.
+ */
+async function strikeLine(ctx: ActionContext, count: number): Promise<string | null> {
+  const st = strikeState(count);
+  if (st.kind === "warn") return warningLine(st.left);
+  if (st.kind === "pause") return (await disableAccount(ctx.userProfileId, "off_topic", { declinesToday: count })) ? PAUSED_REPLY : null;
+  return null;
 }
 
 /** Lowest daily calorie target the coach may set from chat (the app's own settings allow 800). */
@@ -797,24 +831,7 @@ export async function runTool(
       return { result: r, changed: r.ok };
     }
     case "decline_off_topic": {
-      const day = localDateKey(new Date(ctx.now ?? Date.now()), ctx.timezone);
-      const kind = String((input as { kind?: unknown } | null)?.kind ?? "off_topic").slice(0, 20);
-      const count = countDecline(ctx.userProfileId, day);
-      enqueueEvents([
-        {
-          user_profile_id: ctx.userProfileId,
-          session_id: null,
-          source: "server",
-          kind: "off_topic",
-          name: kind,
-          duration_ms: null,
-          status: 200,
-          props: { count },
-          app_version: null,
-          user_agent: null,
-          occurred_at: new Date().toISOString(),
-        },
-      ]);
+      const count = recordDecline(ctx, String((input as { kind?: unknown } | null)?.kind ?? "off_topic"));
       return { result: { ok: true, declinedToday: count } };
     }
     case "set_daily_targets": {
@@ -1439,11 +1456,14 @@ async function runTurn(ctx: ActionContext, userText: string, options: RunChatOpt
   // The off-topic brake: a person past the day's declines gets a fixed line for anything that
   // isn't about their health, with no model call.
   if (brakeOn(ctx.userProfileId, day, userText)) {
-    await saveChatMessage(ctx.userProfileId, "assistant", OFF_TOPIC_BRAKE_REPLY, [], { turnId, status: "ok" });
+    // Each braked message is another off-topic ask: it counts toward the pause.
+    const extra = await strikeLine(ctx, recordDecline(ctx, "braked"));
+    const text = extra === PAUSED_REPLY ? PAUSED_REPLY : [OFF_TOPIC_BRAKE_REPLY, extra].filter(Boolean).join("\n\n");
+    await saveChatMessage(ctx.userProfileId, "assistant", text, [], { turnId, status: "ok" });
     await setTurnStatus(ctx.userProfileId, turnId, "ok");
     stats.braked = true;
     logTurn(ctx.userProfileId, stats, "ok", performance.now() - startedAt);
-    return { text: OFF_TOPIC_BRAKE_REPLY, cards: [], changed: false, turnId };
+    return { text, cards: [], changed: false, turnId };
   }
 
   try {
@@ -1451,6 +1471,10 @@ async function runTurn(ctx: ActionContext, userText: string, options: RunChatOpt
       onEvent: options.onEvent,
       fastOnly: options.fastOnly,
     });
+    if (stats.tools.some((t) => t.name === "decline_off_topic")) {
+      const extra = await strikeLine(ctx, declinesToday(ctx.userProfileId, day));
+      if (extra) reply.text = extra === PAUSED_REPLY ? PAUSED_REPLY : `${reply.text}\n\n${extra}`;
+    }
     await saveChatMessage(ctx.userProfileId, "assistant", reply.text, reply.cards, { turnId, status: "ok" });
     await setTurnStatus(ctx.userProfileId, turnId, "ok");
     logTurn(ctx.userProfileId, stats, reply.refused ? "refusal" : stats.budgetHit ? "budget" : "ok", performance.now() - startedAt);

@@ -35,3 +35,16 @@ describe("off-topic brake", () => {
     expect(offTopicLimit({} as NodeJS.ProcessEnv)).toBe(5);
   });
 });
+
+describe("strikes after the brake", async () => {
+  const { strikeState, warningLine } = await import("./offTopic.js");
+  it("warns from the 5th decline with the strikes left, and pauses at the 8th", () => {
+    expect(strikeState(4)).toEqual({ kind: "ok" });
+    expect(strikeState(5)).toEqual({ kind: "warn", left: 3 });
+    expect(strikeState(7)).toEqual({ kind: "warn", left: 1 });
+    expect(strikeState(8)).toEqual({ kind: "pause" });
+    expect(strikeState(8, { MAGNUS_OFF_TOPIC_PAUSE_AFTER: "0" } as NodeJS.ProcessEnv)).toEqual({ kind: "ok" });
+    expect(warningLine(3)).toMatch(/3 more off-topic requests/);
+    expect(warningLine(1)).toMatch(/One more off-topic request/);
+  });
+});

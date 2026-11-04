@@ -109,6 +109,10 @@ async function api(path, options = {}) {
       endSession("Magnus is invite-only right now. Ask Saksham for an invite.");
       throw new Error("Invite only.");
     }
+    if (body.error === "account_disabled") {
+      showPaused(body);
+      throw Object.assign(new Error("Account paused."), { code: "account_disabled" });
+    }
     if (body.error === "token_scope") {
       // A device token (Android app, HC Webhook) only sends data in; it can't open the app.
       endSession("That token is for syncing Health Connect only. Sign in with Google instead.");
@@ -238,6 +242,15 @@ function showConnect(message) {
     $("google-signin").hidden = !cfg?.google;
     $("token-details").open = !cfg?.google;
   });
+}
+
+/** A paused account: why, and a ready-made email asking for a review. Stays signed in. */
+function showPaused(body) {
+  showConnect(body.message || "This account is paused.");
+  const box = $("connect-error");
+  if (body.review?.mailto) {
+    box.append(" ", el("a", { class: "link", href: body.review.mailto }, "Ask for a review"));
+  }
 }
 
 function showShell() {
