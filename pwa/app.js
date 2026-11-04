@@ -368,6 +368,26 @@ async function loadUsual() {
 
 const short = (t, n = 24) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
 
+/** One glass from the quick-log sheet, with the day's new total. */
+async function quickWater() {
+  try {
+    const r = await api("/water", { method: "POST", body: JSON.stringify({ ml: GLASS_ML }) });
+    toast(`Water: ${litres(r.totalMl)} today.`);
+    loadDays();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+/** "Eating out" from the quick-log sheet: lunch before 3 pm, dinner after. A template, no model call. */
+function eatingOut() {
+  const meal = new Date().getHours() < 15 ? "lunch" : "dinner";
+  return coachTurn(
+    () => addMessage("user", `Eating out at ${meal}`),
+    () => api("/plan/eating-out", { method: "POST", body: JSON.stringify({ meal }) }),
+  );
+}
+
 function repeatMeal(m) {
   return coachTurn(
     () => addMessage("user", `Usual: ${m.text}`),
@@ -1751,6 +1771,7 @@ function appendCard(c, into = $("thread")) {
   else if (c.type === "intervention") into.append(interventionCard(c));
   else if (c.type === "calorie_review") into.append(calorieReviewCard(c.review));
   else if (c.type === "day_plan") into.append(dayPlanCard(c));
+  else if (c.type === "eating_out") into.append(eatingOutCard(c));
 }
 
 // ---------- the day's plan ----------
@@ -1773,6 +1794,18 @@ function dayPlanCard(c) {
     sec("This week", el("p", {}, c.week)),
     c.focus ? el("div", { class: "dp-focus" }, el("p", { class: "eyebrow" }, "Worth a look"), el("p", {}, c.focus)) : null,
     el("p", { class: "dp-motto" }, c.motivation),
+  );
+}
+
+/** The plan around a meal out: what to keep for it, what's left before, and how to order. */
+function eatingOutCard(c) {
+  const keep = c.reserveKcal != null && c.lines[0]?.startsWith("Keep");
+  return el("div", { class: "draft eatout" },
+    el("p", { class: "eyebrow" }, `Eating out · ${c.meal}`),
+    keep ? el("div", { class: "eo-num" }, el("b", {}, fmt(c.reserveKcal)), el("small", {}, `kcal for ${c.meal}`)) : null,
+    el("div", { class: "eo-lines" }, ...c.lines.slice(keep ? 1 : 0).map((l) => el("p", {}, l))),
+    el("p", { class: "eyebrow eo-head" }, "Ordering"),
+    el("ul", { class: "eo-tips" }, ...c.tips.map((t) => el("li", {}, t))),
   );
 }
 
@@ -3232,7 +3265,9 @@ const SHEETS = {
         tile("Barcode", '<path d="M4 6v12M7 6v12M11 6v12M14 6v12M17 6v12M20 6v12"/>', () => openSheet("scan")),
         tile("Steps", '<path d="M8 4c1.5 0 2.5 2 2.5 4.5S9.5 13 8 13s-2.5-2-2.5-4.5S6.5 4 8 4zM6 16h4v2a2 2 0 0 1-4 0zM16 8c1.5 0 2.5 2 2.5 4.5S17.5 17 16 17s-2.5-2-2.5-4.5S14.5 8 16 8z"/>', () => openSheet("steps")),
         tile("Activity", '<path d="M3 12h4l3-7 4 14 3-7h4"/>', () => openSheet("activity")),
-        tile("Weigh-in", '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9.5a4 4 0 0 1 6 0M12 9.5l1.2-1.6"/>', () => openSheet("checkin"))),
+        tile("Weigh-in", '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9.5a4 4 0 0 1 6 0M12 9.5l1.2-1.6"/>', () => openSheet("checkin")),
+        tile("Water", '<path d="M12 3.5c3 4 5.5 7 5.5 10a5.5 5.5 0 0 1-11 0c0-3 2.5-6 5.5-10z"/>', () => { closeSheet(); quickWater(); }),
+        tile("Eating out", '<path d="M5 3v7a2 2 0 0 0 4 0V3M7 10v11M15 21V3c2.5 1.5 4 4 4 8h-4"/>', () => { closeSheet(); afterClose(() => { if ($("view-coach").hidden) setView("coach"); eatingOut(); }); })),
       (state.usual || []).length
         ? el("div", { class: "usual-list" },
             el("p", { class: "section-label" }, "Again"),

@@ -422,11 +422,13 @@ body.composing .tabbar { display: none; }
 .hint a { color: var(--muted); }
 
 /* Log sheet */
-.log-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.log-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .log-tile {
   display: grid; justify-items: center; gap: 6px; padding: 12px 6px 10px; border-radius: 16px;
   background: var(--surface); border: 1px solid var(--hair); color: var(--text); font-size: 0.86rem; font-weight: 500;
 }
+.log-tile span { white-space: nowrap; }
+@media (max-width: 340px) { .log-grid { grid-template-columns: repeat(3, 1fr); } }
 .log-tile svg { width: 24px; height: 24px; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -829,3 +831,12 @@ body.screen-open { overflow: hidden; }
 .dp-focus .eyebrow { margin-bottom: 4px; }
 .dp-focus p { margin: 0; line-height: 1.5; }
 .dp-motto { margin: 0; color: var(--muted); font-style: italic; }
+
+/* Eating-out plan card */
+.eatout .eo-num { display: flex; align-items: baseline; gap: 6px; margin: 4px 0 2px; }
+.eatout .eo-num b { font-family: var(--serif); font-size: 2.2rem; line-height: 1; font-weight: var(--num-w); font-variant-numeric: tabular-nums; }
+.eatout .eo-num small { color: var(--muted); }
+.eatout .eo-lines { margin: 8px 0 0; display: grid; gap: 6px; }
+.eatout .eo-lines p { margin: 0; }
+.eatout .eo-tips { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; color: var(--muted); font-size: 0.9rem; }
+.eatout .eo-head { margin-top: 14px; }
