@@ -1967,8 +1967,9 @@ function planMealCard(c) {
       card.replaceChildren(...body, el("div", { class: "done-line" }, cur.status === "partial" ? "✓ Eaten, portions changed" : "✓ Eaten"));
       return;
     }
-    const ate = el("button", { class: "btn primary", type: "button" }, "Ate this");
-    const change = el("button", { class: "btn", type: "button", onclick: () => openPlannedMeal(cur.date, cur.slot) }, "Change or swap");
+    const ate = el("button", { class: "btn primary small", type: "button" }, "Ate this");
+    const change = el("button", { class: "btn small", type: "button", onclick: () => openPlannedMeal(cur.date, cur.slot) }, "Edit or swap");
+    const own = el("button", { class: "btn small", type: "button", onclick: () => { state.mealSlot = cur.slot; state.mealDate = cur.date !== (todayKey() || localToday()) ? cur.date : null; openSheet("meal"); } }, "Log your own");
     ate.addEventListener("click", async () => {
       ate.disabled = change.disabled = true;
       try {
@@ -1984,7 +1985,7 @@ function planMealCard(c) {
         toast(err.message);
       }
     });
-    card.replaceChildren(...body, el("div", { class: "draft-actions" }, ate, change));
+    card.replaceChildren(...body, el("div", { class: "draft-actions" }, ate, change, own));
   }
   render(c);
   return card;
@@ -3537,6 +3538,8 @@ function mealDraftCard(draft, { onDone, saved } = {}) {
         source: draft.source,
         items: items.map((i) => ({ name: i.name.trim(), calories: +i.calories || 0, protein_g: +i.protein_g || 0, carbs_g: +i.carbs_g || 0, fat_g: +i.fat_g || 0 })),
         edited: JSON.stringify(items) !== original || slot !== draft.slot,
+        // Logged for a planned meal on another day (yesterday's dinner): that day, not today.
+        ...(draft.date ? { date: draft.date } : {}),
       };
       const r = await api("/meals/confirm", { method: "POST", body: JSON.stringify(body) });
       const done = { state: "logged", calories: r.totals.calories };
@@ -3763,7 +3766,7 @@ const SHEETS = {
     const tile = (label, d, onclick) => el("button", { class: "log-tile", type: "button", onclick }, icon(d), el("span", {}, label));
     return el("div", { class: "stack" },
       el("div", { class: "log-grid" },
-        tile("Meal", '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M16 3c-1.7 1-2.5 3-2.5 6s1 4 2.5 4v8"/>', () => { state.mealSlot = null; openSheet("meal"); }),
+        tile("Meal", '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M16 3c-1.7 1-2.5 3-2.5 6s1 4 2.5 4v8"/>', () => { state.mealSlot = null; state.mealDate = null; openSheet("meal"); }),
         tile("Photo", '<path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', () => { closeSheet(); $("photo-input").click(); }),
         tile("Barcode", '<path d="M4 6v12M7 6v12M11 6v12M14 6v12M17 6v12M20 6v12"/>', () => openSheet("scan")),
         tile("Steps", '<path d="M8 4c1.5 0 2.5 2 2.5 4.5S9.5 13 8 13s-2.5-2-2.5-4.5S6.5 4 8 4zM6 16h4v2a2 2 0 0 1-4 0zM16 8c1.5 0 2.5 2 2.5 4.5S17.5 17 16 17s-2.5-2-2.5-4.5S14.5 8 16 8z"/>', () => openSheet("steps")),
@@ -3802,7 +3805,7 @@ const SHEETS = {
     const show = (draft) => {
       form.hidden = true;
       picker.hidden = true;
-      holder.replaceChildren(mealDraftCard(draft, { onDone: () => setTimeout(closeSheet, 700) }));
+      holder.replaceChildren(mealDraftCard(state.mealDate ? { ...draft, date: state.mealDate } : draft, { onDone: () => setTimeout(closeSheet, 700) }));
     };
     // 1) Pick from the food database. 2) Only if it isn't there, describe it and let the chat estimate.
     const picker = foodPicker({ api, el, fmt }, {
@@ -4153,7 +4156,7 @@ async function ensureOnboarded() {
   return true;
 }
 
-initMeals({ api, el, toast, logOwn: (slot) => { state.mealSlot = slot || null; openSheet("meal"); }, openSheet, closeSheet, backSheet, setView, fmt, todayKey: () => todayKey() || localToday(), refresh });
+initMeals({ api, el, toast, logOwn: (slot, date) => { state.mealSlot = slot || null; state.mealDate = date && date !== (todayKey() || localToday()) ? date : null; openSheet("meal"); }, openSheet, closeSheet, backSheet, setView, fmt, todayKey: () => todayKey() || localToday(), refresh });
 
 async function start() {
   if (!(await ensureOnboarded())) return;
