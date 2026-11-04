@@ -113,40 +113,50 @@
         </span>
       </div>
 
-      <section class="block fuel" id="fuel" aria-label="Food">
-        <div class="block-head">
-          <h2>Food</h2>
-          <span class="meta" id="fuel-meta"></span>
-        </div>
-        <div id="fuel-body"><p class="none">Loading…</p></div>
-        <ul class="list rows" id="meals"></ul>
-        <div class="water" id="water" hidden></div>
-      </section>
-
-      <section class="block move" id="move" aria-label="Activity">
-        <div class="block-head">
-          <h2>Movement</h2>
-          <span class="meta" id="move-meta"></span>
-        </div>
-        <ul class="routine-today" id="routine-today" hidden></ul>
-        <div class="tiles" id="move-tiles"></div>
-        <p class="burn-breakdown" id="recovery" hidden></p>
-        <p class="burn-breakdown" id="burn-breakdown" hidden></p>
-        <ul class="list rows" id="workouts"></ul>
-        <ul class="list rows" id="activities"></ul>
-        <div class="block-links">
-          <button class="link" data-sheet="activity" type="button">Add swim, run or sport</button>
-          <button class="link quiet" id="routine-edit" data-sheet="routine" type="button">Set your routine</button>
-        </div>
-      </section>
-
-      <section class="block" id="day-card" aria-label="Checklist">
+      <!-- The day's scorecard stays open; the rest fold away with their key number in the header. -->
+      <section class="block scorecard" id="day-card" aria-label="Scorecard">
         <div class="block-head">
           <h2>On track</h2>
           <span class="score" id="today-score">–</span>
         </div>
         <ul class="checks" id="checks"></ul>
         <div class="quick-row" id="quick-row" hidden></div>
+      </section>
+
+      <section class="block fold fuel" id="fuel" data-fold="fuel" aria-label="Food">
+        <button class="fold-head" type="button" aria-expanded="false" aria-controls="fuel-fold">
+          <h2>Food</h2>
+          <span class="key" id="fuel-meta"></span>
+          <span class="chev" aria-hidden="true"></span>
+        </button>
+        <div class="fold-body" id="fuel-fold">
+          <div id="fuel-body"><p class="none">Loading…</p></div>
+          <ul class="list rows" id="meals"></ul>
+        </div>
+      </section>
+
+      <section class="block fold move" id="move" data-fold="move" aria-label="Movement">
+        <button class="fold-head" type="button" aria-expanded="false" aria-controls="move-fold">
+          <h2>Movement</h2>
+          <span class="key" id="move-meta"></span>
+          <span class="chev" aria-hidden="true"></span>
+        </button>
+        <div class="fold-body" id="move-fold">
+          <ul class="routine-today" id="routine-today" hidden></ul>
+          <div class="stats" id="move-tiles"></div>
+          <div class="stats recovery" id="recovery" hidden></div>
+          <p class="burn-breakdown" id="burn-breakdown" hidden></p>
+          <ul class="list rows" id="workouts"></ul>
+          <ul class="list rows" id="activities"></ul>
+          <div class="block-links">
+            <button class="link" data-sheet="activity" type="button">Add swim, run or sport</button>
+            <button class="link quiet" id="routine-edit" data-sheet="routine" type="button">Set your routine</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="block water-block" aria-label="Water">
+        <div class="water" id="water" hidden></div>
       </section>
     </main>
 

@@ -200,6 +200,33 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
+// ---------- folding sections (Today) ----------
+
+const FOLD_KEY = "magnus-folds";
+
+/** A fold's header line: the key number big, its unit or target small, one muted line under it. */
+function foldKey(id, value, unit, sub) {
+  $(id).replaceChildren(el("span", { class: "kv" }, el("b", {}, value), el("small", {}, unit)), sub ? el("span", { class: "ks" }, sub) : null);
+}
+
+/** Food and Movement start folded; each remembers being opened on this phone. */
+function initFolds() {
+  const open = store.get(FOLD_KEY, {});
+  for (const sec of document.querySelectorAll(".fold")) {
+    const head = sec.querySelector(".fold-head");
+    const set = (on) => {
+      sec.classList.toggle("open", on);
+      head.setAttribute("aria-expanded", String(on));
+    };
+    set(!!open[sec.dataset.fold]);
+    head.addEventListener("click", () => {
+      const on = !sec.classList.contains("open");
+      set(on);
+      store.set(FOLD_KEY, { ...store.get(FOLD_KEY, {}), [sec.dataset.fold]: on });
+    });
+  }
+}
+
 function svg(tag, attrs = {}) {
   const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
   for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
@@ -608,7 +635,9 @@ function renderStrip(scrollToEnd = false) {
       },
         el("span", { class: "wd" }, WD[d.weekday]),
         el("span", { class: "dn" }, String(dateOf(d.date).getUTCDate())),
-        el("i", { class: `mark ${d.onTrack ? "on" : logged ? "some" : ""}${d.workouts.length || d.trainedUnlogged ? " lift" : ""}` }),
+        el("span", { class: "marks" },
+          el("i", { class: `mark ${d.onTrack ? "on" : logged ? "some" : ""}` }),
+          d.workouts.length || d.trainedUnlogged || d.sportCounted ? el("i", { class: "lift", title: "Trained" }) : null),
       );
       return b;
     }),
@@ -653,7 +682,8 @@ function renderDay() {
 
 function renderFuel(d, t) {
   const target = t.calorieTarget;
-  $("fuel-meta").textContent = d.meals.length ? `${d.meals.length} meal${d.meals.length === 1 ? "" : "s"}` : "";
+  foldKey("fuel-meta", fmt(d.calories), target ? ` / ${fmt(target)} kcal` : " kcal",
+    d.meals.length ? `${d.meals.length} meal${d.meals.length === 1 ? "" : "s"} · ${fmt(d.proteinG)} g protein` : "Nothing logged");
   const over = target && d.calories > target;
   const top = el("div", { class: "fuel-top" },
     el("div", { class: "big" }, el("span", { class: "num" }, fmt(d.calories)), el("span", { class: "unit" }, "kcal")),
@@ -672,11 +702,8 @@ function renderFuel(d, t) {
   if (d.carbsG != null) {
     const kcal = MACROS.map(([k, , per]) => (d[k] || 0) * per);
     const total = kcal.reduce((a, b) => a + b, 0);
+    // Macros as numbers only: a second bar under the calorie meter read as one broken bar.
     macros = el("div", { class: "macros-block" },
-      total
-        ? el("div", { class: "macro-bar", role: "img", "aria-label": MACROS.map(([k, label]) => `${label} ${fmt(d[k])} g`).join(", ") },
-            ...MACROS.map(([, , , cls], i) => (kcal[i] ? el("i", { class: cls, style: `flex-grow:${kcal[i]}` }) : null)))
-        : el("div", { class: "macro-bar empty" }),
       el("div", { class: "macro-legend" },
         ...MACROS.map(([k, label, , cls], i) =>
           el("div", { class: "ml" },
@@ -780,13 +807,14 @@ function mealRow(m) {
 function renderMove(d, t, isToday) {
   const hevy = state.history?.hevy;
   const s = state.snapshot;
-  $("move-meta").textContent = d.routine?.length
-    ? `${d.routine.filter((r) => r.state === "done").length}/${d.routine.length} done`
-    : isToday && d.isTrainingDay && s?.gym?.time ? `Gym ${clock(s.gym.time)}` : d.isTrainingDay ? "Training day" : "Rest day";
   const stepT = t.stepTarget || 8000;
+  foldKey("move-meta", fmt(d.steps), " steps",
+    d.routine?.length
+      ? `${d.routine.filter((r) => r.state === "done").length} of ${d.routine.length} done`
+      : isToday && d.isTrainingDay && s?.gym?.time ? `Gym ${clock(s.gym.time)}` : d.isTrainingDay ? "Training day" : "Rest day");
   const mins = d.workouts.reduce((a, w) => a + (w.durationMin || 0), 0);
   const tile = (label, value, unit, sub, pct) =>
-    el("div", { class: "tile" },
+    el("div", { class: "stat" },
       el("div", { class: "tl" }, label),
       el("div", { class: "tv" }, value, unit ? el("small", {}, ` ${unit}`) : null),
       pct != null ? el("div", { class: "meter thin" }, el("i", { style: `width:${Math.min(100, Math.round(pct * 100))}%` })) : null,
@@ -823,7 +851,7 @@ function renderMove(d, t, isToday) {
   $("workouts").replaceChildren(
     ...(rows.length
       ? rows
-      : [el("li", { class: "none" },
+      : [d.routine?.some((r) => r.gym && r.state === "pending") && !d.trainedUnlogged ? null : el("li", { class: "none" },
           d.trainedUnlogged ? (hevy === "not_connected" ? "Marked as trained." : "You trained but didn't log it in Hevy.")
           : d.sportCounted ? `No gym today. ${d.sportCounted.split(" · ")[0]} counted as training.`
           : hevy === "not_connected" ? "No Hevy linked. Tap below on days you train."
@@ -841,6 +869,8 @@ function renderMove(d, t, isToday) {
 function trainedToggle(d) {
   const today = state.history?.today;
   if (d.partial || d.workouts.length || d.sportCounted || (today && d.date > today)) return null;
+  // The routine row's "Done" already answers this for a planned gym session; one button, not two.
+  if (!d.trainedUnlogged && d.routine?.some((r) => r.gym && r.state === "pending")) return null;
   if (!d.trainedUnlogged && !d.isTrainingDay && state.history?.hevy !== "not_connected") return null;
   const btn = el("button", { class: d.trainedUnlogged ? "link" : "btn", type: "button" }, d.trainedUnlogged ? "Undo" : "I trained");
   btn.addEventListener("click", async () => {
@@ -861,14 +891,16 @@ function trainedToggle(d) {
 function renderRecovery(d) {
   const line = $("recovery");
   if (!line) return;
+  // One small stat each instead of a run-on sentence.
+  const stat = (label, value, unit) => el("div", { class: "stat small" }, el("div", { class: "tl" }, label), el("div", { class: "tv" }, value, el("small", {}, ` ${unit}`)));
   const parts = [];
-  if (d.sleepMinutes != null) parts.push(["Slept ", el("b", {}, `${Math.floor(d.sleepMinutes / 60)} h ${String(d.sleepMinutes % 60).padStart(2, "0")} min`)]);
-  if (d.restingHr != null) parts.push(["Resting heart rate ", el("b", {}, `${fmt(d.restingHr)} bpm`)]);
-  if (d.hrvMs != null) parts.push(["HRV ", el("b", {}, `${fmt(d.hrvMs)} ms`)]);
+  if (d.sleepMinutes != null) parts.push(stat("Sleep", `${Math.floor(d.sleepMinutes / 60)}:${String(d.sleepMinutes % 60).padStart(2, "0")}`, "h"));
+  if (d.restingHr != null) parts.push(stat("Resting HR", fmt(d.restingHr), "bpm"));
+  if (d.hrvMs != null) parts.push(stat("HRV", fmt(d.hrvMs), "ms"));
   // Health Connect's total includes resting metabolism; "Burned" above is activity only.
-  if (d.totalKcal != null) parts.push(["Total burn with resting ", el("b", {}, `${fmt(d.totalKcal)} kcal`)]);
+  if (d.totalKcal != null) parts.push(stat("Total burn", fmt(d.totalKcal), "kcal"));
   line.hidden = !parts.length;
-  line.replaceChildren(...parts.flatMap((p, i) => (i ? [" · ", ...p] : p)));
+  line.replaceChildren(...parts);
 }
 
 /** The routine items planned that day, ticked off as they're logged; non-gym ones can be marked done here. */
@@ -3960,6 +3992,7 @@ initMeals({ api, el, toast, openSheet, closeSheet, backSheet, setView, fmt, toda
 
 async function start() {
   if (!(await ensureOnboarded())) return;
+  initFolds();
   showShell();
   $("greeting").textContent = greeting();
   // Opened straight onto another tab (a link, the Android app): put Coach underneath so back lands there.
