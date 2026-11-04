@@ -3421,7 +3421,55 @@ if (window.visualViewport) {
   screen.orientation?.addEventListener("change", () => { fullHeight = 0; keyboardUp = false; setTimeout(() => { fullHeight = vv.height; }, 300); });
 }
 // Tapping a composer button mustn't blur the textarea first, or the layout shifts under the finger.
-for (const id of ["send", "photo", "quick"]) $(id).addEventListener("pointerdown", (e) => { if (document.activeElement === $("input")) e.preventDefault(); });
+// ---------- voice ----------
+// The phone's own speech-to-text (Chrome's Web Speech API) fills the composer; nothing is sent
+// until the person taps send, so a misheard "dal" can be fixed first. Hidden where unsupported.
+
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const voice = { rec: null, base: "" };
+
+function stopListening() {
+  voice.rec?.stop();
+}
+
+function startListening() {
+  const rec = new Recognition();
+  rec.lang = navigator.language || "en-IN";
+  rec.interimResults = true;
+  rec.continuous = false;
+  const input = $("input");
+  voice.base = input.value.trim() ? `${input.value.trim()} ` : "";
+  rec.onresult = (e) => {
+    let said = "";
+    for (const r of e.results) said += r[0].transcript;
+    input.value = voice.base + said.trimStart();
+    autosize();
+  };
+  rec.onerror = (e) => {
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Allow the microphone for Magnus to speak your logs.");
+    else if (e.error === "no-speech") toast("Didn't catch that. Tap the mic and try again.");
+    else if (e.error !== "aborted") toast("Voice isn't available right now. Type it instead.");
+  };
+  rec.onend = () => {
+    voice.rec = null;
+    $("composer").classList.remove("listening");
+    $("mic").setAttribute("aria-pressed", "false");
+    $("mic").setAttribute("aria-label", "Speak instead of typing");
+    autosize();
+  };
+  voice.rec = rec;
+  $("composer").classList.add("listening");
+  $("mic").setAttribute("aria-pressed", "true");
+  $("mic").setAttribute("aria-label", "Stop listening");
+  try { rec.start(); } catch { rec.onend(); }
+}
+
+if (Recognition) {
+  $("mic").hidden = false;
+  $("mic").addEventListener("click", () => (voice.rec ? stopListening() : startListening()));
+}
+
+for (const id of ["send", "photo", "quick", "mic"]) $(id).addEventListener("pointerdown", (e) => { if (document.activeElement === $("input")) e.preventDefault(); });
 window.addEventListener("hashchange", () => { if (viewFromHash(location.hash) !== currentView()) setView(viewFromHash(location.hash), { fromHistory: true }); });
 $("input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing && matchMedia("(pointer: fine)").matches) {
@@ -3430,6 +3478,7 @@ $("input").addEventListener("keydown", (e) => {
   }
 });
 $("composer").addEventListener("submit", (e) => {
+  stopListening();
   e.preventDefault();
   const text = $("input").value;
   if (!text.trim() || state.sending) { send(text); return; }

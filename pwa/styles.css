@@ -231,7 +231,12 @@ body.composing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 
   padding: 10px 6px; max-height: 140px; line-height: 1.4; font-size: 1rem;
 }
 .composer textarea::placeholder { color: var(--faint); }
-.composer.has-text #photo { display: none; }
+.composer.has-text #photo, .composer.has-text #mic { display: none; }
+/* While listening, the mic stays as the stop button and send waits until speech ends. */
+.composer.listening #mic { display: grid; color: var(--accent); animation: listen 1.2s ease-in-out infinite; }
+.composer.listening .send, .composer.listening #photo { display: none; }
+@keyframes listen { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .composer.listening #mic { animation: none; } }
 .composer:not(.has-text) .send { display: none; }
 .send {
   flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; display: grid; place-items: center;
