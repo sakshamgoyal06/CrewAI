@@ -414,14 +414,19 @@ export function createHealthAppRouter(): express.Router {
       return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );
-  /** Foods to add to a meal, already filtered by the person's diet, avoid list and meat limits. */
+  /**
+   * The food list, for adding to a planned meal and for logging. A meal's editor passes
+   * `restricted=1`: only foods inside the person's diet, avoid list and meat limits. Logging
+   * leaves it off, because what they ate is what they ate. Free: no model or web call.
+   */
   router.get(
     "/diet/foods",
     route("diet-foods", async (ctx, req) => {
       const q = z.string().max(60).default("").parse(req.query.q ?? "");
-      const slot = z.enum(PLAN_SLOTS).parse(req.query.slot);
-      const foods = searchMealFoods(q, slot, await restrictionsFor(ctx.userProfileId));
-      return { body: { ok: true, foods } };
+      const slot = z.enum(PLAN_SLOTS).optional().parse(req.query.slot || undefined);
+      const restricted = req.query.restricted === "1";
+      const allows = restricted ? await restrictionsFor(ctx.userProfileId) : () => true;
+      return { body: { ok: true, foods: searchMealFoods(q, slot, allows) } };
     }),
   );
 

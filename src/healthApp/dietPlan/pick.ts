@@ -27,7 +27,8 @@ export type DayPick = {
   totals: Totals;
 };
 
-export type PriorPick = { date: string; slot: PlanSlot; optionId: string | null };
+/** A stored pick. title, totals and kind let it stay in the plan even after its option left it. */
+export type PriorPick = { date: string; slot: PlanSlot; optionId: string | null; title?: string; totals?: Totals; kind?: DayPick["kind"] };
 
 const weekday = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay();
 
@@ -61,6 +62,9 @@ export function pickDays(input: {
         note(o);
         if (o) out.push(pickOf(date, b.slot, o));
         else if (prior.optionId === null) out.push(eatOut(date, b));
+        // Its option left the plan (a rebuild re-sized the options, or it was hidden): the day still
+        // keeps the meal it saved, so a meal never disappears from the day.
+        else if (prior.title && prior.totals) out.push({ date, slot: b.slot, kind: prior.kind ?? "option", optionId: prior.optionId, title: prior.title, totals: prior.totals });
         continue;
       }
       if (isEatOut(input.prefs, weekday(date), b.slot)) {

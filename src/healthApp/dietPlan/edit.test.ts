@@ -67,6 +67,12 @@ describe("food search in the meal editor", () => {
     expect(searchMealFoods("chicken", "dinner", onlyChicken).length).toBeGreaterThan(0);
   });
 
+  it("searches the whole list when logging: no meal given, no restriction applied", () => {
+    const hits = searchMealFoods("chicken", undefined, anyFood);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(searchMealFoods("", undefined, anyFood).length).toBeGreaterThan(5);
+  });
+
   it("gives each serving a one-portion item with numbers", () => {
     const [dal] = searchMealFoods("dal tadka", "lunch", anyFood);
     expect(dal!.servings.length).toBeGreaterThan(0);

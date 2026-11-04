@@ -316,7 +316,14 @@ export type PlannedMeal = DayPick & {
 export async function ensureDays(ctx: ActionContext, plan: ActivePlan, prefs: PrefsRow, today: string): Promise<PlannedMeal[]> {
   const to = addDays(today, PLAN_DAYS - 1);
   const rows = await loadEntries(ctx.userProfileId, addDays(today, -2), to);
-  const existing: PriorPick[] = rows.map((r) => ({ date: r.local_date, slot: r.meal_slot, optionId: (r.metadata?.option_id as string | null) ?? null }));
+  const existing: PriorPick[] = rows.map((r) => ({
+    date: r.local_date,
+    slot: r.meal_slot,
+    optionId: (r.metadata?.option_id as string | null) ?? null,
+    title: r.title,
+    totals: r.metadata?.totals as PriorPick["totals"],
+    kind: r.metadata?.kind as PriorPick["kind"],
+  }));
   const picks = pickDays({ start: today, budgets: plan.budgets, options: plan.options, prefs: prefs.prefs, pinned: prefs.pinned, existing });
   const byId = new Map(Object.values(plan.options).flat().map((o) => [o!.id, o!]));
   const known = new Map(rows.map((r) => [`${r.local_date}|${r.meal_slot}`, r]));
