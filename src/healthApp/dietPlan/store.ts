@@ -18,6 +18,7 @@ import type { MealOption, PersonDiet } from "./compose.js";
 import { pickDays, PLAN_DAYS, type DayPick, type PriorPick } from "./pick.js";
 import { defaultPrefs, dietPrefsInput, type DietPrefs, type DietPrefsInput } from "./prefs.js";
 import { reviewEnabled, reviewPlan } from "./review.js";
+import { supplementChoices, supplementLines, type SupplementLine } from "./supplements.js";
 import { PLAN_SLOTS, type MacroTargets, type MealBudget, type PlanSlot } from "./targets.js";
 
 export type PrefsRow = { prefs: DietPrefs; saved: boolean; pinned: string[]; liked: string[]; hidden: string[] };
@@ -47,6 +48,23 @@ export async function saveDietPrefs(userProfileId: string, input: DietPrefsInput
     .upsert({ user_profile_id: userProfileId, prefs, updated_at: new Date().toISOString() }, { onConflict: "user_profile_id" });
   if (error) throw new Error(error.message);
   return prefs;
+}
+
+/** Marks the entry as the supplements log (raw_text), so it can be found, shown as taken, and undone. */
+export const SUPPLEMENTS_TEXT = "Daily supplements";
+
+/** The open supplements entry for a day, if one was logged. */
+export async function supplementSessionOn(userProfileId: string, date: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("meal_logs")
+    .select("meal_session_id")
+    .eq("user_profile_id", userProfileId)
+    .eq("local_date", date)
+    .eq("raw_text", SUPPLEMENTS_TEXT)
+    .is("deleted_at", null)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return ((data ?? [])[0]?.meal_session_id as string | undefined) ?? null;
 }
 
 export const OPTION_ACTIONS = ["pin", "unpin", "like", "unlike", "hide", "unhide"] as const;
@@ -362,6 +380,8 @@ export type PlanView = {
   plan: Omit<ActivePlan, "review"> | null;
   days: PlannedMeal[];
   reviewOn: boolean;
+  /** Daily supplements from the setup, and whether today's are logged. */
+  supplements: { lines: SupplementLine[]; takenToday: boolean; choices: ReturnType<typeof supplementChoices> };
   /** No calorie or protein target yet: the plan has nothing to split, so the tab asks for them first. */
   needsTargets: boolean;
 };
@@ -375,7 +395,9 @@ export async function loadPlanView(ctx: ActionContext, now = new Date()): Promis
   const [prefs, profile] = await Promise.all([loadDietPrefs(ctx.userProfileId), loadHealthProfile(ctx.userProfileId)]);
   const t = profile.targets;
   const needsTargets = !t.calorieTarget || !t.proteinTarget;
-  const base = { prefs: prefs.prefs, marks: { pinned: prefs.pinned, liked: prefs.liked, hidden: prefs.hidden }, reviewOn: reviewEnabled(), needsTargets };
+  const lines = supplementLines(prefs.prefs.supplements);
+  const takenToday = lines.length ? !!(await supplementSessionOn(ctx.userProfileId, today)) : false;
+  const base = { prefs: prefs.prefs, marks: { pinned: prefs.pinned, liked: prefs.liked, hidden: prefs.hidden }, reviewOn: reviewEnabled(), needsTargets, supplements: { lines, takenToday, choices: supplementChoices() } };
   if (!prefs.saved || needsTargets) return { ok: true, setup: prefs.saved, plan: null, days: [], ...base };
   let plan = await loadActivePlan(ctx.userProfileId);
   const stale = plan && (plan.targets.calories !== Math.round(t.calorieTarget ?? 0) || plan.targets.proteinG !== Math.round(t.proteinTarget ?? 0));

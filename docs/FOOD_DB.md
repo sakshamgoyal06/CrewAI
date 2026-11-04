@@ -42,6 +42,17 @@ requests, and is checked by tests. Plan and sizing:
 - `aliases`: Hindi and regional names, common spellings, and generic words that should mean
   this food ("dal" → dal tadka, "rice" → cooked white rice). An alias may point at only one food.
 
+## Supplements
+
+Supplements are catalog foods with `category: "supplement"` (whey, isolate, casein, plant protein,
+mass gainer, BCAA, collagen, creatine, multivitamin, vitamin D, fish oil, protein bars). The plan
+setup asks which ones a person takes daily (`prefs.supplements`: name, servings, optional meal).
+`src/healthApp/dietPlan/supplements.ts` takes their calories and protein out of the meal
+budgets (a supplement tied to a meal comes out of that meal, the rest are spread; no meal drops
+below 40% of its budget), and `supplementLog.ts` logs them in one tap from the Meals tab. Planned
+meals never include a supplement unless the person loves it. New supplements go in `data/foods.ts`
+with a label source (brand-neutral typical values).
+
 ## Search and suggestions
 
 `searchCatalog(query, opts)` (src/meals/catalog/search.ts) ranks foods for search boxes, pickers

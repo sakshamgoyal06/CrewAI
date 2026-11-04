@@ -23,6 +23,13 @@ const slotSetup = z.object({
   cookMinutes: z.union([z.literal(0), z.literal(10), z.literal(20), z.literal(30)]).nullable().optional(),
 });
 
+/** A daily supplement from the catalog ("Whey protein"), how many servings, and the meal it goes with (null = spread). */
+export const supplementInput = z.object({
+  name: z.string().trim().min(1).max(40),
+  servings: z.coerce.number().min(0.5).max(4).default(1),
+  slot: z.enum(PLAN_SLOTS).nullable().optional(),
+});
+
 export const dietPrefsInput = z.object({
   meals: z.array(slotSetup).min(1).max(4).refine((m) => new Set(m.map((x) => x.slot)).size === m.length, "each meal once"),
   /** Free-text restrictions the model review reads ("no onion-garlic on Tuesdays", "diabetic"). */
@@ -33,6 +40,8 @@ export const dietPrefsInput = z.object({
   whoCooks: z.enum(WHO_COOKS).default("self"),
   kitchen: z.enum(KITCHENS).default("full"),
   staples: z.enum(STAPLES).default("both"),
+  /** Supplements taken daily (whey, creatine, a gainer): their calories and protein come off the meal budgets. */
+  supplements: z.array(supplementInput).max(8).default([]),
   /** Meals usually eaten out: planned as a budget, not a dish. */
   eatOut: z.array(z.object({ day: z.coerce.number().int().min(0).max(6), slot: z.enum(PLAN_SLOTS) })).max(28).default([]),
 });
