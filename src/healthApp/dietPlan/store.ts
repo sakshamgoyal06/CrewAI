@@ -256,8 +256,8 @@ export async function rebuildPlan(ctx: ActionContext, reason: string, now = new 
   const previous = await loadActivePlan(ctx.userProfileId);
   const plan = await savePlan(ctx.userProfileId, draft, reason, previous);
   // Today keeps its picks (the same-day rebalance handles today); later days are picked again.
-  // After a diet or food-list change, today's meals not yet eaten go too, so nothing they ruled out stays.
-  await dropFuturePicks(ctx.userProfileId, reason === "food_prefs_changed" ? today : addDays(today, 1));
+  // After a diet or food-list change, or "Make me a fresh plan", today's meals not yet eaten go too, so nothing they ruled out stays.
+  await dropFuturePicks(ctx.userProfileId, reason === "food_prefs_changed" || reason === "rebuild" ? today : addDays(today, 1));
   logger.info({ userProfileId: ctx.userProfileId, version: plan.version, reason, reviewed: !!draft.review }, "diet plan built");
   return { ok: true, plan };
 }

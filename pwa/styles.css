@@ -1067,7 +1067,7 @@ body.screen-open { overflow: hidden; }
 .pick-row, .pick-basket li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--hair); }
 .pick-row:first-child, .pick-basket li:first-child { border-top: 0; }
 .pick-row .iname, .pick-basket .iname { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.pick-row .slot-pick { max-width: 46%; }
+.pick-row .slot-pick { max-width: 52%; }
 .pick-total { color: var(--muted); font-size: 0.9rem; margin: 0; }
 .left-line { margin: 0; }
 /* Meal editor (one planned meal): live totals, items with portions, add a food, swap. */
@@ -1099,3 +1099,6 @@ body.screen-open { overflow: hidden; }
 .plan-line-wrap .plan-line { margin-bottom: 0; }
 .plan-line-wrap .plan-change { justify-self: start; }
 .dp-plan .dp-meal { text-align: left; font-weight: 500; }
+
+.fresh-plan { display: grid; gap: 6px; margin-top: 20px; }
+.fresh-plan .hint { margin: 0; text-align: center; }

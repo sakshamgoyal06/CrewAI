@@ -134,9 +134,10 @@ function paint() {
   const leftLine = isToday && left.length && left.length < order.length
     ? el("p", { class: "hint left-line" }, left.length === 1 ? `Only ${SLOT_NAME[left[0]].toLowerCase()} is left today.` : `Left today: ${left.map((s) => SLOT_NAME[s].toLowerCase()).join(", ")}.`)
     : null;
-  host.replaceChildren(strip, summary, leftLine, suppRow(ms.date), list,
-    el("div", { class: "block-links" },
-      el("button", { class: "link quiet", type: "button", onclick: rebuild }, "Make me a fresh plan")));
+  host.replaceChildren(...[strip, summary, leftLine, suppRow(ms.date), list,
+    el("div", { class: "fresh-plan" },
+      el("button", { class: "btn block", type: "button", onclick: rebuild }, "Make me a fresh plan"),
+      el("p", { class: "hint" }, "New options from your current food settings. Meals you've already eaten stay."))].filter(Boolean));
 }
 
 /** One row for the day's supplements: what they are and a tap to log them (today only). */
@@ -205,13 +206,18 @@ function openMeal(date, slot) {
   d.openSheet("dietMeal");
 }
 
-async function rebuild() {
+async function rebuild(ev) {
+  const btn = ev?.currentTarget;
+  if (btn) { btn.disabled = true; btn.textContent = "Making your plan…"; }
   try {
     await d.api("/diet/plan/rebuild", { method: "POST" });
-    d.toast("New plan ready. Today stays as it is.");
     await loadPlan(true);
+    d.toast("Fresh plan ready.");
     paint();
-  } catch (err) { d.toast(err.message); }
+  } catch (err) {
+    d.toast(err.message);
+    if (btn) { btn.disabled = false; btn.textContent = "Make me a fresh plan"; }
+  }
 }
 
 // ---------- one meal: the meal editor ----------

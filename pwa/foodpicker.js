@@ -30,7 +30,7 @@ export function foodPicker({ api, el, fmt }, { onReview, onDescribe }) {
     const s = b.serving;
     const q = b.qty;
     return {
-      name: `${fmtQty(q)} × ${s.label} ${b.food.name}`.replace(/\s+/g, " ").trim(),
+      name: (/^1 /.test(s.label) ? `${fmtQty(q)} ${s.label.slice(2)} ${b.food.name}` : `${fmtQty(q)} × ${s.label} ${b.food.name}`).replace(/\s+/g, " ").trim(),
       calories: Math.round(s.kcal * q),
       protein_g: Math.round(s.proteinG * q * 10) / 10,
       carbs_g: Math.round(s.carbsG * q * 10) / 10,
@@ -61,7 +61,7 @@ export function foodPicker({ api, el, fmt }, { onReview, onDescribe }) {
   function row(food) {
     const def = food.servings.find((s) => s.default) || food.servings[0];
     const picker = el("select", { class: "slot-pick", "aria-label": `Serving of ${food.name}` },
-      ...food.servings.map((s) => el("option", { value: s.id, selected: s === def }, `${s.label} · ${fmt(s.kcal)} kcal`)));
+      ...food.servings.map((s) => el("option", { value: s.id, selected: s === def }, `${s.label} (${fmt(s.kcal)} kcal)`)));
     return el("li", { class: "pick-row" },
       el("span", { class: "iname" }, food.name),
       picker,
