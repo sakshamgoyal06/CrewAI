@@ -17,20 +17,13 @@ import { runRoutineTick } from "./routineCheck.js";
 import { runInterventionTick } from "./interventions/engine.js";
 import { runWorkoutChecks, SCHEDULER_INTERVAL_MS } from "./workoutCheck.js";
 import { postCoachMessage } from "./workoutCheckStore.js";
+import { DAY_MS, localClock } from "../util/time.js";
 
 /** A nudge only fires within this long after its time, so a late restart doesn't send stale ones. */
 const NUDGE_WINDOW_MIN = 90;
 const STEPS_PER_MIN = 110;
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
-
-function localClock(now: Date, timezone: string): { hhmm: string; minutes: number; weekday: number } {
-  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", weekday: "short", hourCycle: "h23" }).formatToParts(now);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  const hhmm = `${get("hour")}:${get("minute")}`;
-  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(get("weekday"));
-  return { hhmm, minutes: Number(get("hour")) * 60 + Number(get("minute")), weekday };
-}
 
 const at = (hhmm: string) => {
   const [h, m] = hhmm.split(":").map(Number) as [number, number];
@@ -202,25 +195,52 @@ export async function proactiveTick(userProfileId: string, now = new Date()): Pr
   }
 }
 
-/** People who used the app in the last two weeks; the proactive loop only runs for them. */
+/**
+ * People who used the app in the last two weeks; the proactive loop only runs for them. "Used"
+ * means they wrote to the coach or called the API themselves. The coach's own messages don't
+ * count, or a nudge would keep someone "active" forever.
+ */
 const ACTIVE_DAYS = 14;
 const ACTIVE_REFRESH_MS = 15 * 60_000;
+const ACTIVE_ROWS = 5_000;
 
 export async function listActiveUsers(now = new Date()): Promise<string[]> {
-  const since = new Date(now.getTime() - ACTIVE_DAYS * 86_400_000).toISOString();
-  const { data, error } = await supabase
-    .from("health_chat_messages")
-    .select("user_profile_id")
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(10_000);
-  if (error) throw new Error(`active users: ${error.message}`);
-  return [...new Set((data ?? []).map((r) => String(r.user_profile_id)))];
+  const since = new Date(now.getTime() - ACTIVE_DAYS * DAY_MS).toISOString();
+  const [chat, events] = await Promise.all([
+    supabase
+      .from("health_chat_messages")
+      .select("user_profile_id")
+      .eq("role", "user")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(ACTIVE_ROWS),
+    supabase
+      .from("health_app_events")
+      .select("user_profile_id")
+      .eq("kind", "server_route")
+      .gte("occurred_at", since)
+      .order("occurred_at", { ascending: false })
+      .limit(ACTIVE_ROWS),
+  ]);
+  if (chat.error) throw new Error(`active users: ${chat.error.message}`);
+  if (events.error) throw new Error(`active users: ${events.error.message}`);
+  return [...new Set([...(chat.data ?? []), ...(events.data ?? [])].map((r) => String(r.user_profile_id)))];
+}
+
+/** Users ticked at the same time: enough to keep a slow Hevy call from holding up everyone. */
+const TICK_CONCURRENCY = 4;
+
+async function forEachLimited(ids: string[], limit: number, fn: (id: string) => Promise<void>): Promise<void> {
+  let next = 0;
+  const worker = async () => {
+    while (next < ids.length) await fn(ids[next++]!);
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, ids.length) }, worker));
 }
 
 /**
  * Runs `proactiveTick` for every active user (plus `alwaysInclude`, the deploy owner) on an
- * interval. Users run one after another so a slow Hevy call for one never overlaps the next tick.
+ * interval, a few users at a time. A tick never starts while the last one is still running.
  */
 export function startProactiveScheduler(
   alwaysInclude: string[] = [],
@@ -242,7 +262,7 @@ export function startProactiveScheduler(
           logger.warn({ err: loggableError(err) }, "proactive: could not list active users");
         }
       }
-      for (const id of users) await proactiveTick(id);
+      await forEachLimited(users, TICK_CONCURRENCY, (id) => proactiveTick(id));
     } finally {
       running = false;
     }

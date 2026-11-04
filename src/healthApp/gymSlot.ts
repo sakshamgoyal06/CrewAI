@@ -1,27 +1,11 @@
 /**
  * Gym slot time helpers: local wall-clock times on training days, converted to instants.
  */
+import { tzOffsetMs } from "../util/time.js";
 
 export const DEFAULT_CHECK_DELAY_MIN = 180;
 
 export type GymSlot = { time: string | null; checkDelayMin: number };
-
-/** Offset of `timezone` from UTC at `instant`, in ms (positive east of UTC). */
-function tzOffsetMs(instant: Date, timezone: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(instant);
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
-  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
-  return asUtc - Math.floor(instant.getTime() / 1000) * 1000;
-}
 
 /** The instant of wall-clock `hhmm` on local `date` in `timezone`. */
 export function zonedInstant(date: string, hhmm: string, timezone: string): Date {

@@ -18,6 +18,7 @@ import { listInterventions } from "./interventions/store.js";
 import type { Intervention } from "./interventions/types.js";
 import type { CheckId } from "./northStar.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
+import { addDays, localClock, tzOffsetMs } from "../util/time.js";
 
 /** The day's plan isn't posted before this local hour, so a late-night chat doesn't get "Good morning". */
 export const MORNING_FROM_HOUR = 5;
@@ -45,29 +46,17 @@ export type ChatDay = { date: string; count: number; preview: string };
 
 // ---------- dates ----------
 
-/** Minutes the zone is ahead of UTC at `instant`. */
-function offsetMinutes(instant: Date, timezone: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
-  }).formatToParts(instant);
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
-  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
-  return Math.round((asUtc - Math.floor(instant.getTime() / 1000) * 1000) / 60_000);
-}
-
 /** UTC instant of local midnight starting `date` in `timezone`. */
 export function localMidnight(date: string, timezone: string): Date {
   const tz = resolveTimezone(timezone);
   const guess = Date.parse(`${date}T00:00:00Z`);
-  let t = guess - offsetMinutes(new Date(guess), tz) * 60_000;
+  let t = guess - tzOffsetMs(new Date(guess), tz);
   // Once more, in case a DST change sits between the guess and the answer.
-  t = guess - offsetMinutes(new Date(t), tz) * 60_000;
+  t = guess - tzOffsetMs(new Date(t), tz);
   return new Date(t);
 }
 
-export function addDays(date: string, n: number): string {
-  return new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
-}
+export { addDays };
 
 /** [from, to) in UTC for one local day. */
 export function localDayRange(date: string, timezone: string): { from: string; to: string } {
@@ -335,7 +324,7 @@ export async function ensureDayPlan(userProfileId: string, timezone: string, now
   const date = localDateKey(now, tz);
   const key = `${userProfileId}|${date}`;
   if (handled.get(userProfileId) === date) return "exists";
-  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", hourCycle: "h23" }).format(now));
+  const { hour } = localClock(now, tz);
   if (hour < MORNING_FROM_HOUR) return "too_early";
 
   const turnId = morningTurnId(userProfileId, date);
@@ -360,6 +349,12 @@ export async function ensureDayPlan(userProfileId: string, timezone: string, now
     buildHealthSnapshot(userProfileId, now),
     listInterventions(userProfileId, 21).catch(() => [] as Intervention[]),
   ]);
+  // The snapshot reads the timezone itself; if the two disagree, one of them is wrong. Posting
+  // anyway would key the plan to one day and show another, and the real day would post again.
+  if (snapshot.today.date !== date) {
+    logger.warn({ userProfileId, date, snapshotDate: snapshot.today.date }, "day plan skipped: timezone mismatch");
+    return "not_ready";
+  }
   const open = interventions.find((i) => i.status === "offered" || i.status === "confirm") ?? null;
   const { text, card } = buildDayPlan({ snapshot, name: bits.name, localHour: hour, intervention: open });
   const cards: ChatCard[] = [card, ...(open ? [cardFromIntervention(open)] : [])];

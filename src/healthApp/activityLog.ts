@@ -32,8 +32,8 @@ import { zonedInstant } from "./gymSlot.js";
 import { hevyHistoryCached } from "./hevyHistory.js";
 import { loadHealthProfile, weekdayOfDate } from "./snapshot.js";
 import { getWorkoutChecks, postCoachMessage, saveWorkoutCheckAnswer } from "./workoutCheckStore.js";
+import { DAY_MS } from "../util/time.js";
 
-const DAY_MS = 86_400_000;
 /** Used for burn estimates until a weigh-in exists. */
 export const FALLBACK_WEIGHT_KG = 75;
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");

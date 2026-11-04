@@ -39,10 +39,9 @@ import {
   type InterventionCard,
   type ReasonChoice,
 } from "./types.js";
+import { DAY_MS, dateOf, localClock, localHourOf } from "../../util/time.js";
 
-const DAY_MS = 86_400_000;
 const dayN = (d: string) => Math.round(Date.parse(`${d}T00:00:00Z`) / DAY_MS);
-const dateOf = (n: number) => new Date(n * DAY_MS).toISOString().slice(0, 10);
 const pct = (r: number | null) => (r === null ? "?" : `${Math.round(r * 100)}%`);
 
 export const CAPS = { perWeek: 2, keptQuietDays: 21, repeatQuietDays: 7, offerExpiryDays: 7, ambitiousQuietDays: 30 };
@@ -117,11 +116,7 @@ export function calorieFloor(b: { sex: string | null; birthYear: number | null; 
   return { floor: Math.max(1200, Math.ceil(bmr / 50) * 50), bmr };
 }
 
-const localHour = (iso: string, tz: string) => {
-  const p = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
-  const [h, m] = p.split(":").map(Number) as [number, number];
-  return h + m / 60;
-};
+const localHour = localHourOf;
 
 export async function loadDetectInput(userProfileId: string, now: Date): Promise<Loaded> {
   const loaded = await loadDayRecords(userProfileId, now);
@@ -282,10 +277,9 @@ export async function runInterventionTick(userProfileId: string, now = new Date(
   const today = localDateKey(now, tz);
   if (!force) {
     if (lastRun.get(userProfileId) === today) return null;
-    const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", hourCycle: "h23" }).format(now));
+    const { hour, hhmm } = localClock(now, tz);
     if (hour < POST_FROM_HOUR || hour >= POST_UNTIL_HOUR) return null;
     const prefs = await getPrefs(userProfileId);
-    const hhmm = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(now);
     if (isQuiet(hhmm, prefs)) return null;
   }
   lastRun.set(userProfileId, today);

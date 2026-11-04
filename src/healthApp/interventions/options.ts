@@ -16,8 +16,8 @@ import type { HealthTargets } from "../northStar.js";
 import type { RoutineItem } from "../routine.js";
 import { T } from "./detectors.js";
 import type { Change, Finding, GoalImpact, Option, OptionKind } from "./types.js";
+import { DAY_MS, dateOf } from "../../util/time.js";
 
-const DAY_MS = 86_400_000;
 export const KCAL_PER_KG = 7700;
 export const MAX_EXTENSION_DAYS = 182;
 const WD = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -34,7 +34,6 @@ export type OfferContext = {
 };
 
 const dayN = (d: string) => Math.round(Date.parse(`${d}T00:00:00Z`) / DAY_MS);
-const dateOf = (n: number) => new Date(n * DAY_MS).toISOString().slice(0, 10);
 const r50 = (n: number) => Math.round(n / 50) * 50;
 const r5 = (n: number) => Math.round(n / 5) * 5;
 const kcal = (n: number) => `${Math.round(n).toLocaleString("en-US")} kcal`;

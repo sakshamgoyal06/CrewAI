@@ -14,6 +14,7 @@ import { memoryContextLine, type MemoryLine } from "./coachMemory.js";
 import { localDateKey } from "../nutrition/localDate.js";
 import { interventionsLine } from "./interventions/card.js";
 import type { Intervention } from "./interventions/types.js";
+import { DAY_MS, localClock } from "../util/time.js";
 
 export const SYSTEM_PROMPT = `You are Magnus, a personal health coach inside an app, talking with one person about their own health. You are warm, direct and specific. You sound like a knowledgeable friend who has their numbers in front of them, not like an app.
 
@@ -98,7 +99,6 @@ export function systemPrompt(env: NodeJS.ProcessEnv = process.env): string {
   return usingLegacyPrompt(env) ? LEGACY_SYSTEM_PROMPT : SYSTEM_PROMPT;
 }
 
-const DAY_MS = 86_400_000;
 
 /** Which phase the person is in, from the snapshot alone. */
 export function chatPhase(s: HealthSnapshot, now: Date): ChatPhase {
@@ -187,7 +187,8 @@ export function buildTurnContext(
 
   const openGym = s.workoutChecks.filter((c) => c.status === "missing").map((c) => c.localDate);
   // A routine item is "open" once its slot has passed with nothing logged; before that it's just upcoming.
-  const hhmm = new Intl.DateTimeFormat("en-GB", { timeZone: s.timezone, hour: "2-digit", minute: "2-digit", hour12: false }).format(now);
+  // h23 (via localClock): hour12:false can print midnight as "24:00", which sorts after every slot.
+  const { hhmm } = localClock(now, s.timezone);
   const openRoutine = s.today.routine.filter((r) => r.state === "pending" && !r.gym && r.startTime && r.startTime < hhmm).map((r) => r.label);
   if (openGym.length || openRoutine.length) {
     lines.push(`Open check-ins: ${[openGym.length ? `gym on ${openGym.join(", ")}` : "", openRoutine.length ? `today's ${openRoutine.join(", ")}` : ""].filter(Boolean).join("; ")}.`);

@@ -19,8 +19,9 @@ import { scoreDay, type CheckId, type DayScore, type HealthTargets } from "./nor
 import { loadHealthProfile, summarizeWorkout, weekdayOfDate, windowDates, type WorkoutSummary } from "./snapshot.js";
 import { hevyKey, loadWorkoutHistory } from "./training.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
+import { rcaModel } from "../models.js";
+import { DAY_MS, localHourOf } from "../util/time.js";
 
-const DAY_MS = 86_400_000;
 export const RCA_WINDOW_DAYS = 21;
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -288,11 +289,7 @@ export function buildDayRecords(input: {
   workoutDates: Set<string>;
   checks: Map<string, { status: string; reason: string | null }>;
 }): DayRecord[] {
-  const hourOf = (iso: string) => {
-    const p = new Intl.DateTimeFormat("en-GB", { timeZone: input.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
-    const [h, m] = p.split(":").map(Number) as [number, number];
-    return h + m / 60;
-  };
+  const hourOf = (iso: string) => localHourOf(iso, input.timezone);
   return input.dates.map((date) => {
     const rows = input.meals.filter((m) => String(m.local_date) === date);
     const sessions = new Set(rows.map((m) => m.meal_session_id).filter(Boolean));
@@ -456,13 +453,7 @@ const insightSchema = z.object({
 const SYSTEM = `You are a health coach doing a root-cause analysis for one person. You get evidence mined from their last few weeks of logs, plus earlier experiments and whether they helped.
 Write ONE hypothesis about the main reason they are off track, grounded in the evidence (quote its numbers), and ONE small, specific experiment for the next 7 days that tests it: something concrete they can do daily, not a program change. Don't repeat an experiment that didn't help. Plain words, second person, no hedging, no lists. Answer only by calling the write_rca tool.`;
 
-/**
- * Its own setting, so changing the chat model never changes this one. Sonnet: one short structured
- * answer from mined numbers doesn't need Opus.
- */
-export function rcaModel(env: NodeJS.ProcessEnv = process.env): string {
-  return env.MAGNUS_RCA_MODEL?.trim() || "claude-sonnet-5-5";
-}
+export { rcaModel };
 
 /** One hypothesis + one experiment from Claude, or a deterministic one if the call fails. */
 export async function writeInsight(

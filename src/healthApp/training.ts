@@ -13,8 +13,8 @@ import {
   type HevyWorkout,
   type HevyWorkoutSet,
 } from "../pillars/health/workouts/hevy/index.js";
+import { DAY_MS } from "../util/time.js";
 
-const DAY_MS = 86_400_000;
 /** Change in best estimated 1RM, first vs last sessions in the window, that counts as movement. */
 const TREND_THRESHOLD = 0.025;
 const MIN_SESSIONS_FOR_TREND = 3;

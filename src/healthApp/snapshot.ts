@@ -28,9 +28,9 @@ import {
   type HealthTargets,
   type NorthStar,
 } from "./northStar.js";
+import { DAY_MS } from "../util/time.js";
 
 const WINDOW_DAYS = 7;
-const DAY_MS = 86_400_000;
 
 export type WorkoutSummary = {
   id: string | null;
@@ -144,6 +144,9 @@ export async function loadHealthProfile(
       .maybeSingle(),
     loadRoutine(userProfileId).catch(() => null),
   ]);
+  // A failed read must not quietly become UTC: every "today" downstream (day plan, checks,
+  // nudges) would be computed on the wrong day.
+  if (profile.error) throw new Error(`profile timezone: ${profile.error.message}`);
   const h = (health.data ?? {}) as Record<string, unknown>;
   const num = (v: unknown): number | null => {
     const n = typeof v === "number" ? v : Number(v);

@@ -60,17 +60,10 @@ import { randomUUID } from "node:crypto";
 import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
 import { checkNewGoal, openInterventions, recordManualPlan, respond as respondToIntervention } from "./interventions/engine.js";
 import type { InterventionCard } from "./interventions/types.js";
+import { chatFastModel, chatModel } from "../models.js";
 
-export function healthChatModel(): string {
-  // Sonnet answers a tool-heavy coach turn several times faster than Opus; set the env var to
-  // trade speed back for depth.
-  return process.env.MAGNUS_HEALTH_CHAT_MODEL?.trim() || "claude-sonnet-5-5";
-}
-
-/** The cheap model for routine logging turns (about 20x cheaper per token than Sonnet). */
-export function healthChatFastModel(): string {
-  return process.env.MAGNUS_HEALTH_CHAT_FAST_MODEL?.trim() || "claude-haiku-5-5";
-}
+export const healthChatModel = (): string => chatModel();
+export const healthChatFastModel = (): string => chatFastModel();
 
 /**
  * Words that mean the person wants thinking, not just a log: these turns stay on the main model.
@@ -122,11 +115,11 @@ export function fastModelDodgedLog(userText: string, toolCalls: number, round: n
  * to the main one. `MAGNUS_HEALTH_CHAT_ROUTING=off` sends everything to the main model.
  */
 export function pickChatModel(text: string, env: NodeJS.ProcessEnv = process.env): string {
-  const main = env.MAGNUS_HEALTH_CHAT_MODEL?.trim() || "claude-sonnet-5-5";
+  const main = chatModel(env);
   if (env.MAGNUS_HEALTH_CHAT_ROUTING?.trim().toLowerCase() === "off") return main;
   const t = text.trim();
   if (t.length > 160 || COACHING.test(t)) return main;
-  return env.MAGNUS_HEALTH_CHAT_FAST_MODEL?.trim() || "claude-haiku-5-5";
+  return chatFastModel(env);
 }
 
 /** Rows read for a turn; the window below decides how many of them the model sees. */

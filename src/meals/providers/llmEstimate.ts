@@ -1,9 +1,9 @@
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
+import { mealLookupModel } from "../../models.js";
 import { anthropic } from "../../tools/clients.js";
 import type { MealNutritionEstimate } from "../types.js";
 
-const MODEL = "claude-sonnet-4-6";
 
 const SYSTEM = `You estimate nutrition for a free-text meal description. Reply with **only** a single JSON object, no markdown, no prose.
 Schema:
@@ -21,7 +21,7 @@ function textFromMessage(msg: Message): string {
 
 export async function estimateViaLlm(query: string): Promise<MealNutritionEstimate | null> {
   const msg = await anthropic.messages.create({
-    model: MODEL,
+    model: mealLookupModel(),
     max_tokens: 512,
     system: SYSTEM,
     messages: [{ role: "user", content: query }],
@@ -51,7 +51,7 @@ export async function estimateViaLlm(query: string): Promise<MealNutritionEstima
     fat_g: numOrNull(parsed.fat_g),
     items: items.length > 0 ? items : [{ name: query.slice(0, 80), calories: calories ?? undefined }],
     source: "llm_estimate",
-    providerRaw: { model: MODEL, raw },
+    providerRaw: { model: mealLookupModel(), raw },
   };
 }
 

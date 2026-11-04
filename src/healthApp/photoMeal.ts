@@ -12,6 +12,7 @@ import { z } from "zod";
 
 import { anthropic } from "../tools/clients.js";
 import { MEAL_SLOTS } from "./meals.js";
+import { photoMealModel } from "../models.js";
 
 export const PHOTO_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 /** Base64 length cap (~4.5 MB image). The app resizes to ~1280 px first, so real photos are far smaller. */
@@ -30,9 +31,7 @@ export const photoMealInput = z.object({
 });
 export type PhotoMealInput = z.infer<typeof photoMealInput>;
 
-export function photoMealModel(): string {
-  return process.env.MAGNUS_MEAL_PHOTO_MODEL?.trim() || "claude-sonnet-5-5";
-}
+export { photoMealModel };
 
 export type PhotoFood = { name: string; amount: string };
 
