@@ -178,6 +178,8 @@ const DIETS_ALLOWED: Record<Exclude<PersonDiet, null | "custom">, Diet[]> = {
 };
 
 export function dietAllows(diet: PersonDiet, e: CatalogEntry): boolean {
+  // "Jain chole", "Jain dal tadka": the Jain versions of everyday dishes are only for Jain plans.
+  if (e.key.startsWith("jain ") && diet !== "jain") return false;
   if (!diet || diet === "custom") return true;
   if (!DIETS_ALLOWED[diet].includes(e.diet)) return false;
   if (diet !== "jain") return true;
@@ -306,7 +308,7 @@ export function itemFor(e: CatalogEntry, s: Serving, qty: number): PlanItem {
     // "1 chilla with paneer" for paneer moong chilla: the dish name already says it.
     const describes = unitWords.length > 1 && name.split(" ").includes(unitWords[0]!) && unitWords.slice(1).some((w) => name.includes(w) && w.length > 3);
     if (/ breast fillet$/.test(unitLabel) || describes || (unitLabel.split(" ").length <= 2 && name.endsWith(unitWord))) text = `${fmtQty(qty)} ${qty > 1 ? plural(name) : name}`;
-    else if (qty > 1) text = text.replace(/^(\S+) (bowl|jar|glass|plate)\b/, "$1 $2s");
+    else if (qty > 1) text = text.replace(/^(\S+) (bowl|jar|plate)\b/, "$1 $2s").replace(/^(\S+) glass\b/, "$1 glasses");
     const words = name.split(/\s+/).filter((w) => w.length > 2);
     if (!words.every((w) => text.toLowerCase().includes(w.replace(/s$/, "")))) text = `${text} ${name}`;
   }
