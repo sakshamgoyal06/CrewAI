@@ -29,6 +29,7 @@ import { routineInput } from "./routine.js";
 import { answerRoutineCheck, routineCheckAnswerInput, setRoutine, type RoutineCheckCard } from "./routineCheck.js";
 import type { DayPlanCard } from "./dailyChat.js";
 import type { PlanAdjustCard, PlanMealCard } from "./dietPlan/rhythm.js";
+import { MEAL_PLAN_TOOL, mealPlanInput, runMealPlanTool } from "./dietPlan/chatTool.js";
 import { dayLabel } from "./dailyChat.js";
 import { localDateKey } from "../nutrition/localDate.js";
 import { cardHistoryNote, emptyCardStates, loadCardStates, type CardStates } from "./chatCards.js";
@@ -546,6 +547,7 @@ const toolDefinitions: Anthropic.Tool[] = [
       properties: { meal: { type: "string", enum: ["lunch", "dinner"], description: "Which meal is out; default dinner." } },
     },
   },
+  MEAL_PLAN_TOOL,
   {
     name: "log_water",
     description: "Log water they drank, in ml (a glass is about 250 ml, a bottle 500–1000 ml). undo: true removes the latest water log for the day. Water isn't scored; don't nag about it.",
@@ -862,6 +864,11 @@ export async function runTool(
       if (!p.success) return invalid(p.error);
       const r = await planEatingOut(ctx, p.data);
       return { result: { ok: true, reserveKcal: r.card.reserveKcal, beforeKcal: r.card.beforeKcal, proteinBeforeG: r.card.proteinBeforeG, shownToUserAsCard: true }, card: r.card };
+    }
+    case "meal_plan": {
+      const p = mealPlanInput.safeParse(input);
+      if (!p.success) return invalid(p.error);
+      return runMealPlanTool(ctx, p.data);
     }
     case "log_water": {
       const p = waterInput.safeParse(input);

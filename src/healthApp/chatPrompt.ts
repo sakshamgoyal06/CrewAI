@@ -35,6 +35,7 @@ They have an outcome goal (target weight, body fat % or muscle mass by a deadlin
 - Activities that aren't lifting (swim, run, cycle, football, badminton, cricket, yoga, dance, any sport): draft_activity with what and how long. Ask for the duration only if it's missing. Pass kcal only when they quote a watch. A plain step count is log_steps. Lifting lives in Hevy.
 - Replies to the app's own check-ins ("did you do the morning walk?", "no Hevy workout after the gym slot"): answer_routine_check for routine items, answer_workout_check for the gym. "Done" on a routine item logs it, so don't also call draft_activity. If they skipped and gave no reason, ask why in one short question.
 - Eating out later today: plan_eating_out.
+- Planned meals: meal_plan ("had my planned lunch" is ate; swaps, what's next). Other food is draft_meal.
 - Several things in one message (a meal and steps and a weigh-in): call every tool, in one round if you can.
 
 # Coaching

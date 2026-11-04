@@ -75,3 +75,15 @@ describe("rebalance card", () => {
     expect(text).toContain("Dinner: 1 roti instead of 2 rotis (520 kcal)");
   });
 });
+
+describe("meal_plan chat tool", async () => {
+  const { MEAL_PLAN_TOOL, mealPlanInput } = await import("./chatTool.js");
+  it("takes the actions the description promises", () => {
+    for (const action of ["view", "ate", "swap", "pin", "unpin", "like", "hide", "rebuild"]) {
+      expect(mealPlanInput.safeParse({ action }).success).toBe(true);
+      expect(MEAL_PLAN_TOOL.description).toContain(action);
+    }
+    expect(mealPlanInput.safeParse({ action: "ate", slot: "brunch" }).success).toBe(false);
+    expect(mealPlanInput.safeParse({ action: "view", date: "tomorrow" }).success).toBe(false);
+  });
+});
