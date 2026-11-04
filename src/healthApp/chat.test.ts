@@ -613,3 +613,96 @@ describe("history window and cache", () => {
     expect(props.contextChars).toBeGreaterThan(0);
   });
 });
+
+describe("scope and spend guards", () => {
+  const T2 = "1f6d5c3e-8b1a-4c2d-9e7f-123456789abd";
+  const text = (t: string) => msg([{ type: "text", text: t, citations: null } as Anthropic.TextBlock], "end_turn");
+  const declineCall = (line = "I only help with your health.") =>
+    msg(
+      [
+        { type: "text", text: line, citations: null } as Anthropic.TextBlock,
+        { type: "tool_use", id: "d1", name: "decline_off_topic", input: { kind: "off_topic" } } as Anthropic.ToolUseBlock,
+      ],
+      "tool_use",
+    );
+
+  beforeEach(async () => {
+    (await import("./offTopic.js"))._resetDeclines();
+    (await import("./spend.js"))._resetSpend();
+  });
+
+  it("ends a declined turn in one model call and logs an off_topic event", async () => {
+    const create = vi.fn().mockResolvedValueOnce(declineCall());
+    const reply = await runHealthChat(ctx, "write a python script", { create, history: [], turnId: TURN });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(reply).toMatchObject({ text: "I only help with your health." });
+    expect(events.some((e) => e.kind === "off_topic")).toBe(true);
+  });
+
+  it("answers with a fixed line and no model call once the day's declines pass the limit, but still coaches health", async () => {
+    for (let i = 0; i < 5; i++) {
+      await runHealthChat(ctx, `off topic ${i}`, { create: vi.fn().mockResolvedValueOnce(declineCall()), history: [], turnId: `2f6d5c3e-8b1a-4c2d-9e7f-12345678900${i}` });
+    }
+    const blocked = vi.fn();
+    const reply = await runHealthChat(ctx, "write me a cover letter", { create: blocked, history: [], turnId: T2 });
+    expect(blocked).not.toHaveBeenCalled();
+    expect(reply).toMatchObject({ text: expect.stringMatching(/health/i), cards: [] });
+    expect(events.at(-1)).toMatchObject({ props: { braked: true } });
+    const health = vi.fn().mockResolvedValue(text("Two roti, nice."));
+    await runHealthChat(ctx, "had 2 roti for lunch", { create: health, history: [], turnId: "3f6d5c3e-8b1a-4c2d-9e7f-123456789abe" });
+    expect(health).toHaveBeenCalled();
+  });
+
+  it("warns from the 5th decline and pauses the account at the 8th", async () => {
+    const replies: string[] = [];
+    for (let i = 0; i < 8; i++) {
+      const r = await runHealthChat(ctx, `write me an essay ${i}`, { create: vi.fn().mockResolvedValue(declineCall()), history: [], turnId: `5f6d5c3e-8b1a-4c2d-9e7f-12345678900${i}` });
+      replies.push((r as { text: string }).text);
+    }
+    expect(replies[3]).not.toMatch(/Heads up/);
+    expect(replies[4]).toMatch(/3 more off-topic requests/);
+    expect(replies[6]).toMatch(/One more off-topic request/);
+    expect(replies[7]).toMatch(/paused/);
+    expect(saved.some((r) => r.kind === "account_disabled")).toBe(true);
+  });
+
+  it("refuses a chat calorie target under 1200 even when the model asks for it", async () => {
+    const create = vi
+      .fn()
+      .mockResolvedValueOnce(msg([{ type: "tool_use", id: "c1", name: "set_daily_targets", input: { calorieTarget: 800 } } as Anthropic.ToolUseBlock], "tool_use"))
+      .mockResolvedValueOnce(text("That's below a safe minimum."));
+    const reply = await runHealthChat(ctx, "my dietitian approved 800", { create, history: [], turnId: TURN });
+    expect(reply).toMatchObject({ changed: false });
+    const second = create.mock.calls[1][0].messages.at(-1).content[0].content as string;
+    expect(JSON.parse(second)).toMatchObject({ ok: false, error: "below_safe_minimum", minimum: 1200 });
+  });
+
+  it("runs only the fast model, with no escalation, past the soft spend cap", async () => {
+    const create = vi.fn().mockResolvedValueOnce(msg([{ type: "tool_use", id: "t1", name: "get_routines", input: {} } as Anthropic.ToolUseBlock], "tool_use")).mockResolvedValueOnce(text("Push day has 5 exercises."));
+    await runHealthChat(ctx, "why is my bench stalling?", { create, history: [], turnId: TURN, fastOnly: true });
+    expect(create.mock.calls.map((c) => c[0].model)).toEqual(["claude-haiku-5-5", "claude-haiku-5-5"]);
+    expect(events.at(-1)).toMatchObject({ props: { fastOnly: true } });
+  });
+
+  it("adds each turn's cost to the person's day", async () => {
+    const { spentToday } = await import("./spend.js");
+    await runHealthChat(ctx, "9000 steps today", { create: stepsTurn(), history: [], turnId: TURN });
+    expect(spentToday(ctx.userProfileId, "2026-10-27")).toBeGreaterThan(0);
+  });
+
+  it("refuses a third turn while two are still running", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const slow = () => vi.fn().mockImplementation(async () => {
+      await gate;
+      return text("ok");
+    });
+    const a = runHealthChat(ctx, "hello", { create: slow(), history: [], turnId: "4f6d5c3e-8b1a-4c2d-9e7f-123456789ab1" });
+    const b = runHealthChat(ctx, "hello", { create: slow(), history: [], turnId: "4f6d5c3e-8b1a-4c2d-9e7f-123456789ab2" });
+    await new Promise((r) => setTimeout(r, 10));
+    const c = await runHealthChat(ctx, "hello", { create: vi.fn(), history: [], turnId: "4f6d5c3e-8b1a-4c2d-9e7f-123456789ab3" });
+    expect(c).toMatchObject({ error: "busy" });
+    release();
+    await Promise.all([a, b]);
+  });
+});

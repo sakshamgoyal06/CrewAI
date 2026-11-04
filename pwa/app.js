@@ -109,6 +109,10 @@ async function api(path, options = {}) {
       endSession("Magnus is invite-only right now. Ask Saksham for an invite.");
       throw new Error("Invite only.");
     }
+    if (body.error === "account_disabled") {
+      showPaused(body);
+      throw Object.assign(new Error("Account paused."), { code: "account_disabled" });
+    }
     if (body.error === "token_scope") {
       // A device token (Android app, HC Webhook) only sends data in; it can't open the app.
       endSession("That token is for syncing Health Connect only. Sign in with Google instead.");
@@ -154,6 +158,8 @@ function friendlyError(code) {
     billing_unavailable: "Payments aren't available right now. Try again later.",
     invalid_signature: "The payment couldn't be verified. If you were charged, it will show up within a few minutes.",
     daily_limit: "You've hit today's limit for the coach. Log from Today, or try again tomorrow.",
+    spend_limit: "You've hit today's limit for the coach. Log from Today, or try again tomorrow.",
+    busy: "One message at a time: I'm still answering your last one.",
     draft_limit: "That's a lot of meal estimates for one day. Pick a usual meal or scan a barcode, or try again tomorrow.",
     rca_limit: "I've already looked into this a few times today. Ask again tomorrow.",
     no_targets: "Set your daily calorie and protein targets first.",
@@ -236,6 +242,15 @@ function showConnect(message) {
     $("google-signin").hidden = !cfg?.google;
     $("token-details").open = !cfg?.google;
   });
+}
+
+/** A paused account: why, and a ready-made email asking for a review. Stays signed in. */
+function showPaused(body) {
+  showConnect(body.message || "This account is paused.");
+  const box = $("connect-error");
+  if (body.review?.mailto) {
+    box.append(" ", el("a", { class: "link", href: body.review.mailto }, "Ask for a review"));
+  }
 }
 
 function showShell() {

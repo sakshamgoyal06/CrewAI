@@ -4,10 +4,19 @@
  *   (per 100 g / 100 ml, per piece, per slice …).
  * - `food_recipes`: what a dish or portion is made of, as ingredient amounts per one unit of it.
  * Every failure here is soft: the estimator just falls back to the web.
+ *
+ * Poisoning guard (OWASP LLM04): both tables are shared by everyone, and their rows come from web
+ * lookups driven by what people type. A row a regular user's lookup creates is saved as
+ * `web_pending` with that person as `contributor`, and only that person's meals use it. It becomes a
+ * normal shared row (`web_research`) once a lookup by someone else gives matching numbers, or the
+ * owner's lookup confirms it. Rows already there before this guard stay shared.
  */
 import { logger } from "../logger.js";
 import { supabase } from "../tools/clients.js";
 import type { FoodUnit } from "./foodParse.js";
+import { CONFIRMED_SOURCE, PENDING_SOURCE } from "./foodTrust.js";
+
+export { CONFIRMED_SOURCE, PENDING_SOURCE, splitPending, type FoodContributor } from "./foodTrust.js";
 
 export type FoodRow = {
   food_key: string;
@@ -20,6 +29,8 @@ export type FoodRow = {
   fat_g: number;
   source: string;
   source_detail?: Record<string, unknown>;
+  /** Who created a pending row (from source_detail). */
+  contributor?: string | null;
 };
 
 /** One ingredient line of a recipe; `quantity` is grams/ml for the per-100 units. */
@@ -32,6 +43,7 @@ export type RecipeRow = {
   components: RecipeComponent[];
   source: string;
   source_detail?: Record<string, unknown>;
+  contributor?: string | null;
 };
 
 export type FoodTables = {
@@ -41,7 +53,8 @@ export type FoodTables = {
   recipes: Map<string, RecipeRow>;
 };
 
-const FOOD_COLUMNS = "food_key, unit, display_name, grams_per_unit, calories, protein_g, carbs_g, fat_g, source";
+const FOOD_COLUMNS =
+  "food_key, unit, display_name, grams_per_unit, calories, protein_g, carbs_g, fat_g, source, contributor:source_detail->>contributor";
 
 export const recipeKey = (dishKey: string, unit: string): string => `${dishKey}|${unit}`;
 
@@ -56,6 +69,7 @@ function toFoodRow(r: Record<string, unknown>): FoodRow {
     carbs_g: Number(r.carbs_g),
     fat_g: Number(r.fat_g),
     source: String(r.source),
+    contributor: typeof r.contributor === "string" ? r.contributor : null,
   };
 }
 
@@ -81,7 +95,7 @@ export async function loadFoodTables(keys: string[]): Promise<FoodTables> {
     selectFoods(wanted),
     supabase
       .from("food_recipes")
-      .select("dish_key, unit, display_name, components, source")
+      .select("dish_key, unit, display_name, components, source, contributor:source_detail->>contributor")
       .in("dish_key", wanted)
       .then(({ data, error }) => {
         if (error) logger.warn({ error: error.message }, "food recipe lookup failed");
@@ -106,6 +120,7 @@ export async function knownFoodNames(limit = 150): Promise<string[]> {
   const { data, error } = await supabase
     .from("food_nutrition")
     .select("display_name, hits")
+    .neq("source", PENDING_SOURCE)
     .order("hits", { ascending: false })
     .limit(limit);
   if (error) return [];
@@ -115,20 +130,77 @@ export async function knownFoodNames(limit = 150): Promise<string[]> {
 /** First value stored for a food and unit stays (stable numbers); new foods are added. */
 export async function saveFoods(rows: FoodRow[]): Promise<void> {
   if (!rows.length) return;
-  const unique = new Map(rows.map((r) => [`${r.food_key}|${r.unit}`, { ...r, source_detail: r.source_detail ?? {} }]));
+  const unique = new Map(
+    rows.map((r) => {
+      const { contributor: _c, ...row } = r;
+      return [`${r.food_key}|${r.unit}`, { ...row, source_detail: r.source_detail ?? {} }];
+    }),
+  );
   const { error } = await supabase
     .from("food_nutrition")
     .upsert([...unique.values()], { onConflict: "food_key,unit", ignoreDuplicates: true });
   if (error) logger.warn({ error: error.message }, "food db save failed");
 }
 
-/** A dish's breakdown is refreshed by the latest lookup. */
-export async function saveRecipes(rows: RecipeRow[]): Promise<void> {
+/**
+ * A trusted lookup refreshes a dish's breakdown; anyone else's only adds dishes that aren't
+ * stored yet, so nobody can overwrite a shared recipe.
+ */
+export async function saveRecipes(rows: RecipeRow[], overwrite = true): Promise<void> {
   if (!rows.length) return;
   const now = new Date().toISOString();
-  const unique = new Map(rows.map((r) => [recipeKey(r.dish_key, r.unit), { ...r, source_detail: r.source_detail ?? {}, updated_at: now }]));
-  const { error } = await supabase.from("food_recipes").upsert([...unique.values()], { onConflict: "dish_key,unit" });
+  const unique = new Map(
+    rows.map((r) => {
+      const { contributor: _c, ...row } = r;
+      return [recipeKey(r.dish_key, r.unit), { ...row, source_detail: r.source_detail ?? {}, updated_at: now }];
+    }),
+  );
+  const { error } = await supabase
+    .from("food_recipes")
+    .upsert([...unique.values()], { onConflict: "dish_key,unit", ignoreDuplicates: !overwrite });
   if (error) logger.warn({ error: error.message }, "food recipe save failed");
+}
+
+/**
+ * Makes pending rows shared. `rows` carry the numbers to keep: the first lookup's when a second
+ * person's agreed, the owner's when the owner's lookup confirmed it.
+ */
+export async function confirmFoods(rows: FoodRow[], by: string): Promise<void> {
+  for (const r of rows) {
+    const { error } = await supabase
+      .from("food_nutrition")
+      .update({
+        display_name: r.display_name,
+        grams_per_unit: r.grams_per_unit,
+        calories: r.calories,
+        protein_g: r.protein_g,
+        carbs_g: r.carbs_g,
+        fat_g: r.fat_g,
+        source: CONFIRMED_SOURCE,
+        source_detail: { ...(r.source_detail ?? {}), contributor: r.contributor ?? null, confirmed_by: by },
+      })
+      .eq("food_key", r.food_key)
+      .eq("unit", r.unit)
+      .eq("source", PENDING_SOURCE);
+    if (error) logger.warn({ error: error.message }, "food db confirm failed");
+  }
+}
+
+export async function confirmRecipes(rows: RecipeRow[], by: string): Promise<void> {
+  for (const r of rows) {
+    const { error } = await supabase
+      .from("food_recipes")
+      .update({
+        components: r.components,
+        source: CONFIRMED_SOURCE,
+        source_detail: { ...(r.source_detail ?? {}), contributor: r.contributor ?? null, confirmed_by: by },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("dish_key", r.dish_key)
+      .eq("unit", r.unit)
+      .eq("source", PENDING_SOURCE);
+    if (error) logger.warn({ error: error.message }, "food recipe confirm failed");
+  }
 }
 
 /** Usage counter on ingredient rows; fire-and-forget. */
