@@ -316,12 +316,14 @@ export async function buildHealthHistory(
         mealSessions: dayMeals.length,
         calories,
         proteinG,
+        carbsG: dayMeals.reduce((t, m) => t + m.carbsG, 0),
+        fatG: dayMeals.reduce((t, m) => t + m.fatG, 0),
         steps,
         workoutsLogged: dayWorkouts.length || (trainedUnlogged ? 1 : 0),
         sportLabel: sportCounted,
         routine: dayRoutine,
       },
-      targets,
+      { ...targets, weightKg: kg },
     );
     return {
       date,

@@ -1741,6 +1741,7 @@ function weeklyReviewView(r) {
     ),
   ];
   if (r.activityLine) out.push(el("p", { class: "section-label" }, "Outside the gym"), el("p", { class: "hint" }, r.activityLine));
+  if (r.mealPlanLine) out.push(el("p", { class: "section-label" }, "Meal plan"), el("p", { class: "hint" }, r.mealPlanLine));
   if (r.goal) {
     out.push(el("p", { class: "section-label" }, `Goal · ${r.goal.weeksLeft} weeks left`));
     for (const m of r.goal.metrics) {

@@ -181,7 +181,7 @@ export async function loadHealthProfile(
   };
 }
 
-type MealDay = { sessions: Set<string>; calories: number; proteinG: number };
+type MealDay = { sessions: Set<string>; calories: number; proteinG: number; carbsG: number; fatG: number };
 
 export async function loadMealDays(
   userProfileId: string,
@@ -190,7 +190,7 @@ export async function loadMealDays(
 ): Promise<Map<string, MealDay>> {
   const { data, error } = await supabase
     .from("meal_logs")
-    .select("local_date, meal_session_id, calories, protein_g")
+    .select("local_date, meal_session_id, calories, protein_g, carbs_g, fat_g")
     .eq("user_profile_id", userProfileId)
     .is("deleted_at", null)
     .gte("local_date", fromDate)
@@ -201,12 +201,14 @@ export async function loadMealDays(
   }
   for (const r of data) {
     const key = String(r.local_date);
-    const day = out.get(key) ?? { sessions: new Set<string>(), calories: 0, proteinG: 0 };
+    const day = out.get(key) ?? { sessions: new Set<string>(), calories: 0, proteinG: 0, carbsG: 0, fatG: 0 };
     if (r.meal_session_id) {
       day.sessions.add(String(r.meal_session_id));
     }
     day.calories += Number(r.calories) || 0;
     day.proteinG += Number(r.protein_g) || 0;
+    day.carbsG += Number(r.carbs_g) || 0;
+    day.fatG += Number(r.fat_g) || 0;
     out.set(key, day);
   }
   return out;
@@ -330,12 +332,14 @@ export async function buildHealthSnapshot(
         mealSessions: m?.sessions.size ?? 0,
         calories: m?.calories ?? 0,
         proteinG: m?.proteinG ?? 0,
+        carbsG: m?.carbsG ?? 0,
+        fatG: m?.fatG ?? 0,
         steps: a?.steps ?? 0,
         workoutsLogged: logged,
         sportLabel: sport ? `${sport.label} · ${sport.durationMin} min` : null,
         routine: dayRoutine,
       },
-      targets,
+      { ...targets, weightKg: kg },
     );
   });
 

@@ -75,3 +75,38 @@ describe("computeNorthStar", () => {
     expect(ns.mostMissed).toEqual({ id: "steps", label: "Steps", missedDays: 2 });
   });
 });
+
+describe("food rule from 2026-11-05: calories and macros, not meal count", () => {
+  const t: HealthTargets = { calorieTarget: 2000, proteinTarget: 150, stepTarget: 8000, trainingDays: [], minMealSessions: 3, weightKg: 80 };
+  // macroTargets(2000 kcal, 150 g protein, 80 kg): fat 62 g, carbs 211 g.
+  const day = (over: Partial<DayInputs> = {}): DayInputs => ({
+    date: "2026-11-05", weekday: 4, mealSessions: 1, calories: 2000, proteinG: 150, carbsG: 211, fatG: 62, steps: 9000, workoutsLogged: 0, ...over,
+  });
+  const check = (d: DayInputs, id: string) => scoreDay(d, t).checks.find((c) => c.id === id);
+
+  it("has no meals-logged check: two big meals can be on track", () => {
+    expect(check(day(), "meals_logged")).toBeUndefined();
+    expect(scoreDay(day(), t).onTrack).toBe(true);
+  });
+  it("wants calories at 85–105% of target", () => {
+    expect(check(day({ calories: 1700 }), "calories")?.met).toBe(true);
+    expect(check(day({ calories: 1690 }), "calories")?.met).toBe(false);
+    expect(check(day({ calories: 2100 }), "calories")?.met).toBe(true);
+    expect(check(day({ calories: 2110 }), "calories")?.met).toBe(false);
+  });
+  it("wants at least 90% of protein", () => {
+    expect(check(day({ proteinG: 135 }), "protein")?.met).toBe(true);
+    expect(check(day({ proteinG: 134 }), "protein")?.met).toBe(false);
+  });
+  it("wants carbs and fat each within 25% of target", () => {
+    expect(check(day({ fatG: 77 }), "macros")?.met).toBe(true);
+    expect(check(day({ fatG: 80 }), "macros")?.met).toBe(false);
+    expect(check(day({ carbsG: 150 }), "macros")?.met).toBe(false);
+    expect(check(day({ carbsG: undefined }), "macros")).toBeUndefined();
+  });
+  it("keeps the old rule for earlier days, so past weeks don't change", () => {
+    const old = day({ date: "2026-11-04" });
+    expect(check(old, "meals_logged")?.met).toBe(false);
+    expect(check(old, "macros")).toBeUndefined();
+  });
+});
