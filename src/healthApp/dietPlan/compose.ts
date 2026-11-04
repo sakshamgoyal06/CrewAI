@@ -79,7 +79,7 @@ const STUFFED = new Set(["aloo paratha", "gobi paratha", "paneer paratha", "thep
 /** Stuffed parathas are a meal with curd, not a base for dal. */
 const STUFFED_ONLY = new Set(["aloo paratha", "gobi paratha", "paneer paratha"]);
 /** Breads only eaten with one dish (chole bhature is its own entry). */
-const NOT_A_BASE = new Set(["bhatura"]);
+const NOT_A_BASE = new Set(["bhatura", "litti"]);
 const SOUTH = new Set(["idli", "plain dosa", "masala dosa", "uttapam", "medu vada"]);
 const ACCOMPANIMENTS = new Set(["sambar", "coconut chutney"]);
 const COOL = new Set(["raita", "curd"]);
@@ -91,6 +91,7 @@ const PORRIDGE = new Set(["oat porridge"]);
 const PROTEIN_SIDES = new Set(["paneer", "tofu", "chicken breast cooked"]);
 /** Curd and the dishes made from it: one per meal (no kadhi with curd, no curd rice with raita). */
 const CURD_BASED = new Set(["curd", "greek yogurt", "raita", "kadhi", "kadhi chawal", "curd rice", "sweet lassi", "buttermilk"]);
+const isCurdBased = (key: string) => CURD_BASED.has(key) || /\b(kadhi|raita|dahi|curd|yogurt|lassi)\b/.test(key);
 /** In the catalog as snacks but not a snack on a plan: drinks, papad, cheese slices. */
 const NOT_A_PLAN_SNACK = new Set(["papad", "cheese"]);
 /** Dal-family mains: different dals in one meal's options are near copies, so at most two of them. */
@@ -174,7 +175,10 @@ const DIETS_ALLOWED: Record<Exclude<PersonDiet, null | "custom">, Diet[]> = {
 export function dietAllows(diet: PersonDiet, e: CatalogEntry): boolean {
   if (!diet || diet === "custom") return true;
   if (!DIETS_ALLOWED[diet].includes(e.diet)) return false;
-  return diet !== "jain" || !containsAny(e.key, JAIN_EXCLUDE);
+  if (diet !== "jain") return true;
+  // The catalog marks Jain-safe entries (checked through every ingredient); fall back to names.
+  const flag = (e as { jain?: boolean }).jain;
+  return flag ?? !containsAny(e.key, JAIN_EXCLUDE);
 }
 
 function roleOf(e: CatalogEntry): Role[] {
@@ -283,13 +287,17 @@ export function itemFor(e: CatalogEntry, s: Serving, qty: number): PlanItem {
     }
     text = unitLabel.startsWith("1 ") ? `${fmtQty(qty)} ${unitLabel.slice(2)}` : `${fmtQty(qty)} ${unitLabel}`;
     if (qty > 1) text = text.replace(/^(\S+) (cube|slice|fillet)\b/, "$1 $2s");
-    // "1 breast fillet chicken breast" → "1 chicken breast".
-    if (/ breast fillet$/.test(unitLabel)) text = `${fmtQty(qty)} ${name}`;
+    // "1 breast fillet chicken breast" → "1 chicken breast"; "1 sandwich paneer sandwich" → "1 paneer sandwich".
+    const unitWord = unitLabel.replace(/^1 /, "").split(" ").pop()!;
+    if (/ breast fillet$/.test(unitLabel) || (unitLabel.split(" ").length <= 2 && name.endsWith(unitWord))) text = `${fmtQty(qty)} ${qty > 1 ? plural(name) : name}`;
+    else if (qty > 1) text = text.replace(/^(\S+) (bowl|jar|glass|plate)\b/, "$1 $2s");
     const words = name.split(/\s+/).filter((w) => w.length > 2);
     if (!words.every((w) => text.toLowerCase().includes(w.replace(/s$/, "")))) text = `${text} ${name}`;
   }
   return item(e, s, qty, text);
 }
+
+const plural = (n: string) => (n.endsWith("s") ? n : /(ch|sh|x)$/.test(n) ? `${n}es` : `${n}s`);
 
 function item(e: CatalogEntry, s: Serving, qty: number, text: string): PlanItem {
   const grams = s.grams * qty;
@@ -346,14 +354,14 @@ export function pairingProblems(keys: string[], cat: Catalog = catalog()): strin
     const c = roles.find((x) => x.r.includes("complete"))!;
     if (c.e.category === "rice_dish") problems.push(`${c.e.name} doesn't go with ${breads[0]}`);
   }
-  const curd = [...new Set(roles.filter((x) => CURD_BASED.has(x.e.key)).map((x) => x.e.name))];
+  const curd = [...new Set(roles.filter((x) => isCurdBased(x.e.key)).map((x) => x.e.name))];
   if (curd.length > 1) problems.push(`${curd[0]} and ${curd[1]} are both curd`);
   const south = roles.find((x) => SOUTH.has(x.e.key));
   const vadaWithCurd = south?.e.key === "medu vada" && roles.some((x) => x.e.key === "curd");
   if (south && !vadaWithCurd && !roles.some((x) => x.r.includes("accompaniment"))) problems.push(`${south.e.name} needs sambar or chutney`);
   // A protein side goes with dal or a veg dish, not with a meat curry or another paneer dish.
   const side = roles.find((x) => x.r.includes("protein") && keys.length > 1);
-  const heavyMain = roles.find((x) => x !== side && x.r.includes("main") && (x.e.diet === "nonveg" || x.e.diet === "egg" || containsAny(x.e.key, ["paneer"])));
+  const heavyMain = roles.find((x) => x !== side && x.r.includes("main") && (x.e.diet === "nonveg" || x.e.diet === "egg" || containsAny(x.e.key, ["paneer", "tofu", "soya chunk", "soya", "soy"])));
   if (side && heavyMain) problems.push(`${side.e.name} on top of ${heavyMain.e.name} is too much`);
   const mains = roles.filter((x) => x.r.includes("main") || x.r.includes("side") || x.r.includes("protein"));
   for (let i = 0; i < mains.length; i++) {
