@@ -91,7 +91,12 @@ const PORRIDGE = new Set(["oat porridge"]);
 const PROTEIN_SIDES = new Set(["paneer", "tofu", "chicken breast cooked"]);
 /** Curd and the dishes made from it: one per meal (no kadhi with curd, no curd rice with raita). */
 const CURD_BASED = new Set(["curd", "greek yogurt", "raita", "kadhi", "kadhi chawal", "curd rice", "sweet lassi", "buttermilk"]);
-const isCurdBased = (key: string) => CURD_BASED.has(key) || /\b(kadhi|raita|dahi|curd|yogurt|lassi)\b/.test(key);
+const CURD_MEMO = new Map<string, boolean>();
+const isCurdBased = (key: string): boolean => {
+  let c = CURD_MEMO.get(key);
+  if (c === undefined) CURD_MEMO.set(key, (c = CURD_BASED.has(key) || /\b(kadhi|raita|dahi|curd|yogurt|lassi)\b/.test(key)));
+  return c;
+};
 /** In the catalog as snacks but not a snack on a plan: drinks, papad, cheese slices. */
 const NOT_A_PLAN_SNACK = new Set(["papad", "cheese"]);
 /** Dal-family mains: different dals in one meal's options are near copies, so at most two of them. */
@@ -181,7 +186,15 @@ export function dietAllows(diet: PersonDiet, e: CatalogEntry): boolean {
   return flag ?? !containsAny(e.key, JAIN_EXCLUDE);
 }
 
+const ROLES = new WeakMap<CatalogEntry, Role[]>();
+/** Roles are fixed per catalog entry; cached because compose asks for them once per combination. */
 function roleOf(e: CatalogEntry): Role[] {
+  let r = ROLES.get(e);
+  if (!r) ROLES.set(e, (r = rolesFor(e)));
+  return r;
+}
+
+function rolesFor(e: CatalogEntry): Role[] {
   const r: Role[] = [];
   const k = e.key;
   if (RICE_BASE.has(k)) r.push("rice");
@@ -331,6 +344,20 @@ export function sumTotals(items: Totals[]): Totals {
 // ---------- pairing rules ----------
 
 /** Why these foods don't belong in one meal; empty when they do. Used for usual meals too. */
+// Per-dish word checks, cached: pairingProblems runs for every combination compose tries.
+const PRIMARIES = new Map<string, string[]>();
+const primariesOf = (key: string): string[] => {
+  let p = PRIMARIES.get(key);
+  if (!p) PRIMARIES.set(key, (p = PRIMARY.filter((w) => containsAny(key, [w]))));
+  return p;
+};
+const HEAVY_PROTEIN = new Map<string, boolean>();
+const isHeavyProtein = (key: string): boolean => {
+  let h = HEAVY_PROTEIN.get(key);
+  if (h === undefined) HEAVY_PROTEIN.set(key, (h = containsAny(key, ["paneer", "tofu", "soya chunk", "soya", "soy"])));
+  return h;
+};
+
 export function pairingProblems(keys: string[], cat: Catalog = catalog()): string[] {
   const entries = keys.map((k) => cat.byKey.get(k)).filter((e): e is CatalogEntry => !!e);
   const roles = entries.map((e) => ({ e, r: roleOf(e) }));
@@ -364,7 +391,7 @@ export function pairingProblems(keys: string[], cat: Catalog = catalog()): strin
   if (south && !vadaWithCurd && !roles.some((x) => x.r.includes("accompaniment"))) problems.push(`${south.e.name} needs sambar or chutney`);
   // A protein side goes with dal or a veg dish, not with a meat curry or another paneer dish.
   const side = roles.find((x) => x.r.includes("protein") && keys.length > 1);
-  const heavyMain = roles.find((x) => x !== side && x.r.includes("main") && (x.e.diet === "nonveg" || x.e.diet === "egg" || containsAny(x.e.key, ["paneer", "tofu", "soya chunk", "soya", "soy"])));
+  const heavyMain = roles.find((x) => x !== side && x.r.includes("main") && (x.e.diet === "nonveg" || x.e.diet === "egg" || isHeavyProtein(x.e.key)));
   if (side && heavyMain) problems.push(`${side.e.name} on top of ${heavyMain.e.name} is too much`);
   const mains = roles.filter((x) => x.r.includes("main") || x.r.includes("side") || x.r.includes("protein"));
   for (let i = 0; i < mains.length; i++) {
@@ -372,7 +399,8 @@ export function pairingProblems(keys: string[], cat: Catalog = catalog()): strin
       const a = mains[i]!.e.key;
       const b = mains[j]!.e.key;
       if (a === b) continue;
-      const shared = PRIMARY.find((p) => containsAny(a, [p]) && containsAny(b, [p]));
+      const pb = primariesOf(b);
+      const shared = primariesOf(a).find((p) => pb.includes(p));
       if (shared) problems.push(`${mains[i]!.e.name} and ${mains[j]!.e.name} are both ${shared}`);
     }
   }
@@ -464,27 +492,44 @@ function titleOf(items: PlanItem[]): string {
 }
 
 /** The best portions for one combination, or null when nothing lands within the tolerance. */
-function fit(combo: Slotted[], input: ComposeInput, lovedKeys: string[]): Scored | null {
+/** Each candidate's portions as items, built once per compose rather than once per combination. */
+type ItemCache = WeakMap<Slotted, PlanItem[]>;
+function itemsFor(cache: ItemCache, x: Slotted): PlanItem[] {
+  let l = cache.get(x);
+  if (!l) cache.set(x, (l = steps(x.role, x.s).map((q) => itemFor(x.e, x.s, q))));
+  return l;
+}
+
+function fit(combo: Slotted[], input: ComposeInput, lovedKeys: string[], cache: ItemCache = new WeakMap()): Scored | null {
   const b = input.budget;
-  const stepLists = combo.map((x) => steps(x.role, x.s));
-  let best: { score: number; items: PlanItem[]; totals: Totals } | null = null;
+  const itemLists = combo.map((x) => itemsFor(cache, x));
+  let best: { score: number; idx: number[] } | null = null;
   const idx = combo.map(() => 0);
+  const n = combo.length;
   for (;;) {
-    const items = combo.map((x, i) => itemFor(x.e, x.s, stepLists[i]![idx[i]!]!));
-    const totals = sumTotals(items);
-    const kcalErr = Math.abs(totals.kcal - b.calories) / b.calories;
+    // Plain sums here (no objects): this loop runs for every portion of every combination.
+    let kcal = 0, protein = 0, fat = 0;
+    for (let i = 0; i < n; i++) {
+      const it = itemLists[i]![idx[i]!]!;
+      kcal += it.kcal;
+      protein += it.proteinG;
+      fat += it.fatG;
+    }
+    const kcalErr = Math.abs(Math.round(kcal) - b.calories) / b.calories;
     if (kcalErr <= FIT_TOLERANCE) {
-      const pr = b.proteinG ? totals.proteinG / b.proteinG : 1;
-      const fatOver = b.fatG ? Math.max(0, totals.fatG / b.fatG - 1.25) : 0;
+      const pr = b.proteinG ? r1(protein) / b.proteinG : 1;
+      const fatOver = b.fatG ? Math.max(0, r1(fat) / b.fatG - 1.25) : 0;
       // Protein counts most: plans fell short on protein far more often than on calories.
       const score = kcalErr * 2 + Math.max(0, 1 - pr) * PROTEIN_WEIGHT + fatOver * 0.6;
-      if (!best || score < best.score) best = { score, items, totals };
+      if (!best || score < best.score) best = { score, idx: [...idx] };
     }
     let i = 0;
-    while (i < idx.length && ++idx[i]! >= stepLists[i]!.length) idx[i++] = 0;
-    if (i === idx.length) break;
+    while (i < n && ++idx[i]! >= itemLists[i]!.length) idx[i++] = 0;
+    if (i === n) break;
   }
   if (!best) return null;
+  const bestItems = itemLists.map((l, i) => l[best!.idx[i]!]!);
+  const bestTotals = sumTotals(bestItems);
 
   let score = best.score;
   const keys = combo.map((x) => x.e.key);
@@ -498,18 +543,18 @@ function fit(combo: Slotted[], input: ComposeInput, lovedKeys: string[]): Scored
   const anchor = (combo.find((x) => ["main", "complete", "breakfast", "egg", "porridge", "breakfastBread", "snack", "fruit", "addon"].includes(x.role)) ?? combo[0]!).e.key;
   return {
     option: {
-      id: optionId(b.slot, best.items),
+      id: optionId(b.slot, bestItems),
       slot: b.slot,
-      title: titleOf(best.items),
-      items: best.items,
-      totals: best.totals,
+      title: titleOf(bestItems),
+      items: bestItems,
+      totals: bestTotals,
       origin: "catalog",
       prepMinutes: prep,
     },
     score,
     anchor,
     base: base?.e.key ?? null,
-    highProtein: b.proteinG > 0 && best.totals.proteinG >= b.proteinG * 0.9,
+    highProtein: b.proteinG > 0 && bestTotals.proteinG >= b.proteinG * 0.9,
     rice: base?.role === "rice" || combo.some((x) => x.e.category === "rice_dish" || x.e.key.endsWith("chawal")),
     dal: combo.some((x) => x.role === "main" && isPlainDal(x.e)),
   };
@@ -589,10 +634,11 @@ function composeWithin(input: ComposeInput, cat: Catalog, pad: boolean): MealOpt
 
   const pool = candidates(input, cat);
   const scored: Scored[] = [];
+  const cache: ItemCache = new WeakMap();
   for (const t of TEMPLATES[input.budget.slot]) {
     for (const c of combos(t, pool)) {
       if (pairingProblems(c.map((x) => x.e.key), cat).length) continue;
-      const s = fit(c, input, lovedKeys);
+      const s = fit(c, input, lovedKeys, cache);
       if (s && !hidden.has(s.option.id)) scored.push(s);
     }
   }
