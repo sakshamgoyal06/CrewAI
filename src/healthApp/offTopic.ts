@@ -43,7 +43,7 @@ export const PAUSED_REPLY = "This account is now paused for repeated off-topic u
 
 /** Words that make a message worth the coach's time even when the brake is on. */
 const HEALTH_SIGNAL =
-  /\b(ate|had|eat|eating|food|meal|breakfast|lunch|dinner|snack|protein|carb|fat|fibre|fiber|calorie|kcal|diet|roti|rice|dal|chai|coffee|water|drank|piya|khaya|khaana|khana|walk(ed|ing)?|ran|running|swam|swim|cycle|cycled|gym|workout|exercise|train(ing)?|lift(ed)?|yoga|sport|cricket|football|badminton|steps?|weigh(ed|t)?|kg|body ?fat|muscle|sleep|slept|tired|stress|sore|pain|injur\w*|hevy|routine|recipe|supplement|creatine|vitamin|hungry|craving|health)\b/i;
+  /\b(?:(?:ate|had|eat|eating|food|meal|breakfast|lunch|dinner|snack|protein|carb|fat|fibre|fiber|calorie|kcal|macro|diet|roti|rice|dal|chai|coffee|egg|paneer|chicken|fruit|portion|water|drank|piya|khaya|khaana|khana|walk(?:ed|ing)?|ran|running|swam|swim|cycle|cycled|gym|workout|exercise|train(?:ing)?|lift(?:ed)?|yoga|sport|cricket|football|badminton|step|weigh(?:ed|t)?|kg|body ?fat|muscle|waist|bmi|sleep|slept|tired|stress|sore|pain|injur\w*|hevy|routine|recipe|supplement|creatine|vitamin|hungry|craving|health|goal|target|on track|progress|streak|weigh-in|deficit|surplus|fasting|cheat)(?:s|es)?)\b/i;
 
 export function looksHealthRelated(text: string): boolean {
   return HEALTH_SIGNAL.test(text);

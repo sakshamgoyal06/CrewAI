@@ -19,6 +19,15 @@ describe("off-topic brake", () => {
     }
   });
 
+  it("knows plural and progress questions are about health", () => {
+    for (const t of ["am I on track for my goal?", "how many calories left", "plan my meals", "my macros look off", "2 eggs and toast", "is my weight progress ok", "log 3 workouts"]) {
+      expect(looksHealthRelated(t), t).toBe(true);
+    }
+    for (const t of ["write a python script to sort a list", "random trivia please", "translate this email"]) {
+      expect(looksHealthRelated(t), t).toBe(false);
+    }
+  });
+
   it("turns on after the day's limit, only for non-health messages, and resets the next day", () => {
     for (let i = 0; i < 4; i++) countDecline(U, D);
     expect(brakeOn(U, D, "write a poem")).toBe(false);

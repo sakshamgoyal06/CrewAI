@@ -34,3 +34,37 @@ export function splitMealPhrases(raw: string): string[] {
 
   return byAnd.length > 1 ? byAnd : [one];
 }
+
+const SLOT_WORDS: Record<string, "breakfast" | "lunch" | "dinner" | "snack"> = {
+  breakfast: "breakfast",
+  nashta: "breakfast",
+  lunch: "lunch",
+  dinner: "dinner",
+  supper: "dinner",
+  snack: "snack",
+  snacks: "snack",
+};
+
+/**
+ * Takes the words around the food out of a typed meal: "I had poha for breakfast" → "poha", slot
+ * breakfast; "dal rice at lunch today" → "dal rice", slot lunch. The food parser only knows food
+ * names, so without this "poha for breakfast" finds nothing.
+ */
+export function mealContext(raw: string): { text: string; slot?: "breakfast" | "lunch" | "dinner" | "snack" } {
+  let t = raw.trim();
+  let slot: "breakfast" | "lunch" | "dinner" | "snack" | undefined;
+  const slotRe = /\b(?:for|at|in|during|as)\s+(?:my\s+|a\s+)?(breakfast|nashta|lunch|dinner|supper|snacks?)\b/i;
+  const m = slotRe.exec(t);
+  if (m) {
+    slot = SLOT_WORDS[m[1]!.toLowerCase()];
+    t = t.replace(slotRe, " ");
+  }
+  t = t
+    .replace(/^\s*(?:log\s+)?(?:i\s+)?(?:just\s+)?(?:have\s+|had\s+|ate\s+|eaten\s+|drank\s+|have\s+had\s+|had\s+eaten\s+)+/i, "")
+    .replace(/\b(?:today|tonight|this\s+(?:morning|afternoon|evening)|in\s+the\s+(?:morning|afternoon|evening)|yesterday|just\s+now)\b/gi, " ")
+    .replace(/\s+([,.;!])/g, "$1")
+    .replace(/[\s.!]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return t.length >= 2 ? { text: t, ...(slot ? { slot } : {}) } : { text: raw.trim(), ...(slot ? { slot } : {}) };
+}

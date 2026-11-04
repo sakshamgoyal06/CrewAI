@@ -26,6 +26,7 @@ import {
 } from "./actions.js";
 import {
   createPersonalToken,
+  isOwnerProfile,
   isOwnerProfileRow,
   replacePersonalToken,
   resetOwnAccount,
@@ -192,6 +193,9 @@ async function chatSpendMode(ctx: { userProfileId: string; timezone: string }): 
   return spendMode(ctx.userProfileId, day);
 }
 
+/** What a paused account may still do: see the account, export or delete it, and cancel a plan. */
+const PAUSED_ALLOWED = new Set(["GET /account", "GET /account/export", "DELETE /account", "GET /billing", "POST /billing/cancel"]);
+
 const BUSY_MESSAGE = "One message at a time: I'm still answering your last one.";
 
 /** Hevy history takes several requests; the tracker re-reads it at most every few minutes. */
@@ -261,7 +265,8 @@ export function createHealthAppRouter(): express.Router {
       return;
     }
     // A paused account (repeated off-topic use) gets a review-request draft instead of the app.
-    if (await isAccountDisabled(userProfileId)) {
+    // It can still see its account, take its data out, delete it, and stop a paid plan.
+    if (!PAUSED_ALLOWED.has(`${req.method} ${req.path.replace(/\/+$/, "")}`) && (await isAccountDisabled(userProfileId))) {
       res.status(403).json(disabledResponse(userProfileId));
       return;
     }
@@ -468,6 +473,11 @@ export function createHealthAppRouter(): express.Router {
     "/account/reset",
     route("account-reset", async (ctx, req) => {
       z.object({ confirm: z.literal("RESET") }).parse(req.body ?? {});
+      if (!(await isOwnerProfile(ctx.userProfileId))) return { status: 403, body: { ok: false, error: "owner_only" } };
+      // As with deleting the account: a live paid plan is cancelled first, so it can't keep
+      // billing a profile that no longer exists.
+      const rzp = razorpayConfig();
+      if (rzp) await cancelRazorpaySubscription(ctx.userProfileId, rzp).catch(() => undefined);
       const r = await resetOwnAccount(ctx.userProfileId);
       forgetEntitlement(ctx.userProfileId);
       return r.ok ? { body: r } : { status: r.error === "owner_only" ? 403 : r.error === "needs_google_sign_in" ? 400 : 500, body: r };

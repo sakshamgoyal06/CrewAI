@@ -53,6 +53,8 @@ export const OPTION_ACTIONS = ["pin", "unpin", "like", "unlike", "hide", "unhide
 export type OptionAction = (typeof OPTION_ACTIONS)[number];
 
 /** Pin, like or hide an option. Marks are by option id, so they carry over to later plan versions. */
+const MAX_MARKS = 300;
+
 export async function markOption(userProfileId: string, optionId: string, action: OptionAction): Promise<PrefsRow> {
   const row = await loadDietPrefs(userProfileId);
   const col = action.includes("pin") ? "pinned" : action.includes("like") ? "liked" : "hidden";
@@ -60,6 +62,8 @@ export async function markOption(userProfileId: string, optionId: string, action
   const set = new Set(row[col]);
   if (add) set.add(optionId);
   else set.delete(optionId);
+  // Option ids change with every plan rebuild; keep the newest few hundred so the row can't grow forever.
+  while (set.size > MAX_MARKS) set.delete(set.values().next().value as string);
   // A hidden option can't stay pinned.
   if (action === "hide") row.pinned = row.pinned.filter((x) => x !== optionId);
   const next = { ...row, [col]: [...set] };
