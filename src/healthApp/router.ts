@@ -26,7 +26,9 @@ import {
 } from "./actions.js";
 import {
   createPersonalToken,
+  isOwnerProfileRow,
   replacePersonalToken,
+  resetOwnAccount,
   listPersonalTokens,
   publicAuthConfig,
   resolveRequestUser,
@@ -75,6 +77,7 @@ import {
   applyRazorpayEvent,
   billingEnabled,
   billingMode,
+  forgetEntitlement,
   experienceFor,
   hasFeature,
   PREVIEW_STATES,
@@ -302,6 +305,7 @@ export function createHealthAppRouter(): express.Router {
           onboarded,
           name: data?.display_name ?? null,
           email: data?.email ?? null,
+          owner: isOwnerProfileRow(ctx.userProfileId, data?.email),
           timezone: ctx.timezone,
           hevyConnected: hevy,
           tokens,
@@ -439,6 +443,17 @@ export function createHealthAppRouter(): express.Router {
       z.object({ confirm: z.literal("DELETE") }).parse(req.body ?? {});
       const r = await deleteAccount(ctx.userProfileId);
       return r.ok ? { body: r } : { status: r.error === "owner_account" ? 400 : 500, body: r };
+    }),
+  );
+
+  /** Owner only: wipe all data and start again as a new user, keeping the Google sign-in. */
+  router.post(
+    "/account/reset",
+    route("account-reset", async (ctx, req) => {
+      z.object({ confirm: z.literal("RESET") }).parse(req.body ?? {});
+      const r = await resetOwnAccount(ctx.userProfileId);
+      forgetEntitlement(ctx.userProfileId);
+      return r.ok ? { body: r } : { status: r.error === "owner_only" ? 403 : r.error === "needs_google_sign_in" ? 400 : 500, body: r };
     }),
   );
 
