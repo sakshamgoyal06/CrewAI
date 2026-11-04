@@ -45,28 +45,42 @@ export function billingEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 /** A grace period on failed renewals: past_due keeps Pro this long after the period ends. */
 const GRACE_MS = 3 * DAY_MS;
 
+/**
+ * When the trial starts: sign-up, or MAGNUS_TRIAL_FROM (YYYY-MM-DD) for people who signed up
+ * before billing went live, so turning billing on doesn't end everyone's trial on day one.
+ */
+export function trialStart(createdAt: string | null, env: NodeJS.ProcessEnv = process.env): number | null {
+  const signedUp = createdAt ? Date.parse(createdAt) : NaN;
+  if (!Number.isFinite(signedUp)) return null;
+  const from = Date.parse(`${env.MAGNUS_TRIAL_FROM?.trim() ?? ""}T00:00:00Z`);
+  return Number.isFinite(from) ? Math.max(signedUp, from) : signedUp;
+}
+
+/** True while this row pays for Pro (incl. a cancelled period running out and the grace). */
+export function paidThrough(sub: SubscriptionRow | null, now: Date): boolean {
+  if (!sub?.current_period_end) return false;
+  const end = Date.parse(sub.current_period_end);
+  return ((sub.status === "active" || sub.status === "cancelled") && end > now.getTime()) || (sub.status === "past_due" && end + GRACE_MS > now.getTime());
+}
+
 export function entitlementFrom(input: {
   createdAt: string | null;
   sub: SubscriptionRow | null;
   isOwner: boolean;
   now: Date;
+  env?: NodeJS.ProcessEnv;
 }): Entitlement {
   const { sub, now } = input;
+  const start = trialStart(input.createdAt, input.env);
   const base = {
-    trialEndsAt: input.createdAt ? new Date(Date.parse(input.createdAt) + TRIAL_DAYS * DAY_MS).toISOString() : null,
+    trialEndsAt: start !== null ? new Date(start + TRIAL_DAYS * DAY_MS).toISOString() : null,
     periodEndsAt: sub?.current_period_end ?? null,
     status: sub?.status ?? null,
     plan: sub?.plan ?? null,
     provider: sub?.provider ?? null,
   };
   if (input.isOwner) return { tier: "pro", ...base };
-  if (sub && sub.current_period_end) {
-    const end = Date.parse(sub.current_period_end);
-    const paid =
-      ((sub.status === "active" || sub.status === "cancelled") && end > now.getTime()) ||
-      (sub.status === "past_due" && end + GRACE_MS > now.getTime());
-    if (paid) return { tier: "pro", ...base };
-  }
+  if (paidThrough(sub, now)) return { tier: "pro", ...base };
   if (base.trialEndsAt && Date.parse(base.trialEndsAt) > now.getTime()) return { tier: "trial", ...base };
   return { tier: "free", ...base };
 }
@@ -128,8 +142,8 @@ export function razorpayConfig(env: NodeJS.ProcessEnv = process.env): RazorpayCo
 
 export function priceLabels(env: NodeJS.ProcessEnv = process.env): Record<PlanId, string> {
   return {
-    monthly: env.MAGNUS_PRICE_MONTHLY_LABEL?.trim() || "₹299 / month",
-    yearly: env.MAGNUS_PRICE_YEARLY_LABEL?.trim() || "₹1,999 / year",
+    monthly: env.MAGNUS_PRICE_MONTHLY_LABEL?.trim() || "₹649 / month",
+    yearly: env.MAGNUS_PRICE_YEARLY_LABEL?.trim() || "₹6,999 / year",
   };
 }
 
@@ -153,12 +167,26 @@ export function verifyWebhookSignature(rawBody: Buffer, signature: string, webho
 /** Months of renewals Razorpay will bill before the subscription completes. */
 const TOTAL_COUNT: Record<PlanId, number> = { monthly: 120, yearly: 10 };
 
+async function currentSubscription(userProfileId: string): Promise<SubscriptionRow | null> {
+  const { data, error } = await supabase
+    .from("user_subscriptions")
+    .select("provider, provider_subscription_id, plan, status, current_period_end")
+    .eq("user_profile_id", userProfileId)
+    .maybeSingle();
+  if (error) throw new Error(`read subscription: ${error.message}`);
+  return (data as SubscriptionRow | null) ?? null;
+}
+
 export async function createRazorpaySubscription(
   userProfileId: string,
   plan: PlanId,
   cfg: RazorpayConfig,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ ok: true; subscriptionId: string; keyId: string } | { ok: false; error: "billing_unavailable" }> {
+  now = new Date(),
+): Promise<{ ok: true; subscriptionId: string; keyId: string } | { ok: false; error: "billing_unavailable" | "already_subscribed" }> {
+  // A new checkout replaces the one row: never do that while it still pays for Pro, or a second
+  // tap on "Subscribe" would turn Pro off and leave the first subscription billing in Razorpay.
+  if (paidThrough(await currentSubscription(userProfileId), now)) return { ok: false, error: "already_subscribed" };
   const res = await fetchImpl("https://api.razorpay.com/v1/subscriptions", {
     method: "POST",
     headers: {
@@ -240,8 +268,27 @@ type RazorpayEvent = {
   payload?: { subscription?: { entity?: { id?: string; status?: string; current_end?: number | null; plan_id?: string; notes?: Record<string, string> } } };
 };
 
+/**
+ * What a webhook should leave in the row, or null to ignore it. Webhooks can arrive late, out of
+ * order, or for an older checkout the person abandoned, so:
+ * - an event for another subscription never replaces one that pays for Pro, and only an
+ *   activation replaces an unpaid one;
+ * - a late "pending" (created/authenticated) never undoes a later state;
+ * - a subscription cancelled here at cycle end stays cancelled while Razorpay still says active;
+ * - an event without a period end keeps the one already stored.
+ */
+export function mergeRazorpayUpdate(current: SubscriptionRow | null, incoming: SubscriptionRow, now: Date): SubscriptionRow | null {
+  if (current && current.provider_subscription_id !== incoming.provider_subscription_id) {
+    if (paidThrough(current, now) || incoming.status !== "active") return null;
+    return incoming;
+  }
+  if (incoming.status === "pending" && current && current.status !== "pending") return null;
+  const status = current?.status === "cancelled" && incoming.status === "active" ? "cancelled" : incoming.status;
+  return { ...incoming, status, current_period_end: incoming.current_period_end ?? current?.current_period_end ?? null };
+}
+
 /** Subscription webhooks: keep status and the paid-through date in step with Razorpay. */
-export async function applyRazorpayEvent(event: RazorpayEvent, cfg: RazorpayConfig): Promise<"applied" | "ignored"> {
+export async function applyRazorpayEvent(event: RazorpayEvent, cfg: RazorpayConfig, now = new Date()): Promise<"applied" | "ignored"> {
   const sub = event.payload?.subscription?.entity;
   if (!sub?.id || !sub.status) return "ignored";
   const status = RAZORPAY_STATUS[sub.status];
@@ -258,14 +305,19 @@ export async function applyRazorpayEvent(event: RazorpayEvent, cfg: RazorpayConf
   }
   if (!userProfileId) return "ignored";
   const plan: PlanId = sub.plan_id === cfg.plans.yearly ? "yearly" : "monthly";
-  await saveSubscription(userProfileId, {
+  const next = mergeRazorpayUpdate(await currentSubscription(userProfileId), {
     provider: "razorpay",
     provider_subscription_id: sub.id,
     plan,
     status,
     current_period_end: sub.current_end ? new Date(sub.current_end * 1000).toISOString() : null,
-  });
-  logger.info({ userProfileId, event: event.event, status }, "razorpay subscription updated");
+  }, now);
+  if (!next) {
+    logger.warn({ userProfileId, event: event.event, subscriptionId: sub.id, status }, "razorpay event ignored: stale or for another subscription");
+    return "ignored";
+  }
+  await saveSubscription(userProfileId, next);
+  logger.info({ userProfileId, event: event.event, status: next.status }, "razorpay subscription updated");
   return "applied";
 }
 
@@ -275,12 +327,7 @@ export async function cancelRazorpaySubscription(
   cfg: RazorpayConfig,
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { data } = await supabase
-    .from("user_subscriptions")
-    .select("provider, provider_subscription_id, plan, status, current_period_end")
-    .eq("user_profile_id", userProfileId)
-    .maybeSingle();
-  const row = data as SubscriptionRow | null;
+  const row = await currentSubscription(userProfileId);
   if (!row || row.provider !== "razorpay" || !row.provider_subscription_id) return { ok: false, error: "no_subscription" };
   const res = await fetchImpl(`https://api.razorpay.com/v1/subscriptions/${row.provider_subscription_id}/cancel`, {
     method: "POST",

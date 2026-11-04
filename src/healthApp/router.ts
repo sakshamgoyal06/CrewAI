@@ -745,7 +745,7 @@ export function createHealthAppRouter(): express.Router {
       const cfg = razorpayConfig();
       if (!cfg) return { status: 503, body: { ok: false, error: "billing_unavailable" } };
       const r = await createRazorpaySubscription(ctx.userProfileId, plan, cfg);
-      return { status: r.ok ? 200 : 502, body: r };
+      return { status: r.ok ? 200 : r.error === "already_subscribed" ? 409 : 502, body: r };
     }),
   );
 
