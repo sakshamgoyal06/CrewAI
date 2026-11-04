@@ -3842,36 +3842,62 @@ const SHEETS = {
     const s = state.snapshot;
     const g = s?.goal?.goal;
     const t = s?.targets || {};
-    return el("div", {},
-      el("form", { class: "stack", onsubmit: submitter(async (fd) => {
+    // One Save for the screen: it sends the goal and/or the targets, whichever changed. The weigh-in
+    // day below saves the moment it's picked, as before.
+    const save = el("button", { class: "btn primary block", type: "submit", disabled: true }, "Save");
+    const when = el("p", { class: "hint date-line" });
+    const goalFields = ["tw", "tbf", "tmm", "deadline"], targetFields = ["kcal", "prot", "steps"];
+    let start = null;
+    const form = el("form", { class: "stack settings-form", onsubmit: submitter(async (fd) => {
+      const changed = (names) => names.some((n) => (fd.get(n) ?? "") !== start[n]);
+      const saved = [];
+      if (changed(goalFields)) {
         await api("/goal", { method: "POST", body: JSON.stringify({ targetWeightKg: num(fd.get("tw")), targetBodyFatPct: num(fd.get("tbf")), targetMuscleMassKg: num(fd.get("tmm")), deadline: fd.get("deadline") }) });
-        toast("Goal saved.");
-        refresh();
-      }) },
-        el("p", { class: "section-label" }, "Outcome goal"),
-        el("div", { class: "grid3" },
-          el("label", {}, "Weight kg", el("input", { class: "field", name: "tw", type: "number", step: "0.1", inputmode: "decimal", value: g?.targets.weight_kg ?? null })),
-          el("label", {}, "Body fat %", el("input", { class: "field", name: "tbf", type: "number", step: "0.1", inputmode: "decimal", value: g?.targets.body_fat_pct ?? null })),
-          el("label", {}, "Muscle kg", el("input", { class: "field", name: "tmm", type: "number", step: "0.1", inputmode: "decimal", value: g?.targets.muscle_mass_kg ?? null })),
-        ),
-        el("label", {}, "Deadline", el("input", { class: "field", name: "deadline", type: "date", required: true, value: g?.deadline ?? null })),
-        el("button", { class: "btn primary block", type: "submit" }, "Save goal"),
-      ),
-      el("form", { class: "stack", onsubmit: submitter(async (fd) => {
+        saved.push("Goal");
+      }
+      if (changed(targetFields)) {
         await api("/targets", { method: "POST", body: JSON.stringify({ calorieTarget: num(fd.get("kcal")), proteinTarget: num(fd.get("prot")), stepTarget: num(fd.get("steps")) }) });
-        toast("Targets saved.");
-        refresh();
-      }) },
-        el("p", { class: "section-label" }, "Daily targets"),
-        el("div", { class: "grid3" },
-          el("label", {}, "Calories", el("input", { class: "field", name: "kcal", type: "number", inputmode: "numeric", value: t.calorieTarget ?? null })),
-          el("label", {}, "Protein g", el("input", { class: "field", name: "prot", type: "number", inputmode: "numeric", value: t.proteinTarget ?? null })),
-          el("label", {}, "Steps", el("input", { class: "field", name: "steps", type: "number", inputmode: "numeric", value: t.stepTarget ?? null })),
-        ),
-        el("button", { class: "btn block", type: "submit" }, "Save targets"),
+        saved.push(saved.length ? "targets" : "Targets");
+      }
+      toast(`${saved.join(" and ")} saved.`);
+      start = snapshotForm();
+      setTimeout(sync); // after the submit helper re-enables the button
+      refresh();
+    }) },
+      el("p", { class: "section-label" }, "Outcome goal"),
+      el("div", { class: "grid3" },
+        el("label", {}, "Weight kg", el("input", { class: "field", name: "tw", type: "number", step: "0.1", inputmode: "decimal", value: g?.targets.weight_kg ?? null })),
+        el("label", {}, "Body fat %", el("input", { class: "field", name: "tbf", type: "number", step: "0.1", inputmode: "decimal", value: g?.targets.body_fat_pct ?? null })),
+        el("label", {}, "Muscle kg", el("input", { class: "field", name: "tmm", type: "number", step: "0.1", inputmode: "decimal", value: g?.targets.muscle_mass_kg ?? null })),
       ),
-      weighInDayForm(t),
+      el("label", {}, "Deadline", el("input", { class: "field date", name: "deadline", type: "date", required: true, value: g?.deadline ?? null })),
+      when,
+      el("p", { class: "section-label" }, "Daily targets"),
+      el("div", { class: "grid3" },
+        el("label", {}, "Calories", el("input", { class: "field", name: "kcal", type: "number", inputmode: "numeric", value: t.calorieTarget ?? null })),
+        el("label", {}, "Protein g", el("input", { class: "field", name: "prot", type: "number", inputmode: "numeric", value: t.proteinTarget ?? null })),
+        el("label", {}, "Steps", el("input", { class: "field", name: "steps", type: "number", inputmode: "numeric", value: t.stepTarget ?? null })),
+      ),
+      save,
     );
+    function snapshotForm() {
+      const fd = new FormData(form);
+      return Object.fromEntries([...goalFields, ...targetFields].map((n) => [n, fd.get(n) ?? ""]));
+    }
+    function sync() {
+      const now = snapshotForm();
+      save.disabled = Object.keys(now).every((k) => now[k] === start[k]);
+      const d = now.deadline;
+      if (d) {
+        const weeks = Math.round((dateOf(d) - dateOf(todayKey() || localToday())) / (7 * 86_400_000));
+        when.textContent = `${dateOf(d).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}${weeks > 0 ? ` · ${weeks} week${weeks === 1 ? "" : "s"} away` : ""}`;
+      } else when.textContent = "";
+    }
+    start = snapshotForm();
+    form.addEventListener("input", sync);
+    form.addEventListener("change", sync);
+    sync();
+    return el("div", {}, form, weighInDayForm(t));
   },
 
   notifications() {
