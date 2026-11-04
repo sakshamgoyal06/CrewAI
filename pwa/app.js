@@ -7,7 +7,7 @@ import { scanView } from "./scan.js";
 import { foodPrefsEditor } from "./foodprefs.js";
 import { fromServer, routineEditor, toPayload } from "./routine.js";
 import { initMeals, loadPlan, mealScreen, mealsTitles, openPlannedMeal, planLineFor, renderMeals, setupScreen } from "./meals.js";
-import { foodPicker } from "./foodpicker.js";
+import { mealBuilder, fixedItem } from "./mealbuilder.js";
 import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
 const TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } })();
@@ -149,6 +149,7 @@ function friendlyError(code) {
     no_devices: "This device isn't subscribed yet.",
     not_enough_data: "Not enough logged days yet to find a pattern.",
     meal_not_found: "That meal isn't in your usual list any more.",
+    not_a_food: "That doesn't look like a food. Type a food or drink and an amount, like \"1 plate chicken biryani\".",
     not_food: "I don't see a meal in that photo. Try a clearer shot of the plate, or type what you ate.",
     unreadable: "I couldn't read that photo. Try again, or type what you ate.",
     owner_account: "The owner account can't be deleted from the app.",
@@ -3469,8 +3470,12 @@ function markDraft(id, status) {
   store.set(CONFIRMED_KEY, all);
 }
 
-/** Editable estimate. Saves exactly what's on the card; re-confirming the same card never double-logs. */
-function mealDraftCard(draft, { onDone, saved } = {}) {
+/**
+ * Meal to check before it's logged. Edit opens "Make your meal" with these lines (add from the food
+ * list or search, change amounts, remove), and the card shows the result. Saves exactly what's on
+ * the card; re-confirming the same card never double-logs.
+ */
+function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
   const status = saved ? { state: "logged", calories: saved.calories } : confirmedDrafts()[draft.draftId];
   const card = el("div", { class: "draft" });
   if (status) return finishedCard(card, draft, status);
@@ -3478,14 +3483,15 @@ function mealDraftCard(draft, { onDone, saved } = {}) {
   const original = JSON.stringify(draft.items);
   const items = draft.items.length ? draft.items.map((i) => ({ ...i })) : [{ name: draft.text, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }];
   let slot = SLOTS.some(([k]) => k === draft.slot) ? draft.slot : "snack";
-  let editing = !draft.estimated || !draft.items.length;
+  let changed = false;
 
   const kcal = el("div", { class: "draft-kcal" });
   const macros = el("div", { class: "macros" });
-  const list = el("ul", { class: "items" });
+  const list = el("ul", { class: "items-ro" });
   // The meal slot as one small picker next to the title, instead of a four-way switch.
   const seg = el("select", { class: "slot-pick", "aria-label": "Meal", onchange: (e) => { slot = e.target.value; } });
   const confirm = el("button", { class: "btn primary", type: "button" }, "Confirm & log");
+  const missing = el("p", { class: "draft-note" }, "No numbers for this yet. Tap Edit to pick it from the food list, search for it, or type the numbers.");
 
   function totals() {
     const t = items.reduce((a, i) => ({ c: a.c + (+i.calories || 0), p: a.p + (+i.protein_g || 0), cb: a.cb + (+i.carbs_g || 0), f: a.f + (+i.fat_g || 0) }), { c: 0, p: 0, cb: 0, f: 0 });
@@ -3496,33 +3502,26 @@ function mealDraftCard(draft, { onDone, saved } = {}) {
       el("span", {}, el("b", {}, fmt(t.f, 1)), " g fat"),
     );
     confirm.disabled = !items.length || items.some((i) => !i.name.trim()) || t.c <= 0;
+    missing.hidden = t.c > 0;
   }
-
-  const add = el("button", { class: "add-line", type: "button", onclick: () => { items.push({ name: "", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }); renderItems(); totals(); list.querySelector("li:last-child input")?.focus(); } }, "+ Add item");
-  const edit = el("button", { class: "link", type: "button", onclick: () => { editing = !editing; renderItems(); } }, "Edit");
 
   function renderItems() {
-    // Read-only by default: the estimate in a few quiet lines. Edit opens the table.
-    list.className = editing ? "items" : "items-ro";
-    add.hidden = !editing;
-    edit.textContent = editing ? "Done" : "Edit";
-    if (!editing) {
-      list.replaceChildren(...items.map((i) => el("li", {}, el("span", {}, i.name || "Unnamed"), el("span", {}, `${fmt(+i.calories || 0)} kcal · ${fmt(+i.protein_g || 0, 1)} g P`))));
-      return;
-    }
-    list.replaceChildren(
-      el("li", { class: "item-head" }, el("span", {}, "Item"), el("span", {}, "kcal"), el("span", {}, "prot g"), el("span")),
-      ...items.map((item, idx) =>
-        el("li", { class: "item" },
-          el("input", { value: item.name, "aria-label": "Item name", oninput: (e) => { item.name = e.target.value; totals(); } }),
-          el("input", { class: "num", inputmode: "decimal", value: String(item.calories), "aria-label": "Calories", oninput: (e) => { item.calories = Math.max(0, parseFloat(e.target.value) || 0); totals(); } }),
-          el("input", { class: "num", inputmode: "decimal", value: String(item.protein_g), "aria-label": "Protein grams", oninput: (e) => { item.protein_g = Math.max(0, parseFloat(e.target.value) || 0); totals(); } }),
-          el("button", { class: "x", type: "button", "aria-label": "Remove item", onclick: () => { items.splice(idx, 1); renderItems(); totals(); } }, "×"),
-        ),
-      ),
-    );
+    list.replaceChildren(...items.map((i) => el("li", {}, el("span", {}, i.name || "Unnamed"), el("span", {}, `${fmt(+i.calories || 0)} kcal · ${fmt(+i.protein_g || 0, 1)} g P`))));
   }
 
+  /** The meal after "Make your meal": replaces every line on the card. */
+  function replaceItems(next) {
+    items.splice(0, items.length, ...next);
+    changed = true;
+    renderItems();
+    totals();
+  }
+
+  const edit = el("button", { class: "link", type: "button", onclick: () => {
+    if (onEdit) return onEdit(items.map((i) => ({ ...i })), replaceItems);
+    state.mealBuild = { items: items.map((i) => fixedItem(i, draft.source === "web_research" ? "web" : "own")), apply: replaceItems };
+    openSheet("mealEdit");
+  } }, "Edit");
   function renderSeg() {
     seg.replaceChildren(...SLOTS.map(([k, label]) => el("option", { value: k, selected: k === slot }, label)));
   }
@@ -3537,7 +3536,7 @@ function mealDraftCard(draft, { onDone, saved } = {}) {
         slot,
         source: draft.source,
         items: items.map((i) => ({ name: i.name.trim(), calories: +i.calories || 0, protein_g: +i.protein_g || 0, carbs_g: +i.carbs_g || 0, fat_g: +i.fat_g || 0 })),
-        edited: JSON.stringify(items) !== original || slot !== draft.slot,
+        edited: changed || JSON.stringify(items) !== original || slot !== draft.slot,
         // Logged for a planned meal on another day (yesterday's dinner): that day, not today.
         ...(draft.date ? { date: draft.date } : {}),
       };
@@ -3560,9 +3559,9 @@ function mealDraftCard(draft, { onDone, saved } = {}) {
   card.append(...[
     el("div", { class: "draft-top" }, seg, edit),
     kcal, macros,
-    !draft.estimated ? el("p", { class: "draft-note" }, "No estimate found. Enter calories and protein yourself.") : null,
+    missing,
     draft.servingAssumption ? assumptionNote(draft.servingAssumption) : null,
-    list, add,
+    list,
     el("div", { class: "draft-actions split" }, discard, confirm),
   ].filter(Boolean));
   renderSeg();
@@ -3597,6 +3596,8 @@ const SHEET_ONLY = new Set(["quick"]);
 const AUTOFOCUS = new Set(["steps", "checkin"]);
 
 function hideOverlay() {
+  closeMini(true);
+  state.mealBuild = null;
   state.sheetStack = [];
   state.overlayDepth = 0;
   state.sheetCleanup?.();
@@ -3635,8 +3636,11 @@ window.addEventListener("popstate", () => {
   }
   if (state.ignorePop) { state.ignorePop = false; return; }
   // The phone's back button (or a swipe) while a screen is open: go to the one underneath, or close.
+  // Back with a macros sheet open closes just that.
+  if (state.mini) { closeMini(true); return; }
   if (!$("sheet").hidden) {
-    state.sheetStack.pop();
+    const popped = state.sheetStack.pop();
+    if (popped === "meal" || popped === "mealEdit") state.mealBuild = null;
     state.overlayDepth = Math.max(0, (state.overlayDepth || 1) - 1);
     const under = state.sheetStack.at(-1);
     if (under && state.overlayDepth > 0) openSheet(under, { fromHistory: true });
@@ -3645,6 +3649,35 @@ window.addEventListener("popstate", () => {
   }
   setView(viewFromHash(location.hash), { fromHistory: true });
 });
+
+/**
+ * A small bottom sheet over the current screen (one food's macros). Back closes it, not the screen.
+ * Its own history entry is popped when it's closed with Done or a tap outside.
+ */
+function openMini(content) {
+  closeMini(true);
+  const scrim = el("div", { class: "mini-scrim", onclick: () => closeMini() });
+  const panel = el("section", { class: "mini-sheet", role: "dialog", "aria-modal": "true" },
+    el("div", { class: "grabber", "aria-hidden": "true" }),
+    content,
+    el("button", { class: "btn primary block", type: "button", onclick: () => closeMini() }, "Done"));
+  document.body.append(scrim, panel);
+  state.mini = { scrim, panel };
+  history.pushState({ overlay: state.overlayDepth || 1, mini: 1 }, "", location.hash || "#coach");
+}
+
+/** Closes the macros sheet. `popped`: its history entry is already gone (back button, or the screen closing). */
+function closeMini(popped = false) {
+  const m = state.mini;
+  if (!m) return;
+  state.mini = null;
+  m.scrim.remove();
+  m.panel.remove();
+  if (!popped) {
+    state.ignorePop = true;
+    history.back();
+  }
+}
 
 /** Runs fn once a closing overlay's history entry has been popped (at once if none is pending). */
 function afterClose(fn) {
@@ -3657,7 +3690,7 @@ function openSheet(kind, { fromHistory = false } = {}) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", replan: "Your updated plan", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", dayPlan: "Day plan", ...mealsTitles };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", mealEdit: "Edit meal", mealFind: "Search for a food", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", replan: "Your updated plan", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", dayPlan: "Day plan", ...mealsTitles };
   const screen = !SHEET_ONLY.has(kind);
   const sheet = $("sheet");
   sheet.classList.toggle("screen", screen);
@@ -3796,50 +3829,151 @@ const SHEETS = {
   },
 
   meal() {
-    const holder = el("div");
+    // Log a meal: "Make your meal" (food list first), then check it on the draft card. The meal
+    // being made lives in state.mealBuild so it survives the search screen and back.
+    const b = (state.mealBuild ||= { items: [], mode: "build" });
+    const holder = el("div", { class: "stack" });
     const slotNow = () => {
       if (state.mealSlot) return state.mealSlot;
       const h = new Date().getHours();
       return h < 11 ? "breakfast" : h < 16 ? "lunch" : h < 18 ? "snack" : "dinner";
     };
-    const show = (draft) => {
-      form.hidden = true;
-      picker.hidden = true;
-      holder.replaceChildren(mealDraftCard(state.mealDate ? { ...draft, date: state.mealDate } : draft, { onDone: () => setTimeout(closeSheet, 700) }));
+    const review = (draft) => {
+      b.mode = "review";
+      b.draft = draft;
+      paint();
     };
-    // 1) Pick from the food database. 2) Only if it isn't there, describe it and let the chat estimate.
-    const picker = foodPicker({ api, el, fmt }, {
-      onReview: (items) => show({ draftId: crypto.randomUUID(), text: items.map((i) => i.name).join(", "), slot: slotNow(), source: "food_db", items, estimated: true, servingAssumption: null }),
-      onDescribe: (text) => { picker.hidden = true; form.hidden = false; if (text) form.querySelector("textarea").value = text; form.querySelector("textarea").focus(); },
-    });
-    const form = el("form", { class: "stack", hidden: true, onsubmit: submitter(async (fd) => {
-      const btn = form.querySelector("button[type=submit]");
-      btn.textContent = "Estimating… (checks the web, ~10 s)";
-      let draft;
-      try {
-        draft = await api("/meals/draft", { method: "POST", body: JSON.stringify({ text: fd.get("text") }) });
-      } finally {
-        btn.textContent = "Estimate";
+    // Edit on the card goes back to the builder with the lines as they are now.
+    const backToBuild = (cardItems) => {
+      if (!b.fromBuilder) b.items = cardItems.map((i) => fixedItem(i, b.draft?.source === "web_research" ? "web" : "own"));
+      b.fromBuilder = true;
+      b.mode = "build";
+      paint();
+    };
+    function paint() {
+      if (b.mode === "review" && b.draft) {
+        const d = state.mealDate ? { ...b.draft, date: state.mealDate } : b.draft;
+        holder.replaceChildren(mealDraftCard(d, { onDone: () => setTimeout(closeSheet, 700), onEdit: backToBuild }));
+        return;
       }
-      if (state.mealSlot) draft.slot = state.mealSlot;
-      show(draft);
-    }) },
-      el("p", { class: "hint" }, "Describe it in your own words. I'll estimate it and you can fix any line before it's logged."),
-      el("textarea", { class: "field", name: "text", rows: "3", required: true, placeholder: "e.g. 2 rotis, a bowl of dal, 100 g paneer bhurji", minlength: "2" }),
-      el("button", { class: "btn primary block", type: "submit" }, "Estimate"),
-      el("button", { class: "link", type: "button", onclick: () => { form.hidden = true; picker.hidden = false; } }, "Back to the food list"),
-      el("button", { class: "link", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, "Or snap a photo of the plate"),
-      el("button", { class: "link", type: "button", onclick: () => openSheet("scan") }, "Or scan a packet's barcode"),
-    );
-    const usual = (state.usual || []).length
-      ? el("div", { class: "usual-list" },
-          el("p", { class: "section-label" }, "Your usual"),
-          ...state.usual.slice(0, 3).map((m) =>
-            el("button", { class: "usual-row", type: "button", onclick: () => show({ ...usualDraft(m), slot: state.mealSlot || usualDraft(m).slot }) },
-              el("span", {}, m.text),
-              el("small", {}, `${fmt(m.totals.calories)} kcal · ${m.count}×`))))
-      : null;
-    return el("div", { class: "stack" }, usual, picker, form, holder);
+      const usual = !b.items.length && (state.usual || []).length
+        ? el("div", { class: "usual-list" },
+            el("p", { class: "section-label" }, "Your usual"),
+            ...state.usual.slice(0, 3).map((m) =>
+              el("button", { class: "usual-row", type: "button", onclick: () => { b.fromBuilder = false; review({ ...usualDraft(m), slot: state.mealSlot || usualDraft(m).slot }); } },
+                el("span", {}, m.text),
+                el("small", {}, `${fmt(m.totals.calories)} kcal · ${m.count}×`))))
+        : null;
+      const builder = mealBuilder({ api, el, fmt, openMini }, b, {
+        applyLabel: "Review and log",
+        onApply: (items) => {
+          b.fromBuilder = true;
+          const web = b.items.some((it) => it.kind === "fixed" && it.origin === "web");
+          b.draftId ||= crypto.randomUUID();
+          review({ draftId: b.draftId, text: items.map((i) => i.name).join(", ").slice(0, 500), slot: b.draft?.slot || slotNow(), source: web ? b.webSource || "web_research" : "food_db", items, estimated: true, servingAssumption: null });
+        },
+        onSearchMore: (text) => { b.seed = text; openSheet("mealFind"); },
+      });
+      holder.replaceChildren(...[
+        el("h3", { class: "mb-title" }, "Make your meal"),
+        usual,
+        builder,
+        el("div", { class: "mb-alt" },
+          el("button", { class: "link", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, "Snap a photo of the plate"),
+          el("button", { class: "link", type: "button", onclick: () => openSheet("scan") }, "Scan a packet's barcode")),
+      ].filter(Boolean));
+    }
+    paint();
+    return holder;
+  },
+
+  /** "Make your meal" for a card that's already in the chat: Update puts the lines back on that card. */
+  mealEdit() {
+    const b = state.mealBuild;
+    if (!b?.apply) return el("p", { class: "hint" }, "That meal was closed. Open it again from the chat.");
+    return el("div", { class: "stack" },
+      mealBuilder({ api, el, fmt, openMini }, b, {
+        applyLabel: "Update meal",
+        onApply: (items) => { b.apply(items); closeSheet(); },
+        onSearchMore: (text) => { b.seed = text; openSheet("mealFind"); },
+      }));
+  },
+
+  /**
+   * "Can't find it? Search": one food the database lacks, looked up on the web. Shows the result,
+   * and only an approved result goes back into the meal being made.
+   */
+  mealFind() {
+    const b = state.mealBuild;
+    if (!b) return el("p", { class: "hint" }, "Open Log a meal again to search.");
+    const out = el("div", { class: "stack find-out", "aria-live": "polite" });
+    const input = el("input", { class: "field", name: "text", type: "search", required: true, minlength: "2", maxlength: "120", autocomplete: "off", value: b.seed || "", placeholder: "e.g. 1 plate chicken biryani, Amul lassi 200 ml", "aria-label": "Food to search" });
+    const go = el("button", { class: "btn primary", type: "submit" }, "Search");
+    const backToMeal = (added) => {
+      b.items.push(...added);
+      toast(added.length === 1 ? `Added ${added[0].name}.` : `Added ${added.length} items.`);
+      backSheet();
+    };
+    const loading = (q) => out.replaceChildren(el("div", { class: "find-card loading", "aria-busy": "true" },
+      el("p", {}, `Looking up “${q}”…`),
+      el("small", { class: "muted" }, "Checking the web. This usually takes about 10 seconds."),
+      el("div", { class: "skel" }, el("i"), el("i", { class: "short" }), el("i"))));
+    const manual = (q) => {
+      const f = (label, name) => el("label", { class: "mm-field" }, label, el("input", { class: "field", name, inputmode: "decimal", placeholder: "0" }));
+      const form = el("form", { class: "stack", onsubmit: (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        const n = (k) => Math.max(0, parseFloat(fd.get(k)) || 0);
+        const name = String(fd.get("name") || "").trim().slice(0, 80);
+        if (!name || n("kcal") <= 0) { toast("Add a name and its calories."); return; }
+        backToMeal([fixedItem({ name, calories: Math.round(n("kcal")), protein_g: n("p"), carbs_g: n("c"), fat_g: n("f") }, "own")]);
+      } },
+        el("label", { class: "mm-field" }, "Name", el("input", { class: "field", name: "name", value: q, maxlength: "80", required: true })),
+        el("div", { class: "grid2" }, f("kcal", "kcal"), f("Protein g", "p"), f("Carbs g", "c"), f("Fat g", "f")),
+        el("button", { class: "btn primary block", type: "submit" }, "Add to my meal"));
+      return form;
+    };
+    const form = el("form", { class: "find-form", onsubmit: async (e) => {
+      e.preventDefault();
+      const q = input.value.trim();
+      if (q.length < 2) return;
+      go.disabled = true;
+      input.blur();
+      loading(q);
+      try {
+        const r = await api("/foods/lookup", { method: "POST", body: JSON.stringify({ text: q }) });
+        if (!r.estimated) {
+          out.replaceChildren(el("div", { class: "find-card" },
+            el("p", {}, `Couldn't find numbers for “${r.text}”.`),
+            el("small", { class: "muted" }, "Try another name, or add the numbers from the label yourself."),
+            manual(r.text)));
+          return;
+        }
+        const tot = r.items.reduce((a, i) => ({ k: a.k + i.calories, p: a.p + i.protein_g }), { k: 0, p: 0 });
+        const approve = el("button", { class: "btn primary block", type: "button", onclick: () => {
+          b.webSource = r.source;
+          backToMeal(r.items.map((i) => fixedItem(i, "web")));
+        } }, r.items.length === 1 ? "Add to my meal" : `Add all ${r.items.length} to my meal`);
+        out.replaceChildren(el("div", { class: "find-card" },
+          el("p", { class: "section-label" }, "Found"),
+          el("ul", { class: "items-ro" }, ...r.items.map((i) => el("li", {},
+            el("span", {}, i.name),
+            el("span", {}, `${fmt(i.calories)} kcal · ${fmt(i.protein_g, 1)} P · ${fmt(i.carbs_g, 1)} C · ${fmt(i.fat_g, 1)} F`)))),
+          r.items.length > 1 ? el("p", { class: "muted find-total" }, `Together ${fmt(tot.k)} kcal · ${fmt(tot.p, 1)} g protein`) : null,
+          r.note ? assumptionNote(r.note) : null,
+          el("p", { class: "hint" }, "Check it looks right. You can change the amount or the numbers in your meal."),
+          approve,
+          el("button", { class: "link", type: "button", onclick: () => { out.replaceChildren(); input.focus(); input.select(); } }, "Not right? Search again")));
+      } catch (err) {
+        out.replaceChildren(el("div", { class: "find-card" }, el("p", {}, err.message), err.code === "not_a_food" ? null : manual(q)));
+      } finally {
+        go.disabled = false;
+      }
+    } }, input, go);
+    setTimeout(() => { if (!input.value) input.focus(); }, 50);
+    return el("div", { class: "stack" },
+      el("p", { class: "hint" }, "For a food that isn't in the food list. Food and drink only. Uses one web lookup."),
+      form, out);
   },
 
   steps() {

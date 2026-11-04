@@ -8,6 +8,7 @@ import { z } from "zod";
 import { logger } from "../logger.js";
 import { localDateKey } from "../nutrition/localDate.js";
 import { loggableError } from "../util/loggableError.js";
+import { checkFoodQuery, cleanLookupItems } from "./foodLookup.js";
 import { searchFoods } from "./foodPick.js";
 import {
   checkinInput,
@@ -754,6 +755,33 @@ export function createHealthAppRouter(): express.Router {
     route("foods-search", async (_ctx, req) => {
       const q = typeof req.query.q === "string" ? req.query.q.slice(0, 60) : "";
       return { body: { foods: searchFoods(q, 20) } };
+    }),
+  );
+
+  /**
+   * "Can't find it? Search": one food the database lacks, looked up on the web. Food names only
+   * (checked before anything is paid for), same daily cap as meal estimates, cleaned results.
+   * Nothing is logged here: the person approves it into their meal and confirms the meal.
+   */
+  router.post(
+    "/foods/lookup",
+    route("foods-lookup", async (ctx, req) => {
+      const raw = typeof req.body?.text === "string" ? req.body.text : "";
+      const q = checkFoodQuery(raw);
+      if (!q.ok) return { status: 400, body: { ok: false, error: q.error } };
+      if ((await allowUse(ctx, "draft")) !== true) return { status: 429, body: { ok: false, error: "draft_limit" } };
+      const draft = await startMealDraft(ctx, { text: q.text });
+      const items = cleanLookupItems(draft.items);
+      return {
+        body: {
+          ok: true,
+          text: q.text,
+          source: draft.source,
+          estimated: items.length > 0,
+          items,
+          note: draft.servingAssumption ? draft.servingAssumption.slice(0, 400) : null,
+        },
+      };
     }),
   );
 
