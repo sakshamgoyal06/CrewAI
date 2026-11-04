@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import { foodKeyFor } from "../foodParse.js";
 import { buildCatalog, servingId } from "./index.js";
-import { DISHES, PREP } from "./data/dishes.js";
-import { FOODS } from "./data/foods.js";
+import { DISHES, ORDERED, PREP } from "./data/dishes.js";
+import { FOODS, NOT_JAIN } from "./data/foods.js";
 import type { CatalogDish, CatalogFood, ServingUnit } from "./types.js";
 
 const cat = buildCatalog();
@@ -61,7 +61,8 @@ describe("food catalog", () => {
     const off = cat.entries
       .map((e) => {
         const p = e.per100;
-        const atwater = 4 * p.protein + 4 * Math.max(0, p.carbs - p.fiber) + 2 * p.fiber + 9 * p.fat;
+        const alcohol = FOODS.find((f) => f.name === e.name)?.alcohol ?? 0;
+        const atwater = 4 * p.protein + 4 * Math.max(0, p.carbs - p.fiber) + 2 * p.fiber + 9 * p.fat + 7 * alcohol;
         return { name: e.name, kcal: p.kcal, atwater: Math.round(atwater) };
       })
       .filter((x) => Math.abs(x.kcal - x.atwater) > Math.max(10, 0.15 * x.kcal));
@@ -101,6 +102,23 @@ describe("food catalog", () => {
     expect(cat.entries.filter((e) => e.kind === "dish" && e.prepMinutes === null).map((e) => e.name)).toEqual([]);
     const names = new Set(DISHES.map((d) => d.name));
     expect(Object.keys(PREP).filter((n) => !names.has(n))).toEqual([]);
+  });
+
+  it("marks bought or ordered food, which always has prep 0, and names only real dishes", () => {
+    const names = new Set(DISHES.map((d) => d.name));
+    expect(ORDERED.filter((n) => !names.has(n))).toEqual([]);
+    const ordered = cat.entries.filter((e) => e.ordered);
+    expect(ordered.length).toBeGreaterThanOrEqual(ORDERED.length);
+    expect(ordered.filter((e) => e.prepMinutes !== 0).map((e) => e.name)).toEqual([]);
+    expect(cat.entries.find((e) => e.name === "Dal tadka")!.ordered).toBe(false);
+  });
+
+  it("works out which food is Jain from its ingredients", () => {
+    const foodNames = new Set(FOODS.map((x) => x.name));
+    expect(NOT_JAIN.filter((n) => !foodNames.has(n))).toEqual([]);
+    const jain = (n: string) => cat.entries.find((e) => e.name === n)!.jain;
+    expect(["Jain dal tadka", "Jain paneer sabzi", "Jain chole", "Jain rajma", "Besan gatte ki sabzi", "Lauki chana dal", "Jain kadhi", "Dal dhokli", "Roti", "Paneer"].filter((n) => !jain(n))).toEqual([]);
+    expect(["Dal tadka", "Aloo paratha", "Onion", "Egg, boiled", "Chicken curry", "Pav bhaji"].filter(jain)).toEqual([]);
   });
 
   it("every dish has at least one meal type", () => {

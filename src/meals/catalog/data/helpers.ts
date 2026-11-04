@@ -16,7 +16,7 @@ export function s(unit: ServingUnit, grams: number, size?: ServingSize | null, i
   };
 }
 
-type Opts = { aliases?: string[]; basis?: "100ml"; meals?: MealType[]; prepMinutes?: PrepMinutes };
+type Opts = { aliases?: string[]; basis?: "100ml"; meals?: MealType[]; prepMinutes?: PrepMinutes; ordered?: boolean; alcohol?: number };
 
 /** [kcal, protein, carbs, fat, fiber] per 100 g (or 100 ml). */
 export type M = [number, number, number, number, number];
