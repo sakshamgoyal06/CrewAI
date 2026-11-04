@@ -106,6 +106,10 @@ export type HevyProposalCard = {
 
 // ---------- pure builders ----------
 
+/**
+ * Hevy rejects `rep_range: null` ("Expected object, received null"), so a set without a range
+ * leaves the field out instead of sending null.
+ */
 function routineSet(s: SetIn): HevyRoutineSetInput {
   return {
     type: s.type ?? "normal",
@@ -113,7 +117,7 @@ function routineSet(s: SetIn): HevyRoutineSetInput {
     reps: s.repRange ? null : (s.reps ?? null),
     duration_seconds: s.durationSeconds ?? null,
     distance_meters: s.distanceMeters ?? null,
-    rep_range: s.repRange ? { start: Math.min(s.repRange.start, s.repRange.end), end: Math.max(s.repRange.start, s.repRange.end) } : null,
+    ...(s.repRange ? { rep_range: { start: Math.min(s.repRange.start, s.repRange.end), end: Math.max(s.repRange.start, s.repRange.end) } } : {}),
   };
 }
 
@@ -154,7 +158,7 @@ export function currentExercises(routine: HevyRoutine): HevyRoutineExerciseInput
         distance_meters: s.distance_meters ?? null,
         duration_seconds: s.duration_seconds ?? null,
         custom_metric: s.custom_metric ?? null,
-        rep_range: s.rep_range?.start != null && s.rep_range?.end != null ? { start: s.rep_range.start, end: s.rep_range.end } : null,
+        ...(s.rep_range?.start != null && s.rep_range?.end != null ? { rep_range: { start: s.rep_range.start, end: s.rep_range.end } } : {}),
       })),
     }));
 }
@@ -213,20 +217,35 @@ export function applyRoutineChanges(
         rest_seconds: c.restSeconds ?? cur.rest_seconds,
         notes: c.notes ?? cur.notes,
       };
-      exercises[i] = next;
-      touched.add(next.exercise_template_id);
+      // Only what actually differs: "rest 180s → 180s" is not a change.
       const parts = [
         c.sets ? `${sets(cur)} → ${sets(next)}` : null,
-        c.restSeconds !== undefined ? `rest ${cur.rest_seconds ?? "–"}s → ${c.restSeconds}s` : null,
-        c.notes !== undefined ? "notes updated" : null,
+        c.restSeconds !== undefined && c.restSeconds !== cur.rest_seconds ? `rest ${cur.rest_seconds ?? "–"}s → ${c.restSeconds}s` : null,
+        c.notes !== undefined && c.notes !== cur.notes ? "notes updated" : null,
       ].filter(Boolean);
-      lines.push({ kind: "change", text: `${nameOf(c.exerciseTemplateId)}: ${parts.join(", ") || "no change"}` });
+      if (!parts.length) continue;
+      exercises[i] = next;
+      touched.add(next.exercise_template_id);
+      lines.push({ kind: "change", text: `${nameOf(c.exerciseTemplateId)}: ${parts.join(", ")}` });
     }
   }
   if (!exercises.length) return { ok: false, error: "routine_would_be_empty" };
   const kept = exercises.filter((e) => !touched.has(e.exercise_template_id)).length;
   if (kept) lines.push({ kind: "keep", text: `${kept} other exercise${kept === 1 ? "" : "s"} unchanged` });
   return { ok: true, exercises, lines };
+}
+
+/** Proposals saved before the rep_range fix still carry `rep_range: null`; drop it on apply. */
+export function withoutNullRanges(body: HevyPostRoutineBody): HevyPostRoutineBody {
+  return {
+    routine: {
+      ...body.routine,
+      exercises: body.routine.exercises.map((e) => ({
+        ...e,
+        sets: e.sets.map(({ rep_range, ...rest }) => (rep_range ? { ...rest, rep_range } : rest)),
+      })),
+    },
+  };
 }
 
 export function buildWorkoutBody(input: z.infer<typeof workoutLogInput>): HevyPostWorkoutBody {
@@ -358,6 +377,8 @@ export async function proposeRoutineChange(
   if (!applied.ok) return applied;
   const title = input.title ?? routine.title ?? "Routine";
   const lines = input.title && input.title !== routine.title ? [{ kind: "change" as const, text: `Rename to "${input.title}"` }, ...applied.lines] : applied.lines;
+  // Nothing renamed and nothing changed: don't show an apply card that does nothing.
+  if (!lines.some((l) => l.kind !== "keep")) return { ok: false, error: "no_change" };
   const body: HevyPostRoutineBody = { routine: { title, notes: routine.notes ?? null, exercises: applied.exercises } };
   const saved = await insertProposal(ctx.userProfileId, {
     kind: "routine_update",
@@ -456,13 +477,13 @@ export async function applyProposal(ctx: ActionContext, id: string): Promise<App
     if (row.payload.baseUpdatedAt && live.updated_at && live.updated_at !== row.payload.baseUpdatedAt) {
       return fail("routine_changed_in_hevy");
     }
-    const r = await updateHevyRoutine(apiKey, row.routine_id!, row.payload.body as HevyPostRoutineBody);
+    const r = await updateHevyRoutine(apiKey, row.routine_id!, withoutNullRanges(row.payload.body as HevyPostRoutineBody));
     if (!r.ok) return fail(r.error.slice(0, 300));
     await finishProposal(id, { status: "applied", hevy_id: r.routine.id ?? row.routine_id, error: null });
     return { ok: true, status: "applied", hevyId: r.routine.id ?? row.routine_id };
   }
   if (row.kind === "routine_create") {
-    const r = await createHevyRoutine(apiKey, row.payload.body as HevyPostRoutineBody);
+    const r = await createHevyRoutine(apiKey, withoutNullRanges(row.payload.body as HevyPostRoutineBody));
     if (!r.ok) return fail(r.error.slice(0, 300));
     await finishProposal(id, { status: "applied", hevy_id: r.routine.id ?? null, error: null });
     return { ok: true, status: "applied", hevyId: r.routine.id ?? null };

@@ -54,6 +54,7 @@ import {
   discardProposal,
   proposeRoutineChange,
   proposeWorkoutLog,
+  withoutNullRanges,
 } from "./hevyProposals.js";
 
 const routine: HevyRoutine = {
@@ -85,6 +86,12 @@ beforeEach(() => {
 });
 
 describe("applyRoutineChanges", () => {
+  it("leaves out an update that changes nothing (rest 120s to 120s)", () => {
+    const r = applyRoutineChanges(routine, [{ op: "update", exerciseTemplateId: "bench", restSeconds: 120 }], titles);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.lines.map((l) => l.text)).toEqual(["3 other exercises unchanged"]);
+  });
+
   it("swaps one exercise and keeps the rest exactly", () => {
     const r = applyRoutineChanges(routine, [{ op: "replace", exerciseTemplateId: "lat", newExerciseTemplateId: "clat", sets: [{ repRange: { start: 12, end: 15 } }, { repRange: { start: 12, end: 15 } }] }], titles);
     if (!r.ok) throw new Error(r.error);
@@ -97,10 +104,12 @@ describe("applyRoutineChanges", () => {
       rest_seconds: 120,
       notes: null,
       sets: [
-        { type: "warmup", weight_kg: null, reps: 10, distance_meters: null, duration_seconds: null, custom_metric: null, rep_range: null },
-        { type: "normal", weight_kg: 80, reps: 5, distance_meters: null, duration_seconds: null, custom_metric: null, rep_range: null },
+        { type: "warmup", weight_kg: null, reps: 10, distance_meters: null, duration_seconds: null, custom_metric: null },
+        { type: "normal", weight_kg: 80, reps: 5, distance_meters: null, duration_seconds: null, custom_metric: null },
       ],
     });
+    // Hevy rejects `rep_range: null`, so a set without a range has no such key at all.
+    for (const e of r.exercises) for (const s of e.sets) if (!s.rep_range) expect(s).not.toHaveProperty("rep_range");
     expect(r.lines.map((l) => l.text)).toEqual([
       "Swap Lateral Raise (Dumbbell) → Lateral Raise (Cable) · 2 × 12–15",
       "2 other exercises unchanged",
@@ -161,6 +170,26 @@ describe("proposal flow", () => {
     if (!r.ok) throw new Error(r.error);
     return r.card;
   }
+
+  it("refuses a proposal that neither renames nor changes anything", async () => {
+    const r = await proposeRoutineChange(ctx, {
+      routineId: "r1",
+      reason: "No-op",
+      changes: [{ op: "update", exerciseTemplateId: "bench", restSeconds: 120 }],
+    });
+    expect(r).toEqual({ ok: false, error: "no_change" });
+  });
+
+  it("allows a rename with no exercise changes", async () => {
+    const r = await proposeRoutineChange(ctx, {
+      routineId: "r1",
+      title: "Sunday — Push",
+      reason: "Gym days moved.",
+      changes: [{ op: "update", exerciseTemplateId: "bench", restSeconds: 120 }],
+    });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.card.lines.map((l) => l.text)).toEqual(['Rename to "Sunday — Push"', "3 other exercises unchanged"]);
+  });
 
   it("stores a pending proposal and writes nothing to Hevy", async () => {
     const card = await propose();
@@ -231,5 +260,19 @@ describe("proposal flow", () => {
       exercises: [{ exerciseTemplateId: "bench", sets: [{ weightKg: 80, reps: 5 }] }],
     });
     expect(r).toEqual({ ok: false, error: "future_date" });
+  });
+});
+
+describe("withoutNullRanges", () => {
+  it("drops rep_range: null from a body saved before the fix and keeps real ranges", () => {
+    const body = {
+      routine: {
+        title: "Push",
+        exercises: [{ exercise_template_id: "b", sets: [{ reps: 5, rep_range: null }, { reps: null, rep_range: { start: 8, end: 10 } }] }],
+      },
+    };
+    const out = withoutNullRanges(body);
+    expect(out.routine.exercises[0]!.sets[0]).toEqual({ reps: 5 });
+    expect(out.routine.exercises[0]!.sets[1]).toEqual({ reps: null, rep_range: { start: 8, end: 10 } });
   });
 });

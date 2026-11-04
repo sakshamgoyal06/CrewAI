@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { isCoachOffline } from "./coachOffline.js";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./push.js", () => ({ sendNotification: vi.fn() }));
+
+import { alertOwnerCoachOffline, isCoachOffline } from "./coachOffline.js";
 
 describe("isCoachOffline", () => {
   it("spots an out-of-credit API account", () => {
@@ -16,5 +19,21 @@ describe("isCoachOffline", () => {
   it("leaves ordinary and transient failures alone", () => {
     expect(isCoachOffline(new Error('529 {"type":"error","error":{"type":"overloaded_error"}}'))).toBe(false);
     expect(isCoachOffline(new Error("fetch failed"))).toBe(false);
+  });
+});
+
+describe("alertOwnerCoachOffline", () => {
+  it("pushes the owner once per UTC hour", async () => {
+    const send = vi.fn().mockResolvedValue({ sent: true });
+    await alertOwnerCoachOffline(new Date("2026-11-04T02:28:43Z"), send, {});
+    expect(send).toHaveBeenCalledWith(
+      "73365666-4285-42af-a59e-43ba68ea65c0",
+      expect.objectContaining({ kind: "ops_alert", dedupeKey: "coach_offline:2026-11-04T02" }),
+    );
+  });
+
+  it("never throws when the push fails", async () => {
+    const send = vi.fn().mockRejectedValue(new Error("push down"));
+    await expect(alertOwnerCoachOffline(new Date(), send, {})).resolves.toBeUndefined();
   });
 });
