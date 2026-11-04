@@ -5,7 +5,7 @@
 import { searchCatalog } from "../meals/catalog/search.js";
 import { servingId, servingLabel } from "../meals/catalog/index.js";
 
-export type FoodPickServing = { id: string; label: string; grams: number; default: boolean; kcal: number; proteinG: number; carbsG: number; fatG: number };
+export type FoodPickServing = { id: string; label: string; grams: number; default: boolean; kcal: number; proteinG: number; carbsG: number; fatG: number; fiberG: number };
 export type FoodPick = { key: string; name: string; diet: string; servings: FoodPickServing[] };
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -27,6 +27,7 @@ export function searchFoods(query: string, limit = 20): FoodPick[] {
         proteinG: r1(e.per100.protein * f),
         carbsG: r1(e.per100.carbs * f),
         fatG: r1(e.per100.fat * f),
+        fiberG: r1(e.per100.fiber * f),
       };
     }),
   }));
