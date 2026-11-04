@@ -42,6 +42,25 @@ requests, and is checked by tests. Plan and sizing:
 - `aliases`: Hindi and regional names, common spellings, and generic words that should mean
   this food ("dal" → dal tadka, "rice" → cooked white rice). An alias may point at only one food.
 
+## Search and suggestions
+
+`searchCatalog(query, opts)` (src/meals/catalog/search.ts) ranks foods for search boxes, pickers
+and recommendations:
+
+1. **Match:** a name match beats an alias match; whole name, then name start, then any word
+   start, then part of a word.
+2. **Popularity** (`POPULARITY` in data/ranking.ts): how often people in India log the food,
+   from 1 (rare) to 5 (most days). It's a judged prior until real logs exist. Pass `usage` (log
+   counts by key) to blend real logs in on a log scale. Popularity reorders close matches but
+   never lifts a part-word match above a whole-word one.
+3. **Cuisine** (`CUISINE` in data/ranking.ts): everyday, North Indian, South Indian, Gujarati and
+   Maharashtrian, Bengali and East, Mughlai and tandoor, Indo-Chinese, street food, Western and
+   cafe, packaged. `groupByCuisine` groups results for display.
+
+Filters: `diet` (veg, egg, nonveg, vegan, jain), `meal`, `cuisine`. Cooking ingredients (raw dal,
+flour, oil) are left out unless `eatenOnly: false`. An empty query returns the most popular
+foods. When you add a batch, give each new entry a popularity tier and a cuisine.
+
 ## Sources and licences
 
 | Source | Use |

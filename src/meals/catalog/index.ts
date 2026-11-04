@@ -5,7 +5,8 @@
 import { foodKeyFor, type FoodComponent } from "../foodParse.js";
 import { DISHES } from "./data/dishes.js";
 import { FOODS, NOT_JAIN } from "./data/foods.js";
-import type { Category, CatalogDish, CatalogFood, Macros, MealType, PrepMinutes, Serving, ServingSize, ServingUnit } from "./types.js";
+import { CUISINE, POPULARITY } from "./data/ranking.js";
+import type { Category, CatalogDish, CatalogFood, Cuisine, Macros, MealType, PrepMinutes, Serving, ServingSize, ServingUnit } from "./types.js";
 
 export type CatalogEntry = {
   /** Stable id: the normalized name ("dal tadka"). Plans and logs may reference it. */
@@ -24,7 +25,16 @@ export type CatalogEntry = {
   ordered: boolean;
   /** Fits a Jain diet: vegetarian, with no onion, garlic, root vegetables, mushroom or honey (data/foods.ts NOT_JAIN). */
   jain: boolean;
+  /** How often people log it, 1 (rare) to 5 (most days); a judged prior (data/ranking.ts). */
+  popularity: 1 | 2 | 3 | 4 | 5;
+  /** Regional or style group for grouping search results. */
+  cuisine: Cuisine;
+  /** Normalized aliases that point at this entry (search matches them). */
+  aliases: string[];
 };
+
+const popularityOf = (name: string, meals: MealType[]): CatalogEntry["popularity"] => POPULARITY[name] ?? (meals.length ? 2 : 1);
+const cuisineOf = (name: string): Cuisine => CUISINE[name] ?? "everyday";
 
 /** Whole foods that are eaten as they are. */
 const READY: Category[] = ["fruit", "dairy", "nut_seed", "drink", "supplement", "sweet"];
@@ -98,13 +108,18 @@ export function buildCatalog(foods: CatalogFood[] = FOODS, dishes: CatalogDish[]
   const ingredients = new Map<string, CatalogEntry>();
   const add = (e: CatalogEntry, aliases: string[] | undefined) => {
     entries.push(e);
-    for (const k of [e.key, ...(aliases ?? []).map(foodKeyFor)]) if (k && !byKey.has(k)) byKey.set(k, e);
+    for (const k of [e.key, ...(aliases ?? []).map(foodKeyFor)]) {
+      if (!k || byKey.has(k)) continue;
+      byKey.set(k, e);
+      if (k !== e.key) e.aliases.push(k);
+    }
   };
   for (const f of foods) {
     const e: CatalogEntry = {
       key: foodKeyFor(f.name), name: f.name, kind: "food", basis: f.basis ?? "100g", per100: f.per100,
       servings: f.servings, diet: f.diet, category: f.category, meals: f.meals ?? MEALS_BY_CATEGORY[f.category], prepMinutes: foodPrep(f), ordered: f.ordered ?? false,
       jain: f.diet !== "egg" && f.diet !== "nonveg" && !NOT_JAIN.includes(f.name),
+      popularity: popularityOf(f.name, f.meals ?? MEALS_BY_CATEGORY[f.category]), cuisine: cuisineOf(f.name), aliases: [],
     };
     ingredients.set(e.key, e);
     add(e, f.aliases);
@@ -115,6 +130,7 @@ export function buildCatalog(foods: CatalogFood[] = FOODS, dishes: CatalogDish[]
       key: foodKeyFor(d.name), name: d.name, kind: "dish", basis: d.basis ?? "100g", per100: dishPer100(d, ingredients),
       servings: d.servings, diet: d.diet, category: d.category, meals: d.meals ?? MEALS_BY_CATEGORY[d.category], prepMinutes: d.prepMinutes ?? null, ordered: d.ordered ?? false,
       jain: d.diet !== "egg" && d.diet !== "nonveg" && d.recipe.every(([n]) => ingredients.get(foodKeyFor(n))?.jain === true),
+      popularity: popularityOf(d.name, d.meals ?? MEALS_BY_CATEGORY[d.category]), cuisine: cuisineOf(d.name), aliases: [],
     };
     ingredients.set(e.key, e);
     add(e, d.aliases);
