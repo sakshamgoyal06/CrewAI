@@ -1,7 +1,7 @@
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
-import { extractJsonObject } from "../../agents/health/jsonExtract.js";
-import { HEALTH_SPECIALIST_MODEL } from "../../agents/health/model.js";
+import { extractJsonObject } from "../../util/jsonExtract.js";
+import { mealLookupModel } from "../../models.js";
 import { logger } from "../../logger.js";
 import { anthropic } from "../../tools/clients.js";
 import { mealLogAnthropicWebSearchEnabled } from "../mealEnv.js";
@@ -168,7 +168,7 @@ function parseEstimateJson(
     serving_assumption: serving_assumption.length > 0 ? serving_assumption : null,
     providerRaw: {
       ...providerRawBase,
-      model: HEALTH_SPECIALIST_MODEL,
+      model: mealLookupModel(),
       raw_response: raw.length > 4000 ? `${raw.slice(0, 4000)}…` : raw,
     },
   };
@@ -188,7 +188,7 @@ async function estimateViaAnthropicWebSearch(query: string): Promise<MealNutriti
 
   try {
     const msg = await anthropic.messages.create({
-      model: HEALTH_SPECIALIST_MODEL,
+      model: mealLookupModel(),
       max_tokens: 1200,
       system: SYSTEM_ANTHROPIC_WEB,
       messages: [{ role: "user", content: userContent }],

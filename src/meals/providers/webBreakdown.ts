@@ -5,8 +5,8 @@
  */
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
-import { extractJsonObject } from "../../agents/health/jsonExtract.js";
-import { HEALTH_SPECIALIST_MODEL } from "../../agents/health/model.js";
+import { extractJsonObject } from "../../util/jsonExtract.js";
+import { mealLookupModel } from "../../models.js";
 import { logger } from "../../logger.js";
 import { anthropic } from "../../tools/clients.js";
 import { mealLogAnthropicWebSearchEnabled } from "../mealEnv.js";
@@ -118,7 +118,7 @@ export async function breakdownViaWebResearch(
   try {
     const msg = (await anthropic.messages.create(
       {
-        model: HEALTH_SPECIALIST_MODEL,
+        model: mealLookupModel(),
         max_tokens: 2000,
         system: SYSTEM,
         messages: [{ role: "user", content: user }],

@@ -19,6 +19,7 @@ import { scoreDay, type CheckId, type DayScore, type HealthTargets } from "./nor
 import { loadHealthProfile, summarizeWorkout, weekdayOfDate, windowDates, type WorkoutSummary } from "./snapshot.js";
 import { hevyKey, loadWorkoutHistory } from "./training.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
+import { rcaModel } from "../models.js";
 import { DAY_MS, localHourOf } from "../util/time.js";
 
 export const RCA_WINDOW_DAYS = 21;
@@ -452,13 +453,7 @@ const insightSchema = z.object({
 const SYSTEM = `You are a health coach doing a root-cause analysis for one person. You get evidence mined from their last few weeks of logs, plus earlier experiments and whether they helped.
 Write ONE hypothesis about the main reason they are off track, grounded in the evidence (quote its numbers), and ONE small, specific experiment for the next 7 days that tests it: something concrete they can do daily, not a program change. Don't repeat an experiment that didn't help. Plain words, second person, no hedging, no lists. Answer only by calling the write_rca tool.`;
 
-/**
- * Its own setting, so changing the chat model never changes this one. Sonnet: one short structured
- * answer from mined numbers doesn't need Opus.
- */
-export function rcaModel(env: NodeJS.ProcessEnv = process.env): string {
-  return env.MAGNUS_RCA_MODEL?.trim() || "claude-sonnet-5-5";
-}
+export { rcaModel };
 
 /** One hypothesis + one experiment from Claude, or a deterministic one if the call fails. */
 export async function writeInsight(
