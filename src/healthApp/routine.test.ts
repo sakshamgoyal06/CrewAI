@@ -142,7 +142,7 @@ describe("Routine check in the north star", () => {
   it("replaces the workout check and needs every item", () => {
     const s = scoreDay({ ...day, routine: [{ label: "Morning walk", state: "done" }, { label: "Evening gym", state: "pending" }] }, targets);
     expect(s.checks.map((c) => c.id)).toEqual(["meals_logged", "steps", "routine"]);
-    expect(s.checks[2]).toMatchObject({ met: false, progress: 0.5, detail: "Morning walk ✓ · Evening gym –" });
+    expect(s.checks[2]).toMatchObject({ met: false, progress: 0.5, detail: "Morning walk done · Evening gym not logged" });
     expect(s.onTrack).toBe(false);
     const all = scoreDay({ ...day, routine: [{ label: "Morning walk", state: "done" }, { label: "Evening gym", state: "done" }] }, targets);
     expect(all.onTrack).toBe(true);

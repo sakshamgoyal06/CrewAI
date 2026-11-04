@@ -132,6 +132,7 @@ function friendlyError(code) {
     item_gone: "That routine item isn't in your routine any more.",
     hevy_unavailable: "Couldn't reach Hevy. Try again in a minute.",
     in_progress: "Still working on that one. The answer will show here in a moment.",
+    coach_offline: "The coach is offline right now because of an account issue on our side, not your message. You can still log from the Today tab.",
     routine_changed_in_hevy: "That routine changed in Hevy since. Ask the coach for a fresh suggestion.",
     routine_not_found: "That routine no longer exists in Hevy.",
     proposal_discarded: "That suggestion was discarded.",

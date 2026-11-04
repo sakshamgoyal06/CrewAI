@@ -117,7 +117,7 @@ export function scoreDay(day: DayInputs, targets: HealthTargets): DayScore {
       label: "Routine",
       met: done === day.routine.length,
       progress: clamp01(done / day.routine.length),
-      detail: day.routine.map((r) => `${r.label} ${r.state === "done" ? "✓" : r.state === "skipped" ? "skipped" : "–"}`).join(" · "),
+      detail: day.routine.map((r) => `${r.label} ${r.state === "done" ? "done" : r.state === "skipped" ? "skipped" : "not logged"}`).join(" · "),
     });
   } else if (targets.trainingDays.includes(day.weekday)) {
     const sport = day.workoutsLogged > 0 ? null : day.sportLabel ?? null;
