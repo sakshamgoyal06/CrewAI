@@ -288,8 +288,11 @@ export function itemFor(e: CatalogEntry, s: Serving, qty: number): PlanItem {
     text = unitLabel.startsWith("1 ") ? `${fmtQty(qty)} ${unitLabel.slice(2)}` : `${fmtQty(qty)} ${unitLabel}`;
     if (qty > 1) text = text.replace(/^(\S+) (cube|slice|fillet)\b/, "$1 $2s");
     // "1 breast fillet chicken breast" → "1 chicken breast"; "1 sandwich paneer sandwich" → "1 paneer sandwich".
-    const unitWord = unitLabel.replace(/^1 /, "").split(" ").pop()!;
-    if (/ breast fillet$/.test(unitLabel) || (unitLabel.split(" ").length <= 2 && name.endsWith(unitWord))) text = `${fmtQty(qty)} ${qty > 1 ? plural(name) : name}`;
+    const unitWords = unitLabel.replace(/^1 /, "").split(" ");
+    const unitWord = unitWords[unitWords.length - 1]!;
+    // "1 chilla with paneer" for paneer moong chilla: the dish name already says it.
+    const describes = unitWords.length > 1 && name.split(" ").includes(unitWords[0]!) && unitWords.slice(1).some((w) => name.includes(w) && w.length > 3);
+    if (/ breast fillet$/.test(unitLabel) || describes || (unitLabel.split(" ").length <= 2 && name.endsWith(unitWord))) text = `${fmtQty(qty)} ${qty > 1 ? plural(name) : name}`;
     else if (qty > 1) text = text.replace(/^(\S+) (bowl|jar|glass|plate)\b/, "$1 $2s");
     const words = name.split(/\s+/).filter((w) => w.length > 2);
     if (!words.every((w) => text.toLowerCase().includes(w.replace(/s$/, "")))) text = `${text} ${name}`;
