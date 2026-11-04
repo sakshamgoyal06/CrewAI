@@ -312,7 +312,7 @@ export function mealScreen() {
     wrap.append(
       el("p", {}, p.title),
       el("p", { class: "hint" }, "Pick a dish with a protein (paneer, dal, chicken, eggs) and go easy on fried sides and refined bread. Log what you had and the rest of the day adjusts."),
-      el("button", { class: "btn primary block", type: "button", onclick: () => d.logOwn(slot) }, "Log what I ate"),
+      el("button", { class: "btn primary block", type: "button", onclick: () => d.logOwn(slot, date) }, "Log what I ate"),
       el("p", { class: "hint" }, "Search the food list first. If something isn't there, describe it and I'll estimate it."));
     return wrap;
   }
@@ -366,7 +366,7 @@ export function mealScreen() {
       kids.push(el("button", { class: "link quiet", type: "button", onclick: () => { startEdit(date, slot, p.items); paintAdd(); repaint(); } }, "Discard changes"));
     } else if (canEat) {
       kids.push(el("button", { class: "btn primary block", type: "button", onclick: (ev) => save(ev, true) }, "Ate this"),
-        el("button", { class: "btn block", type: "button", onclick: () => d.logOwn(slot) }, "Log my own instead"));
+        el("button", { class: "btn block", type: "button", onclick: () => d.logOwn(slot, date) }, "Log my own instead"));
     } else {
       kids.push(el("p", { class: "hint" }, "Change it any time before the day. You can log it on the day."));
     }
@@ -665,15 +665,31 @@ export function planLineFor(date, openTab) {
   const { el, fmt } = d;
   if (!ms.view?.setup || !days().includes(date)) return null;
   const picks = SLOT_ORDER.map((s) => pickOf(date, s)).filter(Boolean);
-  const next = picks.find((p) => !isEaten(p));
+  const left = picks.filter((p) => !isEaten(p));
   const tot = dayTotals(date);
-  const line = el("button", { class: "plan-line", type: "button", onclick: openTab },
+  const isToday = date === d.todayKey();
+  const names = left.map((p) => SLOT_NAME[p.slot].toLowerCase());
+  const note = !left.length
+    ? `All of ${isToday ? "today's" : "this day's"} planned meals are done.`
+    : left.length === 1
+      ? `Only ${names[0]} is left ${isToday ? "today" : "this day"}.`
+      : `${left.length} meals left: ${names.slice(0, -1).join(", ")} and ${names.at(-1)}.`;
+  const head = el("button", { class: "plan-line", type: "button", onclick: openTab },
     el("span", {}, `Plan: ${tot.eatenCount} of ${tot.count} meals eaten`),
-    next ? el("small", {}, `Next: ${SLOT_NAME[next.slot]}, ${next.kind === "eat_out" ? "eating out" : `${fmt(next.totals.kcal)} kcal`}`) : el("small", {}, "All planned meals eaten"),
+    el("small", {}, note),
     el("i", { class: "chev-r" }));
-  if (!next || next.kind === "eat_out") return line;
-  return el("div", { class: "plan-line-wrap" }, line,
-    el("button", { class: "btn small plan-change", type: "button", onclick: () => openPlannedMeal(next.date, next.slot) }, `Change or swap ${SLOT_NAME[next.slot].toLowerCase()}`));
+  // Every meal of the day, each one a tap away from its editor.
+  const rows = picks.map((p) => {
+    const eaten = isEaten(p);
+    const out = p.kind === "eat_out";
+    const what = out ? "Eating out" : itemsOf(p).map((i) => i.text).join(", ") || p.title;
+    return el("li", { class: eaten ? "done" : "" },
+      el("button", { class: "pl-row", type: "button", onclick: () => (eaten ? openTab() : openPlannedMeal(p.date, p.slot)) },
+        el("span", { class: "pl-slot" }, SLOT_NAME[p.slot]),
+        el("span", { class: "pl-what" }, what),
+        el("span", { class: "pl-kcal" }, eaten ? "✓ eaten" : el("b", {}, `${out ? "~" : ""}${fmt(p.totals.kcal)} kcal · ${out ? "Log" : "Edit"}`))));
+  });
+  return el("div", { class: "plan-line-wrap" }, head, el("ul", { class: "pl-list" }, ...rows));
 }
 
 export const mealsTitles = { dietSetup: "Your meals", dietMeal: "" };
