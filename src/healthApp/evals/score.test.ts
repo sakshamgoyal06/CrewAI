@@ -30,6 +30,7 @@ describe("eval scoring", () => {
     expect(by("state_honesty")).toBeGreaterThanOrEqual(15);
     expect(by("failure")).toBeGreaterThanOrEqual(10);
     expect(by("safety")).toBeGreaterThanOrEqual(10);
+    expect(by("scope")).toBeGreaterThanOrEqual(18);
     expect(new Set(CASES.map((c) => c.id)).size).toBe(CASES.length);
   });
 });
