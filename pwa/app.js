@@ -1833,10 +1833,26 @@ function appendCard(c, into = $("thread")) {
 
 const longDay = (date) => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
 
-/** What the coach opens each day with: plan, targets, goal, yesterday, one thing to look at. */
+/**
+ * What the coach opens each day with, kept short: the day's timeline, the three targets and the one
+ * thing worth a look. Goal, yesterday, the week and meals open as their own screen ("Full plan").
+ */
 function dayPlanCard(c) {
+  return el("div", { class: "draft dayplan compact" },
+    el("p", { class: "eyebrow" }, `${longDay(c.date)}'s plan`),
+    c.plan?.length
+      ? el("ul", { class: "dp-plan" }, ...c.plan.map((p) => el("li", {}, el("span", { class: "dp-time" }, p.time || "Any time"), el("span", {}, p.label))))
+      : c.dayKind ? el("p", { class: "dp-kind" }, c.dayKind) : null,
+    el("div", { class: "dp-targets" }, ...(c.targets || []).map((t) => el("div", {}, el("b", {}, t.value), el("small", {}, t.label)))),
+    c.focus ? el("p", { class: "dp-tip" }, el("b", {}, "Worth a look "), c.focus) : null,
+    el("button", { class: "link dp-more", type: "button", onclick: () => { state.dayPlan = c; openSheet("dayPlan"); } }, "Full plan"),
+  );
+}
+
+/** The whole day's plan, as its own screen. */
+function dayPlanFull(c) {
   const sec = (label, ...kids) => el("div", { class: "dp-sec" }, el("p", { class: "eyebrow" }, label), ...kids);
-  return el("div", { class: "draft dayplan" },
+  return el("div", { class: "dayplan full" },
     el("p", { class: "eyebrow" }, c.greeting),
     el("h3", { class: "dp-greet" }, `${longDay(c.date)}'s plan`),
     sec("Today",
@@ -1849,7 +1865,7 @@ function dayPlanCard(c) {
     sec("This week", el("p", {}, c.week)),
     c.meals?.length ? sec("Meals",
       el("ul", { class: "dp-plan" }, ...c.meals.map((m) => el("li", {}, el("span", { class: "dp-time" }, m.time ? clock(m.time) : SLOT_LABEL[m.slot]), el("span", {}, `${m.title} · ${fmt(m.kcal)} kcal`)))),
-      el("button", { class: "link", type: "button", onclick: () => setView("meals") }, "Open meals")) : null,
+      el("button", { class: "link", type: "button", onclick: () => { closeSheet(); afterClose(() => setView("meals")); } }, "Open meals")) : null,
     c.focus ? el("div", { class: "dp-focus" }, el("p", { class: "eyebrow" }, "Worth a look"), el("p", {}, c.focus)) : null,
     el("p", { class: "dp-motto" }, c.motivation),
   );
@@ -3386,7 +3402,8 @@ function mealDraftCard(draft, { onDone, saved } = {}) {
   const kcal = el("div", { class: "draft-kcal" });
   const macros = el("div", { class: "macros" });
   const list = el("ul", { class: "items" });
-  const seg = el("div", { class: "seg", role: "radiogroup", "aria-label": "Meal" });
+  // The meal slot as one small picker next to the title, instead of a four-way switch.
+  const seg = el("select", { class: "slot-pick", "aria-label": "Meal", onchange: (e) => { slot = e.target.value; } });
   const confirm = el("button", { class: "btn primary", type: "button" }, "Confirm & log");
 
   function totals() {
@@ -3426,8 +3443,7 @@ function mealDraftCard(draft, { onDone, saved } = {}) {
   }
 
   function renderSeg() {
-    seg.replaceChildren(...SLOTS.map(([k, label]) =>
-      el("button", { type: "button", class: k === slot ? "on" : "", role: "radio", "aria-checked": String(k === slot), onclick: () => { slot = k; renderSeg(); } }, label)));
+    seg.replaceChildren(...SLOTS.map(([k, label]) => el("option", { value: k, selected: k === slot }, label)));
   }
 
   confirm.addEventListener("click", async () => {
@@ -3456,15 +3472,15 @@ function mealDraftCard(draft, { onDone, saved } = {}) {
     }
   });
 
-  const discard = el("button", { class: "btn", type: "button", onclick: () => { markDraft(draft.draftId, { state: "discarded" }); finishedCard(card, draft, { state: "discarded" }); onDone?.(); } }, "Discard");
+  const discard = el("button", { class: "link quiet", type: "button", onclick: () => { markDraft(draft.draftId, { state: "discarded" }); finishedCard(card, draft, { state: "discarded" }); onDone?.(); } }, "Discard");
 
   card.append(...[
-    el("div", { class: "draft-top" }, el("p", { class: "eyebrow" }, "Meal estimate"), edit),
+    el("div", { class: "draft-top" }, seg, edit),
     kcal, macros,
     !draft.estimated ? el("p", { class: "draft-note" }, "No estimate found. Enter calories and protein yourself.") : null,
     draft.servingAssumption ? assumptionNote(draft.servingAssumption) : null,
-    seg, list, add,
-    el("div", { class: "draft-actions" }, discard, confirm),
+    list, add,
+    el("div", { class: "draft-actions split" }, discard, confirm),
   ].filter(Boolean));
   renderSeg();
   renderItems();
@@ -3558,7 +3574,7 @@ function openSheet(kind, { fromHistory = false } = {}) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", ...mealsTitles };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", dayPlan: "Day plan", ...mealsTitles };
   const screen = !SHEET_ONLY.has(kind);
   const sheet = $("sheet");
   sheet.classList.toggle("screen", screen);
@@ -3820,6 +3836,10 @@ const SHEETS = {
 
   chatDay() {
     return chatDaySection();
+  },
+
+  dayPlan() {
+    return state.dayPlan ? dayPlanFull(state.dayPlan) : el("p", { class: "none" }, "No plan for today yet.");
   },
 
   plan() {
