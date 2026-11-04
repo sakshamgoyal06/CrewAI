@@ -37,10 +37,14 @@ export function scopeAllows(scope: TokenScope, method: string, path: string): bo
   return scope === "full" || INGEST_ROUTES.has(`${method.toUpperCase()} ${path.replace(/\/+$/, "")}`);
 }
 
-/** Sign-up gate. `open` (default) lets anyone with a Google account in; `invite` only listed emails. */
+/**
+ * Sign-up gate. `invite` (default) lets in only listed emails and the owner; `open` lets anyone
+ * with a Google account in. Defaults closed, so a missing env var can't open the AI bill to everyone.
+ */
 export function signupAllowed(email: string | null | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
-  const mode = env.MAGNUS_SIGNUP_MODE?.trim().toLowerCase() || "open";
-  if (mode !== "invite") return true;
+  const mode = env.MAGNUS_SIGNUP_MODE?.trim().toLowerCase() || "invite";
+  if (mode === "open") return true;
+  if (isOwnerEmail(email, env)) return true;
   const list = (env.MAGNUS_INVITE_EMAILS ?? "")
     .split(",")
     .map((e) => e.trim().toLowerCase())

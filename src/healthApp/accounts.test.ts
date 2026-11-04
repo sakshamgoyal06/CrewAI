@@ -86,14 +86,16 @@ beforeEach(() => {
   vi.stubEnv("MAGNUS_HEALTH_APP_TOKEN", LEGACY);
   vi.stubEnv("MAGNUS_HEALTH_APP_USER_PROFILE_ID", OWNER);
   vi.stubEnv("MAGNUS_OWNER_EMAIL", "owner@example.com");
-  vi.stubEnv("MAGNUS_SIGNUP_MODE", "");
+  vi.stubEnv("MAGNUS_SIGNUP_MODE", "open");
 });
 
 afterEach(() => vi.unstubAllEnvs());
 
 describe("sign-up rules", () => {
-  it("is open by default and invite-only when asked", () => {
-    expect(signupAllowed("a@b.com", {})).toBe(true);
+  it("is invite-only by default (fails closed) and open only when asked", () => {
+    expect(signupAllowed("a@b.com", {})).toBe(false);
+    expect(signupAllowed("a@b.com", { MAGNUS_SIGNUP_MODE: "open" })).toBe(true);
+    expect(signupAllowed("Owner@Example.com", { MAGNUS_OWNER_EMAIL: "owner@example.com" })).toBe(true);
     const env = { MAGNUS_SIGNUP_MODE: "invite", MAGNUS_INVITE_EMAILS: "Friend@x.com, other@y.com" };
     expect(signupAllowed("friend@x.com", env)).toBe(true);
     expect(signupAllowed("stranger@x.com", env)).toBe(false);
@@ -148,8 +150,8 @@ describe("resolveRequestUser", () => {
     expect(tables.user_profile).toHaveLength(2);
   });
 
-  it("turns strangers away when sign-up is invite-only", async () => {
-    vi.stubEnv("MAGNUS_SIGNUP_MODE", "invite");
+  it("turns strangers away when sign-up is invite-only, or unset", async () => {
+    vi.stubEnv("MAGNUS_SIGNUP_MODE", "");
     users.set(jwt("stranger"), { id: "auth-s", email: "s@example.com", user_metadata: {} });
     expect(await resolveRequestUser(`Bearer ${jwt("stranger")}`)).toEqual({ error: "signup_closed" });
   });

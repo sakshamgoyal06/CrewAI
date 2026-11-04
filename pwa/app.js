@@ -124,6 +124,7 @@ async function api(path, options = {}) {
 function friendlyError(code) {
   return {
     future_date: "That date is in the future.",
+    not_a_fact: "Coach memory is for facts about you, like a schedule or an injury, not instructions for the coach.",
     invalid_body: "Some values look off. Check and try again.",
     deadline_must_be_after_start: "The deadline needs to be after today.",
     no_items: "Add at least one item.",

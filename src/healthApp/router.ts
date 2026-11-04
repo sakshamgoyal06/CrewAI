@@ -52,7 +52,7 @@ import {
 } from "./onboarding.js";
 import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from "./events.js";
 import { loadChatHistory, runHealthChat, type ChatStreamEvent } from "./chat.js";
-import { COACH_OFFLINE_MESSAGE, isCoachOffline } from "./coachOffline.js";
+import { alertOwnerCoachOffline, COACH_OFFLINE_MESSAGE, isCoachOffline } from "./coachOffline.js";
 import { hydrateCard, loadCardStates } from "./chatCards.js";
 import { isDateKey, listChatDays, localDayRange, tryDayPlan } from "./dailyChat.js";
 import { editLine, forgetLine, loadCoachMemory, MEMORY_MAX_CHARS, MEMORY_MAX_LINES, memoryToday, rememberLine } from "./coachMemory.js";
@@ -152,6 +152,7 @@ function route(name: string, handler: Handler): express.RequestHandler {
         return;
       }
       const offline = isCoachOffline(err);
+      if (offline) void alertOwnerCoachOffline();
       logger.error({ err: loggableError(err), route: name, coachOffline: offline || undefined }, offline ? "model provider account unusable (credit or key)" : "health app route failed");
       res.locals.routeError = err instanceof Error ? err.message : String(err);
       res.status(offline ? 503 : 500).json({ error: offline ? "coach_offline" : "server_error" });
@@ -575,6 +576,7 @@ export function createHealthAppRouter(): express.Router {
       else send({ type: "done", reply: r });
     } catch (err) {
       const offline = isCoachOffline(err);
+      if (offline) void alertOwnerCoachOffline();
       logger.error({ err: loggableError(err), route: "chat-stream", coachOffline: offline || undefined }, offline ? "model provider account unusable (credit or key)" : "health app route failed");
       res.locals.routeError = err instanceof Error ? err.message : String(err);
       if (offline) send({ type: "error", error: "coach_offline", message: COACH_OFFLINE_MESSAGE });

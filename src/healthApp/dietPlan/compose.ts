@@ -49,6 +49,10 @@ export type MealOption = {
   prepMinutes: number;
   /** For a usual meal: its key in frequentMeals, so logging it can reuse the usual items. */
   usualKey?: string;
+  /** How familiar the meal is: its least logged dish's popularity, 1 (rare) to 5 (most days). */
+  popularity?: number;
+  /** The main dish's cuisine ("south_indian"); the day's picks vary it (pick.ts). */
+  cuisine?: string;
 };
 
 /** The person's diet type as onboarding stores it. */
@@ -502,6 +506,17 @@ function itemsFor(cache: ItemCache, x: Slotted): PlanItem[] {
   return l;
 }
 
+/**
+ * Popularity and cuisine come with the food catalog's search work (CatalogEntry.popularity, 1–5,
+ * and .cuisine); read loosely so this works before and after it. Unknown = 3, "everyday".
+ */
+const popularityOf = (e: CatalogEntry): number => (e as { popularity?: number }).popularity ?? 3;
+const cuisineOf = (e: CatalogEntry): string => (e as { cuisine?: string }).cuisine ?? "everyday";
+/** Score per popularity point below 3 (or bonus above it), against 2 per unit of calorie error. */
+const POPULARITY_WEIGHT = 0.05;
+/** Roles whose dish defines the meal; accompaniments and add-ons don't make a meal unfamiliar. */
+const CORE_ROLES: Role[] = ["main", "complete", "breakfast", "egg", "porridge", "breakfastBread", "snack", "side", "bread", "rice"];
+
 function fit(combo: Slotted[], input: ComposeInput, lovedKeys: string[], cache: ItemCache = new WeakMap()): Scored | null {
   const b = input.budget;
   const itemLists = combo.map((x) => itemsFor(cache, x));
@@ -541,8 +556,13 @@ function fit(combo: Slotted[], input: ComposeInput, lovedKeys: string[], cache: 
   if (base && input.staples !== "both") score += (input.staples === "roti") === (base.role === "bread") ? -0.1 : 0.15;
   const prep = Math.max(0, ...combo.map((x) => x.e.prepMinutes ?? 20));
   score += prep * 0.002;
+  // Familiar food first: a meal is as familiar as its least logged core dish.
+  const core = combo.filter((x) => CORE_ROLES.includes(x.role));
+  const popularity = Math.min(...(core.length ? core : combo).map((x) => popularityOf(x.e)));
+  score += (3 - popularity) * POPULARITY_WEIGHT;
 
-  const anchor = (combo.find((x) => ["main", "complete", "breakfast", "egg", "porridge", "breakfastBread", "snack", "fruit", "addon"].includes(x.role)) ?? combo[0]!).e.key;
+  const anchorX = combo.find((x) => ["main", "complete", "breakfast", "egg", "porridge", "breakfastBread", "snack", "fruit", "addon"].includes(x.role)) ?? combo[0]!;
+  const anchor = anchorX.e.key;
   return {
     option: {
       id: optionId(b.slot, bestItems),
@@ -552,6 +572,8 @@ function fit(combo: Slotted[], input: ComposeInput, lovedKeys: string[], cache: 
       totals: bestTotals,
       origin: "catalog",
       prepMinutes: prep,
+      popularity,
+      cuisine: cuisineOf(anchorX.e),
     },
     score,
     anchor,
