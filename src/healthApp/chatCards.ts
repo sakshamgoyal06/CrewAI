@@ -27,10 +27,12 @@ export type CardStates = {
   proposals: Map<string, ProposalRow>;
   reports: Map<string, RcaReport>;
   interventions: Map<string, Intervention>;
+  /** `${date}|${slot}` → the planned meal's status (planned, logged, partial). */
+  planMeals: Map<string, string>;
 };
 
 export function emptyCardStates(): CardStates {
-  return { mealsLogged: new Map(), activitiesSaved: new Map(), workoutChecks: new Map(), routineChecks: new Map(), proposals: new Map(), reports: new Map(), interventions: new Map() };
+  return { mealsLogged: new Map(), activitiesSaved: new Map(), workoutChecks: new Map(), routineChecks: new Map(), proposals: new Map(), reports: new Map(), interventions: new Map(), planMeals: new Map() };
 }
 
 /** Loads the live state behind every card in `cards`, in as few queries as the mix needs. */
@@ -43,6 +45,7 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
   const proposalIds: string[] = [];
   const reportIds: string[] = [];
   const interventionIds: string[] = [];
+  const planDates: string[] = [];
   for (const c of cards) {
     if (c.type === "meal_draft") mealIds.push(c.draft.draftId);
     else if (c.type === "activity_draft") activityIds.push(c.draft.draftId);
@@ -51,13 +54,14 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
     else if (c.type === "hevy_proposal") proposalIds.push(c.proposalId);
     else if (c.type === "rca") reportIds.push(c.reportId);
     else if (c.type === "intervention") interventionIds.push(c.interventionId);
+    else if (c.type === "plan_meal") planDates.push(c.date);
   }
   const range = (dates: string[]) => {
     const s = [...dates].sort();
     return [s[0]!, s[s.length - 1]!] as const;
   };
 
-  const [meals, activities, workouts, routines, proposals, reports, interventions] = await Promise.all([
+  const [meals, activities, workouts, routines, proposals, reports, interventions, planMeals] = await Promise.all([
     mealIds.length
       ? supabase.from("meal_logs").select("meal_session_id, calories").eq("user_profile_id", userProfileId).in("meal_session_id", mealIds).is("deleted_at", null)
       : Promise.resolve({ data: [] }),
@@ -69,6 +73,9 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
     getProposals(userProfileId, proposalIds),
     getReports(userProfileId, reportIds),
     getInterventions(userProfileId, interventionIds),
+    planDates.length
+      ? supabase.from("meal_plan_entries").select("local_date, meal_slot, status").eq("user_profile_id", userProfileId).eq("source", "plan").in("local_date", [...new Set(planDates)]).in("status", ["planned", "logged", "partial"])
+      : Promise.resolve({ data: [] }),
   ]);
 
   for (const r of (meals.data ?? []) as Array<{ meal_session_id: string; calories: number | null }>) {
@@ -84,6 +91,7 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
   states.proposals = proposals;
   states.reports = reports;
   states.interventions = interventions;
+  for (const r of (planMeals.data ?? []) as Array<{ local_date: string; meal_slot: string; status: string }>) states.planMeals.set(`${r.local_date}|${r.meal_slot}`, r.status);
   return states;
 }
 
@@ -117,6 +125,10 @@ export function hydrateCard(card: ChatCard, states: CardStates): ChatCard {
     case "intervention": {
       const i = states.interventions.get(card.interventionId);
       return i ? cardFromIntervention(i) : card;
+    }
+    case "plan_meal": {
+      const status = states.planMeals.get(`${card.date}|${card.slot}`);
+      return status ? { ...card, status } : card;
     }
     default:
       return card;
@@ -162,6 +174,12 @@ export function cardHistoryNote(card: ChatCard, states: CardStates): string {
     case "day_plan":
       // The plan's text is the message itself; nothing to add.
       return "";
+    case "eating_out":
+      return `[Eating-out plan for ${live.meal}: ${live.reserveKcal != null ? `keep ${live.reserveKcal} kcal for it, ${live.beforeKcal} kcal before it` : "no calorie target, rules only"}]`;
+    case "plan_meal":
+      return `[Planned ${live.slot} card for ${live.date}, ${live.title}: ${live.status === "logged" || live.status === "partial" ? "eaten" : "not eaten yet"}]`;
+    case "plan_adjust":
+      return `[${live.kind === "day_close" ? "Day close" : "Rest-of-day rebalance"} card: ${live.headline}]`;
     case "calorie_review":
       return `[Calorie target card: suggests ${live.review.suggestedTarget} kcal (current ${live.review.currentTarget ?? "unset"}); the person applies it from the card]`;
     default:

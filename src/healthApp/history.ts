@@ -10,6 +10,7 @@ import { burnForDay, trainingActivity, typicalTrainingBurn, type Activity, type 
 import { FALLBACK_WEIGHT_KG, getActivities } from "./activityLog.js";
 import { getBodyCheckins } from "./bodyStore.js";
 import { hevyHistoryCached, withinAnalysisWindow } from "./hevyHistory.js";
+import { getWaterByDate, waterTargetMl } from "./water.js";
 import { scoreDay, type DayCheck, type HealthTargets } from "./northStar.js";
 import { loadHealthProfile, weekdayOfDate, windowDates } from "./snapshot.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
@@ -84,6 +85,8 @@ export type HistoryDay = {
   trainedUnlogged: boolean;
   /** Routine items planned that day, with done / skipped / pending. */
   routine: RoutineItemStatus[];
+  /** Water logged that day, in ml. */
+  waterMl: number;
 };
 
 export type HealthHistory = {
@@ -92,6 +95,8 @@ export type HealthHistory = {
   targets: HealthTargets;
   bodyWeightKg: number | null;
   hevy: "connected" | "not_connected" | "unavailable";
+  /** Daily water goal in ml (from body weight). */
+  waterTargetMl: number;
   days: HistoryDay[];
 };
 
@@ -214,7 +219,7 @@ export async function buildHealthHistory(
   const from = dates[0]!;
   const to = dates[dates.length - 1]!;
 
-  const [mealRes, activityRes, hevy, checkins, workoutChecks, activities, stepRes, routineChecks] = await Promise.all([
+  const [mealRes, activityRes, hevy, checkins, workoutChecks, activities, stepRes, routineChecks, water] = await Promise.all([
     supabase
       .from("meal_logs")
       .select("meal_session_id, local_date, meal_slot, raw_text, description, calories, protein_g, carbs_g, fat_g, logged_at, created_at, component_index")
@@ -236,6 +241,7 @@ export async function buildHealthHistory(
       .gte("local_date", from)
       .lte("local_date", to),
     routine?.length ? getRoutineChecks(userProfileId, from, to) : Promise.resolve(new Map()),
+    getWaterByDate(userProfileId, from, to).catch(() => new Map<string, number>()),
   ]);
   const actsByDate = new Map<string, Activity[]>();
   for (const a of activities) actsByDate.set(a.localDate, [...(actsByDate.get(a.localDate) ?? []), a]);
@@ -310,12 +316,14 @@ export async function buildHealthHistory(
         mealSessions: dayMeals.length,
         calories,
         proteinG,
+        carbsG: dayMeals.reduce((t, m) => t + m.carbsG, 0),
+        fatG: dayMeals.reduce((t, m) => t + m.fatG, 0),
         steps,
         workoutsLogged: dayWorkouts.length || (trainedUnlogged ? 1 : 0),
         sportLabel: sportCounted,
         routine: dayRoutine,
       },
-      targets,
+      { ...targets, weightKg: kg },
     );
     return {
       date,
@@ -342,6 +350,7 @@ export async function buildHealthHistory(
       sportCounted,
       trainedUnlogged,
       routine: dayRoutine,
+      waterMl: water.get(date) ?? 0,
     };
   });
 
@@ -351,6 +360,7 @@ export async function buildHealthHistory(
     targets,
     bodyWeightKg: weightKg,
     hevy: !hevy.connected ? "not_connected" : hevy.ok ? "connected" : "unavailable",
+    waterTargetMl: waterTargetMl(weightKg),
     days,
   };
 }

@@ -203,8 +203,8 @@ export function startingPlan(input: OnboardingInput, today: string): StartingPla
   }
   lines.push(
     input.routine?.length
-      ? `A day counts as on track when you log 3 meals, land at 60–100% of the calorie target, hit protein and steps, and do what your routine has for that day. I'll remind you before each one. Aim for 5 of 7.`
-      : `A day counts as on track when you log 3 meals, land at 60–100% of the calorie target, hit protein and steps, and train on training days. Aim for 5 of 7.`,
+      ? `A day counts as on track when your food lands at 85–105% of the calorie target with at least 90% of your protein and carbs and fat near target, you hit your steps, and you do what your routine has for that day. I'll remind you before each one. Aim for 5 of 7.`
+      : `A day counts as on track when your food lands at 85–105% of the calorie target with at least 90% of your protein and carbs and fat near target, you hit your steps, and you train on training days. Aim for 5 of 7.`,
   );
 
   return {

@@ -15,6 +15,7 @@ import { ensureDayPlan } from "./dailyChat.js";
 import { routineLine } from "./routine.js";
 import { runRoutineTick } from "./routineCheck.js";
 import { runInterventionTick } from "./interventions/engine.js";
+import { runDayClose, runMealTimeTick } from "./dietPlan/rhythm.js";
 import { runWorkoutChecks, SCHEDULER_INTERVAL_MS } from "./workoutCheck.js";
 import { postCoachMessage } from "./workoutCheckStore.js";
 import { DAY_MS, localClock } from "../util/time.js";
@@ -186,6 +187,8 @@ export async function proactiveTick(userProfileId: string, now = new Date()): Pr
     ["nudges", () => runNudges(userProfileId, now)],
     ["rca", () => maybeRunRca(userProfileId, now)],
     ["interventions", () => runInterventionTick(userProfileId, now).then(() => undefined)],
+    ["meal plan", () => loadHealthProfile(userProfileId).then(({ timezone }) => runMealTimeTick({ userProfileId, timezone, now }, now)).then(() => undefined)],
+    ["day close", () => loadHealthProfile(userProfileId).then(({ timezone }) => runDayClose({ userProfileId, timezone, now }, now)).then(() => undefined)],
   ] as const) {
     try {
       await fn();

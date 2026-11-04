@@ -5,6 +5,8 @@
  * number never depends on an LLM, and each one is something the user controls that same day.
  */
 
+import { macroTargets } from "./dietPlan/targets.js";
+
 export type DayInputs = {
   /** YYYY-MM-DD in the user's timezone. */
   date: string;
@@ -13,6 +15,9 @@ export type DayInputs = {
   mealSessions: number;
   calories: number;
   proteinG: number;
+  /** When given (and the day is on the food rule), carbs and fat are checked against their targets. */
+  carbsG?: number;
+  fatG?: number;
   steps: number;
   workoutsLogged: number;
   /** A sport that stood in for the day's training (see activities.ts), e.g. "Football · 60 min". */
@@ -33,9 +38,11 @@ export type HealthTargets = {
   minMealSessions: number;
   /** Weekday (0 = Sunday) the person weighs in on; null or missing means "7 days after the last one". */
   weighInDay?: number | null;
+  /** Latest weight, for the fat floor in the carb and fat targets. */
+  weightKg?: number | null;
 };
 
-export type CheckId = "meals_logged" | "calories" | "protein" | "steps" | "workout" | "routine";
+export type CheckId = "meals_logged" | "calories" | "protein" | "macros" | "steps" | "workout" | "routine";
 
 export type DayCheck = {
   id: CheckId;
@@ -60,6 +67,15 @@ export const WEEKLY_ON_TRACK_GOAL = 5;
 /** Below this share of the calorie target the day looks under-logged, not disciplined. */
 const CALORIE_FLOOR_RATIO = 0.6;
 
+/**
+ * The food rule from this date (Saksham, 2026-11-04): calories and macros, not meal count.
+ * Calories 85–105% of target, protein at least 90%, carbs and fat each within 25% of theirs.
+ * Earlier days keep the old rule (3 meals logged, calories 60–100%, protein 100%), so past
+ * weeks don't change under people.
+ */
+export const FOOD_RULE_FROM = "2026-11-05";
+export const FOOD_BAND = { kcalLow: 0.85, kcalHigh: 1.05, protein: 0.9, macro: 0.25 } as const;
+
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) {
     return 0;
@@ -67,9 +83,8 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
-export function scoreDay(day: DayInputs, targets: HealthTargets): DayScore {
-  const checks: DayCheck[] = [];
-
+/** The food checks before FOOD_RULE_FROM. */
+function legacyFoodChecks(day: DayInputs, targets: HealthTargets, checks: DayCheck[]): void {
   checks.push({
     id: "meals_logged",
     label: "Meals logged",
@@ -103,6 +118,53 @@ export function scoreDay(day: DayInputs, targets: HealthTargets): DayScore {
       detail: `${Math.round(day.proteinG)} / ${targets.proteinTarget} g`,
     });
   }
+}
+
+/** Calories 85–105%, protein ≥ 90%, carbs and fat within 25% (FOOD_BAND). */
+function foodChecks(day: DayInputs, targets: HealthTargets, checks: DayCheck[]): void {
+  const t = targets.calorieTarget && targets.calorieTarget > 0 ? targets.calorieTarget : null;
+  if (t) {
+    const low = t * FOOD_BAND.kcalLow;
+    const high = t * FOOD_BAND.kcalHigh;
+    checks.push({
+      id: "calories",
+      label: "Calories in range",
+      met: day.calories >= low && day.calories <= high,
+      progress: day.calories > high ? clamp01(high / day.calories) : clamp01(day.calories / low),
+      detail: `${Math.round(day.calories)} / ${t} kcal`,
+    });
+  }
+  const p = targets.proteinTarget && targets.proteinTarget > 0 ? targets.proteinTarget : null;
+  if (p) {
+    const need = p * FOOD_BAND.protein;
+    checks.push({
+      id: "protein",
+      label: "Protein",
+      met: day.proteinG >= need,
+      progress: clamp01(day.proteinG / need),
+      detail: `${Math.round(day.proteinG)} / ${p} g`,
+    });
+  }
+  if (t && p && day.carbsG !== undefined && day.fatG !== undefined) {
+    const m = macroTargets({ calories: t, proteinG: p, weightKg: targets.weightKg ?? null });
+    const off = (v: number, target: number) => (target > 0 ? Math.abs(v - target) / target : 0);
+    const worst = Math.max(off(day.carbsG, m.carbsG), off(day.fatG, m.fatG));
+    checks.push({
+      id: "macros",
+      label: "Carbs & fat",
+      met: worst <= FOOD_BAND.macro,
+      // Full at the band's edge, falling to 0 at twice the band.
+      progress: clamp01(1 - Math.max(0, worst - FOOD_BAND.macro) / FOOD_BAND.macro),
+      detail: `${Math.round(day.carbsG)} / ${m.carbsG} g carbs, ${Math.round(day.fatG)} / ${m.fatG} g fat`,
+    });
+  }
+}
+
+export function scoreDay(day: DayInputs, targets: HealthTargets): DayScore {
+  const checks: DayCheck[] = [];
+
+  if (day.date >= FOOD_RULE_FROM) foodChecks(day, targets, checks);
+  else legacyFoodChecks(day, targets, checks);
 
   checks.push({
     id: "steps",

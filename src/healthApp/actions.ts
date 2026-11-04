@@ -6,7 +6,10 @@
 import { z } from "zod";
 
 import { localDateKey } from "../nutrition/localDate.js";
+import { logger } from "../logger.js";
+import { loggableError } from "../util/loggableError.js";
 import { ACTIVITY_SOURCES, upsertDailyActivity } from "./activityStore.js";
+import { afterMealLogged } from "./dietPlan/rhythm.js";
 import { setActiveGoal, updateDailyTargets, upsertBodyCheckin } from "./bodyStore.js";
 import {
   deleteMeal,
@@ -190,7 +193,7 @@ export async function confirmMeal(
 ): Promise<ConfirmMealResult> {
   const date = resolveDate(ctx, input.date);
   if (typeof date !== "string") return { ok: false, ...date };
-  return saveConfirmedMeal(
+  const saved = await saveConfirmedMeal(
     ctx.userProfileId,
     {
       draftId: input.draftId,
@@ -203,6 +206,13 @@ export async function confirmMeal(
     },
     ctx.now,
   );
+  // The meal plan follows: marks a planned meal eaten and resizes the rest of today. Never blocks the log.
+  if (saved.ok && !saved.alreadySaved) {
+    void afterMealLogged(ctx, { date, slot: input.slot, mealSessionId: saved.mealSessionId }, ctx.now).catch((err) =>
+      logger.warn({ err: loggableError(err) }, "meal plan follow-up failed"),
+    );
+  }
+  return saved;
 }
 
 export async function removeMeal(

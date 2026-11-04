@@ -6,6 +6,7 @@ import { runOnboarding } from "./onboarding.js";
 import { scanView } from "./scan.js";
 import { foodPrefsEditor } from "./foodprefs.js";
 import { fromServer, routineEditor, toPayload } from "./routine.js";
+import { initMeals, loadPlan, mealScreen, mealsTitles, openPlannedMeal, planLineFor, renderMeals, setupScreen } from "./meals.js";
 import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
 const TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } })();
@@ -116,7 +117,7 @@ async function api(path, options = {}) {
   }
   const body = await res.json().catch(() => ({}));
   trackApi(path, options.method, res.status, performance.now() - started, res.ok ? null : body.error || `http_${res.status}`);
-  if (!res.ok) throw Object.assign(new Error(friendlyError(body.error)), { inProgress: body.error === "in_progress" });
+  if (!res.ok) throw Object.assign(new Error(friendlyError(body.error)), { inProgress: body.error === "in_progress", code: body.error });
   return body;
 }
 
@@ -152,6 +153,13 @@ function friendlyError(code) {
     daily_limit: "You've hit today's limit for the coach. Log from Today, or try again tomorrow.",
     draft_limit: "That's a lot of meal estimates for one day. Pick a usual meal or scan a barcode, or try again tomorrow.",
     rca_limit: "I've already looked into this a few times today. Ask again tomorrow.",
+    no_targets: "Set your daily calorie and protein targets first.",
+    no_setup: "Set up your meals first.",
+    option_not_found: "That option isn't in your plan any more.",
+    meal_not_planned: "That meal isn't planned any more.",
+    already_logged: "Already logged.",
+    nothing_to_log: "Add at least one item.",
+    nothing_to_undo: "Nothing to undo.",
     hevy_key_invalid: "Hevy didn't accept that key. Copy it again from the link above (hevy.com/settings?developer).",
   }[code] || "Something went wrong. Try again.";
 }
@@ -232,7 +240,7 @@ function showShell() {
   $("shell").hidden = false;
 }
 
-const VIEWS = ["coach", "today", "progress", "you"];
+const VIEWS = ["coach", "today", "meals", "progress", "you"];
 /** Old links (and the Android app) still say #tracker; that page is now Today. */
 const currentView = () => VIEWS.find((v) => !$(`view-${v}`).hidden) || "coach";
 const viewFromHash = (h) => { const v = h.replace("#", ""); return v === "tracker" ? "today" : VIEWS.includes(v) ? v : "coach"; };
@@ -270,6 +278,9 @@ function setView(view, { fromHistory = false } = {}) {
     if (view === "today" && state.history) requestAnimationFrame(() => renderStrip(state.selectedDate === todayKey()));
   }
   if (view === "you") renderYou();
+  if (view === "meals") renderMeals();
+  // The food card shows the day against the meal plan; fetch the plan once Today is opened.
+  if (view === "today") loadPlan().then(() => { if (state.history) renderDay(); }).catch(() => {});
 }
 
 // ---------- appearance ----------
@@ -367,6 +378,26 @@ async function loadUsual() {
 }
 
 const short = (t, n = 24) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
+
+/** One glass from the quick-log sheet, with the day's new total. */
+async function quickWater() {
+  try {
+    const r = await api("/water", { method: "POST", body: JSON.stringify({ ml: GLASS_ML }) });
+    toast(`Water: ${litres(r.totalMl)} today.`);
+    loadDays();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+/** "Eating out" from the quick-log sheet: lunch before 3 pm, dinner after. A template, no model call. */
+function eatingOut() {
+  const meal = new Date().getHours() < 15 ? "lunch" : "dinner";
+  return coachTurn(
+    () => addMessage("user", `Eating out at ${meal}`),
+    () => api("/plan/eating-out", { method: "POST", body: JSON.stringify({ meal }) }),
+  );
+}
 
 function repeatMeal(m) {
   return coachTurn(
@@ -653,12 +684,48 @@ function renderFuel(d, t) {
   } else {
     macros = el("div", { class: "macro-legend" }, el("div", { class: "ml" }, el("span", { class: "k" }, el("i", { class: "sw p" }), "Protein"), el("span", { class: "v" }, `${fmt(d.proteinG)}`, el("small", {}, " g"))));
   }
-  $("fuel-body").replaceChildren(...[top, meter, macros].filter(Boolean));
+  $("fuel-body").replaceChildren(...[top, meter, macros, planLineFor(d.date, () => setView("meals"))].filter(Boolean));
 
   $("meals").replaceChildren(
     ...(d.meals.length
       ? d.meals.map((m) => mealRow(m, d))
       : [el("li", { class: "none" }, d.date === todayKey() ? "Nothing logged yet today." : "No meals logged this day.")]),
+  );
+  renderWater(d);
+}
+
+const GLASS_ML = 250;
+const litres = (ml) => `${fmt(ml / 1000, 2)} L`;
+
+/** Water for the shown day: a glass per tap, minus to take the last one back. Not scored. */
+function renderWater(d) {
+  const box = $("water");
+  const today = todayKey();
+  if (!box || (today && d.date > today)) { if (box) box.hidden = true; return; }
+  const ml = d.waterMl || 0;
+  const target = state.history?.waterTargetMl || 2500;
+  const busy = (on) => box.querySelectorAll("button").forEach((b) => { b.disabled = on; });
+  const send = async (body) => {
+    busy(true);
+    try {
+      const r = await api("/water", { method: "POST", body: JSON.stringify({ date: d.date, ...body }) });
+      // Show the new total at once; the full refresh catches up behind it.
+      d.waterMl = r.totalMl;
+      renderWater(d);
+      loadDays();
+    } catch (err) {
+      busy(false);
+      toast(err.message);
+    }
+  };
+  box.hidden = false;
+  box.replaceChildren(
+    el("div", { class: "wl" }, el("b", {}, "Water"), el("span", {}, `${litres(ml)} of ${litres(target)}`)),
+    el("div", { class: "wa" },
+      ml > 0 ? el("button", { class: "icon-btn", type: "button", "aria-label": "Remove the last water log", onclick: () => send({ undo: true }) }, "−") : null,
+      el("button", { class: "btn", type: "button", onclick: () => send({ ml: GLASS_ML }) }, "+ Glass")),
+    el("div", { class: "meter", role: "img", "aria-label": `${litres(ml)} of ${litres(target)} water` },
+      el("i", { style: `width:${Math.min(100, Math.round((ml / target) * 100))}%` })),
   );
 }
 
@@ -1427,11 +1494,14 @@ function renderHistory(messages) {
   requestAnimationFrame(() => { t.scrollTop = t.scrollHeight; t.style.scrollBehavior = prevBehavior; });
 }
 
-/** Messages and their cards into a thread. The day's plan is a card, so its text bubble is skipped. */
+/** Cards that say everything their message says: the text bubble is skipped (the model still reads it). */
+const CARD_ONLY = new Set(["day_plan", "plan_meal", "plan_adjust"]);
+
+/** Messages and their cards into a thread. */
 function renderMessages(messages, into, { retry = false } = {}) {
   for (const m of messages) {
     const cards = m.cards || [];
-    if (!cards.some((c) => c.type === "day_plan")) addMessage(m.role === "user" ? "user" : "coach", m.content, into);
+    if (!cards.some((c) => CARD_ONLY.has(c.type))) addMessage(m.role === "user" ? "user" : "coach", m.content, into);
     for (const c of cards) appendCard(c, into);
     if (retry && m.role === "user" && unanswered(m)) {
       failedTurn("That one didn't get a reply.", m.turnId ? () => send(m.content, m.turnId, () => {}) : null);
@@ -1671,6 +1741,7 @@ function weeklyReviewView(r) {
     ),
   ];
   if (r.activityLine) out.push(el("p", { class: "section-label" }, "Outside the gym"), el("p", { class: "hint" }, r.activityLine));
+  if (r.mealPlanLine) out.push(el("p", { class: "section-label" }, "Meal plan"), el("p", { class: "hint" }, r.mealPlanLine));
   if (r.goal) {
     out.push(el("p", { class: "section-label" }, `Goal · ${r.goal.weeksLeft} weeks left`));
     for (const m of r.goal.metrics) {
@@ -1715,6 +1786,9 @@ function appendCard(c, into = $("thread")) {
   else if (c.type === "intervention") into.append(interventionCard(c));
   else if (c.type === "calorie_review") into.append(calorieReviewCard(c.review));
   else if (c.type === "day_plan") into.append(dayPlanCard(c));
+  else if (c.type === "eating_out") into.append(eatingOutCard(c));
+  else if (c.type === "plan_meal") into.append(planMealCard(c));
+  else if (c.type === "plan_adjust") into.append(planAdjustCard(c));
 }
 
 // ---------- the day's plan ----------
@@ -1735,8 +1809,77 @@ function dayPlanCard(c) {
     c.goal ? sec("Goal", el("p", {}, c.goal)) : null,
     c.yesterday ? sec("Yesterday", el("p", {}, c.yesterday)) : null,
     sec("This week", el("p", {}, c.week)),
+    c.meals?.length ? sec("Meals",
+      el("ul", { class: "dp-plan" }, ...c.meals.map((m) => el("li", {}, el("span", { class: "dp-time" }, m.time ? clock(m.time) : SLOT_LABEL[m.slot]), el("span", {}, `${m.title} · ${fmt(m.kcal)} kcal`)))),
+      el("button", { class: "link", type: "button", onclick: () => setView("meals") }, "Open meals")) : null,
     c.focus ? el("div", { class: "dp-focus" }, el("p", { class: "eyebrow" }, "Worth a look"), el("p", {}, c.focus)) : null,
     el("p", { class: "dp-motto" }, c.motivation),
+  );
+}
+
+
+/** A planned meal at its time: eat it in one tap, or open it to change portions or swap. */
+function planMealCard(c) {
+  const card = el("div", { class: "draft planmeal" });
+  const eaten = (s) => s === "logged" || s === "partial";
+  function render(cur) {
+    const head = el("p", { class: "eyebrow" }, `${SLOT_LABEL[cur.slot]}${cur.time ? ` · ${clock(cur.time)}` : ""} · on your plan`);
+    const body = [
+      head,
+      el("ul", { class: "pm-items" }, ...cur.items.map((t) => el("li", {}, t))),
+      el("p", { class: "pm-sub" }, `${fmt(cur.kcal)} kcal · ${cur.proteinG} g protein`),
+    ];
+    if (eaten(cur.status)) {
+      card.replaceChildren(...body, el("div", { class: "done-line" }, cur.status === "partial" ? "✓ Eaten, portions changed" : "✓ Eaten"));
+      return;
+    }
+    const ate = el("button", { class: "btn primary", type: "button" }, "Ate this");
+    const change = el("button", { class: "btn", type: "button", onclick: () => openPlannedMeal(cur.date, cur.slot) }, "Change or swap");
+    ate.addEventListener("click", async () => {
+      ate.disabled = change.disabled = true;
+      try {
+        await api(`/diet/days/${cur.date}/${cur.slot}/eat`, { method: "POST", body: "{}" });
+        c.status = "logged";
+        render(c);
+        toast("Logged as planned.");
+        loadPlan(true).catch(() => {});
+        refresh();
+      } catch (err) {
+        if (err.code === "already_logged") { c.status = "logged"; render(c); return; }
+        ate.disabled = change.disabled = false;
+        toast(err.message);
+      }
+    });
+    card.replaceChildren(...body, el("div", { class: "draft-actions" }, ate, change));
+  }
+  render(c);
+  return card;
+}
+
+/** The plan moved: the rest of today resized after an off-plan meal, or the night's day close. */
+function planAdjustCard(c) {
+  const close = c.kind === "day_close";
+  const meals = c.next?.meals || [];
+  return el("div", { class: "draft planadjust" },
+    el("p", { class: "eyebrow" }, close ? "Day close" : "Rest of today"),
+    el("p", { class: "pa-head" }, c.headline),
+    c.lines?.length ? el("ul", { class: "pa-lines" }, ...c.lines.map((l) => el("li", {}, l))) : null,
+    close && meals.length ? el("div", { class: "dp-sec" },
+      el("p", { class: "eyebrow" }, "Tomorrow"),
+      el("ul", { class: "dp-plan" }, ...meals.map((m) => el("li", {}, el("span", { class: "dp-time" }, m.time ? clock(m.time) : SLOT_LABEL[m.slot]), el("span", {}, `${m.title} · ${fmt(m.kcal)} kcal`))))) : null,
+    el("button", { class: "link", type: "button", onclick: () => setView("meals") }, close ? "See tomorrow's meals" : "See today's meals"),
+  );
+}
+
+/** The plan around a meal out: what to keep for it, what's left before, and how to order. */
+function eatingOutCard(c) {
+  const keep = c.reserveKcal != null && c.lines[0]?.startsWith("Keep");
+  return el("div", { class: "draft eatout" },
+    el("p", { class: "eyebrow" }, `Eating out · ${c.meal}`),
+    keep ? el("div", { class: "eo-num" }, el("b", {}, fmt(c.reserveKcal)), el("small", {}, `kcal for ${c.meal}`)) : null,
+    el("div", { class: "eo-lines" }, ...c.lines.slice(keep ? 1 : 0).map((l) => el("p", {}, l))),
+    el("p", { class: "eyebrow eo-head" }, "Ordering"),
+    el("ul", { class: "eo-tips" }, ...c.tips.map((t) => el("li", {}, t))),
   );
 }
 
@@ -2105,6 +2248,7 @@ const NUDGES = [
   ["weigh_in", "Weekly weigh-in"],
   ["rca", "Root-cause reviews"],
   ["intervention", "Plan check-ins"],
+  ["plan_meal", "Planned meals"],
 ];
 
 /** Settings: the weekly routine. Saving replaces it, and training days follow from it. */
@@ -3088,7 +3232,7 @@ function openSheet(kind, { fromHistory = false } = {}) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", pastDays: "Past days", chatDay: "" };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", pastDays: "Past days", chatDay: "", ...mealsTitles };
   const screen = !SHEET_ONLY.has(kind);
   const sheet = $("sheet");
   sheet.classList.toggle("screen", screen);
@@ -3130,6 +3274,8 @@ function submitter(fn) {
 const num = (v) => (v === "" || v == null ? undefined : Number(v));
 
 const SHEETS = {
+  dietSetup: setupScreen,
+  dietMeal: mealScreen,
   activity() {
     const date = state.activityDate || null;
     state.activityDate = null;
@@ -3196,7 +3342,9 @@ const SHEETS = {
         tile("Barcode", '<path d="M4 6v12M7 6v12M11 6v12M14 6v12M17 6v12M20 6v12"/>', () => openSheet("scan")),
         tile("Steps", '<path d="M8 4c1.5 0 2.5 2 2.5 4.5S9.5 13 8 13s-2.5-2-2.5-4.5S6.5 4 8 4zM6 16h4v2a2 2 0 0 1-4 0zM16 8c1.5 0 2.5 2 2.5 4.5S17.5 17 16 17s-2.5-2-2.5-4.5S14.5 8 16 8z"/>', () => openSheet("steps")),
         tile("Activity", '<path d="M3 12h4l3-7 4 14 3-7h4"/>', () => openSheet("activity")),
-        tile("Weigh-in", '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9.5a4 4 0 0 1 6 0M12 9.5l1.2-1.6"/>', () => openSheet("checkin"))),
+        tile("Weigh-in", '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9.5a4 4 0 0 1 6 0M12 9.5l1.2-1.6"/>', () => openSheet("checkin")),
+        tile("Water", '<path d="M12 3.5c3 4 5.5 7 5.5 10a5.5 5.5 0 0 1-11 0c0-3 2.5-6 5.5-10z"/>', () => { closeSheet(); quickWater(); }),
+        tile("Eating out", '<path d="M5 3v7a2 2 0 0 0 4 0V3M7 10v11M15 21V3c2.5 1.5 4 4 4 8h-4"/>', () => { closeSheet(); afterClose(() => { if ($("view-coach").hidden) setView("coach"); eatingOut(); }); })),
       (state.usual || []).length
         ? el("div", { class: "usual-list" },
             el("p", { class: "section-label" }, "Again"),
@@ -3421,7 +3569,55 @@ if (window.visualViewport) {
   screen.orientation?.addEventListener("change", () => { fullHeight = 0; keyboardUp = false; setTimeout(() => { fullHeight = vv.height; }, 300); });
 }
 // Tapping a composer button mustn't blur the textarea first, or the layout shifts under the finger.
-for (const id of ["send", "photo", "quick"]) $(id).addEventListener("pointerdown", (e) => { if (document.activeElement === $("input")) e.preventDefault(); });
+// ---------- voice ----------
+// The phone's own speech-to-text (Chrome's Web Speech API) fills the composer; nothing is sent
+// until the person taps send, so a misheard "dal" can be fixed first. Hidden where unsupported.
+
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const voice = { rec: null, base: "" };
+
+function stopListening() {
+  voice.rec?.stop();
+}
+
+function startListening() {
+  const rec = new Recognition();
+  rec.lang = navigator.language || "en-IN";
+  rec.interimResults = true;
+  rec.continuous = false;
+  const input = $("input");
+  voice.base = input.value.trim() ? `${input.value.trim()} ` : "";
+  rec.onresult = (e) => {
+    let said = "";
+    for (const r of e.results) said += r[0].transcript;
+    input.value = voice.base + said.trimStart();
+    autosize();
+  };
+  rec.onerror = (e) => {
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Allow the microphone for Magnus to speak your logs.");
+    else if (e.error === "no-speech") toast("Didn't catch that. Tap the mic and try again.");
+    else if (e.error !== "aborted") toast("Voice isn't available right now. Type it instead.");
+  };
+  rec.onend = () => {
+    voice.rec = null;
+    $("composer").classList.remove("listening");
+    $("mic").setAttribute("aria-pressed", "false");
+    $("mic").setAttribute("aria-label", "Speak instead of typing");
+    autosize();
+  };
+  voice.rec = rec;
+  $("composer").classList.add("listening");
+  $("mic").setAttribute("aria-pressed", "true");
+  $("mic").setAttribute("aria-label", "Stop listening");
+  try { rec.start(); } catch { rec.onend(); }
+}
+
+if (Recognition) {
+  $("mic").hidden = false;
+  $("mic").addEventListener("click", () => (voice.rec ? stopListening() : startListening()));
+}
+
+for (const id of ["send", "photo", "quick", "mic"]) $(id).addEventListener("pointerdown", (e) => { if (document.activeElement === $("input")) e.preventDefault(); });
 window.addEventListener("hashchange", () => { if (viewFromHash(location.hash) !== currentView()) setView(viewFromHash(location.hash), { fromHistory: true }); });
 $("input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing && matchMedia("(pointer: fine)").matches) {
@@ -3430,6 +3626,7 @@ $("input").addEventListener("keydown", (e) => {
   }
 });
 $("composer").addEventListener("submit", (e) => {
+  stopListening();
   e.preventDefault();
   const text = $("input").value;
   if (!text.trim() || state.sending) { send(text); return; }
@@ -3460,6 +3657,8 @@ async function ensureOnboarded() {
   store.set(ONBOARDED_KEY, true);
   return true;
 }
+
+initMeals({ api, el, toast, openSheet, closeSheet, backSheet, setView, fmt, todayKey: () => todayKey() || localToday(), refresh });
 
 async function start() {
   if (!(await ensureOnboarded())) return;

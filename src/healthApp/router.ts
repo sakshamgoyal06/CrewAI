@@ -67,6 +67,10 @@ import { listMealsForDate } from "./meals.js";
 import { draftMealFromPhoto } from "./mealCards.js";
 import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
 import { loadWeeklyReview } from "./weeklyReview.js";
+import { eatInput, eatPlanned, undoPlanned, unlinkDeletedMeal } from "./dietPlan/log.js";
+import { rebalanceToday } from "./dietPlan/rhythm.js";
+import { loadDietPrefs, loadPlanView, markOption, OPTION_ACTIONS, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
+import { PLAN_SLOTS } from "./dietPlan/targets.js";
 import {
   applyRazorpayEvent,
   billingEnabled,
@@ -101,6 +105,8 @@ import {
 } from "./push.js";
 import { cardFromReport, rcaResponseInput, respondToRca, runRca } from "./rca.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
+import { logWater, waterInput } from "./water.js";
+import { eatingOutInput, planEatingOut } from "./eatingOut.js";
 import { loadCalorieReview } from "./calorieTarget.js";
 import { cardFromIntervention, checkNewGoal, recordManualPlan, respond as respondToIntervention, revertToVersion } from "./interventions/engine.js";
 import { listVersions } from "./interventions/plan.js";
@@ -304,6 +310,79 @@ export function createHealthAppRouter(): express.Router {
     route("account-food", async (ctx, req) => {
       const r = await saveFoodPrefs(ctx.userProfileId, foodPrefsInput.parse(req.body));
       return r.ok ? { body: r } : { status: 500, body: r };
+    }),
+  );
+
+  /** Diet plan: the Meals tab (setup answers, plan version, 3-day picks). */
+  router.get(
+    "/diet/plan",
+    route("diet-plan", async (ctx) => {
+      const r = await loadPlanView(ctx);
+      return r.ok ? { body: r } : { status: 409, body: r };
+    }),
+  );
+  router.get(
+    "/diet/prefs",
+    route("diet-prefs", async (ctx) => {
+      const r = await loadDietPrefs(ctx.userProfileId);
+      return { body: { ok: true, ...r } };
+    }),
+  );
+  /** Saves the setup answers and builds a new plan from them. */
+  router.put(
+    "/diet/prefs",
+    route("diet-prefs-save", async (ctx, req) => {
+      const prefs = await saveDietPrefs(ctx.userProfileId, req.body);
+      const r = await rebuildPlan(ctx, "prefs_changed");
+      return r.ok ? { body: { ok: true, prefs, version: r.plan.version } } : { status: 409, body: r };
+    }),
+  );
+  router.post(
+    "/diet/plan/rebuild",
+    route("diet-rebuild", async (ctx) => {
+      const r = await rebuildPlan(ctx, "rebuild");
+      return r.ok ? { body: { ok: true, version: r.plan.version } } : { status: 409, body: r };
+    }),
+  );
+  router.post(
+    "/diet/options/:id",
+    route("diet-option-mark", async (ctx, req) => {
+      const { action } = z.object({ action: z.enum(OPTION_ACTIONS) }).parse(req.body);
+      const id = z.string().regex(/^opt_[a-z]+_[0-9a-f]{12}$/).parse(req.params.id);
+      const r = await markOption(ctx.userProfileId, id, action);
+      return { body: { ok: true, pinned: r.pinned, liked: r.liked, hidden: r.hidden } };
+    }),
+  );
+  router.post(
+    "/diet/days/:date/:slot/swap",
+    route("diet-swap", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
+      const { optionId } = z.object({ optionId: z.string().min(1).max(40) }).parse(req.body);
+      const r = await swapPick(ctx, date, slot, optionId);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+
+  /** "Ate this" on a planned meal, with any portion changes; and its undo. */
+  router.post(
+    "/diet/days/:date/:slot/eat",
+    route("diet-eat", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
+      const r = await eatPlanned(ctx, date, slot, eatInput.parse(req.body ?? {}));
+      // Ate more or less than planned: the rest of today follows (before the reply, so the tab shows it).
+      if (r.ok && r.status === "partial") await rebalanceToday(ctx).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance failed"));
+      return r.ok ? { body: r } : { status: r.error === "already_logged" ? 409 : 400, body: r };
+    }),
+  );
+  router.post(
+    "/diet/days/:date/:slot/undo",
+    route("diet-undo", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
+      const r = await undoPlanned(ctx, date, slot);
+      return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );
 
@@ -568,13 +647,30 @@ export function createHealthAppRouter(): express.Router {
 
   router.delete(
     "/meals/:id",
-    route("meal-delete", async (ctx, req) => fromResult(await removeMeal(ctx, String(req.params.id)))),
+    route("meal-delete", async (ctx, req) => {
+      const id = String(req.params.id);
+      const r = await removeMeal(ctx, id);
+      if (r.ok) await unlinkDeletedMeal(ctx.userProfileId, id);
+      return fromResult(r);
+    }),
   );
 
   /** Steps ingest: manual entry and phone automations. */
   router.post(
     "/steps",
     route("steps", async (ctx, req) => fromResult(await logSteps(ctx, stepsInput.parse(req.body)))),
+  );
+
+  /** "Eating out tonight" from the quick-log sheet: a plan card in the chat, no model call. */
+  router.post(
+    "/plan/eating-out",
+    route("plan-eating-out", async (ctx, req) => ({ body: await planEatingOut(ctx, eatingOutInput.parse(req.body ?? {}), { record: true }) })),
+  );
+
+  /** Water: add a glass (ml), or undo the day's latest. */
+  router.post(
+    "/water",
+    route("water", async (ctx, req) => fromResult(await logWater(ctx, waterInput.parse(req.body)))),
   );
 
   /** Android: HC Webhook pushes Health Connect steps, distance, exercise and scale readings here. */
