@@ -12,6 +12,7 @@ import { getLocalTimeParts } from "../nutrition/localDate.js";
 import { estimateCacheKey } from "../meals/estimateMealNutrition.js";
 import { localDateKey, resolveTimezone } from "../nutrition/localDate.js";
 import { supabase } from "../tools/clients.js";
+import { MFP_RAW_TEXT } from "./mfpImport.js";
 import type { ActionContext } from "./actions.js";
 import { recordChatTurn, type ChatReply } from "./chat.js";
 import {
@@ -121,7 +122,8 @@ export async function loadLoggedSessions(userProfileId: string, sinceDate: strin
   const bySession = new Map<string, { s: LoggedSession; rows: Array<{ idx: number; item: MealItem }> }>();
   for (const r of data) {
     const id = r.meal_session_id ? String(r.meal_session_id) : "";
-    if (!id) continue;
+    // Imported days are whole-meal totals ("Lunch (MyFitnessPal)"), not meals to repeat.
+    if (!id || r.raw_text === MFP_RAW_TEXT) continue;
     let entry = bySession.get(id);
     if (!entry) {
       entry = {

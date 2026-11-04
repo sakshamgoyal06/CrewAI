@@ -26,7 +26,9 @@ import {
 } from "./actions.js";
 import {
   createPersonalToken,
+  isOwnerProfileRow,
   replacePersonalToken,
+  resetOwnAccount,
   listPersonalTokens,
   publicAuthConfig,
   resolveRequestUser,
@@ -74,6 +76,13 @@ import { PLAN_SLOTS } from "./dietPlan/targets.js";
 import {
   applyRazorpayEvent,
   billingEnabled,
+  billingMode,
+  forgetEntitlement,
+  experienceFor,
+  hasFeature,
+  PREVIEW_STATES,
+  previewEntitlement,
+  priceAmounts,
   cancelRazorpaySubscription,
   confirmInput,
   confirmRazorpayCheckout,
@@ -106,6 +115,7 @@ import {
 import { cardFromReport, rcaResponseInput, respondToRca, runRca } from "./rca.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
 import { logWater, waterInput } from "./water.js";
+import { importMfp, mfpImportInput } from "./mfpImport.js";
 import { eatingOutInput, planEatingOut } from "./eatingOut.js";
 import { loadCalorieReview } from "./calorieTarget.js";
 import { cardFromIntervention, checkNewGoal, recordManualPlan, respond as respondToIntervention, revertToVersion } from "./interventions/engine.js";
@@ -295,6 +305,7 @@ export function createHealthAppRouter(): express.Router {
           onboarded,
           name: data?.display_name ?? null,
           email: data?.email ?? null,
+          owner: isOwnerProfileRow(ctx.userProfileId, data?.email),
           timezone: ctx.timezone,
           hevyConnected: hevy,
           tokens,
@@ -416,6 +427,15 @@ export function createHealthAppRouter(): express.Router {
     route("account-export", async (ctx) => ({ body: await exportAccount(ctx.userProfileId) })),
   );
 
+  /** Past meals from a MyFitnessPal export (the Nutrition Summary CSV). `dryRun` previews. */
+  router.post(
+    "/import/myfitnesspal",
+    route("import-mfp", async (ctx, req) => {
+      const r = await importMfp(ctx.userProfileId, mfpImportInput.parse(req.body), ctx.timezone);
+      return r.ok ? { body: r } : { status: r.error === "not_mfp_summary" || r.error === "no_meals" || r.error === "too_many_rows" ? 400 : 500, body: r };
+    }),
+  );
+
   /** Deletes the account and all its data. The body must say `{ "confirm": "DELETE" }`. */
   router.delete(
     "/account",
@@ -423,6 +443,17 @@ export function createHealthAppRouter(): express.Router {
       z.object({ confirm: z.literal("DELETE") }).parse(req.body ?? {});
       const r = await deleteAccount(ctx.userProfileId);
       return r.ok ? { body: r } : { status: r.error === "owner_account" ? 400 : 500, body: r };
+    }),
+  );
+
+  /** Owner only: wipe all data and start again as a new user, keeping the Google sign-in. */
+  router.post(
+    "/account/reset",
+    route("account-reset", async (ctx, req) => {
+      z.object({ confirm: z.literal("RESET") }).parse(req.body ?? {});
+      const r = await resetOwnAccount(ctx.userProfileId);
+      forgetEntitlement(ctx.userProfileId);
+      return r.ok ? { body: r } : { status: r.error === "owner_only" ? 403 : r.error === "needs_google_sign_in" ? 400 : 500, body: r };
     }),
   );
 
@@ -714,13 +745,22 @@ export function createHealthAppRouter(): express.Router {
   /** Plan, trial and what can be bought. */
   router.get(
     "/billing",
-    route("billing", async (ctx) => {
+    route("billing", async (ctx, req) => {
       const cfg = razorpayConfig();
+      const now = new Date();
+      const as = String(req.query.as ?? "");
+      const ent =
+        billingMode() === "preview" && (PREVIEW_STATES as readonly string[]).includes(as)
+          ? previewEntitlement(as as (typeof PREVIEW_STATES)[number], now)
+          : await loadEntitlement(ctx.userProfileId);
       return {
         body: {
           enabled: billingEnabled(),
-          entitlement: await loadEntitlement(ctx.userProfileId),
+          mode: billingMode(),
+          entitlement: ent,
+          experience: experienceFor(ent, now),
           prices: priceLabels(),
+          amounts: priceAmounts(),
           razorpay: cfg ? { keyId: cfg.keyId } : null,
           freeLimits: { chat: limitFor("free", "chat", { ...process.env, MAGNUS_BILLING: "on" }), photo: limitFor("free", "photo", { ...process.env, MAGNUS_BILLING: "on" }) },
         },
@@ -734,8 +774,11 @@ export function createHealthAppRouter(): express.Router {
       const { plan } = z.object({ plan: z.enum(["monthly", "yearly"]) }).parse(req.body);
       const cfg = razorpayConfig();
       if (!cfg) return { status: 503, body: { ok: false, error: "billing_unavailable" } };
-      const r = await createRazorpaySubscription(ctx.userProfileId, plan, cfg);
-      return { status: r.ok ? 200 : 502, body: r };
+      const ent = await loadEntitlement(ctx.userProfileId);
+      // During the trial, the first charge waits for the trial's end.
+      const startAt = ent.tier === "trial" && ent.trialEndsAt ? new Date(ent.trialEndsAt) : null;
+      const r = await createRazorpaySubscription(ctx.userProfileId, plan, cfg, fetch, new Date(), startAt);
+      return { status: r.ok ? 200 : r.error === "already_subscribed" ? 409 : 502, body: r };
     }),
   );
 
@@ -744,7 +787,9 @@ export function createHealthAppRouter(): express.Router {
     route("billing-confirm", async (ctx, req) => {
       const cfg = razorpayConfig();
       if (!cfg) return { status: 503, body: { ok: false, error: "billing_unavailable" } };
-      const r = await confirmRazorpayCheckout(ctx.userProfileId, confirmInput.parse(req.body), cfg);
+      const ent = await loadEntitlement(ctx.userProfileId);
+      const startAt = ent.tier === "trial" && ent.trialEndsAt ? new Date(ent.trialEndsAt) : null;
+      const r = await confirmRazorpayCheckout(ctx.userProfileId, confirmInput.parse(req.body), cfg, new Date(), startAt);
       return { status: r.ok ? 200 : 400, body: r };
     }),
   );
@@ -934,6 +979,7 @@ export function createHealthAppRouter(): express.Router {
   router.post(
     "/rca",
     route("rca", async (ctx) => {
+      if (!(await hasFeature(ctx.userProfileId, "rca"))) return { status: 402, body: { ok: false, error: "pro_feature" } };
       if ((await allowUse(ctx, "rca")) !== true) return { status: 429, body: { ok: false, error: "rca_limit" } };
       const r = await runRca(ctx.userProfileId, "manual");
       return r ? { body: { ok: true, card: cardFromReport(r.report) } } : { status: 400, body: { ok: false, error: "not_enough_data" } };
