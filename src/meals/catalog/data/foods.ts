@@ -1,0 +1,169 @@
+/**
+ * Whole foods and components, batch 1 (2026-11-04).
+ *
+ * Numbers are per 100 g (100 ml for `basis: "100ml"`), from USDA FoodData Central where a fitting
+ * public-domain entry exists (the exact USDA description is kept in `source`). Indian foods with
+ * no USDA entry (paneer, poha, ragi, makhana, jaggery, Indian milk grades) use typical reference
+ * values, noted as such. Serving weights follow how each food is measured at home in India.
+ */
+import type { CatalogFood } from "../types.js";
+import { food, label, PER100, ref, s, usda } from "./helpers.js";
+
+const flour = [s("tbsp", 8), s("cup", 120), PER100()];
+const oilServings = [s("tsp", 4.5, null, true), s("tbsp", 13.5)];
+const nut = (piece: number) => [s("handful", 30, null, true), s("piece", piece), s("tbsp", 9)];
+
+export const FOODS: CatalogFood[] = [
+  // ── Grains, flours, cereals ──────────────────────────────────────────────
+  food("Rice, raw", "grain", "vegan", [370, 7, 80.3, 1, 0.1], usda("Rice, white, long grain, unenriched, raw"), [s("cup", 185), s("tbsp", 12), PER100()], { aliases: ["raw rice", "chawal raw", "uncooked rice"] }),
+  food("White rice, cooked", "grain", "vegan", [129, 2.7, 28, 0.3, 0.4], usda("Rice, white, cooked, no added fat"),
+    [s("bowl", 150, null, true, "1 katori"), s("bowl", 250, "large", false, "1 large bowl"), s("plate", 250), s("cup", 160), s("ladle", 60, null, false, "1 serving spoon")],
+    { aliases: ["rice", "chawal", "steamed rice", "plain rice", "boiled rice", "basmati rice", "white rice", "cooked rice"] }),
+  food("Brown rice, cooked", "grain", "vegan", [123, 2.4, 25.8, 1.1, 1], usda("Rice, brown, cooked, no added fat"),
+    [s("bowl", 150, null, true, "1 katori"), s("plate", 250), s("cup", 160)], { aliases: ["brown rice"] }),
+  food("Whole wheat flour (atta)", "grain", "vegan", [333, 9.6, 74.5, 1.9, 13.1], usda("Wheat flour, whole-grain, soft wheat"), flour, { aliases: ["atta", "wheat flour", "gehun ka atta", "whole wheat flour"] }),
+  food("Refined flour (maida)", "grain", "vegan", [364, 10.3, 76.3, 1, 2.7], usda("Wheat flour, white, all-purpose, unenriched"), flour, { aliases: ["maida", "all purpose flour", "refined flour"] }),
+  food("Semolina (sooji)", "grain", "vegan", [360, 12.7, 72.8, 1.1, 3.9], usda("Semolina, unenriched"), flour, { aliases: ["sooji", "suji", "rava", "semolina"] }),
+  food("Gram flour (besan)", "grain", "vegan", [387, 22.4, 57.8, 6.7, 10.8], usda("Chickpea flour (besan)"), flour, { aliases: ["besan", "gram flour", "chickpea flour"] }),
+  food("Jowar flour", "grain", "vegan", [359, 8.4, 76.6, 3.3, 6.6], usda("Sorghum flour, whole-grain"), flour, { aliases: ["jowar atta", "sorghum flour", "jowar"] }),
+  food("Bajra flour", "grain", "vegan", [382, 10.8, 75.1, 4.2, 3.5], usda("Millet flour"), flour, { aliases: ["bajra atta", "pearl millet flour", "bajra"] }),
+  food("Ragi flour", "grain", "vegan", [320, 7.2, 66.8, 1.9, 11.2], ref("Typical finger millet flour values; no USDA entry"), flour, { aliases: ["ragi", "nachni", "finger millet flour", "ragi atta"] }),
+  food("Makki flour", "grain", "vegan", [362, 8.1, 76.9, 3.6, 7.3], usda("Cornmeal, whole-grain, yellow"), flour, { aliases: ["makki atta", "maize flour", "cornmeal"] }),
+  food("Poha, raw", "grain", "vegan", [346, 6.6, 77.3, 1.2, 2], ref("Typical flattened rice values; no USDA entry"), [s("cup", 60), s("bowl", 60, null, false, "1 katori"), PER100()], { aliases: ["flattened rice", "rice flakes", "chivda raw", "aval"] }),
+  food("Rolled oats", "grain", "vegan", [379, 13.5, 68.7, 5.9, 10.1], usda("Oats, whole grain, rolled, old fashioned"),
+    [s("tbsp", 6), s("cup", 80), s("serving", 40, null, true, "40 g (½ cup)")], { aliases: ["oats", "oatmeal dry", "quaker oats"] }),
+  food("Quinoa, cooked", "grain", "vegan", [120, 4.4, 21.3, 1.9, 2.8], usda("Quinoa, cooked"), [s("bowl", 150, null, true, "1 katori"), s("cup", 185)], { aliases: ["quinoa"] }),
+  food("Millet, cooked", "grain", "vegan", [119, 3.5, 23.7, 1, 1.3], usda("Millet, cooked"), [s("bowl", 150, null, true, "1 katori"), s("cup", 175)], { aliases: ["cooked millet"] }),
+  food("Pasta, cooked", "grain", "vegan", [158, 5.8, 30.9, 0.9, 1.8], usda("Pasta, cooked, enriched, without added salt"), [s("bowl", 150, null, true, "1 katori"), s("cup", 140), s("plate", 250)], { aliases: ["boiled pasta", "spaghetti", "penne"] }),
+  food("White bread", "bread", "vegan", [270, 9.4, 49.2, 3.6, 2.3], usda("Bread, white, commercially prepared"), [s("slice", 25, null, true)], { aliases: ["bread", "bread slice", "sandwich bread"] }),
+  food("Brown bread", "bread", "vegan", [253, 12.3, 43.1, 3.5, 6], usda("Bread, whole-wheat, commercially prepared"), [s("slice", 28, null, true)], { aliases: ["whole wheat bread", "atta bread", "multigrain bread"] }),
+  food("Pav", "bread", "veg", [272, 8.5, 50.5, 3.6, 2.2], ref("Typical soft dinner-roll values (white bread dough with a little fat)"), [s("piece", 40, null, true)], { aliases: ["pao", "ladi pav", "bun", "dinner roll"] }),
+  food("Cornflakes", "grain", "vegan", [376, 7, 84, 0.6, 3], label("Typical plain cornflakes label"), [s("bowl", 30, null, true, "1 bowl (30 g)"), s("cup", 28)], { aliases: ["corn flakes"] }),
+  food("Instant noodles (masala), dry", "snack", "veg", [440, 9, 62, 17, 2], label("Typical masala instant noodles label, per dry weight"),
+    [s("serving", 70, null, true, "1 pack (70 g)"), s("piece", 70, null, false, "1 pack"), s("bowl", 70, null, false, "1 bowl (1 pack)")], { aliases: ["maggi", "instant noodles", "maggi noodles", "noodles"] }),
+
+  // ── Pulses and legumes ───────────────────────────────────────────────────
+  food("Toor dal, raw", "pulse", "vegan", [343, 21.7, 62.8, 1.5, 15], usda("Pigeon peas (red gram), mature seeds, raw"), [s("tbsp", 12), s("cup", 200), PER100()], { aliases: ["arhar dal raw", "tuvar dal raw", "pigeon peas"] }),
+  food("Moong dal, raw", "pulse", "vegan", [347, 23.9, 62.6, 1.1, 16.3], usda("Mung beans, mature seeds, raw"), [s("tbsp", 12), s("cup", 200), PER100()], { aliases: ["mung dal raw", "green gram", "moong raw"] }),
+  food("Masoor dal, raw", "pulse", "vegan", [358, 23.9, 63.1, 2.2, 10.8], usda("Lentils, pink or red, raw"), [s("tbsp", 12), s("cup", 190), PER100()], { aliases: ["red lentils", "masoor raw"] }),
+  food("Urad dal, raw", "pulse", "vegan", [341, 25.2, 59, 1.6, 18.3], usda("Mungo beans, mature seeds, raw"), [s("tbsp", 12), s("cup", 200), PER100()], { aliases: ["black gram", "urad raw", "kali dal raw"] }),
+  food("Chana dal, raw", "pulse", "vegan", [372, 20.5, 61, 6, 12.2], ref("USDA 'Chickpeas, mature seeds, raw' values (entry missing from the bulk mirror)"), [s("tbsp", 12), s("cup", 200), PER100()], { aliases: ["bengal gram", "chana raw", "kala chana raw", "kabuli chana raw", "chickpeas raw"] }),
+  food("Rajma, raw", "pulse", "vegan", [337, 22.5, 61.3, 1.1, 15.2], usda("Beans, kidney, red, mature seeds, raw"), [s("cup", 185), PER100()], { aliases: ["kidney beans raw", "rajma dry"] }),
+  food("Chickpeas, boiled", "pulse", "vegan", [163, 8.8, 27.3, 2.6, 7.6], usda("Chickpeas, from dried, no added fat"), [s("bowl", 150, null, true, "1 katori"), s("cup", 165)], { aliases: ["boiled chana", "boiled chickpeas", "chana boiled", "kabuli chana boiled"] }),
+  food("Kidney beans, boiled", "pulse", "vegan", [126, 8.6, 22.7, 0.5, 7.4], usda("Kidney beans, from dried, no added fat"), [s("bowl", 150, null, true, "1 katori"), s("cup", 177)], { aliases: ["boiled rajma", "rajma boiled"] }),
+  food("Lentils, boiled", "pulse", "vegan", [115, 9, 20, 0.4, 7.9], usda("Lentils, from dried, no added fat"), [s("bowl", 150, null, true, "1 katori"), s("cup", 198)], { aliases: ["boiled dal", "plain dal", "boiled lentils"] }),
+  food("Moong sprouts", "pulse", "vegan", [30, 3, 5.9, 0.2, 1.8], usda("Mung beans, mature seeds, sprouted, raw"), [s("bowl", 100, null, true, "1 katori"), s("cup", 104)], { aliases: ["sprouts", "bean sprouts", "sprouted moong"] }),
+  food("Soya chunks, dry", "pulse", "vegan", [345, 52, 33, 0.5, 13], label("Typical soya chunks label, per dry weight"), [s("serving", 30, null, true, "30 g dry"), s("cup", 50)], { aliases: ["soya chunks", "soya nuggets", "meal maker", "nutrela"] }),
+  food("Tofu", "pulse", "vegan", [83, 10, 1.2, 5.3, 1], usda("Tofu, extra firm, prepared with nigari"), [PER100(), s("piece", 25, null, false, "1 cube")], { aliases: ["bean curd"] }),
+
+  // ── Vegetables (raw weight) ──────────────────────────────────────────────
+  food("Potato", "vegetable", "vegan", [77, 2, 17.5, 0.1, 2.1], usda("Potatoes, flesh and skin, raw"), [s("piece", 150, "medium", true), s("piece", 100, "small"), s("piece", 220, "large")], { aliases: ["aloo", "potatoes", "boiled potato", "batata"] }),
+  food("Onion", "vegetable", "vegan", [40, 1.1, 9.3, 0.1, 1.7], usda("Onions, raw"), [s("piece", 110, "medium", true), s("piece", 70, "small"), s("piece", 150, "large"), s("tbsp", 10, null, false, "1 tbsp chopped")], { aliases: ["pyaz", "kanda", "onions"] }),
+  food("Tomato", "vegetable", "vegan", [18, 0.9, 3.9, 0.2, 1.2], usda("Tomatoes, red, ripe, raw, year round average"), [s("piece", 100, "medium", true), s("piece", 60, "small"), s("piece", 150, "large")], { aliases: ["tamatar", "tomatoes"] }),
+  food("Cauliflower", "vegetable", "vegan", [25, 1.9, 5, 0.3, 2], usda("Cauliflower, raw"), [s("cup", 100), PER100()], { aliases: ["gobi", "phool gobi"] }),
+  food("Cabbage", "vegetable", "vegan", [25, 1.3, 5.8, 0.1, 2.5], usda("Cabbage, raw"), [s("cup", 90), PER100()], { aliases: ["patta gobi", "band gobi"] }),
+  food("Okra", "vegetable", "vegan", [33, 1.9, 7.5, 0.2, 3.2], usda("Okra, raw"), [s("cup", 100), PER100()], { aliases: ["bhindi raw", "lady finger", "ladyfinger"] }),
+  food("Brinjal", "vegetable", "vegan", [25, 1, 5.9, 0.2, 3], usda("Eggplant, raw"), [s("piece", 250, null, true, "1 large bharta brinjal"), s("cup", 82)], { aliases: ["baingan", "eggplant", "aubergine"] }),
+  food("Spinach", "vegetable", "vegan", [23, 2.9, 3.6, 0.4, 2.2], usda("Spinach, raw"), [s("cup", 30), s("handful", 25), PER100()], { aliases: ["palak"] }),
+  food("Green peas", "vegetable", "vegan", [81, 5.4, 14.4, 0.4, 5.7], usda("Peas, green, raw"), [s("bowl", 100, null, true, "1 katori"), s("cup", 145), s("tbsp", 10)], { aliases: ["matar", "peas"] }),
+  food("Carrot", "vegetable", "vegan", [41, 0.9, 9.6, 0.2, 2.8], usda("Carrots, raw"), [s("piece", 70, "medium", true), s("cup", 110)], { aliases: ["gajar", "carrots"] }),
+  food("Bottle gourd", "vegetable", "vegan", [14, 0.6, 3.4, 0, 0.5], usda("Gourd, white-flowered (calabash), raw"), [s("cup", 115), PER100()], { aliases: ["lauki raw", "doodhi", "ghiya", "dudhi"] }),
+  food("Capsicum", "vegetable", "vegan", [20, 0.9, 4.6, 0.2, 1.7], usda("Peppers, sweet, green, raw"), [s("piece", 120, "medium", true), s("cup", 90)], { aliases: ["shimla mirch", "bell pepper", "green pepper"] }),
+  food("Cucumber", "vegetable", "vegan", [16, 0.7, 3.6, 0.1, 0.5], usda("Cucumber, with peel, raw"), [s("piece", 200, "medium", true), s("cup", 120), s("slice", 7)], { aliases: ["kheera", "kakdi"] }),
+  food("Green beans", "vegetable", "vegan", [31, 1.8, 7, 0.2, 2.7], usda("Beans, snap, green, raw"), [s("cup", 100), PER100()], { aliases: ["french beans", "beans"] }),
+  food("Mushroom", "vegetable", "vegan", [22, 3.1, 3.3, 0.3, 1], usda("Mushrooms, white, raw"), [s("cup", 70), s("piece", 18), PER100()], { aliases: ["mushrooms", "button mushroom"] }),
+  food("Ginger", "spice_condiment", "vegan", [80, 1.8, 17.8, 0.8, 2], usda("Ginger root, raw"), [s("tsp", 5, null, true), s("tbsp", 15)], { aliases: ["adrak"] }),
+  food("Garlic", "spice_condiment", "vegan", [149, 6.4, 33.1, 0.5, 2.1], usda("Garlic, raw"), [s("piece", 3, null, true, "1 clove"), s("tsp", 3)], { aliases: ["lehsun", "garlic clove"] }),
+  food("Green chilli", "spice_condiment", "vegan", [40, 2, 9.5, 0.2, 1.5], usda("Peppers, hot chili, green, raw"), [s("piece", 5, null, true)], { aliases: ["hari mirch", "green chili"] }),
+  food("Coriander leaves", "spice_condiment", "vegan", [23, 2.1, 3.7, 0.5, 2.8], usda("Coriander (cilantro) leaves, raw"), [s("tbsp", 5, null, true, "1 tbsp chopped")], { aliases: ["dhaniya", "cilantro", "coriander"] }),
+  food("Lemon juice", "spice_condiment", "vegan", [22, 0.3, 6.9, 0.2, 0.3], usda("Lemon juice, raw"), [s("tsp", 5, null, true), s("tbsp", 15), s("piece", 30, null, false, "juice of 1 lemon")], { aliases: ["nimbu", "lemon", "lime juice"] }),
+  food("Sweet potato", "vegetable", "vegan", [86, 1.6, 20.1, 0.1, 3], ref("USDA 'Sweet potato, raw, unprepared' values (entry missing from the bulk mirror)"), [s("piece", 130, "medium", true), PER100(false)], { aliases: ["shakarkandi", "shakarkand"] }),
+  food("Beetroot", "vegetable", "vegan", [43, 1.6, 9.6, 0.2, 2.8], usda("Beets, raw"), [s("piece", 80, "medium", true), s("cup", 136)], { aliases: ["chukandar", "beet"] }),
+  food("Broccoli", "vegetable", "vegan", [34, 2.8, 6.6, 0.4, 2.6], usda("Broccoli, raw"), [s("cup", 90), PER100()]),
+  food("Sweet corn", "vegetable", "vegan", [86, 3.3, 18.7, 1.4, 2], usda("Corn, sweet, yellow, raw"), [s("bowl", 100, null, true, "1 katori"), s("cup", 145), s("piece", 100, null, false, "1 cob (kernels)")], { aliases: ["corn", "bhutta", "makai", "american corn"] }),
+  food("Pumpkin", "vegetable", "vegan", [26, 1, 6.5, 0.1, 0.5], usda("Pumpkin, raw"), [s("cup", 115), PER100()], { aliases: ["kaddu", "sitaphal sabzi"] }),
+  food("Radish", "vegetable", "vegan", [16, 0.7, 3.4, 0.1, 1.6], usda("Radishes, raw"), [s("piece", 100, "medium", true), s("cup", 115)], { aliases: ["mooli"] }),
+
+  // ── Fruits (edible part) ─────────────────────────────────────────────────
+  food("Banana", "fruit", "vegan", [89, 1.1, 22.8, 0.3, 2.6], usda("Bananas, raw"), [s("piece", 100, "medium", true), s("piece", 80, "small"), s("piece", 130, "large")], { aliases: ["kela", "bananas"] }),
+  food("Apple", "fruit", "vegan", [57, 0.3, 13.6, 0.1, 2.4], usda("Apples, raw, golden delicious, with skin"), [s("piece", 180, "medium", true), s("piece", 130, "small"), s("piece", 220, "large"), s("slice", 20)], { aliases: ["seb", "apples"] }),
+  food("Mango", "fruit", "vegan", [60, 0.8, 15, 0.4, 1.6], usda("Mangos, raw"), [s("piece", 200, "medium", true, "1 medium (edible part)"), s("cup", 165), s("slice", 40)], { aliases: ["aam", "mangoes"] }),
+  food("Orange", "fruit", "vegan", [47, 0.9, 11.8, 0.1, 2.4], usda("Oranges, raw, all commercial varieties"), [s("piece", 130, "medium", true), s("piece", 100, "small")], { aliases: ["santra", "narangi", "kinnow", "mosambi"] }),
+  food("Papaya", "fruit", "vegan", [43, 0.5, 10.8, 0.3, 1.7], usda("Papayas, raw"), [s("bowl", 150, null, true, "1 katori, cubed"), s("cup", 145), s("slice", 100)], { aliases: ["papita"] }),
+  food("Watermelon", "fruit", "vegan", [30, 0.6, 7.5, 0.1, 0.4], usda("Watermelon, raw"), [s("bowl", 150, null, true, "1 katori, cubed"), s("cup", 152), s("slice", 280)], { aliases: ["tarbooz", "tarbuj"] }),
+  food("Grapes", "fruit", "vegan", [67, 0.6, 17.1, 0.3, 0.9], usda("Grapes, american type (slip skin), raw"), [s("bowl", 100, null, true, "1 katori"), s("cup", 92), s("piece", 5, null, false, "1 grape")], { aliases: ["angoor"] }),
+  food("Pomegranate", "fruit", "vegan", [83, 1.7, 18.7, 1.2, 4], usda("Pomegranates, raw"), [s("bowl", 100, null, true, "1 katori, seeds"), s("cup", 174), s("piece", 280, null, false, "1 fruit (seeds)")], { aliases: ["anar"] }),
+  food("Guava", "fruit", "vegan", [68, 2.5, 14.3, 0.9, 5.4], usda("Guavas, common, raw"), [s("piece", 100, "medium", true)], { aliases: ["amrood", "peru"] }),
+  food("Pineapple", "fruit", "vegan", [50, 0.5, 13.1, 0.1, 1.4], usda("Pineapple, raw, all varieties"), [s("bowl", 150, null, true, "1 katori"), s("cup", 165), s("slice", 85)], { aliases: ["ananas"] }),
+  food("Chikoo", "fruit", "vegan", [83, 0.4, 20, 1.1, 5.3], usda("Sapodilla, raw"), [s("piece", 100, "medium", true)], { aliases: ["chiku", "sapota", "sapodilla"] }),
+  food("Dates", "fruit", "vegan", [282, 2.5, 75, 0.4, 8], usda("Dates, deglet noor"), [s("piece", 8, null, true, "1 date"), s("piece", 24, "large", false, "1 medjool date")], { aliases: ["khajoor", "date", "dates dry"] }),
+  food("Strawberries", "fruit", "vegan", [32, 0.7, 7.7, 0.3, 2], usda("Strawberries, raw"), [s("cup", 150), s("piece", 12), PER100()], { aliases: ["strawberry"] }),
+  food("Pear", "fruit", "vegan", [57, 0.4, 15.2, 0.1, 3.1], usda("Pears, raw"), [s("piece", 180, "medium", true)], { aliases: ["nashpati", "pears"] }),
+  food("Muskmelon", "fruit", "vegan", [34, 0.8, 8.2, 0.2, 0.9], usda("Melons, cantaloupe, raw"), [s("bowl", 150, null, true, "1 katori, cubed"), s("cup", 160)], { aliases: ["kharbuja", "cantaloupe"] }),
+  food("Kiwi", "fruit", "vegan", [61, 1.1, 14.7, 0.5, 3], usda("Kiwifruit, green, raw"), [s("piece", 75, "medium", true)], { aliases: ["kiwifruit"] }),
+  food("Coconut, fresh", "fruit", "vegan", [354, 3.3, 15.2, 33.5, 9], usda("Nuts, coconut meat, raw"), [s("tbsp", 10, null, false, "1 tbsp grated"), s("cup", 80), s("piece", 45, null, true, "1 piece")], { aliases: ["nariyal", "coconut", "grated coconut"] }),
+  food("Raisins", "fruit", "vegan", [299, 3.3, 79.3, 0.2, 4.5], usda("Raisins"), [s("tbsp", 9, null, true), s("handful", 30)], { aliases: ["kishmish"] }),
+
+  // ── Dairy ────────────────────────────────────────────────────────────────
+  food("Toned milk", "dairy", "veg", [61, 3.3, 4.6, 3.2, 0], usda("Milk, whole (3.25% fat, close to Indian toned milk at 3%)"),
+    [s("glass", 250, null, true), s("cup", 200), s("tbsp", 15)], { basis: "100ml", aliases: ["milk", "doodh", "cow milk", "packet milk"] }),
+  food("Full cream milk", "dairy", "veg", [87, 3.2, 4.8, 6, 0], ref("Typical Indian full cream milk (6% fat)"), [s("glass", 250, null, true), s("cup", 200)], { basis: "100ml", aliases: ["full fat milk", "whole milk", "buffalo milk", "gold milk"] }),
+  food("Double toned milk", "dairy", "veg", [45, 3.1, 4.7, 1.5, 0], ref("Typical Indian double toned milk (1.5% fat)"), [s("glass", 250, null, true), s("cup", 200)], { basis: "100ml", aliases: ["low fat milk", "skimmed milk", "slim milk"] }),
+  food("Curd", "dairy", "veg", [61, 3.5, 4.7, 3.2, 0], usda("Yogurt, plain, whole milk"), [s("bowl", 150, null, true, "1 katori"), s("cup", 245), s("tbsp", 15)], { aliases: ["dahi", "yogurt", "yoghurt", "plain curd"] }),
+  food("Greek yogurt", "dairy", "veg", [73, 9.9, 3.9, 1.9, 0], usda("Yogurt, Greek, plain, lowfat"), [s("bowl", 100, null, true, "1 small cup (100 g)"), s("tbsp", 15)], { aliases: ["hung curd", "greek curd"] }),
+  food("Paneer", "dairy", "veg", [265, 18.3, 1.2, 20.8, 0], ref("Typical full-fat paneer values; no USDA entry"),
+    [PER100(), s("piece", 25, null, false, "1 cube"), s("bowl", 100, null, false, "1 katori, cubed")], { aliases: ["cottage cheese", "panir", "malai paneer"] }),
+  food("Ghee", "fat_oil", "veg", [900, 0, 0, 100, 0], usda("Butter, Clarified butter (ghee)"), [s("tsp", 4.5, null, true), s("tbsp", 13)], { aliases: ["desi ghee", "clarified butter"] }),
+  food("Butter", "fat_oil", "veg", [717, 0.8, 0.1, 81.1, 0], usda("Butter, salted"), [s("tsp", 5, null, true), s("tbsp", 14), s("piece", 10, null, false, "1 small cube")], { aliases: ["makhan", "amul butter"] }),
+  food("Fresh cream", "dairy", "veg", [250, 2.2, 3.4, 25, 0], ref("Typical Indian fresh cream (25% fat)"), [s("tbsp", 15, null, true)], { aliases: ["cream", "malai"] }),
+  food("Cheese", "dairy", "veg", [408, 23.3, 2.4, 34, 0], usda("Cheese, cheddar"), [s("slice", 20, null, true), s("tbsp", 7, null, false, "1 tbsp grated"), s("piece", 20, null, false, "1 cube")], { aliases: ["cheese slice", "cheddar", "processed cheese"] }),
+  food("Khoya", "dairy", "veg", [421, 14.6, 20.5, 31.2, 0], ref("Typical khoya (mawa) values; no USDA entry"), [s("tbsp", 15, null, true), PER100(false)], { aliases: ["mawa", "khoa"] }),
+
+  // ── Eggs, meat, fish ─────────────────────────────────────────────────────
+  food("Egg, boiled", "egg", "egg", [155, 12.6, 1.1, 10.6, 0], usda("Egg, whole, cooked, hard-boiled"), [s("piece", 50, null, true, "1 egg"), s("piece", 60, "large", false, "1 large egg")], { aliases: ["egg", "eggs", "boiled egg", "anda", "whole egg", "hard boiled egg"] }),
+  food("Egg, raw", "egg", "egg", [143, 12.6, 0.7, 9.5, 0], usda("Egg, whole, raw, fresh"), [s("piece", 50, null, true, "1 egg")], { aliases: ["raw egg"] }),
+  food("Egg white", "egg", "egg", [52, 10.9, 0.7, 0.2, 0], usda("Egg, white, raw, fresh"), [s("piece", 33, null, true, "1 egg white")], { aliases: ["egg whites", "boiled egg white"] }),
+  food("Fried egg", "egg", "egg", [196, 13.6, 0.8, 14.8, 0], usda("Egg, whole, cooked, fried"), [s("piece", 46, null, true, "1 egg")], { aliases: ["egg fried", "sunny side up", "half fry", "bull's eye"] }),
+  food("Chicken breast, raw", "meat", "nonveg", [112, 22.5, 0, 1.9, 0], usda("Chicken, breast, boneless, skinless, raw"), [PER100()], { aliases: ["raw chicken breast"] }),
+  food("Chicken breast, cooked", "meat", "nonveg", [149, 28, 0, 3.3, 0], usda("Chicken breast, stewed, skin not eaten"), [PER100(), s("piece", 120, null, false, "1 breast fillet")], { aliases: ["chicken breast", "chicken", "grilled chicken", "boiled chicken", "chicken boiled"] }),
+  food("Chicken thigh, raw", "meat", "nonveg", [149, 18.6, 0, 7.9, 0], usda("Chicken, thigh, boneless, skinless, raw"), [PER100()], { aliases: ["chicken curry cut raw", "raw chicken"] }),
+  food("Mutton, raw", "meat", "nonveg", [109, 20.6, 0, 2.3, 0], ref("USDA 'Game meat, goat, raw' values (entry missing from the bulk mirror)"), [PER100()], { aliases: ["goat meat raw", "raw mutton"] }),
+  food("Mutton, cooked", "meat", "nonveg", [142, 26.9, 0, 3, 0], usda("Goat"), [PER100()], { aliases: ["goat meat", "mutton boiled"] }),
+  food("Fish (rohu), raw", "fish", "nonveg", [127, 17.8, 0, 5.6, 0], usda("Fish, carp, raw"), [PER100(), s("piece", 80, null, false, "1 piece")], { aliases: ["rohu", "fish", "carp", "katla"] }),
+  food("Salmon", "fish", "nonveg", [208, 20.4, 0, 13.4, 0], usda("Fish, salmon, Atlantic, farmed, raw"), [PER100()]),
+  food("Prawns, raw", "fish", "nonveg", [85, 20.1, 0, 0.5, 0], usda("Crustaceans, shrimp, raw"), [PER100()], { aliases: ["prawns", "shrimp", "jhinga"] }),
+
+  // ── Nuts and seeds ───────────────────────────────────────────────────────
+  food("Almonds", "nut_seed", "vegan", [579, 21.1, 21.6, 49.9, 12.5], usda("Nuts, almonds"), nut(1.2), { aliases: ["badam", "almond"] }),
+  food("Cashews", "nut_seed", "vegan", [553, 18.2, 30.2, 43.9, 3.3], usda("Nuts, cashew nuts, raw"), nut(1.5), { aliases: ["kaju", "cashew"] }),
+  food("Walnuts", "nut_seed", "vegan", [654, 15.2, 13.7, 65.2, 6.7], usda("Nuts, walnuts, english"), nut(4), { aliases: ["akhrot", "walnut"] }),
+  food("Pistachios", "nut_seed", "vegan", [560, 20.2, 27.2, 45.3, 10.6], usda("Nuts, pistachio nuts, raw"), nut(0.7), { aliases: ["pista"] }),
+  food("Peanuts", "nut_seed", "vegan", [567, 25.8, 16.1, 49.2, 8.5], usda("Peanuts, all types, raw"), [s("handful", 30, null, true), s("tbsp", 9)], { aliases: ["moongphali", "groundnuts", "mungfali", "peanut"] }),
+  food("Roasted peanuts", "nut_seed", "vegan", [599, 28, 15.3, 52.5, 9.4], usda("Peanuts, roasted, unsalted"), [s("handful", 30, null, true), s("tbsp", 9)], { aliases: ["roasted groundnuts", "salted peanuts"] }),
+  food("Peanut butter", "nut_seed", "vegan", [598, 22.2, 22.3, 51.4, 5], usda("Peanut butter, smooth style, without salt"), [s("tbsp", 16, null, true), s("tsp", 5)], { aliases: ["pb"] }),
+  food("Chia seeds", "nut_seed", "vegan", [486, 16.5, 42.1, 30.7, 34.4], usda("Seeds, chia seeds, dried"), [s("tbsp", 12, null, true), s("tsp", 4)], { aliases: ["chia"] }),
+  food("Flax seeds", "nut_seed", "vegan", [534, 18.3, 28.9, 42.2, 27.3], usda("Seeds, flaxseed"), [s("tbsp", 10, null, true), s("tsp", 3.5)], { aliases: ["alsi", "flaxseed", "linseed"] }),
+  food("Pumpkin seeds", "nut_seed", "vegan", [574, 29.8, 14.7, 49, 6.5], usda("Pumpkin seeds, unsalted"), [s("tbsp", 9, null, true), s("handful", 30)], { aliases: ["pepitas"] }),
+  food("Sesame seeds", "nut_seed", "vegan", [573, 17.7, 23.4, 49.7, 11.8], usda("Seeds, sesame seeds, whole, dried"), [s("tbsp", 9, null, true), s("tsp", 3)], { aliases: ["til"] }),
+  food("Sunflower seeds", "nut_seed", "vegan", [584, 20.8, 20, 51.5, 8.6], usda("Seeds, sunflower seed kernels, dried"), [s("tbsp", 9, null, true), s("handful", 30)]),
+  food("Makhana", "nut_seed", "vegan", [347, 9.7, 76.9, 0.1, 7], ref("Typical fox nut values; no USDA entry"), [s("cup", 10, null, false, "1 cup (10 g)"), s("bowl", 25, null, true, "1 bowl (25 g)"), s("handful", 8)], { aliases: ["fox nuts", "lotus seeds", "phool makhana"] }),
+
+  // ── Oils, sugars ─────────────────────────────────────────────────────────
+  food("Vegetable oil", "fat_oil", "vegan", [884, 0, 0, 100, 0], usda("Oil, vegetable, soybean, refined"), oilServings, { aliases: ["oil", "refined oil", "sunflower oil", "cooking oil", "soybean oil", "rice bran oil"] }),
+  food("Mustard oil", "fat_oil", "vegan", [884, 0, 0, 100, 0], usda("Oil, mustard"), oilServings, { aliases: ["sarson ka tel", "sarson oil"] }),
+  food("Coconut oil", "fat_oil", "vegan", [892, 0, 0, 99.1, 0], usda("Oil, coconut"), oilServings, { aliases: ["nariyal tel"] }),
+  food("Olive oil", "fat_oil", "vegan", [884, 0, 0, 100, 0], usda("Oil, olive, salad or cooking"), oilServings, { aliases: ["extra virgin olive oil"] }),
+  food("Sugar", "sugar_sweetener", "vegan", [387, 0, 100, 0, 0], usda("Sugars, granulated"), [s("tsp", 4.2, null, true), s("tbsp", 12.5), s("piece", 4, null, false, "1 cube")], { aliases: ["chini", "white sugar", "cheeni"] }),
+  food("Jaggery", "sugar_sweetener", "vegan", [383, 0.4, 95, 0.1, 0], ref("Typical jaggery (gur) values; no USDA entry"), [s("piece", 10, null, true, "1 small piece"), s("tsp", 5), s("tbsp", 15)], { aliases: ["gur", "gud"] }),
+  food("Honey", "sugar_sweetener", "vegan", [304, 0.3, 82.4, 0, 0.2], usda("Honey"), [s("tsp", 7, null, true), s("tbsp", 21)], { aliases: ["shahad"] }),
+
+  // ── Drinks, supplements ──────────────────────────────────────────────────
+  food("Black coffee", "drink", "vegan", [1, 0.1, 0, 0, 0], usda("Coffee, brewed"), [s("cup", 200, null, true)], { basis: "100ml", aliases: ["americano", "coffee black", "filter coffee black"] }),
+  food("Black tea", "drink", "vegan", [1, 0, 0.3, 0, 0], ref("Brewed tea without milk or sugar (USDA ~1 kcal/100 ml)"), [s("cup", 150, null, true)], { basis: "100ml", aliases: ["tea without milk", "green tea", "lemon tea", "kali chai"] }),
+  food("Coconut water", "drink", "vegan", [18, 0.2, 4.2, 0, 0], usda("Coconut water, unsweetened"), [s("glass", 250, null, true), s("piece", 300, null, false, "1 coconut")], { basis: "100ml", aliases: ["nariyal pani", "tender coconut"] }),
+  food("Orange juice", "drink", "vegan", [47, 0.8, 10.2, 0.3, 0.3], usda("Orange juice, 100%, NFS"), [s("glass", 250, null, true)], { basis: "100ml", aliases: ["fresh juice", "mosambi juice", "juice"] }),
+  food("Whey protein", "supplement", "veg", [400, 80, 8, 5, 0], label("Typical whey concentrate label"), [s("scoop", 30, null, true)], { aliases: ["whey", "protein powder", "protein shake powder"] }),
+  food("Milk chocolate", "sweet", "veg", [535, 7.7, 59.4, 29.7, 3.4], usda("Candies, milk chocolate"), [s("piece", 10, null, true, "1 small square"), PER100(false)], { aliases: ["chocolate", "dairy milk"] }),
+  food("Vanilla ice cream", "sweet", "veg", [207, 3.5, 23.6, 11, 0.7], usda("Ice cream, vanilla"), [s("scoop", 45, null, true), s("cup", 130)], { aliases: ["ice cream"] }),
+  food("Papad", "snack", "vegan", [371, 25.6, 59.9, 3.2, 18.6], usda("Papad"), [s("piece", 12, null, true)], { aliases: ["papadum", "roasted papad"] }),
+];

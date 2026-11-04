@@ -22,7 +22,13 @@ const tables = (foods: FoodRow[], recipes: RecipeRow[] = []): FoodTables => {
   for (const r of recipes) t.recipes.set(`${r.dish_key}|${r.unit}`, r);
   return t;
 };
-const quiet = { known: async () => [], markUsed: vi.fn().mockResolvedValue(undefined) };
+const quiet = {
+  known: async () => [],
+  markUsed: vi.fn().mockResolvedValue(undefined),
+  // These cases exercise the Supabase tables; the shipped catalog is tested on its own.
+  catalog: { entries: [], byKey: new Map() },
+  recordGaps: vi.fn(),
+};
 
 describe("estimateWithFoodDb", () => {
   it("builds a meal from stored ingredients and dish recipes without the web", async () => {

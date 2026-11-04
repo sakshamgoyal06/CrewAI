@@ -18,6 +18,8 @@ export type FoodUnit =
   | "tsp"
   | "plate"
   | "scoop"
+  | "ladle"
+  | "handful"
   | "serving";
 
 export type FoodComponent = {
@@ -32,6 +34,14 @@ export type FoodComponent = {
   unit: FoodUnit;
   /** True when the person gave no amount (we assume one serving). */
   assumedQuantity: boolean;
+  /** "small", "medium" or "large" when the person said so ("2 large rotis", "a big bowl"). */
+  size?: "small" | "medium" | "large";
+};
+
+const SIZE_WORDS: Record<string, "small" | "medium" | "large"> = {
+  small: "small", chota: "small", choti: "small", mini: "small",
+  medium: "medium", regular: "medium",
+  large: "large", big: "large", bada: "large", badi: "large",
 };
 
 const NUMBER_WORDS: Record<string, number> = {
@@ -45,7 +55,9 @@ const UNIT_WORDS: Record<string, FoodUnit> = {
   kg: "per_100g",
   ml: "per_100ml", milliliter: "per_100ml", millilitre: "per_100ml", l: "per_100ml", litre: "per_100ml", liter: "per_100ml",
   piece: "piece", pieces: "piece", pc: "piece", pcs: "piece", nos: "piece", no: "piece",
-  bowl: "bowl", bowls: "bowl", katori: "bowl", katoris: "bowl",
+  bowl: "bowl", bowls: "bowl", katori: "bowl", katoris: "bowl", katoriyan: "bowl",
+  ladle: "ladle", ladles: "ladle", karchi: "ladle", karchis: "ladle",
+  handful: "handful", handfuls: "handful", mutthi: "handful",
   cup: "cup", cups: "cup",
   glass: "glass", glasses: "glass",
   slice: "slice", slices: "slice",
@@ -57,7 +69,10 @@ const UNIT_WORDS: Record<string, FoodUnit> = {
 };
 
 /** Words that carry no food identity. */
-const FILLER = new Set(["of", "some", "the", "my", "small", "medium", "large", "big", "full", "approx", "about", "around", "~"]);
+const FILLER = new Set([
+  "of", "some", "the", "my", "small", "medium", "large", "big", "regular", "mini", "chota", "choti", "bada", "badi",
+  "full", "approx", "about", "around", "~",
+]);
 
 /** Plural → singular for keys; leaves short words and -ss alone ("dal", "glass"). */
 function singular(word: string): string {
@@ -100,6 +115,14 @@ export function parseFoodPhrase(phrase: string): FoodComponent | null {
     }
   }
 
+  // A size word before the unit: "1 large bowl rice", "2 small katori dal".
+  let size: FoodComponent["size"];
+  const sz = rest.match(/^([a-z]+)\s+/);
+  if (sz && SIZE_WORDS[sz[1]!]) {
+    size = SIZE_WORDS[sz[1]!];
+    rest = rest.slice(sz[0].length);
+  }
+
   // Unit right after the number: "100g", "100 g", "2 bowls of"
   const u = rest.match(/^([a-z]+)\b\.?\s*(?:of\s+)?/);
   if (u && UNIT_WORDS[u[1]!] && (quantity !== null || u[1] !== "no")) {
@@ -110,6 +133,8 @@ export function parseFoodPhrase(phrase: string): FoodComponent | null {
   }
 
   const name = rest.replace(/^of\s+/, "").trim();
+  // Or anywhere in the name: "2 roti large", "a medium banana".
+  size ??= name.split(/\s+/).map((w) => SIZE_WORDS[w]).find(Boolean);
   const foodKey = foodKeyFor(name);
   if (!foodKey) return null;
 
@@ -121,6 +146,7 @@ export function parseFoodPhrase(phrase: string): FoodComponent | null {
     quantity: (quantity ?? 1) * factor,
     unit: unit ?? (assumedQuantity ? "serving" : "piece"),
     assumedQuantity,
+    ...(size ? { size } : {}),
   };
 }
 

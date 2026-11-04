@@ -1,0 +1,110 @@
+/**
+ * Golden meals: real ways people log Indian meals. Each must be answered entirely from the
+ * shipped catalog (no database read, no web lookup) and land in a sensible calorie range.
+ * Ranges are wide on purpose: they catch a wrong serving or unit, not small recipe differences.
+ */
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../foodStore.js", () => ({
+  loadFoodTables: vi.fn(async () => ({ foods: new Map(), recipes: new Map() })),
+  knownFoodNames: vi.fn(async () => []),
+  recipeKey: (k: string, u: string) => `${k}|${u}`,
+  saveFoods: vi.fn(),
+  saveRecipes: vi.fn(),
+  markFoodsUsed: vi.fn(),
+}));
+
+import { estimateWithFoodDb } from "../foodDbEstimate.js";
+import { loadFoodTables } from "../foodStore.js";
+
+const GOLDEN: [meal: string, minKcal: number, maxKcal: number][] = [
+  ["2 roti, 1 katori dal, half plate rice", 400, 560],
+  ["2 rotis and a bowl of bhindi", 280, 400],
+  ["3 chapati, palak paneer", 470, 620],
+  ["aloo paratha with curd", 290, 420],
+  ["2 aloo parathas, 1 tbsp butter", 560, 760],
+  ["1 large aloo paratha", 280, 400],
+  ["poha", 220, 320],
+  ["1 plate poha and chai", 300, 420],
+  ["upma, coconut chutney", 240, 330],
+  ["3 idli, sambar, chutney", 230, 340],
+  ["masala dosa", 250, 350],
+  ["2 dosa and sambar", 340, 450],
+  ["2 medu vada", 230, 320],
+  ["chicken biryani", 560, 720],
+  ["1 plate veg biryani, raita", 470, 620],
+  ["rajma chawal", 360, 480],
+  ["chole bhature", 600, 780],
+  ["dal makhani, 2 roti", 330, 460],
+  ["2 boiled eggs, 2 slices brown bread", 280, 360],
+  ["omelette, 2 bread", 300, 380],
+  ["egg bhurji with 2 pav", 360, 500],
+  ["200g chicken breast, 1 cup rice", 480, 560],
+  ["150 g paneer", 370, 430],
+  ["100g soya chunks", 320, 370],
+  ["1 scoop whey, 1 banana", 190, 250],
+  ["a glass of milk", 130, 170],
+  ["1 cup chai", 60, 95],
+  ["2 cups tea", 130, 180],
+  ["black coffee", 0, 10],
+  ["handful of almonds", 150, 200],
+  ["1 apple, 1 medium banana", 160, 220],
+  ["half katori curd", 35, 60],
+  ["1 bowl dahi", 70, 110],
+  ["2 samosa", 380, 520],
+  ["vada pav", 280, 380],
+  ["pav bhaji", 460, 600],
+  ["2 gulab jamun", 280, 380],
+  ["kheer", 220, 300],
+  ["sweet lassi", 160, 220],
+  ["chaas", 35, 70],
+  ["khichdi, 1 tsp ghee", 180, 240],
+  ["2 moong dal chilla", 280, 360],
+  ["2 besan chilla", 300, 400],
+  ["oats with milk", 250, 340],
+  ["chicken curry and 2 roti", 400, 520],
+  ["butter chicken, 1 cup rice", 420, 520],
+  ["fish curry with rice", 340, 460],
+  ["mutton curry, jeera rice", 380, 520],
+  ["egg curry, 2 roti", 440, 560],
+  ["paneer butter masala and 2 roti", 460, 580],
+  ["aloo gobi, 2 phulka", 330, 430],
+  ["baingan bharta and 2 bajra roti", 360, 480],
+  ["kadhi chawal", 320, 440],
+  ["sprouts", 20, 50],
+  ["1 katori papaya", 50, 80],
+  ["coconut water", 35, 60],
+  ["maggi", 280, 340],
+  ["2 large rotis", 230, 300],
+  ["1 small roti", 60, 90],
+  ["1 tbsp peanut butter, 2 slices white bread", 210, 270],
+];
+
+describe("golden meals from the catalog", () => {
+  it.each(GOLDEN)("%s → %i–%i kcal, all from the catalog", async (meal, min, max) => {
+    const web = vi.fn();
+    const recordGaps = vi.fn();
+    vi.mocked(loadFoodTables).mockClear();
+    const r = await estimateWithFoodDb(meal, web, { recordGaps });
+    expect(r, `no estimate for "${meal}"`).not.toBeNull();
+    expect(web).not.toHaveBeenCalled();
+    expect(loadFoodTables).not.toHaveBeenCalled();
+    expect(recordGaps).not.toHaveBeenCalled();
+    expect(r!.source).toBe("food_db");
+    expect(r!.calories!).toBeGreaterThanOrEqual(min);
+    expect(r!.calories!).toBeLessThanOrEqual(max);
+  });
+
+  it("logs a catalog miss as a gap and only then asks the database", async () => {
+    const recordGaps = vi.fn();
+    vi.mocked(loadFoodTables).mockClear();
+    await estimateWithFoodDb("2 roti and a bowl of zzz unknown curry", null, { recordGaps });
+    expect(loadFoodTables).toHaveBeenCalledWith(["zzz unknown curry"]);
+    expect(recordGaps.mock.calls[0]![0].map((c: { foodKey: string }) => c.foodKey)).toEqual(["zzz unknown curry"]);
+  });
+
+  it("shows the household measure on each line", async () => {
+    const r = await estimateWithFoodDb("2 medium roti, half katori dal", null, { recordGaps: vi.fn() });
+    expect(r!.items.map((i) => i.name)).toEqual(["Roti · 2 medium roti · 80 g", "Dal tadka · ½ katori · 75 g"]);
+  });
+});
