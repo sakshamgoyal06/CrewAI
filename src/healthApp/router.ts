@@ -78,7 +78,7 @@ import { editInput, editPick, restrictionsFor, searchMealFoods } from "./dietPla
 import { eatInput, eatPlanned, undoPlanned, unlinkDeletedMeal } from "./dietPlan/log.js";
 import { logSupplements, undoSupplements } from "./dietPlan/supplementLog.js";
 import { rebalanceToday } from "./dietPlan/rhythm.js";
-import { loadDietPrefs, loadPlanView, markOption, OPTION_ACTIONS, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
+import { FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
 import { replanForGoal } from "./replan.js";
 import { getActiveGoal } from "./bodyStore.js";
 import { PLAN_SLOTS } from "./dietPlan/targets.js";
@@ -404,6 +404,18 @@ export function createHealthAppRouter(): express.Router {
       const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
       const { optionId } = z.object({ optionId: z.string().min(1).max(40) }).parse(req.body);
       const r = await swapPick(ctx, date, slot, optionId);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+
+  /** Why a planned meal is being swapped; "don't cook" and "too much effort" are remembered, the rest last a day. */
+  router.post(
+    "/diet/days/:date/:slot/feedback",
+    route("diet-feedback", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
+      const { reason } = z.object({ reason: z.enum(FEEDBACK_REASONS) }).parse(req.body);
+      const r = await mealFeedback(ctx, date, slot, reason);
       return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );

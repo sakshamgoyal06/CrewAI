@@ -20,6 +20,7 @@ import { pickDays, PLAN_DAYS, type DayPick, type PriorPick } from "./pick.js";
 import { defaultPrefs, dietPrefsInput, type DietPrefs, type DietPrefsInput } from "./prefs.js";
 import { reviewEnabled, reviewPlan } from "./review.js";
 import { supplementChoices, supplementLines, type SupplementLine } from "./supplements.js";
+import { accountDay, type DayAccount } from "./dayAccount.js";
 import { PLAN_SLOTS, type MacroTargets, type MealBudget, type PlanSlot } from "./targets.js";
 
 export type PrefsRow = { prefs: DietPrefs; saved: boolean; pinned: string[]; liked: string[]; hidden: string[] };
@@ -114,6 +115,8 @@ export type ActivePlan = {
   createdAt: string;
 };
 
+type OptionMeta = { novelty: boolean; prep: MealOption["prep"] | null; proteinGroup: string | null };
+
 type OptionRow = {
   id: string;
   slot: PlanSlot;
@@ -143,12 +146,17 @@ export async function loadActivePlan(userProfileId: string): Promise<ActivePlan 
   if (e2) throw new Error(e2.message);
   const options: ActivePlan["options"] = {};
   for (const r of (rows ?? []) as OptionRow[]) {
+    // Novelty, prep and protein ride along inside the totals column (no schema change); split them out.
+    const { meta, ...totals } = r.totals as MealOption["totals"] & { meta?: OptionMeta };
     (options[r.slot] ??= []).push({
       id: r.id,
       slot: r.slot,
       title: r.title,
       items: r.items,
-      totals: r.totals,
+      totals,
+      ...(meta?.novelty ? { novelty: true } : {}),
+      ...(meta?.prep ? { prep: meta.prep } : {}),
+      ...(meta?.proteinGroup !== undefined ? { proteinGroup: meta.proteinGroup } : {}),
       origin: r.origin,
       prepMinutes: r.prep_minutes,
       ...(r.usual_key ? { usualKey: r.usual_key } : {}),
@@ -205,7 +213,7 @@ async function savePlan(userProfileId: string, draft: PlanDraft, reason: string,
       position,
       title: o.title,
       items: o.items,
-      totals: o.totals,
+      totals: { ...o.totals, meta: { novelty: !!o.novelty, prep: o.prep ?? null, proteinGroup: o.proteinGroup ?? null } satisfies OptionMeta },
       origin: o.origin,
       usual_key: o.usualKey ?? null,
       prep_minutes: o.prepMinutes,
@@ -349,7 +357,7 @@ export async function ensureDays(ctx: ActionContext, plan: ActivePlan, prefs: Pr
     totals: r.metadata?.totals as PriorPick["totals"],
     kind: r.metadata?.kind as PriorPick["kind"],
   }));
-  const picks = pickDays({ start: today, budgets: plan.budgets, options: plan.options, prefs: prefs.prefs, pinned: prefs.pinned, existing });
+  const picks = pickDays({ start: today, budgets: plan.budgets, options: plan.options, prefs: prefs.prefs, pinned: prefs.pinned, existing, unavailable: prefs.prefs.unavailable });
   const byId = new Map(Object.values(plan.options).flat().map((o) => [o!.id, o!]));
   const known = new Map(rows.map((r) => [`${r.local_date}|${r.meal_slot}`, r]));
   const missing = picks.filter((p) => !known.has(`${p.date}|${p.slot}`));
@@ -423,6 +431,8 @@ export type PlanView = {
   supplements: { lines: SupplementLine[]; takenToday: boolean; choices: ReturnType<typeof supplementChoices> };
   /** No calorie or protein target yet: the plan has nothing to split, so the tab asks for them first. */
   needsTargets: boolean;
+  /** Each planned day's numbers: targets, planned, supplements, eat-out allowances, logged (dayAccount.ts). */
+  accounts?: DayAccount[];
 };
 
 /**
@@ -450,5 +460,78 @@ export async function loadPlanView(ctx: ActionContext, now = new Date()): Promis
   plan = { ...plan, options: Object.fromEntries(Object.entries(plan.options).map(([slot, list]) => [slot, (list ?? []).filter((o) => itemsAllowed(o.items, allows))])) as typeof plan.options };
   const days = await ensureDays(ctx, plan, prefs, today);
   const { review: _r, ...rest } = plan;
-  return { ok: true, setup: true, plan: rest, days, ...base };
+  const dates = [...new Set(days.map((x) => x.date))];
+  const accounts = dates.map((date) => accountDay({ date, targets: plan!.targets, meals: days.filter((x) => x.date === date), supplements: lines }));
+  return { ok: true, setup: true, plan: rest, days, accounts, ...base };
+}
+
+// ---------- swap feedback ----------
+
+/**
+ * Why they swapped a planned meal. Each reason means something different, and only the first
+ * two are remembered:
+ * - dont_cook: "We don't cook this" — that dish (not its ingredients) never comes back.
+ * - too_much_effort: that dish is ranked down from now on; quicker meals come first.
+ * - dislike_combo: that combination is hidden; its foods stay available in other meals.
+ * - unavailable_today / want_different: skipped for that date only, nothing is remembered.
+ */
+export const FEEDBACK_REASONS = ["dont_cook", "too_much_effort", "dislike_combo", "unavailable_today", "want_different"] as const;
+export type FeedbackReason = (typeof FEEDBACK_REASONS)[number];
+
+/** The dish a meal is built around: its biggest item that isn't the roti or rice. */
+export function mainDishOf(items: Array<{ key: string | null; kcal: number }>): string | null {
+  const cat = catalog();
+  const notBase = items.filter((i) => i.key && !["bread", "grain"].includes(cat.byKey.get(i.key)?.category ?? "") && i.key !== "white rice cooked");
+  return [...(notBase.length ? notBase : items)].sort((a, b) => b.kcal - a.kcal)[0]?.key ?? null;
+}
+
+export async function mealFeedback(
+  ctx: ActionContext,
+  date: string,
+  slot: PlanSlot,
+  reason: FeedbackReason,
+  now = new Date(),
+): Promise<{ ok: true; remembered: string | null } | { ok: false; error: string }> {
+  const today = localDateKey(now, ctx.timezone);
+  const { data, error } = await supabase
+    .from("meal_plan_entries")
+    .select("id, metadata")
+    .eq("user_profile_id", ctx.userProfileId)
+    .eq("local_date", date)
+    .eq("meal_slot", slot)
+    .eq("source", "plan")
+    .eq("status", "planned")
+    .limit(1);
+  if (error) throw new Error(error.message);
+  const entry = (data ?? [])[0] as { id: string; metadata: Record<string, unknown> | null } | undefined;
+  if (!entry) return { ok: false, error: "meal_not_planned" };
+  const optionId = (entry.metadata?.option_id as string | null) ?? null;
+  const items = (entry.metadata?.items as Array<{ key: string | null; kcal: number }> | undefined) ?? [];
+  const row = await loadDietPrefs(ctx.userProfileId);
+  const prefs = { ...row.prefs, habits: { ...row.prefs.habits } };
+  let remembered: string | null = null;
+  if (reason === "dont_cook" || reason === "too_much_effort") {
+    const dish = mainDishOf(items);
+    if (dish) {
+      const field = reason === "dont_cook" ? "neverCook" : "tooMuchEffort";
+      prefs.habits[field] = [...new Set([...(prefs.habits[field] ?? []), dish])].slice(-100);
+      remembered = dish;
+    }
+  } else if (reason === "dislike_combo") {
+    if (optionId) await markOption(ctx.userProfileId, optionId, "hide");
+  }
+  if ((reason === "unavailable_today" || reason === "want_different") && optionId) {
+    // Old dates drop off, so a skip never outlives its day.
+    prefs.unavailable = [...prefs.unavailable.filter((u) => u.date >= today), { date, optionId }].slice(-60);
+  }
+  await saveDietPrefs(ctx.userProfileId, prefs);
+  if (remembered) {
+    // A dish they don't cook (or find too much work) leaves every option: rebuild, keeping eaten meals.
+    const r = await rebuildPlan(ctx, "food_prefs_changed", now);
+    if (!r.ok) return r;
+  } else {
+    // Re-pick just this meal: the next view picks a different option for it.
+    await supabase.from("meal_plan_entries").delete().eq("id", entry.id).eq("status", "planned");
+  }
+  return { ok: true, remembered };
 }

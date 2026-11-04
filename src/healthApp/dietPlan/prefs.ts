@@ -5,6 +5,7 @@
  */
 import { z } from "zod";
 
+import { FREQUENCIES, PROTEIN_GROUPS } from "./familiarity.js";
 import { DEFAULT_SHARES, PLAN_SLOTS, type PlanSlot } from "./targets.js";
 
 const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "expected HH:MM");
@@ -44,6 +45,20 @@ export const dietPrefsInput = z.object({
   supplements: z.array(supplementInput).max(8).default([]),
   /** Meals usually eaten out: planned as a budget, not a dish. */
   eatOut: z.array(z.object({ day: z.coerce.number().int().min(0).max(6), slot: z.enum(PLAN_SLOTS) })).max(28).default([]),
+  /**
+   * What they actually eat (familiarity.ts). All optional: unanswered parts use a starter set for
+   * the diet. neverCook and tooMuchEffort grow from swap feedback, one dish at a time.
+   */
+  habits: z
+    .object({
+      proteins: z.partialRecord(z.enum(PROTEIN_GROUPS), z.enum(FREQUENCIES)).optional(),
+      cuisines: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
+      neverCook: z.array(z.string().trim().min(1).max(80)).max(100).optional(),
+      tooMuchEffort: z.array(z.string().trim().min(1).max(80)).max(100).optional(),
+    })
+    .default({}),
+  /** "Ingredients unavailable today": an option skipped on one date only. Never a lasting dislike. */
+  unavailable: z.array(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), optionId: z.string().min(1).max(40) })).max(60).default([]),
 });
 
 export type DietPrefsInput = z.input<typeof dietPrefsInput>;

@@ -49,6 +49,7 @@ export async function buildPlanDraft(input: {
         prepLimit: prepLimit(input.prefs, b.slot),
         usual: input.usual.filter((u) => u.slot === b.slot),
         hidden: [...input.hidden, ...extraHidden],
+        habits: input.prefs.habits,
       });
     }
     return out;

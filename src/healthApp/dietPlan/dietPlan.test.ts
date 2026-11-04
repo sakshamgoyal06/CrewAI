@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { catalog } from "../../meals/catalog/index.js";
 import { closeDay, rebalanceDay } from "./adjust.js";
 import { buildPlanDraft } from "./build.js";
-import { allowedMeats, composeOptions, dietAllows, itemFor, FIT_TOLERANCE, MAX_OPTIONS, MIN_OPTIONS, pairingProblems, type MealOption, type PersonDiet } from "./compose.js";
+import { allowedMeats, composeOptions, dietAllows, itemFor, FIT_TOLERANCE, MAX_NEW_OPTIONS, MAX_OPTIONS, MIN_OPTIONS, pairingProblems, type MealOption, type PersonDiet } from "./compose.js";
 import { pickDays } from "./pick.js";
 import { defaultPrefs, dietPrefsInput, prepLimit } from "./prefs.js";
 import { parseReview, reviewInput } from "./review.js";
@@ -52,8 +52,12 @@ describe("composeOptions", () => {
     for (const slot of ["breakfast", "lunch", "snack", "dinner"]) {
       it(`gives ${diet} ${slot} ${MIN_OPTIONS}–${MAX_OPTIONS} options that fit, follow the diet and pair well`, () => {
         const opts = compose(slot, diet);
-        expect(opts.length).toBeGreaterThanOrEqual(diet === "jain" ? 4 : MIN_OPTIONS);
-        expect(opts.length).toBeLessThanOrEqual(MAX_OPTIONS);
+        const everyday = opts.filter((o) => !o.novelty);
+        expect(everyday.length).toBeGreaterThanOrEqual(diet === "jain" ? 4 : MIN_OPTIONS);
+        expect(everyday.length).toBeLessThanOrEqual(MAX_OPTIONS);
+        // "Try something new" options come after the everyday ones, at most a couple.
+        expect(opts.length - everyday.length).toBeLessThanOrEqual(MAX_NEW_OPTIONS);
+        expect(opts.slice(0, everyday.length)).toEqual(everyday);
         expect(new Set(opts.map((o) => o.id)).size).toBe(opts.length);
         for (const o of opts) {
           expect(Math.abs(o.totals.kcal - budget(slot).calories) / budget(slot).calories).toBeLessThanOrEqual(FIT_TOLERANCE);
