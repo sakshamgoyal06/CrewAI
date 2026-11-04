@@ -67,6 +67,8 @@ import { listMealsForDate } from "./meals.js";
 import { draftMealFromPhoto } from "./mealCards.js";
 import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
 import { loadWeeklyReview } from "./weeklyReview.js";
+import { loadDietPrefs, loadPlanView, markOption, OPTION_ACTIONS, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
+import { PLAN_SLOTS } from "./dietPlan/targets.js";
 import {
   applyRazorpayEvent,
   billingEnabled,
@@ -304,6 +306,57 @@ export function createHealthAppRouter(): express.Router {
     route("account-food", async (ctx, req) => {
       const r = await saveFoodPrefs(ctx.userProfileId, foodPrefsInput.parse(req.body));
       return r.ok ? { body: r } : { status: 500, body: r };
+    }),
+  );
+
+  /** Diet plan: the Meals tab (setup answers, plan version, 3-day picks). */
+  router.get(
+    "/diet/plan",
+    route("diet-plan", async (ctx) => {
+      const r = await loadPlanView(ctx);
+      return r.ok ? { body: r } : { status: 409, body: r };
+    }),
+  );
+  router.get(
+    "/diet/prefs",
+    route("diet-prefs", async (ctx) => {
+      const r = await loadDietPrefs(ctx.userProfileId);
+      return { body: { ok: true, ...r } };
+    }),
+  );
+  /** Saves the setup answers and builds a new plan from them. */
+  router.put(
+    "/diet/prefs",
+    route("diet-prefs-save", async (ctx, req) => {
+      const prefs = await saveDietPrefs(ctx.userProfileId, req.body);
+      const r = await rebuildPlan(ctx, "prefs_changed");
+      return r.ok ? { body: { ok: true, prefs, version: r.plan.version } } : { status: 409, body: r };
+    }),
+  );
+  router.post(
+    "/diet/plan/rebuild",
+    route("diet-rebuild", async (ctx) => {
+      const r = await rebuildPlan(ctx, "rebuild");
+      return r.ok ? { body: { ok: true, version: r.plan.version } } : { status: 409, body: r };
+    }),
+  );
+  router.post(
+    "/diet/options/:id",
+    route("diet-option-mark", async (ctx, req) => {
+      const { action } = z.object({ action: z.enum(OPTION_ACTIONS) }).parse(req.body);
+      const id = z.string().regex(/^opt_[a-z]+_[0-9a-f]{12}$/).parse(req.params.id);
+      const r = await markOption(ctx.userProfileId, id, action);
+      return { body: { ok: true, pinned: r.pinned, liked: r.liked, hidden: r.hidden } };
+    }),
+  );
+  router.post(
+    "/diet/days/:date/:slot/swap",
+    route("diet-swap", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
+      const { optionId } = z.object({ optionId: z.string().min(1).max(40) }).parse(req.body);
+      const r = await swapPick(ctx, date, slot, optionId);
+      return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );
 
