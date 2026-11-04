@@ -64,6 +64,19 @@ export type Category =
 
 export type Diet = "veg" | "egg" | "nonveg" | "vegan";
 
+/** Regional or style group, for grouping search results (data/ranking.ts). */
+export type Cuisine =
+  | "everyday"
+  | "north_indian"
+  | "south_indian"
+  | "west_indian"
+  | "east_indian"
+  | "mughlai"
+  | "indo_chinese"
+  | "street_food"
+  | "western"
+  | "packaged";
+
 /** When a food is usually eaten; the diet planner uses it to build options. */
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 
