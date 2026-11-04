@@ -5,6 +5,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { isProduction } from "../env.js";
 import { logger } from "../logger.js";
+import { createOpenAIShim } from "./openaiShim.js";
 
 const required = (name: string, value: string | undefined): string => {
   if (value === undefined || value.trim() === "") {
@@ -61,16 +62,31 @@ const anthropicMaxRetries = Number.parseInt(
   10,
 );
 
-export const anthropic = new Anthropic({
-  apiKey: required("ANTHROPIC_API_KEY", process.env.ANTHROPIC_API_KEY),
-  timeout: Number.isNaN(anthropicTimeout) ? 120000 : anthropicTimeout,
-  maxRetries: Number.isNaN(anthropicMaxRetries) ? 2 : anthropicMaxRetries,
-});
+/** "openai" runs every model call on OpenAI (see openaiShim.ts); anything else uses Anthropic. */
+export const llmProvider = process.env.MAGNUS_LLM_PROVIDER?.trim().toLowerCase() === "openai" ? "openai" : "anthropic";
+
+const llmTimeout = Number.isNaN(anthropicTimeout) ? 120000 : anthropicTimeout;
+const llmMaxRetries = Number.isNaN(anthropicMaxRetries) ? 2 : anthropicMaxRetries;
+
+export const anthropic: Anthropic =
+  llmProvider === "openai"
+    ? (createOpenAIShim({
+        apiKey: required("OPENAI_API_KEY", process.env.OPENAI_API_KEY),
+        baseUrl: process.env.OPENAI_BASE_URL?.trim() || undefined,
+        timeout: llmTimeout,
+        maxRetries: llmMaxRetries,
+      }) as unknown as Anthropic)
+    : new Anthropic({
+        apiKey: required("ANTHROPIC_API_KEY", process.env.ANTHROPIC_API_KEY),
+        timeout: llmTimeout,
+        maxRetries: llmMaxRetries,
+      });
 
 logger.info(
   {
     supabaseTimeoutMs: Number.isNaN(supabaseDbTimeout) ? 30000 : supabaseDbTimeout,
-    anthropicTimeoutMs: Number.isNaN(anthropicTimeout) ? 120000 : anthropicTimeout,
+    anthropicTimeoutMs: llmTimeout,
+    llmProvider,
   },
   "clients initialized",
 );

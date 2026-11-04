@@ -9,6 +9,10 @@ const PATTERNS = [
   /authentication_error/i,
   /invalid x-api-key/i,
   /permission_error/i,
+  // OpenAI, when MAGNUS_LLM_PROVIDER=openai.
+  /insufficient_quota/i,
+  /invalid_api_key/i,
+  /incorrect api key/i,
 ];
 
 export const COACH_OFFLINE_MESSAGE =
