@@ -1,15 +1,21 @@
 /**
  * Supplements taken every day (whey, creatine, a multivitamin, a gainer). They are asked for in
  * the plan setup because they carry real calories and protein: a daily scoop of whey is 24 g of
- * the protein target, so the meals around it are planned smaller. Pure; reads the food catalog.
+ * the protein target. Each one is an item inside a meal (whey with breakfast), counted with that
+ * meal like any food; the meal's other food is sized around it. Pure; reads the food catalog.
  */
-import { catalog, lookupFood, servingLabel, type CatalogEntry } from "../../meals/catalog/index.js";
+import { catalog, lookupFood, servingId, servingLabel, type CatalogEntry } from "../../meals/catalog/index.js";
+import type { MealOption, PlanItem } from "./compose.js";
 import { foodKeyFor } from "../../meals/foodParse.js";
 import type { MealBudget, PlanSlot } from "./targets.js";
 
 export type SupplementPref = { name: string; servings: number; slot?: PlanSlot | null };
 
 export type SupplementLine = {
+  /** Catalog key and serving, so the line can be a meal item. */
+  key: string;
+  servingId: string;
+  grams: number;
   /** Catalog name ("Whey protein"). */
   name: string;
   servings: number;
@@ -52,6 +58,9 @@ export function supplementLines(list: SupplementPref[]): SupplementLine[] {
     const prev = merged.get(key);
     const servings = (prev?.servings ?? 0) + p.servings;
     merged.set(key, {
+      key: e.key,
+      servingId: servingId(e.key, s),
+      grams: Math.round(s.grams * servings),
       name: e.name,
       servings,
       slot: p.slot ?? null,
@@ -101,4 +110,33 @@ export function budgetsAfterSupplements(budgets: MealBudget[], lines: Supplement
     });
   }
   return out;
+}
+
+/**
+ * Supplements are food: each one goes into a meal as an ordinary item, counted with that meal.
+ * One without a meal goes with breakfast (or the first meal). The setup choice only says the
+ * person is fine with supplements and how much; nothing is counted outside the meals.
+ */
+export function supplementsBySlot(lines: SupplementLine[], slots: PlanSlot[]): Map<PlanSlot, SupplementLine[]> {
+  const out = new Map<PlanSlot, SupplementLine[]>();
+  if (!slots.length) return out;
+  const fallback = slots.includes("breakfast") ? "breakfast" : slots[0]!;
+  for (const l of lines) {
+    const slot = l.slot && slots.includes(l.slot) ? l.slot : fallback;
+    out.set(slot, [...(out.get(slot) ?? []), { ...l, slot }]);
+  }
+  return out;
+}
+
+export function supplementItem(l: SupplementLine): PlanItem {
+  return { key: l.key, name: l.name, servingId: l.servingId, qty: l.servings, text: `${l.text} ${l.name.toLowerCase()}`, grams: l.grams, kcal: l.kcal, proteinG: l.proteinG, carbsG: l.carbsG, fatG: l.fatG, fiberG: 0 };
+}
+
+/** The option with its supplements added as items, unless it already has them (a usual meal with whey). */
+export function withSupplements(o: MealOption, lines: SupplementLine[]): MealOption {
+  const add = lines.filter((l) => !o.items.some((i) => i.key === l.key));
+  if (!add.length) return o;
+  const items = [...o.items, ...add.map(supplementItem)];
+  const t = (k: "kcal" | "proteinG" | "carbsG" | "fatG" | "fiberG") => Math.round(items.reduce((a, i) => a + (i[k] || 0), 0) * 10) / 10;
+  return { ...o, items, totals: { kcal: Math.round(t("kcal")), proteinG: t("proteinG"), carbsG: t("carbsG"), fatG: t("fatG"), fiberG: t("fiberG") } };
 }

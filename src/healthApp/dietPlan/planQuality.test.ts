@@ -188,14 +188,22 @@ describe("day accounting", () => {
     expect(a.planned.kcal).toBe(500 + Math.round(whey[0]!.kcal));
   });
 
-  it("built plans reconcile with 4/4/9 within the documented tolerance, supplements taken out of meal budgets once", async () => {
-    const prefs = dietPrefsInput.parse({ ...defaultPrefs(), supplements: [{ name: "Whey protein", servings: 1, slot: "breakfast" }] });
+  it("supplements are meal items: whey sits inside every breakfast option and the day adds up", async () => {
+    const prefs = dietPrefsInput.parse({ ...defaultPrefs(), supplements: [{ name: "Whey protein", servings: 1, slot: null }] });
     const d = await buildPlanDraft({ calories: 2232, proteinG: 165, weightKg: 80, prefs, diet: "non_vegetarian", avoid: [], dietNote: null, usual: [], hidden: [] } as never);
-    const budgetKcal = d.budgets.reduce((a, b) => a + b.calories, 0);
-    expect(Math.abs(budgetKcal + whey[0]!.kcal - 2232)).toBeLessThanOrEqual(5);
+    // Budgets are whole meals again; the supplement is inside one of them, not beside them.
+    expect(Math.abs(d.budgets.reduce((a, b) => a + b.calories, 0) - 2232)).toBeLessThanOrEqual(5);
+    for (const o of d.options.breakfast!) {
+      const w = o.items.filter((i) => i.key === whey[0]!.key);
+      expect(w).toHaveLength(1);
+      expect(o.totals.kcal).toBe(Math.round(o.items.reduce((a, i) => a + i.kcal, 0)));
+      expect(o.totals.proteinG).toBeCloseTo(o.items.reduce((a, i) => a + i.proteinG, 0), 0);
+    }
+    for (const slot of ["lunch", "snack", "dinner"] as const) for (const o of d.options[slot] ?? []) expect(o.items.some((i) => i.key === whey[0]!.key)).toBe(false);
     const picks = pickDays({ start: "2026-11-05", budgets: d.budgets, options: d.options, prefs });
     const day = picks.filter((p) => p.date === "2026-11-05").map((p) => ({ slot: p.slot, kind: p.kind, status: "planned", totals: p.totals }));
-    const a = accountDay({ date: "2026-11-05", targets: d.targets, meals: day, supplements: whey });
+    const a = accountDay({ date: "2026-11-05", targets: d.targets, meals: day, supplements: [] });
+    expect(a.supplements.kcal).toBe(0);
     expect(a.reconcile.diffPct).toBeLessThanOrEqual(RECONCILE_TOLERANCE);
     expect(a.target.kcal).toBe(2232);
   }, 30_000);

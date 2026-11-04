@@ -129,7 +129,7 @@ function paint() {
   const leftLine = isToday && left.length && left.length < order.length
     ? el("p", { class: "hint left-line" }, left.length === 1 ? `Only ${SLOT_NAME[left[0]].toLowerCase()} is left today.` : `Left today: ${left.map((s) => SLOT_NAME[s].toLowerCase()).join(", ")}.`)
     : null;
-  host.replaceChildren(...[strip, summary, leftLine, suppRow(ms.date), list,
+  host.replaceChildren(...[strip, summary, leftLine, list,
     el("div", { class: "fresh-plan" },
       el("button", { class: "btn block", type: "button", onclick: rebuild }, "Make me a fresh plan"),
       el("p", { class: "hint" }, "New options from your current food settings. Meals you've already eaten stay."))].filter(Boolean));
@@ -467,7 +467,7 @@ export function mealScreen() {
 
   paintAdd();
   repaint();
-  wrap.append(...[totalsBox, list, addBox, suppNote(slot), action].filter(Boolean));
+  wrap.append(...[totalsBox, list, addBox, action].filter(Boolean));
   if (p.optionId && !p.edited) wrap.append(optionMarks(p.optionId));
   wrap.append(otherOptions(date, slot, p.optionId));
   return wrap;
@@ -702,7 +702,8 @@ export function setupScreen() {
     seg([["full", "Full"], ["basic", "Basic (kettle, microwave)"], ["none", "None"]], () => v.kitchen, (x) => { v.kitchen = x; }),
     el("p", { class: "section-label" }, "Roti or rice"),
     seg([["roti", "Mostly roti"], ["rice", "Mostly rice"], ["both", "Both"]], () => v.staples, (x) => { v.staples = x; }),
-    el("p", { class: "section-label" }, "Supplements you take daily"),
+    el("p", { class: "section-label" }, "Supplements you're happy to have"),
+    el("p", { class: "hint" }, "Magnus adds them to a meal (whey with breakfast unless you pick one), and they count like any food. You can also add one to any meal yourself."),
     el("p", { class: "hint" }, "Whey, creatine, a gainer, vitamins. Their calories and protein count toward your day, so your meals are planned around them."),
     suppBox,
     el("p", { class: "section-label" }, "Foods you love"),
