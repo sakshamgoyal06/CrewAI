@@ -21,5 +21,7 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci
+      - name: Syntax-check the PWA (plain JS, no build step)
+        run: for f in pwa/*.js; do node --check "$f"; done
       - run: npm run build
       - run: npm test

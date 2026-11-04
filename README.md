@@ -1,15 +1,15 @@
 # Magnus
 
-A personal health coach as an installable web app (PWA). Chat is the home screen; the tracker is the second page. Both log to the same place.
+A personal health coach as an installable web app (PWA) with a thin Android app around it. Four tabs: **Coach** (chat, the home screen), **Today**, **Progress** and **You**. Chat and the screens log to the same place. People sign in with Google.
 
 - **Coach chat**: tell it what you ate, walked or weighed in plain words. Meals come back as an editable estimate you confirm; steps, weigh-ins, goals and targets save directly. Ask "why am I off track?" and it answers from your data.
-- **Tracker**: the north-star number (on-track days in the last 7), goal progress with required vs actual pace and a projected date, today's checks, meals, and recent Hevy workouts.
+- **Today and Progress**: the north-star number (on-track days in the last 7), goal progress with required vs actual pace and a projected date, today's checks, meals, and recent Hevy workouts.
 - **Gym slot check**: set a gym time for training days. A few hours after it (3 by default), the server checks Hevy; if no workout is there, the coach asks in chat whether you trained, and a skip is stored with its reason.
 - **Hevy, read and write**: the coach analyses your Hevy history (which lifts are progressing, stalled or slipping), suggests swaps and rep changes, edits routines, creates routines and logs workouts. Every change is a card you apply; nothing is written to Hevy until you do. The tracker shows a Lifts card with each lift's trend.
-- **Notifications**: Web Push from the server: morning plan, missed-meal reminders, step pace, the workout check, an evening wrap-up, weigh-in day and root-cause reviews. Each one can be turned off, and quiet hours apply. Turn them on in **Tracker → ⚙ → Notifications**.
+- **Notifications**: Web Push from the server: morning plan, missed-meal reminders, step pace, the workout check, an evening wrap-up, weigh-in day and root-cause reviews. Each one can be turned off, and quiet hours apply. Turn them on in **You → Notifications**.
 - **Root-cause analysis**: after two off-track days in a row, and every Sunday evening, the app mines the last 3 weeks (which checks fail, which days, missing meals, late eating, step patterns, skip reasons), writes one hypothesis and one 7-day experiment, and a week later checks whether the experiment moved the number. Also on demand: ask "why am I off track?".
 - **Offline logging**: steps, weigh-ins, meal confirmations and workout-check answers made offline are kept on the phone and sent when it reconnects.
-- **Android sync**: steps, walks and smart-scale readings arrive from Health Connect through the HC Webhook app.
+- **Android sync**: the Magnus Android app links Health Connect with one tap and syncs steps, walks, sleep, heart rate and smart-scale readings every hour. See [`android/README.md`](android/README.md).
 
 The older Telegram assistant is parked in [`archive/`](archive/README.md). The plan and phases are in [`docs/HEALTH_PWA_PLAN.md`](docs/HEALTH_PWA_PLAN.md).
 
@@ -21,35 +21,27 @@ Node 20 + TypeScript, Express, Anthropic SDK (coach chat and meal estimates), Su
 src/index.ts            starts the HTTP server
 src/healthServer.ts     /health, /ready, /app (static PWA), /api/health
 src/healthApp/          API routes, actions, coach chat, meals, goals, north star, Health Connect ingest
+src/models.ts           every Claude model id, each with an env override
 pwa/                    the app
+android/                the Android app (Trusted Web Activity + Health Connect sync)
 supabase/migrations/    database schema
+archive/                the Telegram-era code, kept for reference
 ```
 
 ## Set up
 
 1. `npm install`
 2. Copy `.env.example` to `.env` and fill the required values.
-3. Apply the migrations `supabase/migrations/20261027120000_health_app_activity.sql` and `20261028090000_health_gym_slot.sql` and `20261028100000_health_hevy_proposals.sql` and `20261101090000_health_push_rca.sql` (Supabase SQL editor, or `SUPABASE_DB_PASSWORD=… npm run db:apply -- <file>`).
-4. `OWNER_TIMEZONE=Asia/Kolkata npm run app:setup`, then put the two printed values (`MAGNUS_HEALTH_APP_USER_PROFILE_ID`, `MAGNUS_HEALTH_APP_TOKEN`) in `.env` / Railway.
-5. Connect Hevy in the app (You → Food, connections & account).
-6. `npm run dev`, open `http://localhost:8080/app/`, paste the token. On the phone, open the Railway URL in Chrome → menu → **Install app**.
-7. In the app, open **Tracker → ⚙** and set your goal (target weight / body fat / muscle mass + deadline) and daily targets, training days and gym slot.
+3. Apply the migrations in `supabase/migrations/` in filename order (Supabase SQL editor, or `SUPABASE_DB_PASSWORD=… npm run db:apply -- <file>`). See [`supabase/README.md`](supabase/README.md).
+4. `npm run dev` and open `http://localhost:8080/app/`. Sign in with Google; the first sign-in creates your profile and the coach walks you through your goal, targets and routine.
+5. Connect Hevy in **You → Food, connections & account** with your own key from https://hevy.com/settings?developer.
+6. On Android, install the APK from the `android-latest` release and connect Health Connect from inside it.
 
-## Android steps and weigh-ins (Health Connect)
-
-A web app can't read Health Connect directly, so the free [HC Webhook](https://github.com/mcnaveen/health-connect-webhook) app pushes it:
-
-1. Install **Health Connect** and **HC Webhook** (Play Store). Make sure your step source (Google Fit, Samsung Health, Fitbit, your watch) writes to Health Connect.
-2. In HC Webhook, grant **Steps, Distance, Exercise, Weight, Body fat**.
-3. Add a webhook: URL `https://<your-railway-domain>/api/health/ingest/health-connect`, format **JSON**, custom header `Authorization: Bearer <MAGNUS_HEALTH_APP_TOKEN>`.
-4. Data types → steps and distance resolution **60 minutes** with **Count overlapping apps once** on (so a phone and a watch aren't counted twice).
-5. Sync mode **Interval, 30 minutes**. Exclude HC Webhook from battery optimization.
-
-Buckets are stored per hour and the day's totals are rebuilt from them, so re-sent or edited buckets never double count. Walking and hiking sessions count as walk minutes. A smart-scale reading merges into that day's check-in without wiping fields you entered by hand. Health Connect has no muscle-mass type, so log muscle mass in the app.
+Usage caps per person per day are set with `MAGNUS_DAILY_{CHAT,PHOTO,RCA,DRAFT}_LIMIT` (see `.env.example`). Evals call the real model, so `npm run evals` refuses to run unless `MAGNUS_EVALS_ALLOW_API=1`.
 
 ## API
 
-All routes need `Authorization: Bearer <MAGNUS_HEALTH_APP_TOKEN>`.
+Routes need `Authorization: Bearer <token>`: a Google sign-in token, the owner token, or a personal `mgt_` token. Personal tokens made for a phone are ingest-only (`/ingest/health-connect`, `/steps`, `/whoami`).
 
 | Route | Does |
 |---|---|
@@ -66,7 +58,7 @@ All routes need `Authorization: Bearer <MAGNUS_HEALTH_APP_TOKEN>`.
 | `GET /api/health/push` · `POST /api/health/push/subscribe` · `/unsubscribe` · `/test` · `/prefs` | Web Push key, device subscription, test send, quiet hours and per-nudge toggles |
 | `POST /api/health/rca` · `POST /api/health/rca/:id` | Run a root-cause analysis now · take up (`try`) or `decline` its experiment |
 | `POST /api/health/workout-check` | Answer the post-gym check: `recheck`, `skipped` (+ `reason`), `trained_unlogged` |
-| `POST /api/health/ingest/health-connect` | HC Webhook payloads |
+| `POST /api/health/ingest/health-connect` | Health Connect sync from the Android app |
 
 ## Test
 
