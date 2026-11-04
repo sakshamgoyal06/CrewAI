@@ -2785,6 +2785,16 @@ async function importMfpFile(input) {
   }
 }
 
+/** Forgets everything this phone cached about the account; keeps the sign-in, theme and app link. */
+function resetLocalState() {
+  // The sign-in (magnus-auth*, Supabase's sb-* session) and the theme stay.
+  const keep = (k) => k.startsWith("magnus-auth") || k.startsWith("sb-") || k === THEME_KEY;
+  try {
+    for (const k of Object.keys(localStorage)) if (!keep(k)) localStorage.removeItem(k);
+  } catch { /* private mode */ }
+  getCache.clear();
+}
+
 function accountSection() {
   const wrap = el("div", { class: "stack" }, el("p", { class: "section-label" }, "Account"));
   const who = el("p", { class: "hint" }, "Loading…");
@@ -2811,7 +2821,20 @@ function accountSection() {
     } catch (err) { toast(err.message); }
   } }, "Delete account");
   const food = el("div", { class: "stack" });
-  wrap.append(who, el("p", { class: "section-label" }, "Food"), food, el("p", { class: "section-label" }, "Hevy"), hevy, el("p", { class: "section-label" }, "Health Connect"), hc,
+  // Owner only: try Magnus as a brand-new user, any time. Keeps the Google sign-in.
+  const fresh = el("div", { class: "stack", hidden: true },
+    el("p", { class: "section-label" }, "Owner"),
+    el("p", { class: "hint" }, "Start fresh: wipes your meals, weigh-ins, chats, plan and connections, and opens onboarding as a new user. You stay signed in. It can't be undone."),
+    el("button", { class: "link danger", type: "button", onclick: async () => {
+      const typed = prompt("Start over as a new user? Everything is wiped. Type RESET to confirm.");
+      if (typed !== "RESET") return;
+      try {
+        await api("/account/reset", { method: "POST", body: JSON.stringify({ confirm: "RESET" }) });
+        resetLocalState();
+        location.replace("/app/");
+      } catch (err) { toast(err.message); }
+    } }, "Start fresh as a new user"));
+  wrap.append(who, fresh, el("p", { class: "section-label" }, "Food"), food, el("p", { class: "section-label" }, "Hevy"), hevy, el("p", { class: "section-label" }, "Health Connect"), hc,
     el("p", { class: "section-label" }, "Your data"), el("p", { class: "hint" }, "Your data is yours: download all of it, or delete it for good."), el("div", { class: "row-between" }, download, remove),
     el("p", { class: "hint" }, "Coming from MyFitnessPal? Export your data there (Settings, then Export data) and pick the zip here. Your past days show up in your trends."), mfp, mfpFile, out);
 
@@ -2899,6 +2922,7 @@ function accountSection() {
 
   function draw(a) {
     who.textContent = a.email ? `Signed in as ${a.email}` : a.name ? `Signed in as ${a.name}` : "Signed in with an app token.";
+    fresh.hidden = !a.owner;
     paintHevy(a.hevyConnected);
     paintHc(a.tokens || []);
     paintFood(a.food);

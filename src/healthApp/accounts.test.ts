@@ -67,6 +67,7 @@ vi.mock("../tools/clients.js", () => ({
 import {
   createPersonalToken,
   isOwnerEmail,
+  isOwnerProfileRow,
   publicAuthConfig,
   resolveRequestUser,
   scopeAllows,
@@ -180,5 +181,20 @@ describe("scopeAllows", () => {
     expect(scopeAllows("ingest", "GET", "/chat")).toBe(false);
     expect(scopeAllows("ingest", "POST", "/account/tokens")).toBe(false);
     expect(scopeAllows("full", "DELETE", "/account")).toBe(true);
+  });
+});
+
+describe("isOwnerProfileRow", () => {
+  it("finds the owner by Google email, so a fresh account is still the owner", () => {
+    const env = { MAGNUS_OWNER_EMAIL: "Owner@Example.com" };
+    expect(isOwnerProfileRow("any-new-id", "owner@example.com", env)).toBe(true);
+    expect(isOwnerProfileRow("any-new-id", "someone@example.com", env)).toBe(false);
+    expect(isOwnerProfileRow("any-new-id", null, env)).toBe(false);
+  });
+
+  it("still honours the legacy owner profile id when it is set", () => {
+    expect(isOwnerProfileRow("p1", null, { MAGNUS_HEALTH_APP_USER_PROFILE_ID: "p1" })).toBe(true);
+    expect(isOwnerProfileRow("p2", null, { MAGNUS_HEALTH_APP_USER_PROFILE_ID: "p1" })).toBe(false);
+    expect(isOwnerProfileRow("p1", null, {})).toBe(false);
   });
 });

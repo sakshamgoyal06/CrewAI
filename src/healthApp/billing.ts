@@ -10,7 +10,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { logger } from "../logger.js";
 import { supabase } from "../tools/clients.js";
-import { healthAppAuthConfig } from "./auth.js";
+import { isOwnerProfileRow } from "./accounts.js";
 import type { LimitedAction } from "./usageLimits.js";
 import { DAY_MS } from "../util/time.js";
 
@@ -192,7 +192,7 @@ export async function loadEntitlement(userProfileId: string, now = new Date()): 
   const hit = cache.get(userProfileId);
   if (hit && now.getTime() - hit.at < CACHE_MS) return hit.ent;
   const [profile, sub] = await Promise.all([
-    supabase.from("user_profile").select("created_at").eq("id", userProfileId).maybeSingle(),
+    supabase.from("user_profile").select("created_at, email").eq("id", userProfileId).maybeSingle(),
     supabase
       .from("user_subscriptions")
       .select("provider, provider_subscription_id, plan, status, current_period_end")
@@ -203,7 +203,7 @@ export async function loadEntitlement(userProfileId: string, now = new Date()): 
   const ent = entitlementFrom({
     createdAt: (profile.data as { created_at?: string } | null)?.created_at ?? null,
     sub: sub.error ? null : ((sub.data as SubscriptionRow | null) ?? null),
-    isOwner: healthAppAuthConfig()?.userProfileId === userProfileId,
+    isOwner: isOwnerProfileRow(userProfileId, (profile.data as { email?: string | null } | null)?.email),
     now,
   });
   cache.set(userProfileId, { at: now.getTime(), ent });
