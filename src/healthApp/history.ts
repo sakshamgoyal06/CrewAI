@@ -18,7 +18,8 @@ import { checksOn, getRoutineChecks } from "./routineStore.js";
 import { DAY_MS } from "../util/time.js";
 
 export const DEFAULT_HISTORY_DAYS = 30;
-export const MAX_HISTORY_DAYS = 56;
+/** 12 weeks, for the Progress charts' weekly view. */
+export const MAX_HISTORY_DAYS = 84;
 export { stepsBurn, workoutBurn, burnForDay } from "./activities.js";
 export type { Burn } from "./activities.js";
 

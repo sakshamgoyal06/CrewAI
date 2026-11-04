@@ -5,7 +5,9 @@
 import type { HevyWorkout } from "../pillars/health/workouts/hevy/index.js";
 import { hevyKey, loadWorkoutHistory } from "./training.js";
 
-export const HEVY_HISTORY_WEEKS = 8;
+/** Enough for the 12-week Progress view; the lift analysis still reads its own 8 weeks. */
+export const HEVY_HISTORY_WEEKS = 12;
+export const TRAINING_ANALYSIS_WEEKS = 8;
 const CACHE_MS = 10 * 60_000;
 
 type Entry = { at: number; workouts: HevyWorkout[] };
