@@ -129,9 +129,32 @@ function paint() {
 
   const order = SLOT_ORDER.filter((s) => v.prefs.meals.some((m) => m.slot === s));
   const list = el("ul", { class: "list meal-plan" }, ...order.map((slot) => mealCard(ms.date, slot)).filter(Boolean));
-  host.replaceChildren(strip, summary, list,
+  host.replaceChildren(strip, summary, suppRow(ms.date), list,
     el("div", { class: "block-links" },
       el("button", { class: "link quiet", type: "button", onclick: rebuild }, "Make me a fresh plan")));
+}
+
+/** One row for the day's supplements: what they are and a tap to log them (today only). */
+function suppRow(date) {
+  const { el, fmt } = d;
+  const sup = ms.view?.supplements;
+  if (!sup?.lines?.length) return null;
+  const kcal = sup.lines.reduce((a, l) => a + l.kcal, 0);
+  const protein = sup.lines.reduce((a, l) => a + l.proteinG, 0);
+  const isToday = date === d.todayKey();
+  const taken = isToday && sup.takenToday;
+  const act = async () => {
+    try {
+      await d.api(`/diet/supplements/${date}`, { method: taken ? "DELETE" : "POST" });
+      sup.takenToday = !taken;
+      d.toast(taken ? "Supplements removed from today." : "Supplements logged.");
+      paint();
+    } catch (err) { d.toast(err.message); }
+  };
+  return el("div", { class: "supp-line" },
+    el("span", { class: "what" }, sup.lines.map((l) => `${l.name} (${l.text})`).join(", ")),
+    el("small", { class: "sub" }, `${fmt(kcal)} kcal · ${fmt(Math.round(protein))} g protein, already taken out of your meals`),
+    isToday ? el("button", { class: "btn small", type: "button", onclick: act }, taken ? "Undo" : "Took them") : null);
 }
 
 function mealCard(date, slot) {
@@ -373,6 +396,7 @@ export function setupScreen() {
     restrictions: [...(p?.restrictions || [])],
     fastingDays: [...(p?.fastingDays || [])],
     eatOut: [...(p?.eatOut || [])],
+    supplements: (p?.supplements || []).map((x) => ({ name: x.name, servings: x.servings || 1, slot: x.slot || null })),
   };
   const wrap = el("div", { class: "stack diet-setup" });
 
@@ -409,6 +433,30 @@ export function setupScreen() {
     return box;
   };
 
+  // Supplements: tap the ones you take daily, then how many and with which meal.
+  const choices = ms.view?.supplements?.choices || [];
+  const suppBox = el("div", { class: "stack supp-box" });
+  const paintSupps = () => {
+    const has = (n) => v.supplements.find((x) => x.name === n);
+    const chips = el("div", { class: "chips wrap" }, ...choices.map((c) => el("button", { type: "button", class: `chip${has(c.name) ? " on" : ""}`, "aria-pressed": String(!!has(c.name)),
+      onclick: () => { v.supplements = has(c.name) ? v.supplements.filter((x) => x.name !== c.name) : v.supplements.length < 8 ? [...v.supplements, { name: c.name, servings: 1, slot: null }] : v.supplements; paintSupps(); } }, c.name)));
+    const rows = v.supplements.map((s) => {
+      const c = choices.find((x) => x.name === s.name);
+      const nowKcal = c ? Math.round(c.kcal * s.servings) : 0;
+      const nowP = c ? Math.round(c.proteinG * s.servings) : 0;
+      return el("div", { class: "supp-row" },
+        el("div", { class: "set-row" },
+          el("div", { class: "set-text" }, el("span", {}, s.name), el("small", {}, `${s.servings === 1 ? "" : `${s.servings} × `}${c?.label || "1 serving"} · ${nowKcal} kcal · ${nowP} g protein`)),
+          el("span", { class: "row-right" },
+            el("button", { class: "btn small", type: "button", "aria-label": `Fewer ${s.name}`, onclick: () => { s.servings = Math.max(0.5, s.servings - 0.5); paintSupps(); } }, "−"),
+            el("span", {}, String(s.servings)),
+            el("button", { class: "btn small", type: "button", "aria-label": `More ${s.name}`, onclick: () => { s.servings = Math.min(4, s.servings + 0.5); paintSupps(); } }, "+"))),
+        seg([[null, "Any meal"], ["breakfast", "Breakfast"], ["lunch", "Lunch"], ["snack", "Snack"], ["dinner", "Dinner"]], () => s.slot, (x) => { s.slot = x; }));
+    });
+    suppBox.replaceChildren(chips, ...rows);
+  };
+  paintSupps();
+
   const days7 = (get, toggle) => {
     const node = el("div", { class: "weekdays" });
     const paintDays = () => node.replaceChildren(...WD.map((w, k) => el("button", { type: "button", class: `chip${get(k) ? " on" : ""}`, "aria-pressed": String(get(k)), onclick: () => { toggle(k); paintDays(); } }, w)));
@@ -425,6 +473,7 @@ export function setupScreen() {
         meals: normalised(v.meals),
         whoCooks: v.whoCooks, kitchen: v.kitchen, staples: v.staples,
         loves: v.loves, restrictions: v.restrictions, fastingDays: v.fastingDays,
+        supplements: v.supplements,
         eatOut: v.eatOut.filter((e) => v.meals.some((m) => m.on && m.slot === e.slot)),
       };
       const r = await d.api("/diet/prefs", { method: "PUT", body: JSON.stringify(body) });
@@ -447,6 +496,9 @@ export function setupScreen() {
     seg([["full", "Full"], ["basic", "Basic (kettle, microwave)"], ["none", "None"]], () => v.kitchen, (x) => { v.kitchen = x; }),
     el("p", { class: "section-label" }, "Roti or rice"),
     seg([["roti", "Mostly roti"], ["rice", "Mostly rice"], ["both", "Both"]], () => v.staples, (x) => { v.staples = x; }),
+    el("p", { class: "section-label" }, "Supplements you take daily"),
+    el("p", { class: "hint" }, "Whey, creatine, a gainer, vitamins. Their calories and protein count toward your day, so your meals are planned around them."),
+    suppBox,
     el("p", { class: "section-label" }, "Foods you love"),
     chipList(v.loves, "e.g. paneer, poha, dosa", 20),
     el("p", { class: "section-label" }, "Anything else to keep in mind"),

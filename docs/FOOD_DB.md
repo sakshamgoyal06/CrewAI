@@ -18,6 +18,17 @@ requests, and is checked by tests. Plan and sizing:
 3. **Web breakdown** (paid): only for what's still missing. Each catalog miss is logged as a
    `food_gap` event in `health_app_events`, so the next batch builds what people actually eat.
 
+### Units and joined names
+
+- **Plate:** a food with no plate measure gets one at 1½ katori (katori foods), 2 pieces (piece
+  foods like dosa or samosa) or one usual serving. Packs, packets, tins, cans and pegs mean one
+  usual serving of that food ("1 packet maggi", "1 peg whisky").
+- **Joined names:** "fish curry rice" or "dal rice" (two catalog foods typed together, with no
+  "with") split into two items when the whole isn't a catalog food and both halves are. The
+  amount goes to the first, the second is one usual serving.
+- **Phrase coverage:** `phraseCoverage.test.ts` runs about 270 phrases people really type
+  through the catalog. Add the phrases behind any new gap there; the test fails if one needs the web.
+
 ## Data format
 
 - `data/foods.ts`: whole foods and components. Numbers per 100 g (or 100 ml with
@@ -41,6 +52,17 @@ requests, and is checked by tests. Plan and sizing:
   old name as an alias instead.
 - `aliases`: Hindi and regional names, common spellings, and generic words that should mean
   this food ("dal" → dal tadka, "rice" → cooked white rice). An alias may point at only one food.
+
+## Supplements
+
+Supplements are catalog foods with `category: "supplement"` (whey, isolate, casein, plant protein,
+mass gainer, BCAA, collagen, creatine, multivitamin, vitamin D, fish oil, protein bars). The plan
+setup asks which ones a person takes daily (`prefs.supplements`: name, servings, optional meal).
+`src/healthApp/dietPlan/supplements.ts` takes their calories and protein out of the meal
+budgets (a supplement tied to a meal comes out of that meal, the rest are spread; no meal drops
+below 40% of its budget), and `supplementLog.ts` logs them in one tap from the Meals tab. Planned
+meals never include a supplement unless the person loves it. New supplements go in `data/foods.ts`
+with a label source (brand-neutral typical values).
 
 ## Search and suggestions
 

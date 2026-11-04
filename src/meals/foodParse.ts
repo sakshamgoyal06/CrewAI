@@ -66,6 +66,9 @@ const UNIT_WORDS: Record<string, FoodUnit> = {
   plate: "plate", plates: "plate",
   scoop: "scoop", scoops: "scoop",
   serving: "serving", servings: "serving", portion: "serving", portions: "serving",
+  // Packs and measures that stand for one usual serving of that food: "1 packet maggi", "1 peg whisky".
+  packet: "serving", packets: "serving", pack: "serving", packs: "serving", sachet: "serving", sachets: "serving",
+  tin: "serving", tins: "serving", can: "serving", cans: "serving", peg: "serving", pegs: "serving",
 };
 
 /** Words that carry no food identity. */

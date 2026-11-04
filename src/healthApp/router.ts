@@ -73,6 +73,7 @@ import { draftMealFromPhoto } from "./mealCards.js";
 import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
 import { loadWeeklyReview } from "./weeklyReview.js";
 import { eatInput, eatPlanned, undoPlanned, unlinkDeletedMeal } from "./dietPlan/log.js";
+import { logSupplements, undoSupplements } from "./dietPlan/supplementLog.js";
 import { rebalanceToday } from "./dietPlan/rhythm.js";
 import { loadDietPrefs, loadPlanView, markOption, OPTION_ACTIONS, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
 import { replanForGoal } from "./replan.js";
@@ -412,6 +413,23 @@ export function createHealthAppRouter(): express.Router {
       // Ate more or less than planned: the rest of today follows (before the reply, so the tab shows it).
       if (r.ok && r.status === "partial") await rebalanceToday(ctx).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance failed"));
       return r.ok ? { body: r } : { status: r.error === "already_logged" ? 409 : 400, body: r };
+    }),
+  );
+  /** "Took my supplements": logs the day's supplements from the plan setup (idempotent). */
+  router.post(
+    "/diet/supplements/:date",
+    route("diet-supplements-log", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const r = await logSupplements(ctx, date);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  router.delete(
+    "/diet/supplements/:date",
+    route("diet-supplements-undo", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const r = await undoSupplements(ctx, date);
+      return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );
   router.post(

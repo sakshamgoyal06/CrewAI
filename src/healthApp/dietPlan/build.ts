@@ -4,6 +4,7 @@
  */
 import { composeOptions, type MealOption, type PersonDiet } from "./compose.js";
 import { prepLimit, shares, type DietPrefs } from "./prefs.js";
+import { budgetsAfterSupplements, supplementLines } from "./supplements.js";
 import type { PlanReview, ReviewIssue } from "./review.js";
 import { macroTargets, mealBudgets, type MacroTargets, type MealBudget, type PlanSlot } from "./targets.js";
 
@@ -33,7 +34,8 @@ export async function buildPlanDraft(input: {
   review?: ReviewFn;
 }): Promise<PlanDraft> {
   const targets = macroTargets({ calories: input.calories, proteinG: input.proteinG, weightKg: input.weightKg });
-  const budgets = mealBudgets(targets, shares(input.prefs));
+  // Daily supplements come off the meal budgets; the day's targets stay whole.
+  const budgets = budgetsAfterSupplements(mealBudgets(targets, shares(input.prefs)), supplementLines(input.prefs.supplements));
   const compose = (extraHidden: string[]) => {
     const out: Partial<Record<PlanSlot, MealOption[]>> = {};
     for (const b of budgets) {
@@ -84,5 +86,7 @@ function personSummary(input: { diet: PersonDiet; avoid: string[]; prefs: DietPr
   if (input.avoid.length) parts.push(`avoids ${input.avoid.join(", ")}`);
   if (input.prefs.restrictions.length) parts.push(`restrictions: ${input.prefs.restrictions.join("; ")}`);
   parts.push(`staple ${input.prefs.staples}`);
+  const supps = supplementLines(input.prefs.supplements);
+  if (supps.length) parts.push(`takes daily: ${supps.map((s) => `${s.name} (${s.text})`).join(", ")}`);
   return parts.join("; ");
 }

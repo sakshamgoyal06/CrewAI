@@ -1053,3 +1053,9 @@ body.screen-open { overflow: hidden; }
   .skel i, .checks li.met.pop .dot, .fold.open .fold-body { animation: none; }
   #pill-ring, .meter > i, .bar > i { transition: none; }
 }
+
+.supp-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 10px 12px; margin: 0 0 10px; background: var(--sunken); border-radius: 12px; }
+.supp-line .what { flex: 1 1 100%; font-size: 0.9rem; }
+.supp-line .sub { flex: 1; color: var(--muted); font-size: 0.8rem; }
+.supp-row { padding: 6px 0; }
+.supp-row .row-right { gap: 8px; align-items: center; }
