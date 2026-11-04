@@ -74,6 +74,8 @@ import { PLAN_SLOTS } from "./dietPlan/targets.js";
 import {
   applyRazorpayEvent,
   billingEnabled,
+  billingMode,
+  priceAmounts,
   cancelRazorpaySubscription,
   confirmInput,
   confirmRazorpayCheckout,
@@ -729,8 +731,10 @@ export function createHealthAppRouter(): express.Router {
       return {
         body: {
           enabled: billingEnabled(),
+          mode: billingMode(),
           entitlement: await loadEntitlement(ctx.userProfileId),
           prices: priceLabels(),
+          amounts: priceAmounts(),
           razorpay: cfg ? { keyId: cfg.keyId } : null,
           freeLimits: { chat: limitFor("free", "chat", { ...process.env, MAGNUS_BILLING: "on" }), photo: limitFor("free", "photo", { ...process.env, MAGNUS_BILLING: "on" }) },
         },
@@ -744,7 +748,10 @@ export function createHealthAppRouter(): express.Router {
       const { plan } = z.object({ plan: z.enum(["monthly", "yearly"]) }).parse(req.body);
       const cfg = razorpayConfig();
       if (!cfg) return { status: 503, body: { ok: false, error: "billing_unavailable" } };
-      const r = await createRazorpaySubscription(ctx.userProfileId, plan, cfg);
+      const ent = await loadEntitlement(ctx.userProfileId);
+      // During the trial, the first charge waits for the trial's end.
+      const startAt = ent.tier === "trial" && ent.trialEndsAt ? new Date(ent.trialEndsAt) : null;
+      const r = await createRazorpaySubscription(ctx.userProfileId, plan, cfg, fetch, new Date(), startAt);
       return { status: r.ok ? 200 : r.error === "already_subscribed" ? 409 : 502, body: r };
     }),
   );
@@ -754,7 +761,9 @@ export function createHealthAppRouter(): express.Router {
     route("billing-confirm", async (ctx, req) => {
       const cfg = razorpayConfig();
       if (!cfg) return { status: 503, body: { ok: false, error: "billing_unavailable" } };
-      const r = await confirmRazorpayCheckout(ctx.userProfileId, confirmInput.parse(req.body), cfg);
+      const ent = await loadEntitlement(ctx.userProfileId);
+      const startAt = ent.tier === "trial" && ent.trialEndsAt ? new Date(ent.trialEndsAt) : null;
+      const r = await confirmRazorpayCheckout(ctx.userProfileId, confirmInput.parse(req.body), cfg, new Date(), startAt);
       return { status: r.ok ? 200 : 400, body: r };
     }),
   );

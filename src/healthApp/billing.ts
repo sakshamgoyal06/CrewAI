@@ -39,7 +39,16 @@ export type Entitlement = {
 };
 
 export function billingEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.MAGNUS_BILLING?.trim().toLowerCase() === "on";
+  return billingMode(env) === "on";
+}
+
+/**
+ * off: no plan UI, nothing enforced. preview: the plan and payment screens show (with a
+ * simulated payment when Razorpay isn't linked) but nothing is enforced. on: live.
+ */
+export function billingMode(env: NodeJS.ProcessEnv = process.env): "off" | "preview" | "on" {
+  const v = env.MAGNUS_BILLING?.trim().toLowerCase();
+  return v === "on" ? "on" : v === "preview" ? "preview" : "off";
 }
 
 /** A grace period on failed renewals: past_due keeps Pro this long after the period ends. */
@@ -147,6 +156,15 @@ export function priceLabels(env: NodeJS.ProcessEnv = process.env): Record<PlanId
   };
 }
 
+/** Plan prices in whole rupees, for the plan screen's per-month and savings lines. */
+export function priceAmounts(env: NodeJS.ProcessEnv = process.env): Record<PlanId, number> {
+  const rupees = (v: string | undefined, d: number) => {
+    const n = Number.parseInt(v?.trim() ?? "", 10);
+    return Number.isFinite(n) && n > 0 ? n : d;
+  };
+  return { monthly: rupees(env.MAGNUS_PRICE_MONTHLY, 649), yearly: rupees(env.MAGNUS_PRICE_YEARLY, 6999) };
+}
+
 const hmac = (secret: string, data: string | Buffer) => createHmac("sha256", secret).update(data).digest("hex");
 
 function safeEqualHex(a: string, b: string): boolean {
@@ -183,6 +201,8 @@ export async function createRazorpaySubscription(
   cfg: RazorpayConfig,
   fetchImpl: typeof fetch = fetch,
   now = new Date(),
+  /** First charge at this time instead of today (the end of a running trial). */
+  startAt: Date | null = null,
 ): Promise<{ ok: true; subscriptionId: string; keyId: string } | { ok: false; error: "billing_unavailable" | "already_subscribed" }> {
   // A new checkout replaces the one row: never do that while it still pays for Pro, or a second
   // tap on "Subscribe" would turn Pro off and leave the first subscription billing in Razorpay.
@@ -197,6 +217,7 @@ export async function createRazorpaySubscription(
       plan_id: cfg.plans[plan],
       total_count: TOTAL_COUNT[plan],
       customer_notify: 1,
+      ...(startAt && startAt.getTime() > now.getTime() + 3600_000 ? { start_at: Math.floor(startAt.getTime() / 1000) } : {}),
       notes: { user_profile_id: userProfileId, plan },
     }),
   });
@@ -225,12 +246,17 @@ export const confirmInput = z.object({
 
 const PERIOD_MS: Record<PlanId, number> = { monthly: 31 * DAY_MS, yearly: 366 * DAY_MS };
 
-/** Checkout said it was paid: verify, then turn Pro on. The webhook sets the exact period later. */
+/**
+ * Checkout said it was paid: verify, then turn Pro on. The webhook sets the exact period later.
+ * A subscription that starts at the end of the trial is paid through `startAt`: Pro from now,
+ * first charge then.
+ */
 export async function confirmRazorpayCheckout(
   userProfileId: string,
   input: z.infer<typeof confirmInput>,
   cfg: RazorpayConfig,
   now = new Date(),
+  startAt: Date | null = null,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!verifyCheckoutSignature(input.razorpay_payment_id, input.razorpay_subscription_id, input.razorpay_signature, cfg.keySecret)) {
     return { ok: false, error: "invalid_signature" };
@@ -247,7 +273,7 @@ export async function confirmRazorpayCheckout(
     provider_subscription_id: input.razorpay_subscription_id,
     plan: row.plan,
     status: "active",
-    current_period_end: new Date(now.getTime() + PERIOD_MS[row.plan]).toISOString(),
+    current_period_end: (startAt && startAt > now ? startAt : new Date(now.getTime() + PERIOD_MS[row.plan])).toISOString(),
   });
   return { ok: true };
 }

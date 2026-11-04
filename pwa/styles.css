@@ -911,3 +911,32 @@ body.screen-open { overflow: hidden; }
 .targets-required h2 { margin: 4px 0 6px; }
 .targets-required p { margin: 0 0 12px; }
 .muted-block { opacity: 0.6; }
+
+/* ---------- plan & payment screens ---------- */
+.pay { gap: 14px; }
+.pay-lede { font-family: var(--serif); font-weight: var(--head-w); font-size: 1.15rem; margin: 0; }
+.perk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.perk-list li { display: grid; gap: 2px; padding-left: 26px; position: relative; }
+.perk-list li::before { content: "✓"; position: absolute; left: 0; top: 0; color: var(--accent); font-weight: 700; }
+.plan-cards { display: grid; gap: 10px; }
+.plan-card { display: grid; gap: 4px; text-align: left; padding: 16px; border-radius: 18px; border: 1.5px solid var(--hair-strong); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+.plan-card.on { border-color: var(--accent); background: var(--accent-soft); }
+.plan-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.plan-tag { font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); }
+.plan-price { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.pay-row { padding: 8px 0; border-bottom: 1px solid var(--hair); }
+.pay-row:last-child { border-bottom: 0; }
+.pay-row > span:last-child { text-align: right; }
+.pay-result { text-align: center; align-items: center; padding-top: 24px; }
+.pay-result h3 { margin: 0; font-family: var(--serif); font-size: 1.3rem; }
+.pay-result .perk-list { text-align: left; justify-self: stretch; }
+.pay-result .btn { width: 100%; }
+.pay-badge { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font-size: 1.8rem; font-weight: 700; margin: 0 auto; background: var(--raised); color: var(--muted); }
+.pay-badge.good { background: color-mix(in srgb, var(--good) 20%, transparent); color: var(--good); }
+.pay-badge.bad { background: color-mix(in srgb, var(--bad) 20%, transparent); color: var(--bad); }
+.pay-warn { border-color: color-mix(in srgb, var(--warn) 55%, var(--hair)); }
+.pay-warn strong { color: var(--warn); }
+.preview-box { padding: 10px 12px; border: 1px dashed var(--hair-strong); border-radius: 14px; gap: 8px; }
+.preview-box .seg { margin-bottom: 0; }
+.warn-text { color: var(--warn); }
+.center-text { text-align: center; }
