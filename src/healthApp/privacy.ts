@@ -19,6 +19,7 @@ export const EXPORT_TABLES = [
   "health_daily_activity",
   "health_activity_samples",
   "health_activities",
+  "health_water_logs",
   "health_routine_items",
   "health_routine_checks",
   "health_chat_messages",
@@ -60,6 +61,8 @@ async function allRows(table: string, userProfileId: string): Promise<Record<str
       .select("*")
       .eq("user_profile_id", userProfileId)
       .range(from, from + PAGE - 1);
+    // A table from a migration that hasn't run yet has no rows to export.
+    if (error && (error.code === "42P01" || error.code === "PGRST205")) return out;
     if (error) throw new Error(`export ${table}: ${error.message}`);
     out.push(...((data ?? []) as Record<string, unknown>[]));
     if (!data || data.length < PAGE) return out;

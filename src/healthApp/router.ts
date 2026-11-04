@@ -89,7 +89,7 @@ import { liftingGap, routineInput } from "./routine.js";
 import { answerRoutineCheck, routineCheckAnswerInput, setRoutine } from "./routineCheck.js";
 import { applyProposal, discardProposal } from "./hevyProposals.js";
 import { analyzeTraining } from "./training.js";
-import { HEVY_HISTORY_WEEKS, hevyHistoryCached, invalidateHevyHistory } from "./hevyHistory.js";
+import { TRAINING_ANALYSIS_WEEKS, hevyHistoryCached, invalidateHevyHistory } from "./hevyHistory.js";
 import { buildHealthHistory, clampDays } from "./history.js";
 import {
   deleteSubscription,
@@ -103,6 +103,8 @@ import {
 } from "./push.js";
 import { cardFromReport, rcaResponseInput, respondToRca, runRca } from "./rca.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
+import { logWater, waterInput } from "./water.js";
+import { eatingOutInput, planEatingOut } from "./eatingOut.js";
 import { loadCalorieReview } from "./calorieTarget.js";
 import { cardFromIntervention, checkNewGoal, recordManualPlan, respond as respondToIntervention, revertToVersion } from "./interventions/engine.js";
 import { listVersions } from "./interventions/plan.js";
@@ -630,6 +632,18 @@ export function createHealthAppRouter(): express.Router {
     route("steps", async (ctx, req) => fromResult(await logSteps(ctx, stepsInput.parse(req.body)))),
   );
 
+  /** "Eating out tonight" from the quick-log sheet: a plan card in the chat, no model call. */
+  router.post(
+    "/plan/eating-out",
+    route("plan-eating-out", async (ctx, req) => ({ body: await planEatingOut(ctx, eatingOutInput.parse(req.body ?? {}), { record: true }) })),
+  );
+
+  /** Water: add a glass (ml), or undo the day's latest. */
+  router.post(
+    "/water",
+    route("water", async (ctx, req) => fromResult(await logWater(ctx, waterInput.parse(req.body)))),
+  );
+
   /** Android: HC Webhook pushes Health Connect steps, distance, exercise and scale readings here. */
   router.post(
     "/ingest/health-connect",
@@ -911,7 +925,7 @@ export function createHealthAppRouter(): express.Router {
       const h = await hevyHistoryCached(ctx.userProfileId, { fresh: req.query.fresh === "1", now });
       if (!h.connected) return { body: { connected: false, analysis: null } };
       if (!h.ok) return { status: 502, body: { error: "hevy_unavailable" } };
-      const body = { connected: true, analysis: analyzeTraining(h.workouts, now, ctx.timezone, HEVY_HISTORY_WEEKS) };
+      const body = { connected: true, analysis: analyzeTraining(h.workouts, now, ctx.timezone, TRAINING_ANALYSIS_WEEKS) };
       trainingCache.set(ctx.userProfileId, { at: Date.now(), body });
       return { body };
     }),

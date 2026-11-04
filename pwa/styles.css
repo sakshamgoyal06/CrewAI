@@ -231,7 +231,12 @@ body.composing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 
   padding: 10px 6px; max-height: 140px; line-height: 1.4; font-size: 1rem;
 }
 .composer textarea::placeholder { color: var(--faint); }
-.composer.has-text #photo { display: none; }
+.composer.has-text #photo, .composer.has-text #mic { display: none; }
+/* While listening, the mic stays as the stop button and send waits until speech ends. */
+.composer.listening #mic { display: grid; color: var(--accent); animation: listen 1.2s ease-in-out infinite; }
+.composer.listening .send, .composer.listening #photo { display: none; }
+@keyframes listen { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .composer.listening #mic { animation: none; } }
 .composer:not(.has-text) .send { display: none; }
 .send {
   flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; display: grid; place-items: center;
@@ -417,11 +422,13 @@ body.composing .tabbar { display: none; }
 .hint a { color: var(--muted); }
 
 /* Log sheet */
-.log-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.log-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .log-tile {
   display: grid; justify-items: center; gap: 6px; padding: 12px 6px 10px; border-radius: 16px;
   background: var(--surface); border: 1px solid var(--hair); color: var(--text); font-size: 0.86rem; font-weight: 500;
 }
+.log-tile span { white-space: nowrap; }
+@media (max-width: 340px) { .log-grid { grid-template-columns: repeat(3, 1fr); } }
 .log-tile svg { width: 24px; height: 24px; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -529,6 +536,14 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .meter { height: 6px; border-radius: 6px; background: var(--hair-strong); overflow: hidden; margin: 12px 0 16px; }
 .meter > i { display: block; height: 100%; background: var(--accent); border-radius: 6px; transition: width 0.6s ease; }
 .meter.over > i { background: var(--warn); }
+/* Water: one line under the meals, a glass at a time. */
+.water { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--hair); }
+.water .wl { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.water .wl b { font-weight: 600; }
+.water .wl span { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.water .wa { display: flex; gap: 6px; }
+.water .meter { grid-column: 1 / -1; margin: 4px 0 0; height: 4px; }
+.water .meter > i { background: color-mix(in srgb, var(--accent) 55%, #5aa0d8); }
 .meter.thin { height: 3px; margin: 8px 0 6px; }
 .macro-bar { display: flex; gap: 2px; height: 8px; border-radius: 8px; overflow: hidden; background: var(--hair); }
 .macro-bar > i { display: block; flex-basis: 0; min-width: 2px; }
@@ -816,3 +831,12 @@ body.screen-open { overflow: hidden; }
 .dp-focus .eyebrow { margin-bottom: 4px; }
 .dp-focus p { margin: 0; line-height: 1.5; }
 .dp-motto { margin: 0; color: var(--muted); font-style: italic; }
+
+/* Eating-out plan card */
+.eatout .eo-num { display: flex; align-items: baseline; gap: 6px; margin: 4px 0 2px; }
+.eatout .eo-num b { font-family: var(--serif); font-size: 2.2rem; line-height: 1; font-weight: var(--num-w); font-variant-numeric: tabular-nums; }
+.eatout .eo-num small { color: var(--muted); }
+.eatout .eo-lines { margin: 8px 0 0; display: grid; gap: 6px; }
+.eatout .eo-lines p { margin: 0; }
+.eatout .eo-tips { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; color: var(--muted); font-size: 0.9rem; }
+.eatout .eo-head { margin-top: 14px; }

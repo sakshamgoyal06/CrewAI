@@ -28,7 +28,7 @@ function loadTrend() {
   const saved = store.get(TREND_KEY, null) || {};
   return {
     metric: TREND_METRICS.includes(saved.metric) ? saved.metric : "calories",
-    range: [7, 30].includes(saved.range) ? saved.range : 30,
+    range: [7, 30, 84].includes(saved.range) ? saved.range : 30,
     bodyRange: [30, 90, 180].includes(saved.bodyRange) ? saved.bodyRange : 90,
   };
 }
@@ -368,6 +368,26 @@ async function loadUsual() {
 
 const short = (t, n = 24) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
 
+/** One glass from the quick-log sheet, with the day's new total. */
+async function quickWater() {
+  try {
+    const r = await api("/water", { method: "POST", body: JSON.stringify({ ml: GLASS_ML }) });
+    toast(`Water: ${litres(r.totalMl)} today.`);
+    loadDays();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+/** "Eating out" from the quick-log sheet: lunch before 3 pm, dinner after. A template, no model call. */
+function eatingOut() {
+  const meal = new Date().getHours() < 15 ? "lunch" : "dinner";
+  return coachTurn(
+    () => addMessage("user", `Eating out at ${meal}`),
+    () => api("/plan/eating-out", { method: "POST", body: JSON.stringify({ meal }) }),
+  );
+}
+
 function repeatMeal(m) {
   return coachTurn(
     () => addMessage("user", `Usual: ${m.text}`),
@@ -516,6 +536,8 @@ async function loadDays() {
   try {
     state.history = await api("/history?days=30");
     store.set(HISTORY_CACHE_KEY, state.history);
+    // Something may have been logged: the 12-week view refetches in the background next time.
+    if (state.longHistory) state.longHistory.at = 0;
     renderDays();
   } catch (err) {
     if (!state.history) $("fuel-body").replaceChildren(el("p", { class: "none" }, "Couldn't load your days. Pull down or reopen to retry."));
@@ -657,6 +679,42 @@ function renderFuel(d, t) {
     ...(d.meals.length
       ? d.meals.map((m) => mealRow(m, d))
       : [el("li", { class: "none" }, d.date === todayKey() ? "Nothing logged yet today." : "No meals logged this day.")]),
+  );
+  renderWater(d);
+}
+
+const GLASS_ML = 250;
+const litres = (ml) => `${fmt(ml / 1000, 2)} L`;
+
+/** Water for the shown day: a glass per tap, minus to take the last one back. Not scored. */
+function renderWater(d) {
+  const box = $("water");
+  const today = todayKey();
+  if (!box || (today && d.date > today)) { if (box) box.hidden = true; return; }
+  const ml = d.waterMl || 0;
+  const target = state.history?.waterTargetMl || 2500;
+  const busy = (on) => box.querySelectorAll("button").forEach((b) => { b.disabled = on; });
+  const send = async (body) => {
+    busy(true);
+    try {
+      const r = await api("/water", { method: "POST", body: JSON.stringify({ date: d.date, ...body }) });
+      // Show the new total at once; the full refresh catches up behind it.
+      d.waterMl = r.totalMl;
+      renderWater(d);
+      loadDays();
+    } catch (err) {
+      busy(false);
+      toast(err.message);
+    }
+  };
+  box.hidden = false;
+  box.replaceChildren(
+    el("div", { class: "wl" }, el("b", {}, "Water"), el("span", {}, `${litres(ml)} of ${litres(target)}`)),
+    el("div", { class: "wa" },
+      ml > 0 ? el("button", { class: "icon-btn", type: "button", "aria-label": "Remove the last water log", onclick: () => send({ undo: true }) }, "−") : null,
+      el("button", { class: "btn", type: "button", onclick: () => send({ ml: GLASS_ML }) }, "+ Glass")),
+    el("div", { class: "meter", role: "img", "aria-label": `${litres(ml)} of ${litres(target)} water` },
+      el("i", { style: `width:${Math.min(100, Math.round((ml / target) * 100))}%` })),
   );
 }
 
@@ -976,7 +1034,8 @@ function renderTrend() {
   const h = state.history;
   if (!h) return;
   if (BODY_TREND[metric]) return renderBodyTrend(metric);
-  renderRange([[7, "7D"], [30, "30D"]], range, (v) => { state.trend.range = v; });
+  renderRange([[7, "7D"], [30, "30D"], [84, "12W"]], range, (v) => { state.trend.range = v; });
+  if (range === 84) return renderWeeklyTrend(metric);
   const cfg = TREND[metric];
   const days = h.days.slice(-range);
   const t = h.targets || {};
@@ -1058,10 +1117,10 @@ function barChart(host, days, cfg, target, onPick) {
     if (!totals[i]) g.append(svg("circle", { class: "zero", cx: String(cx), cy: String(y(0) - 1.5), r: "1.5" }));
     s.append(g);
     bars.push(g);
-    const showLabel = days.length <= 7 || (days.length - 1 - i) % 7 === 0;
+    const showLabel = d.week ? (days.length - 1 - i) % 3 === 0 : days.length <= 7 || (days.length - 1 - i) % 7 === 0;
     if (showLabel) {
       const tx = svg("text", { class: `axis${d.date === state.selectedDate ? " strong" : ""}`, x: String(cx), y: String(H - 6), "text-anchor": "middle" });
-      tx.textContent = days.length <= 7 ? WD[d.weekday] : String(dateOf(d.date).getUTCDate());
+      tx.textContent = d.week ? dateOf(d.startDate || d.date).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" }) : days.length <= 7 ? WD[d.weekday] : String(dateOf(d.date).getUTCDate());
       s.append(tx);
     }
   });
@@ -1095,6 +1154,113 @@ function barChart(host, days, cfg, target, onPick) {
 }
 
 for (const b of document.querySelectorAll("#trend-tabs button")) b.addEventListener("click", () => { state.trend.metric = b.dataset.metric; saveTrend(); renderTrend(); });
+
+// ---------- 12-week view ----------
+// Twelve bars, one per week (oldest left), from a longer /history read fetched only when asked for.
+
+const LONG_DAYS = 84;
+const LONG_TTL_MS = 10 * 60_000;
+
+async function loadLongHistory() {
+  const cur = state.longHistory;
+  if (cur && Date.now() - cur.at < LONG_TTL_MS && cur.data.today === todayKey()) return cur.data;
+  if (loadLongHistory.running) return loadLongHistory.running;
+  loadLongHistory.running = api(`/history?days=${LONG_DAYS}`)
+    .then((data) => { state.longHistory = { at: Date.now(), data }; return data; })
+    .finally(() => { loadLongHistory.running = null; });
+  return loadLongHistory.running;
+}
+
+/** Average over the days that have a reading; 0 when none do. */
+const avgOf = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+
+/**
+ * Seven-day blocks ending today, shaped like a day so the bar chart and TREND configs read them:
+ * food and burn are daily averages over the days with data, steps over days with steps, and
+ * training is the week's total minutes.
+ */
+function weeksOf(days) {
+  const out = [];
+  for (let end = days.length; end > 0; end -= 7) {
+    const block = days.slice(Math.max(0, end - 7), end);
+    const fed = block.filter((d) => d.calories > 0);
+    const walked = block.filter((d) => d.steps > 0);
+    const burned = block.filter((d) => d.burn);
+    out.unshift({
+      week: true,
+      date: block[0].date,
+      endDate: block[block.length - 1].date,
+      dates: block.map((d) => d.date),
+      fedDays: fed.length,
+      calories: avgOf(fed.map((d) => d.calories)),
+      proteinG: avgOf(fed.map((d) => d.proteinG || 0)),
+      carbsG: avgOf(fed.map((d) => d.carbsG || 0)),
+      fatG: avgOf(fed.map((d) => d.fatG || 0)),
+      steps: avgOf(walked.map((d) => d.steps)),
+      burn: burned.length ? { kcal: avgOf(burned.map((d) => d.burn.kcal)), source: burned.every((d) => d.burn.source === "estimate") ? "estimate" : "mixed" } : null,
+      workouts: block.flatMap((d) => d.workouts),
+      onTrack: block.filter((d) => d.onTrack).length,
+    });
+  }
+  return out;
+}
+
+const WEEK_TIP = {
+  calories: (w) => [`${fmt(w.calories)} kcal a day`, `${w.fedDays} day${w.fedDays === 1 ? "" : "s"} logged`],
+  macros: (w) => [`${fmt(w.proteinG)} g protein a day`, `carbs ${fmt(w.carbsG)} g`, `fat ${fmt(w.fatG)} g`],
+  steps: (w) => [`${fmt(w.steps)} steps a day`],
+  burn: (w) => (w.burn ? [`${fmt(w.burn.kcal)} kcal a day`, "active calories"] : ["No data"]),
+  training: (w) => [`${w.workouts.length} workout${w.workouts.length === 1 ? "" : "s"}`, `${fmt(w.workouts.reduce((a, x) => a + (x.durationMin || 0), 0))} min`, `${fmt(w.workouts.reduce((a, x) => a + x.volumeKg, 0))} kg lifted`],
+};
+
+async function renderWeeklyTrend(metric) {
+  const summary = $("trend-summary");
+  const cfg = TREND[metric];
+  let h = state.longHistory?.data;
+  if (!h || h.today !== todayKey()) {
+    summary.classList.remove("picked");
+    summary.replaceChildren(el("span", { class: "ts" }, "Loading 12 weeks…"));
+    $("trend-legend").replaceChildren();
+    $("trend-chart").replaceChildren();
+    try { h = await loadLongHistory(); } catch (err) {
+      summary.replaceChildren(el("span", { class: "ts" }, "Couldn't load 12 weeks just now."));
+      return;
+    }
+    // The person may have switched away while it loaded.
+    if (state.trend.range !== LONG_DAYS || state.trend.metric !== metric) return;
+  } else if (Date.now() - state.longHistory.at > LONG_TTL_MS) {
+    // Refetch quietly; redraw only if the numbers moved, so a tapped week isn't reset for nothing.
+    const before = JSON.stringify(h.days);
+    loadLongHistory()
+      .then((fresh) => { if (JSON.stringify(fresh.days) !== before && state.trend.range === LONG_DAYS && state.trend.metric === metric) renderWeeklyTrend(metric); })
+      .catch(() => {});
+  }
+  const t = h.targets || {};
+  const weeks = weeksOf(h.days);
+  const [headline, sub] = cfg.summary(h.days, t);
+  const showSummary = () => {
+    summary.classList.remove("picked");
+    summary.replaceChildren(el("span", { class: "tv" }, headline), ...(sub ? [el("span", { class: "ts" }, `${sub} · last 12 weeks`)] : [el("span", { class: "ts" }, "last 12 weeks")]));
+  };
+  const showWeek = (w) => {
+    if (!w) return showSummary();
+    const [first, ...rest] = WEEK_TIP[metric](w);
+    summary.classList.add("picked");
+    summary.replaceChildren(
+      el("span", { class: "tv" }, first),
+      el("span", { class: "ts" }, [`${shortDate(w.date)} – ${dayName(w.endDate)}`, ...rest, `${w.onTrack}/7 on track`].join(" · ")),
+    );
+  };
+  showSummary();
+  $("trend-note").textContent = metric === "training" ? "Each bar is a week's total. Tap one to see it." : "Each bar is a week's daily average. Tap one to see it.";
+  const target = metric === "training" ? null : cfg.target ? cfg.target(t) : null;
+  $("trend-legend").replaceChildren(
+    ...(metric === "macros" ? MACROS.map(([, label, , cls]) => el("span", { class: "lg" }, el("i", { class: `sw ${cls}` }), label)) : []),
+    ...(target ? [el("span", { class: "lg" }, el("i", { class: "key-target" }), `Target ${fmt(target)}`)] : []),
+  );
+  const weekCfg = { ...cfg, unit: `${cfg.unit} per week`, estimated: metric === "burn" ? (w) => w.burn?.source === "estimate" : undefined };
+  barChart($("trend-chart"), weeks.map((w) => ({ ...w, date: w.dates.includes(state.selectedDate) ? state.selectedDate : w.date, startDate: w.date })), weekCfg, target, (w) => showWeek(w && { ...w, date: w.startDate }));
+}
 
 /** The range buttons: days for daily metrics, months for weight and body fat. */
 function renderRange(options, current, set) {
@@ -1605,6 +1771,7 @@ function appendCard(c, into = $("thread")) {
   else if (c.type === "intervention") into.append(interventionCard(c));
   else if (c.type === "calorie_review") into.append(calorieReviewCard(c.review));
   else if (c.type === "day_plan") into.append(dayPlanCard(c));
+  else if (c.type === "eating_out") into.append(eatingOutCard(c));
 }
 
 // ---------- the day's plan ----------
@@ -1627,6 +1794,18 @@ function dayPlanCard(c) {
     sec("This week", el("p", {}, c.week)),
     c.focus ? el("div", { class: "dp-focus" }, el("p", { class: "eyebrow" }, "Worth a look"), el("p", {}, c.focus)) : null,
     el("p", { class: "dp-motto" }, c.motivation),
+  );
+}
+
+/** The plan around a meal out: what to keep for it, what's left before, and how to order. */
+function eatingOutCard(c) {
+  const keep = c.reserveKcal != null && c.lines[0]?.startsWith("Keep");
+  return el("div", { class: "draft eatout" },
+    el("p", { class: "eyebrow" }, `Eating out · ${c.meal}`),
+    keep ? el("div", { class: "eo-num" }, el("b", {}, fmt(c.reserveKcal)), el("small", {}, `kcal for ${c.meal}`)) : null,
+    el("div", { class: "eo-lines" }, ...c.lines.slice(keep ? 1 : 0).map((l) => el("p", {}, l))),
+    el("p", { class: "eyebrow eo-head" }, "Ordering"),
+    el("ul", { class: "eo-tips" }, ...c.tips.map((t) => el("li", {}, t))),
   );
 }
 
@@ -3086,7 +3265,9 @@ const SHEETS = {
         tile("Barcode", '<path d="M4 6v12M7 6v12M11 6v12M14 6v12M17 6v12M20 6v12"/>', () => openSheet("scan")),
         tile("Steps", '<path d="M8 4c1.5 0 2.5 2 2.5 4.5S9.5 13 8 13s-2.5-2-2.5-4.5S6.5 4 8 4zM6 16h4v2a2 2 0 0 1-4 0zM16 8c1.5 0 2.5 2 2.5 4.5S17.5 17 16 17s-2.5-2-2.5-4.5S14.5 8 16 8z"/>', () => openSheet("steps")),
         tile("Activity", '<path d="M3 12h4l3-7 4 14 3-7h4"/>', () => openSheet("activity")),
-        tile("Weigh-in", '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9.5a4 4 0 0 1 6 0M12 9.5l1.2-1.6"/>', () => openSheet("checkin"))),
+        tile("Weigh-in", '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9.5a4 4 0 0 1 6 0M12 9.5l1.2-1.6"/>', () => openSheet("checkin")),
+        tile("Water", '<path d="M12 3.5c3 4 5.5 7 5.5 10a5.5 5.5 0 0 1-11 0c0-3 2.5-6 5.5-10z"/>', () => { closeSheet(); quickWater(); }),
+        tile("Eating out", '<path d="M5 3v7a2 2 0 0 0 4 0V3M7 10v11M15 21V3c2.5 1.5 4 4 4 8h-4"/>', () => { closeSheet(); afterClose(() => { if ($("view-coach").hidden) setView("coach"); eatingOut(); }); })),
       (state.usual || []).length
         ? el("div", { class: "usual-list" },
             el("p", { class: "section-label" }, "Again"),
@@ -3311,7 +3492,55 @@ if (window.visualViewport) {
   screen.orientation?.addEventListener("change", () => { fullHeight = 0; keyboardUp = false; setTimeout(() => { fullHeight = vv.height; }, 300); });
 }
 // Tapping a composer button mustn't blur the textarea first, or the layout shifts under the finger.
-for (const id of ["send", "photo", "quick"]) $(id).addEventListener("pointerdown", (e) => { if (document.activeElement === $("input")) e.preventDefault(); });
+// ---------- voice ----------
+// The phone's own speech-to-text (Chrome's Web Speech API) fills the composer; nothing is sent
+// until the person taps send, so a misheard "dal" can be fixed first. Hidden where unsupported.
+
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const voice = { rec: null, base: "" };
+
+function stopListening() {
+  voice.rec?.stop();
+}
+
+function startListening() {
+  const rec = new Recognition();
+  rec.lang = navigator.language || "en-IN";
+  rec.interimResults = true;
+  rec.continuous = false;
+  const input = $("input");
+  voice.base = input.value.trim() ? `${input.value.trim()} ` : "";
+  rec.onresult = (e) => {
+    let said = "";
+    for (const r of e.results) said += r[0].transcript;
+    input.value = voice.base + said.trimStart();
+    autosize();
+  };
+  rec.onerror = (e) => {
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Allow the microphone for Magnus to speak your logs.");
+    else if (e.error === "no-speech") toast("Didn't catch that. Tap the mic and try again.");
+    else if (e.error !== "aborted") toast("Voice isn't available right now. Type it instead.");
+  };
+  rec.onend = () => {
+    voice.rec = null;
+    $("composer").classList.remove("listening");
+    $("mic").setAttribute("aria-pressed", "false");
+    $("mic").setAttribute("aria-label", "Speak instead of typing");
+    autosize();
+  };
+  voice.rec = rec;
+  $("composer").classList.add("listening");
+  $("mic").setAttribute("aria-pressed", "true");
+  $("mic").setAttribute("aria-label", "Stop listening");
+  try { rec.start(); } catch { rec.onend(); }
+}
+
+if (Recognition) {
+  $("mic").hidden = false;
+  $("mic").addEventListener("click", () => (voice.rec ? stopListening() : startListening()));
+}
+
+for (const id of ["send", "photo", "quick", "mic"]) $(id).addEventListener("pointerdown", (e) => { if (document.activeElement === $("input")) e.preventDefault(); });
 window.addEventListener("hashchange", () => { if (viewFromHash(location.hash) !== currentView()) setView(viewFromHash(location.hash), { fromHistory: true }); });
 $("input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing && matchMedia("(pointer: fine)").matches) {
@@ -3320,6 +3549,7 @@ $("input").addEventListener("keydown", (e) => {
   }
 });
 $("composer").addEventListener("submit", (e) => {
+  stopListening();
   e.preventDefault();
   const text = $("input").value;
   if (!text.trim() || state.sending) { send(text); return; }

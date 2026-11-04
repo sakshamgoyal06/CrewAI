@@ -29,7 +29,7 @@ import {
 } from "./activities.js";
 import type { ActionContext } from "./actions.js";
 import { zonedInstant } from "./gymSlot.js";
-import { hevyHistoryCached } from "./hevyHistory.js";
+import { hevyHistoryCached, withinAnalysisWindow } from "./hevyHistory.js";
 import { loadHealthProfile, weekdayOfDate } from "./snapshot.js";
 import { getWorkoutChecks, postCoachMessage, saveWorkoutCheckAnswer } from "./workoutCheckStore.js";
 import { DAY_MS } from "../util/time.js";
@@ -120,7 +120,10 @@ export async function loadTrainingContext(userProfileId: string, timezone: strin
   return {
     trainingDays: targets.trainingDays,
     isTrainingDay: targets.trainingDays.includes(weekdayOfDate(date)),
-    typicalBurn: typicalTrainingBurn(sessions.map((s) => s.durationMin ?? 0), weightKg),
+    typicalBurn: typicalTrainingBurn(
+      hevy.connected && hevy.ok ? withinAnalysisWindow(hevy.workouts).map((w) => (w.start_time && w.end_time ? Math.max(0, Math.round((Date.parse(w.end_time) - Date.parse(w.start_time)) / 60_000)) : 0)) : [],
+      weightKg,
+    ),
     workouts: sessions.filter((s) => s.date === date).map(({ startTime, durationMin }) => ({ startTime, durationMin })),
     liftingDates: [...liftingDates],
   };
