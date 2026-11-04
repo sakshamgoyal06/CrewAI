@@ -3926,11 +3926,21 @@ const SHEETS = {
   replan() {
     const r = state.replan;
     if (!r) return el("p", { class: "none" }, "Nothing changed.");
-    return el("div", { class: "stack" },
-      r.cappedForSafety ? el("p", { class: "hint warn" }, r.lines[0]) : null,
-      el("p", { class: "section-label" }, "What changed"),
-      ...r.changes.map((c) => el("p", { class: "hint" }, el("b", {}, c.label + ": "), c.from ? `${c.from} → ${c.to}` : c.to)),
-      ...r.lines.slice(r.cappedForSafety ? 1 : 0).map((l) => el("p", {}, l)),
+    const fmt = (n) => Math.round(n).toLocaleString("en-US");
+    const pace = r.plannedKgPerWeek != null ? `${r.plannedKgPerWeek > 0 ? "+" : "−"}${Math.abs(r.plannedKgPerWeek).toFixed(2)} kg a week` : null;
+    return el("div", { class: "stack replan" },
+      r.cappedForSafety ? el("p", { class: "plan-warn unsafe", role: "alert" }, r.lines[0]) : null,
+      el("div", { class: "replan-hero" },
+        el("small", {}, "Daily calories"),
+        el("strong", {}, fmt(r.calorieTarget.to)),
+        r.calorieTarget.from != null && r.calorieTarget.from !== r.calorieTarget.to ? el("span", { class: "replan-from" }, `was ${fmt(r.calorieTarget.from)}`) : null,
+        pace ? el("span", { class: "replan-pace" }, pace) : null),
+      r.changes.length ? el("div", { class: "card replan-changes" },
+        el("p", { class: "section-label" }, "What changed"),
+        ...r.changes.map((c) => el("div", { class: "replan-row" },
+          el("span", { class: "replan-label" }, c.label),
+          el("span", { class: "replan-val" }, c.from ? el("s", {}, c.from) : null, c.from ? " → " : "", el("b", {}, c.to))))) : null,
+      ...r.lines.slice(r.cappedForSafety ? 1 : 0).map((l) => el("p", { class: "replan-note" }, l)),
       el("p", { class: "hint" }, r.source === "formula" ? "Based on a formula estimate. It sharpens as you log meals and weigh in." : "Based on your logged meals and weigh-ins."),
       el("button", { class: "btn primary block", type: "button", onclick: closeSheet }, "Got it"),
     );

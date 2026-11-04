@@ -690,6 +690,18 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .plan-nums small { color: var(--muted); font-size: 0.75rem; }
 .plan-warn.unsafe { background: var(--warn-soft, rgba(208, 138, 43, 0.18)); color: var(--warn, #d08a2b); font-weight: 600; }
 .plan-warn { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); font-size: 0.9rem; }
+.replan-hero { display: grid; justify-items: center; gap: 4px; padding: 20px 16px; border-radius: var(--radius); border: 1px solid var(--hair); background: var(--surface); text-align: center; }
+.replan-hero small { color: var(--muted); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.replan-hero strong { font-family: var(--serif); font-weight: var(--num-w); font-size: 2.6rem; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.replan-from, .replan-pace { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.replan-changes { margin: 0; display: grid; gap: 10px; }
+.replan-changes .section-label { margin: 0; }
+.replan-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; font-size: 0.92rem; }
+.replan-label { color: var(--muted); }
+.replan-val { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.replan-val s { color: var(--muted); text-decoration: line-through; }
+.replan-val b { font-weight: 600; }
+.replan-note { margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
 .plan-lines p { margin: 0 0 10px; color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
 
 /* barcode scan */
