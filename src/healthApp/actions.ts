@@ -70,6 +70,8 @@ export const targetsInput = z
       .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "expected HH:MM")
       .nullable()
       .optional(),
+    /** Weekday (0 = Sunday) for the weekly weigh-in; null = 7 days after the last one. */
+    weighInDay: z.coerce.number().int().min(0).max(6).nullable().optional(),
     /** Minutes after the gym slot to check Hevy for a logged workout. */
     checkDelayMin: z.coerce.number().int().min(30).max(720).optional(),
   })

@@ -124,6 +124,7 @@ export type TargetsInput = {
   trainingDays?: number[] | null;
   gymTime?: string | null;
   checkDelayMin?: number;
+  weighInDay?: number | null;
 };
 
 export async function updateDailyTargets(
@@ -137,6 +138,7 @@ export async function updateDailyTargets(
   if (input.trainingDays !== undefined) patch.training_days = input.trainingDays;
   if (input.gymTime !== undefined) patch.gym_time = input.gymTime;
   if (input.checkDelayMin !== undefined) patch.workout_check_delay_min = input.checkDelayMin;
+  if (input.weighInDay !== undefined) patch.weigh_in_day = input.weighInDay;
   const { error } = await supabase
     .from("user_health_profile")
     .upsert(patch, { onConflict: "user_profile_id" });

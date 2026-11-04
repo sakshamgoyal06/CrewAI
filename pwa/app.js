@@ -2492,6 +2492,35 @@ function renderTraining(r) {
   };
 }
 
+// ---------- weigh-in day ----------
+
+const WD_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** Which weekday the weekly weigh-in lands on; saved as soon as it's picked. */
+function weighInDayForm(t) {
+  const current = Number.isInteger(t.weighInDay) ? String(t.weighInDay) : "";
+  const select = el("select", { class: "field", name: "weighInDay", "aria-label": "Weigh-in day" },
+    el("option", { value: "", selected: current === "" }, "Any day, a week after the last"),
+    ...WD_FULL.map((name, i) => el("option", { value: String(i), selected: current === String(i) }, name)));
+  select.addEventListener("change", async () => {
+    select.disabled = true;
+    try {
+      await api("/targets", { method: "POST", body: JSON.stringify({ weighInDay: select.value === "" ? null : Number(select.value) }) });
+      toast(select.value === "" ? "Weigh-in a week after the last one." : `Weigh-ins on ${WD_FULL[Number(select.value)]}s.`);
+      refresh();
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      select.disabled = false;
+    }
+  });
+  return el("div", { class: "stack" },
+    el("p", { class: "section-label" }, "Weekly weigh-in"),
+    el("label", {}, "Weigh-in day", select),
+    el("p", { class: "hint" }, "Same day each week, before breakfast, gives the cleanest trend. Miss it and the reminder carries on the next day."),
+  );
+}
+
 // ---------- workout check card ----------
 
 const SKIP_REASONS = ["Tired", "Busy", "Sore or injured", "Sick", "Travelling"];
@@ -3185,6 +3214,7 @@ const SHEETS = {
         ),
         el("button", { class: "btn block", type: "submit" }, "Save targets"),
       ),
+      weighInDayForm(t),
     );
   },
 
