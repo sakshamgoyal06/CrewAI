@@ -660,6 +660,42 @@ function renderFuel(d, t) {
       ? d.meals.map((m) => mealRow(m, d))
       : [el("li", { class: "none" }, d.date === todayKey() ? "Nothing logged yet today." : "No meals logged this day.")]),
   );
+  renderWater(d);
+}
+
+const GLASS_ML = 250;
+const litres = (ml) => `${fmt(ml / 1000, 2)} L`;
+
+/** Water for the shown day: a glass per tap, minus to take the last one back. Not scored. */
+function renderWater(d) {
+  const box = $("water");
+  const today = todayKey();
+  if (!box || (today && d.date > today)) { if (box) box.hidden = true; return; }
+  const ml = d.waterMl || 0;
+  const target = state.history?.waterTargetMl || 2500;
+  const busy = (on) => box.querySelectorAll("button").forEach((b) => { b.disabled = on; });
+  const send = async (body) => {
+    busy(true);
+    try {
+      const r = await api("/water", { method: "POST", body: JSON.stringify({ date: d.date, ...body }) });
+      // Show the new total at once; the full refresh catches up behind it.
+      d.waterMl = r.totalMl;
+      renderWater(d);
+      loadDays();
+    } catch (err) {
+      busy(false);
+      toast(err.message);
+    }
+  };
+  box.hidden = false;
+  box.replaceChildren(
+    el("div", { class: "wl" }, el("b", {}, "Water"), el("span", {}, `${litres(ml)} of ${litres(target)}`)),
+    el("div", { class: "wa" },
+      ml > 0 ? el("button", { class: "icon-btn", type: "button", "aria-label": "Remove the last water log", onclick: () => send({ undo: true }) }, "−") : null,
+      el("button", { class: "btn", type: "button", onclick: () => send({ ml: GLASS_ML }) }, "+ Glass")),
+    el("div", { class: "meter", role: "img", "aria-label": `${litres(ml)} of ${litres(target)} water` },
+      el("i", { style: `width:${Math.min(100, Math.round((ml / target) * 100))}%` })),
+  );
 }
 
 function expander(key, head, body) {

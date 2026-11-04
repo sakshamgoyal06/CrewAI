@@ -534,6 +534,14 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .meter { height: 6px; border-radius: 6px; background: var(--hair-strong); overflow: hidden; margin: 12px 0 16px; }
 .meter > i { display: block; height: 100%; background: var(--accent); border-radius: 6px; transition: width 0.6s ease; }
 .meter.over > i { background: var(--warn); }
+/* Water: one line under the meals, a glass at a time. */
+.water { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--hair); }
+.water .wl { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.water .wl b { font-weight: 600; }
+.water .wl span { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.water .wa { display: flex; gap: 6px; }
+.water .meter { grid-column: 1 / -1; margin: 4px 0 0; height: 4px; }
+.water .meter > i { background: color-mix(in srgb, var(--accent) 55%, #5aa0d8); }
 .meter.thin { height: 3px; margin: 8px 0 6px; }
 .macro-bar { display: flex; gap: 2px; height: 8px; border-radius: 8px; overflow: hidden; background: var(--hair); }
 .macro-bar > i { display: block; flex-basis: 0; min-width: 2px; }
