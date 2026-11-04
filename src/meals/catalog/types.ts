@@ -91,6 +91,8 @@ type Base = {
   meals?: MealType[];
   /** Overrides the category's usual prep time; every dish sets it (data/dishes.ts PREP). */
   prepMinutes?: PrepMinutes;
+  /** Usually bought or ordered rather than made at home (pizza, naan, mithai). The planner offers it only for eat-out meals. */
+  ordered?: boolean;
   basis?: "100g" | "100ml";
   servings: Serving[];
 };

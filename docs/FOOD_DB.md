@@ -33,6 +33,9 @@ requests, and is checked by tests. Plan and sizing:
 - `prepMinutes`: home prep time, 0 (ready to eat or ordered), 10, 20 or 30 (meaning 30+). Every
   dish has one in `PREP` (data/dishes.ts); fruit, nuts, dairy and drinks default to 0. The diet
   planner filters options by it.
+- `ordered`: true for food people usually buy or order rather than cook (restaurant breads,
+  street food, pizza, Indo-Chinese, mithai). These keep `prepMinutes` 0, and the planner offers
+  them only for eat-out meals. List dishes in `ORDERED` (data/dishes.ts); set it on a food directly.
 - Stable ids: a food's id is its normalized name (`key`, e.g. "dal tadka") and a serving's id is
   `servingId()` ("roti:piece:medium"). Don't rename a food once plans may reference it; add the
   old name as an alias instead.

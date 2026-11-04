@@ -20,6 +20,8 @@ export type CatalogEntry = {
   meals: MealType[];
   /** Minutes to make at home (0, 10, 20, 30 = 30+); null for ingredients that aren't eaten alone. */
   prepMinutes: PrepMinutes | null;
+  /** Usually bought or ordered, not made at home; prepMinutes 0 then means "no prep", not "home-made in 0 min". */
+  ordered: boolean;
 };
 
 /** Whole foods that are eaten as they are. */
@@ -99,7 +101,7 @@ export function buildCatalog(foods: CatalogFood[] = FOODS, dishes: CatalogDish[]
   for (const f of foods) {
     const e: CatalogEntry = {
       key: foodKeyFor(f.name), name: f.name, kind: "food", basis: f.basis ?? "100g", per100: f.per100,
-      servings: f.servings, diet: f.diet, category: f.category, meals: f.meals ?? MEALS_BY_CATEGORY[f.category], prepMinutes: foodPrep(f),
+      servings: f.servings, diet: f.diet, category: f.category, meals: f.meals ?? MEALS_BY_CATEGORY[f.category], prepMinutes: foodPrep(f), ordered: f.ordered ?? false,
     };
     ingredients.set(e.key, e);
     add(e, f.aliases);
@@ -108,7 +110,7 @@ export function buildCatalog(foods: CatalogFood[] = FOODS, dishes: CatalogDish[]
   for (const d of dishes) {
     const e: CatalogEntry = {
       key: foodKeyFor(d.name), name: d.name, kind: "dish", basis: d.basis ?? "100g", per100: dishPer100(d, ingredients),
-      servings: d.servings, diet: d.diet, category: d.category, meals: d.meals ?? MEALS_BY_CATEGORY[d.category], prepMinutes: d.prepMinutes ?? null,
+      servings: d.servings, diet: d.diet, category: d.category, meals: d.meals ?? MEALS_BY_CATEGORY[d.category], prepMinutes: d.prepMinutes ?? null, ordered: d.ordered ?? false,
     };
     ingredients.set(e.key, e);
     add(e, d.aliases);

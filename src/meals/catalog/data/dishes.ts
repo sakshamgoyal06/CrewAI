@@ -366,4 +366,36 @@ export const PREP: Record<string, PrepMinutes> = {
   "Egg white bhurji": 10,
 };
 
-export const DISHES: CatalogDish[] = LIST.map((d) => ({ ...d, prepMinutes: d.prepMinutes ?? PREP[d.name] }));
+/** Dishes people usually buy or order rather than cook (restaurant breads, street food, mithai). */
+export const ORDERED: string[] = [
+  "Naan",
+  "Butter naan",
+  "Garlic naan",
+  "Tandoori roti",
+  "Kachori",
+  "Pani puri",
+  "Bhel puri",
+  "Veg momos",
+  "Chicken momos",
+  "Veg manchurian",
+  "Chilli paneer",
+  "Chilli chicken",
+  "Veg pizza",
+  "Veg burger",
+  "Egg roll",
+  "Paneer roll",
+  "Chicken roll",
+  "Tandoori chicken",
+  "Rasgulla",
+  "Jalebi",
+  "Besan ladoo",
+  "Rasmalai",
+  "Kaju katli",
+  "Peanut chikki",
+];
+
+export const DISHES: CatalogDish[] = LIST.map((d) => ({
+  ...d,
+  prepMinutes: d.prepMinutes ?? PREP[d.name],
+  ...(ORDERED.includes(d.name) ? { ordered: true } : {}),
+}));
