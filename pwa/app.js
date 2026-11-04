@@ -148,7 +148,9 @@ function friendlyError(code) {
     owner_account: "The owner account can't be deleted from the app.",
     barcode_not_found: "That barcode isn't in the food database yet. Type what it was instead, or snap a photo of the label.",
     barcode_lookup_failed: "Couldn't reach the food database just now. Try again in a minute, or type what you had.",
-    free_limit: "That's today's free allowance. Upgrade to Pro in Settings for unlimited coaching, or log from Today.",
+    free_limit: "That's today's free allowance. Pro has no daily cap, or you can keep logging from Today.",
+    already_subscribed: "You're already on Pro.",
+    pro_feature: "That's part of Magnus Pro. See plans in You → Magnus Pro.",
     billing_unavailable: "Payments aren't available right now. Try again later.",
     invalid_signature: "The payment couldn't be verified. If you were charged, it will show up within a few minutes.",
     daily_limit: "You've hit today's limit for the coach. Log from Today, or try again tomorrow.",
@@ -323,7 +325,7 @@ function renderYou() {
   // Warm the screens this menu opens, so Notifications and the account screen draw at once.
   withCache("/account", (a) => { $("you-who").textContent = a.email || a.name || "Signed in"; });
   fetchCached("/push").catch(() => {});
-  fetchCached("/billing").catch(() => {});
+  withCache("/billing", () => paintPlanSection(), () => {});
 }
 
 // ---------- cached reads for the settings screens ----------
@@ -1562,7 +1564,7 @@ async function streamChat(body, live = {}) {
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(friendlyError(err.error)), { inProgress: err.error === "in_progress" });
+    throw Object.assign(new Error(friendlyError(err.error)), { inProgress: err.error === "in_progress", code: err.error });
   }
   if (!res.body?.getReader) return api("/chat", { method: "POST", body: JSON.stringify(body) });
 
@@ -1647,7 +1649,8 @@ async function coachTurn(showUser, request, retry) {
   } catch (err) {
     typing.remove();
     bubble?.remove();
-    failedTurn(err.message, retry);
+    const failed = failedTurn(err.message, err.code === "free_limit" ? null : retry);
+    if (err.code === "free_limit") failed.append(" ", el("button", { class: "link", type: "button", onclick: () => openSheet("plans") }, "See plans"));
     // The server may still be answering: pick the reply up from history shortly.
     if (err.inProgress) setTimeout(() => { if (!state.sending) loadHistory(); }, 8000);
   } finally {
@@ -2416,6 +2419,41 @@ function notificationsSection() {
 
 /** Who's signed in, Hevy, the Health Connect token, and sign-out. */
 // ---------- plan & billing ----------
+// Screens: Plans → Review → Payment result, and Your plan (manage). MAGNUS_BILLING=preview shows
+// them with a simulated payment and a "Preview as" switch, so the flow can be checked before
+// Razorpay is linked. Nothing here decides access: the server's entitlement does.
+
+const pay = { planId: "yearly", previewAs: null, result: null };
+const PREVIEW_STATES = [["", "Real"], ["trial", "Trial"], ["free", "Free"], ["pro", "Pro"], ["past_due", "Payment issue"], ["cancelled", "Cancelled"]];
+const PRO_PERKS = [
+  ["Coach without a daily cap", "Ask, log and plan in chat as much as you like."],
+  ["Meal photos", "Snap a plate and get it estimated."],
+  ["Nightly digest and weekly review", "How the day went, and one thing to do tomorrow."],
+  ["Adaptive targets", "Calories and macros that follow your real progress."],
+];
+const longDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "");
+const daysLeftOf = (iso) => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 86_400_000));
+const inr = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
+const PERIOD_DAYS = { monthly: 30, yearly: 365 };
+
+function billingNow() { return getCache.get("/billing") || null; }
+
+/** The entitlement to show: the server's, or in preview the state picked under "Preview as". */
+function shownEntitlement(b) {
+  if (!b || b.mode !== "preview" || !pay.previewAs) return b?.entitlement;
+  const at = (days) => new Date(Date.now() + days * 86_400_000).toISOString();
+  const base = { trialEndsAt: null, periodEndsAt: null, status: null, plan: null, provider: null };
+  return {
+    trial: { ...base, tier: "trial", trialEndsAt: at(3) },
+    free: { ...base, tier: "free", trialEndsAt: at(-2) },
+    pro: { ...base, tier: "pro", status: "active", plan: pay.planId, provider: "razorpay", periodEndsAt: at(PERIOD_DAYS[pay.planId]) },
+    past_due: { ...base, tier: "pro", status: "past_due", plan: "monthly", provider: "razorpay", periodEndsAt: at(-1) },
+    cancelled: { ...base, tier: "pro", status: "cancelled", plan: "monthly", provider: "razorpay", periodEndsAt: at(18) },
+  }[pay.previewAs];
+}
+
+/** Pays for real only when billing is on and Razorpay is linked; in preview it simulates. */
+const canPayForReal = (b) => b?.mode === "on" && !!b.razorpay;
 
 let razorpayLoad = null;
 function loadRazorpay() {
@@ -2428,66 +2466,248 @@ function loadRazorpay() {
   return razorpayLoad;
 }
 
-async function upgrade(planId) {
+/** Razorpay Checkout. Resolves "paid", "confirming" (paid, our confirm didn't land) or "dismissed". */
+async function razorpayCheckout(planId) {
   const [Razorpay, sub] = await Promise.all([
     loadRazorpay(),
     api("/billing/razorpay/subscribe", { method: "POST", body: JSON.stringify({ plan: planId }) }),
   ]);
-  await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const rzp = new Razorpay({
       key: sub.keyId,
       subscription_id: sub.subscriptionId,
       name: "Magnus Pro",
       description: planId === "yearly" ? "Yearly plan" : "Monthly plan",
-      theme: { color: "#d9b26f" },
+      theme: { color: "#c9a24a" },
       handler: async (resp) => {
-        try {
-          await api("/billing/razorpay/confirm", { method: "POST", body: JSON.stringify(resp) });
-          toast("Welcome to Magnus Pro.");
-          resolve();
-        } catch (err) { reject(err); }
+        try { await api("/billing/razorpay/confirm", { method: "POST", body: JSON.stringify(resp) }); resolve("paid"); }
+        catch { resolve("confirming"); }
       },
-      modal: { ondismiss: () => resolve() },
+      modal: { ondismiss: () => resolve("dismissed") },
     });
     rzp.on("payment.failed", (e) => reject(new Error(e?.error?.description || "The payment didn't go through.")));
     rzp.open();
   });
 }
 
-function planSection(box) {
-  const daysLeft = (iso) => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 86_400_000));
-  async function paint() {
-    let b;
-    try { b = await api("/billing"); getCache.set("/billing", b); } catch { box.replaceChildren(); return; }
-    draw(b);
+function showPayResult(result) {
+  pay.result = result;
+  fetchCached("/billing").catch(() => {});
+  openSheet("payResult");
+}
+
+function plansScreen() {
+  const box = el("div", { class: "stack pay" });
+  const paint = (b) => {
+    if (!b) { box.replaceChildren(el("p", { class: "hint" }, "Loading…")); return; }
+    const e = shownEntitlement(b);
+    const a = b.amounts || { monthly: 649, yearly: 6999 };
+    const save = Math.max(0, Math.round((1 - a.yearly / (a.monthly * 12)) * 100));
+    const card = (id, title, price, sub, tag) => el("button", {
+      class: `plan-card${pay.planId === id ? " on" : ""}`, type: "button", role: "radio", "aria-checked": String(pay.planId === id),
+      onclick: () => { pay.planId = id; paint(b); },
+    }, el("span", { class: "plan-top" }, el("strong", {}, title), tag ? el("span", { class: "plan-tag" }, tag) : null),
+      el("span", { class: "plan-price" }, price), el("span", { class: "hint" }, sub));
+    const status = e?.tier === "trial"
+      ? `Your free trial has ${daysLeftOf(e.trialEndsAt)} day${daysLeftOf(e.trialEndsAt) === 1 ? "" : "s"} left. Pick a plan now and nothing is charged until the trial ends on ${longDate(e.trialEndsAt)}.`
+      : e?.tier === "free"
+        ? `You're on the free plan: ${b.freeLimits.chat} coach messages and ${b.freeLimits.photo} meal photo a day.`
+        : null;
+    const proNow = e?.tier === "pro";
+    box.replaceChildren(
+      previewSwitch(b, () => paint(b)),
+      el("p", { class: "pay-lede" }, "Everything Magnus does, every day."),
+      el("ul", { class: "perk-list" }, ...PRO_PERKS.map(([t, d]) => el("li", {}, el("strong", {}, t), el("span", { class: "hint" }, d)))),
+      proNow
+        ? el("div", { class: "stack" }, el("p", { class: "hint" }, "You're on Magnus Pro."), el("button", { class: "btn block", type: "button", onclick: () => openSheet("managePlan") }, "Manage your plan"))
+        : el("div", { class: "stack" },
+          status ? el("p", { class: "hint" }, status) : null,
+          el("div", { class: "plan-cards", role: "radiogroup", "aria-label": "Plan" },
+            card("yearly", "Yearly", `${inr(a.yearly)} / year`, `${inr(Math.round(a.yearly / 12))} a month`, save ? `Save ${save}%` : null),
+            card("monthly", "Monthly", `${inr(a.monthly)} / month`, "Cancel any time", null)),
+          el("button", { class: "btn primary block", type: "button", onclick: () => openSheet("checkout") }, `Continue with ${pay.planId === "yearly" ? "Yearly" : "Monthly"}`),
+          el("p", { class: "hint center-text" }, "Renews automatically. Cancel any time from You → Plan.")),
+    );
+  };
+  withCache("/billing", paint, () => box.replaceChildren(el("p", { class: "hint" }, "Couldn't load plans. Check your connection.")));
+  return box;
+}
+
+/** Preview mode only: look at every state without paying or changing anything. */
+function previewSwitch(b, repaint) {
+  if (b.mode !== "preview") return null;
+  return el("div", { class: "stack preview-box" },
+    el("p", { class: "hint" }, "Preview: payments are simulated and nothing is charged or saved."),
+    el("div", { class: "seg", role: "radiogroup", "aria-label": "Preview as" }, ...PREVIEW_STATES.map(([k, l]) =>
+      el("button", { type: "button", class: (pay.previewAs || "") === k ? "on" : "", role: "radio", "aria-checked": String((pay.previewAs || "") === k),
+        onclick: () => { pay.previewAs = k || null; repaint(); paintPlanSection(); paintPlanBanner(); } }, l))));
+}
+
+function checkoutScreen() {
+  const b = billingNow();
+  if (!b) return el("p", { class: "hint" }, "Loading…");
+  const a = b.amounts || { monthly: 649, yearly: 6999 };
+  const amount = a[pay.planId];
+  const e = shownEntitlement(b);
+  // During the trial the first charge waits for its end (the server sets Razorpay's start_at).
+  const firstCharge = e?.tier === "trial" && e.trialEndsAt && Date.parse(e.trialEndsAt) > Date.now() + 3600_000 ? e.trialEndsAt : null;
+  const renews = longDate(new Date((firstCharge ? Date.parse(firstCharge) : Date.now()) + PERIOD_DAYS[pay.planId] * 86_400_000).toISOString());
+  const row = (k, v) => el("div", { class: "row-between pay-row" }, el("span", { class: "hint" }, k), el("span", {}, v));
+  const real = canPayForReal(b);
+  const btn = el("button", { class: "btn primary block", type: "button", disabled: !real && b.mode !== "preview", onclick: async () => {
+    btn.disabled = true;
+    btn.textContent = "Opening payment…";
+    try {
+      if (!real) {
+        await new Promise((r) => setTimeout(r, 900));
+        pay.previewAs = "pro";
+        showPayResult({ kind: "success", planId: pay.planId, simulated: true, firstCharge });
+        return;
+      }
+      const out = await razorpayCheckout(pay.planId);
+      if (out === "paid") showPayResult({ kind: "success", planId: pay.planId, firstCharge });
+      else if (out === "confirming") showPayResult({ kind: "pending", planId: pay.planId });
+    } catch (err) {
+      if (err.code === "already_subscribed") { toast("You're already on Pro."); openSheet("managePlan"); return; }
+      showPayResult({ kind: "failed", planId: pay.planId, message: err.message });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = payLabel;
+    }
+  } });
+  const payLabel = !real && b.mode !== "preview" ? "Payments open soon" : firstCharge ? "Set up autopay" : `Pay ${inr(amount)}`;
+  btn.textContent = payLabel;
+  return el("div", { class: "stack pay" },
+    el("div", { class: "card" },
+      row("Plan", `Magnus Pro · ${pay.planId === "yearly" ? "Yearly" : "Monthly"}`),
+      firstCharge ? row("Today", "₹0, the trial keeps running") : row("Today", inr(amount)),
+      firstCharge ? row("First charge", `${inr(amount)} on ${longDate(firstCharge)}`) : null,
+      row("Renews", `${renews}, then every ${pay.planId === "yearly" ? "year" : "month"}`),
+      row("Cancel", "Any time, Pro stays until the period ends")),
+    btn,
+    el("p", { class: "hint" }, "Paid through Razorpay with UPI, card or netbanking. You approve an autopay mandate once; your card and UPI details never reach Magnus."),
+    b.mode === "preview" ? el("p", { class: "hint" }, "Preview: tapping Pay simulates a successful payment.") : null,
+  );
+}
+
+function payResultScreen() {
+  const r = pay.result || { kind: "failed", message: "Nothing to show." };
+  const done = el("button", { class: "btn primary block", type: "button", onclick: () => { closeSheet(); paintPlanSection(); paintPlanBanner(); } }, "Done");
+  if (r.kind === "success") {
+    return el("div", { class: "stack pay pay-result" },
+      el("div", { class: "pay-badge good", "aria-hidden": "true" }, "✓"),
+      el("h3", {}, "You're on Magnus Pro"),
+      el("p", { class: "hint" }, `${r.planId === "yearly" ? "Yearly" : "Monthly"} plan. ${r.firstCharge ? `Nothing is charged until ${longDate(r.firstCharge)}, when your trial ends.` : "A receipt is on its way from Razorpay."}${r.simulated ? " (Preview: nothing was charged.)" : ""}`),
+      el("ul", { class: "perk-list" }, ...PRO_PERKS.map(([t]) => el("li", {}, el("strong", {}, t)))),
+      done);
   }
-  function draw(b) {
-    if (!b.enabled) { box.replaceChildren(); return; }
-    const e = b.entitlement;
-    const buy = (planId) => el("button", { class: planId === "yearly" ? "btn primary block" : "btn block", type: "button", onclick: async (ev) => {
-      ev.target.disabled = true;
-      try { await upgrade(planId); paint(); } catch (err) { toast(err.message); }
-      ev.target.disabled = false;
-    } }, planId === "yearly" ? `Yearly · ${b.prices.yearly}` : `Monthly · ${b.prices.monthly}`);
-    const rows = [el("p", { class: "section-label" }, "Plan")];
-    if (e.tier === "pro") {
-      const until = e.periodEndsAt ? new Date(e.periodEndsAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : null;
-      rows.push(el("p", { class: "hint" }, e.status === "cancelled" && until ? `Magnus Pro until ${until}. It won't renew.` : until ? `Magnus Pro. Renews ${until}.` : "Magnus Pro."));
-      if (e.provider === "razorpay" && e.status === "active") {
-        rows.push(el("button", { class: "link danger", type: "button", onclick: async () => {
-          if (!confirm("Cancel Magnus Pro? You keep it until the end of the period you paid for.")) return;
-          try { await api("/billing/cancel", { method: "POST" }); toast("Cancelled. Pro stays on until the period ends."); paint(); } catch (err) { toast(err.message); }
+  if (r.kind === "pending") {
+    const line = el("p", { class: "hint" }, "Your payment went through. We're waiting for Razorpay to confirm it, which usually takes a few seconds.");
+    let tries = 0;
+    const poll = async () => {
+      tries += 1;
+      try {
+        const b = await api("/billing");
+        getCache.set("/billing", b);
+        if (b.entitlement?.tier === "pro") { showPayResult({ kind: "success", planId: r.planId }); return; }
+      } catch { /* keep waiting */ }
+      if (tries < 10 && pay.result === r) setTimeout(poll, 3000);
+      else if (pay.result === r) line.textContent = "Still confirming. You can close this: Pro turns on by itself once Razorpay confirms, and you won't be charged twice.";
+    };
+    setTimeout(poll, 2000);
+    return el("div", { class: "stack pay pay-result" }, el("div", { class: "pay-badge", "aria-hidden": "true" }, "…"), el("h3", {}, "Confirming your payment"), line, done);
+  }
+  return el("div", { class: "stack pay pay-result" },
+    el("div", { class: "pay-badge bad", "aria-hidden": "true" }, "!"),
+    el("h3", {}, "The payment didn't go through"),
+    el("p", { class: "hint" }, `${r.message || "Something went wrong."} Nothing was charged. If money left your account, it is refunded automatically.`),
+    el("button", { class: "btn primary block", type: "button", onclick: () => openSheet("checkout") }, "Try again"),
+    el("button", { class: "btn block", type: "button", onclick: () => { closeSheet(); } }, "Not now"));
+}
+
+function managePlanScreen() {
+  const box = el("div", { class: "stack pay" });
+  const paint = (b) => {
+    if (!b) return;
+    const e = shownEntitlement(b);
+    const row = (k, v) => el("div", { class: "row-between pay-row" }, el("span", { class: "hint" }, k), el("span", {}, v));
+    const parts = [previewSwitch(b, () => paint(b))];
+    if (e?.tier !== "pro") {
+      parts.push(el("p", { class: "hint" }, e?.tier === "trial" ? `Free trial, ${daysLeftOf(e.trialEndsAt)} days left.` : "Free plan."),
+        el("button", { class: "btn primary block", type: "button", onclick: () => openSheet("plans") }, "See plans"));
+    } else {
+      const until = longDate(e.periodEndsAt);
+      if (e.status === "past_due") {
+        parts.push(el("div", { class: "card pay-warn" },
+          el("strong", {}, "Your last renewal didn't go through"),
+          el("p", { class: "hint" }, "Razorpay tries again over the next few days. Check that your UPI autopay or card is still active. Pro stays on meanwhile; if it can't be renewed, you move to the free plan and keep all your data.")));
+      }
+      parts.push(el("div", { class: "card" },
+        row("Plan", e.provider === "manual" || !e.plan ? "Magnus Pro" : `Magnus Pro · ${e.plan === "yearly" ? "Yearly" : "Monthly"}`),
+        until ? row(e.status === "cancelled" ? "Ends" : e.status === "past_due" ? "Was due" : "Renews", until) : null,
+        row("Status", { active: "Active", cancelled: "Cancelled, won't renew", past_due: "Payment issue", pending: "Starting", expired: "Ended" }[e.status] || "Active")));
+      if (e.status === "cancelled") parts.push(el("p", { class: "hint" }, `You keep Pro until ${until}. After that you're on the free plan, and you can pick a plan again any time.`));
+      if (e.provider === "razorpay" && (e.status === "active" || e.status === "past_due")) {
+        parts.push(el("button", { class: "link danger", type: "button", onclick: async () => {
+          if (!confirm(`Cancel Magnus Pro? You keep it until ${until || "the end of the period"}, and you won't be charged again.`)) return;
+          try {
+            if (b.mode === "preview" && pay.previewAs) pay.previewAs = "cancelled";
+            else await api("/billing/cancel", { method: "POST" });
+            toast("Cancelled. Pro stays on until the period ends.");
+            await fetchCached("/billing").catch(() => {});
+            paint(billingNow());
+            paintPlanSection();
+          } catch (err) { toast(err.message); }
         } }, "Cancel subscription"));
       }
-    } else {
-      rows.push(el("p", { class: "hint" }, e.tier === "trial"
-        ? `Free trial: ${daysLeft(e.trialEndsAt)} days left of everything. After it, the free plan has ${b.freeLimits.chat} coach messages and ${b.freeLimits.photo} meal photo a day.`
-        : `Free plan: ${b.freeLimits.chat} coach messages and ${b.freeLimits.photo} meal photo a day. Pro has no daily limit worth worrying about, plus the weekly review and adaptive targets.`));
-      if (b.razorpay) rows.push(buy("yearly"), buy("monthly"));
     }
-    box.replaceChildren(...rows);
+    box.replaceChildren(...parts);
+  };
+  withCache("/billing", paint, () => box.replaceChildren(el("p", { class: "hint" }, "Couldn't load your plan.")));
+  return box;
+}
+
+/**
+ * The plan banner on Coach and Today, from the server's experience (trial ending, trial ended,
+ * payment issue, Pro ending). In preview, the "Preview as" state's banner. Dismissed per day.
+ */
+async function paintPlanBanner() {
+  const nodes = document.querySelectorAll("[data-plan-banner]");
+  let b = billingNow();
+  if (b?.mode === "preview" && pay.previewAs) {
+    try { b = await api(`/billing?as=${encodeURIComponent(pay.previewAs)}`); } catch { return; }
   }
-  withCache("/billing", draw, () => box.replaceChildren());
+  const banner = b?.experience?.banner;
+  const key = banner ? `plan-banner:${banner.kind}:${localToday()}` : null;
+  const show = banner && (!banner.dismissible || !store.get(key, false));
+  for (const n of nodes) {
+    n.hidden = !show;
+    if (!show) { n.replaceChildren(); continue; }
+    n.classList.toggle("warn", banner.kind === "payment_issue");
+    n.replaceChildren(
+      el("span", {}, banner.text),
+      el("div", { class: "plan-banner-actions" },
+        el("button", { class: "link", type: "button", onclick: () => openSheet(banner.action) }, banner.action === "plans" ? "See plans" : "Fix"),
+        banner.dismissible ? el("button", { class: "icon-btn ghost small", type: "button", "aria-label": "Hide for today", onclick: () => { store.set(key, true); paintPlanBanner(); } }, "×") : null));
+  }
+}
+
+/** The Magnus Pro row on You: one status line, opening Plans or Your plan. */
+function paintPlanSection() {
+  const row = $("you-plan");
+  const b = billingNow();
+  if (!row || !b) return;
+  row.hidden = b.mode === "off";
+  if (row.hidden) return;
+  const e = shownEntitlement(b);
+  const pro = e.tier === "pro";
+  row.dataset.sheet = pro ? "managePlan" : "plans";
+  const line = pro
+    ? e.status === "past_due" ? "Payment issue: tap to see what to do" : e.status === "cancelled" ? `Pro until ${longDate(e.periodEndsAt)}, won't renew` : `Pro${e.periodEndsAt ? `, renews ${longDate(e.periodEndsAt)}` : ""}`
+    : e.tier === "trial" ? `Free trial, ${daysLeftOf(e.trialEndsAt)} days left` : "Free plan: see what Pro adds";
+  const small = $("you-plan-line");
+  small.textContent = line;
+  small.classList.toggle("warn-text", e.status === "past_due");
 }
 
 /**
@@ -2520,6 +2740,62 @@ async function checkHealthConnectPrompt() {
   } catch { /* offline: ask next time */ }
 }
 
+/** The Nutrition Summary CSV inside a MyFitnessPal export zip (or the CSV itself). */
+async function mfpCsvFromFile(file) {
+  if (!/\.zip$/i.test(file.name) && file.type !== "application/zip") return file.text();
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const dv = new DataView(buf.buffer);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("That file isn't a zip.");
+  let p = dv.getUint32(eocd + 16, true);
+  const count = dv.getUint16(eocd + 10, true);
+  for (let n = 0; n < count && dv.getUint32(p, true) === 0x02014b50; n++) {
+    const method = dv.getUint16(p + 10, true);
+    const size = dv.getUint32(p + 20, true);
+    const nameLen = dv.getUint16(p + 28, true);
+    const local = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(buf.subarray(p + 46, p + 46 + nameLen));
+    p += 46 + nameLen + dv.getUint16(p + 30, true) + dv.getUint16(p + 32, true);
+    if (!/(^|\/)Nutrition-Summary[^/]*\.csv$/i.test(name)) continue;
+    const start = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true);
+    const data = buf.subarray(start, start + size);
+    if (method === 0) return new TextDecoder().decode(data);
+    if (method !== 8 || typeof DecompressionStream === "undefined") throw new Error("Can't open this zip here. Unzip it and pick the Nutrition-Summary CSV.");
+    return new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+  }
+  throw new Error("No Nutrition Summary in that zip. Pick the file MyFitnessPal emailed you.");
+}
+
+async function importMfpFile(input) {
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  const fail = { not_mfp_summary: "That isn't a MyFitnessPal Nutrition Summary.", no_meals: "No meals from the last year in that file.", too_many_rows: "That file is too big. Export a shorter range." };
+  try {
+    const csv = await mfpCsvFromFile(file);
+    const send = (dryRun) => api("/import/myfitnesspal", { method: "POST", body: JSON.stringify({ csv, dryRun }) });
+    const preview = await send(true);
+    if (!preview.meals) { toast(preview.alreadyImported ? "Already imported." : "Nothing new to import: those days are already logged here."); return; }
+    const skipped = preview.skippedLoggedDays ? ` ${preview.skippedLoggedDays} day(s) you already logged here stay as they are.` : "";
+    if (!confirm(`Import ${preview.days} day(s) from ${fmtDay(preview.from)} to ${fmtDay(preview.to)}, about ${fmt(preview.avgCalories)} kcal a day?${skipped}`)) return;
+    const done = await send(false);
+    toast(`Imported ${done.days} day(s) from MyFitnessPal. They're in your Progress trends.`);
+  } catch (err) {
+    toast(fail[err.code] || err.message);
+  }
+}
+
+/** Forgets everything this phone cached about the account; keeps the sign-in, theme and app link. */
+function resetLocalState() {
+  // The sign-in (magnus-auth*, Supabase's sb-* session) and the theme stay.
+  const keep = (k) => k.startsWith("magnus-auth") || k.startsWith("sb-") || k === THEME_KEY;
+  try {
+    for (const k of Object.keys(localStorage)) if (!keep(k)) localStorage.removeItem(k);
+  } catch { /* private mode */ }
+  getCache.clear();
+}
+
 function accountSection() {
   const wrap = el("div", { class: "stack" }, el("p", { class: "section-label" }, "Account"));
   const who = el("p", { class: "hint" }, "Loading…");
@@ -2534,6 +2810,8 @@ function accountSection() {
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch (err) { toast(err.message); }
   } }, "Download my data");
+  const mfpFile = el("input", { type: "file", accept: ".zip,.csv,application/zip,text/csv", hidden: true, onchange: () => importMfpFile(mfpFile) });
+  const mfp = el("button", { class: "link", type: "button", onclick: () => mfpFile.click() }, "Import from MyFitnessPal");
   const remove = el("button", { class: "link danger", type: "button", onclick: async () => {
     const typed = prompt("This deletes your account and every meal, weigh-in and message. It can't be undone. Type DELETE to confirm.");
     if (typed !== "DELETE") return;
@@ -2543,11 +2821,23 @@ function accountSection() {
       endSession("Your account and data were deleted.");
     } catch (err) { toast(err.message); }
   } }, "Delete account");
-  const plan = el("div", { class: "stack" });
-  planSection(plan);
   const food = el("div", { class: "stack" });
-  wrap.append(who, plan, el("p", { class: "section-label" }, "Food"), food, el("p", { class: "section-label" }, "Hevy"), hevy, el("p", { class: "section-label" }, "Health Connect"), hc,
-    el("p", { class: "section-label" }, "Your data"), el("p", { class: "hint" }, "Your data is yours: download all of it, or delete it for good."), el("div", { class: "row-between" }, download, remove), out);
+  // Owner only: try Magnus as a brand-new user, any time. Keeps the Google sign-in.
+  const fresh = el("div", { class: "stack", hidden: true },
+    el("p", { class: "section-label" }, "Owner"),
+    el("p", { class: "hint" }, "Start fresh: wipes your meals, weigh-ins, chats, plan and connections, and opens onboarding as a new user. You stay signed in. It can't be undone."),
+    el("button", { class: "link danger", type: "button", onclick: async () => {
+      const typed = prompt("Start over as a new user? Everything is wiped. Type RESET to confirm.");
+      if (typed !== "RESET") return;
+      try {
+        await api("/account/reset", { method: "POST", body: JSON.stringify({ confirm: "RESET" }) });
+        resetLocalState();
+        location.replace("/app/");
+      } catch (err) { toast(err.message); }
+    } }, "Start fresh as a new user"));
+  wrap.append(who, fresh, el("p", { class: "section-label" }, "Food"), food, el("p", { class: "section-label" }, "Hevy"), hevy, el("p", { class: "section-label" }, "Health Connect"), hc,
+    el("p", { class: "section-label" }, "Your data"), el("p", { class: "hint" }, "Your data is yours: download all of it, or delete it for good."), el("div", { class: "row-between" }, download, remove),
+    el("p", { class: "hint" }, "Coming from MyFitnessPal? Export your data there (Settings, then Export data) and pick the zip here. Your past days show up in your trends."), mfp, mfpFile, out);
 
   function paintFood(prefs) {
     if (!prefs) { food.replaceChildren(); return; }
@@ -2633,6 +2923,7 @@ function accountSection() {
 
   function draw(a) {
     who.textContent = a.email ? `Signed in as ${a.email}` : a.name ? `Signed in as ${a.name}` : "Signed in with an app token.";
+    fresh.hidden = !a.owner;
     paintHevy(a.hevyConnected);
     paintHc(a.tokens || []);
     paintFood(a.food);
@@ -3235,7 +3526,7 @@ function openSheet(kind, { fromHistory = false } = {}) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", pastDays: "Past days", chatDay: "", ...mealsTitles };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", ...mealsTitles };
   const screen = !SHEET_ONLY.has(kind);
   const sheet = $("sheet");
   sheet.classList.toggle("screen", screen);
@@ -3277,6 +3568,10 @@ function submitter(fn) {
 const num = (v) => (v === "" || v == null ? undefined : Number(v));
 
 const SHEETS = {
+  plans: plansScreen,
+  checkout: checkoutScreen,
+  payResult: payResultScreen,
+  managePlan: managePlanScreen,
   dietSetup: setupScreen,
   dietMeal: mealScreen,
   activity() {
@@ -3691,6 +3986,7 @@ async function start() {
   refresh();
   flushQueue();
   checkHealthConnectPrompt();
+  withCache("/billing", () => { paintPlanSection(); paintPlanBanner(); }, () => {});
 }
 
 window.addEventListener("online", flushQueue);

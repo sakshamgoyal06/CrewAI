@@ -3,6 +3,7 @@
  * proactive scheduler sends through every subscription. Each notification has a dedupe key, so
  * a restart or a second tick never sends the same nudge twice.
  */
+import { createECDH } from "node:crypto";
 import webpush from "web-push";
 import { z } from "zod";
 
@@ -12,13 +13,23 @@ import { loggableError } from "../util/loggableError.js";
 
 export type PushConfig = { publicKey: string; privateKey: string; subject: string };
 
-const DEFAULT_VAPID_PUBLIC_KEY =
-  "BAvH5sNC8GBb9FMFInwZgC6V3eMsz5LBDb2CbmbMd8J97i0ECAelH87s144Ol2dOY5mqLu3tNlKk8SS9WfyI50o";
+/** The VAPID public key that belongs to a private key (both base64url, P-256), or "" if it isn't one. */
+export function vapidPublicKeyOf(privateKey: string): string {
+  try {
+    const raw = Buffer.from(privateKey, "base64url");
+    if (raw.length !== 32) return "";
+    const ecdh = createECDH("prime256v1");
+    ecdh.setPrivateKey(raw);
+    return ecdh.getPublicKey().toString("base64url");
+  } catch {
+    return "";
+  }
+}
 
 export function pushConfig(): PushConfig | null {
-  // TEMP default: the public half of the VAPID pair is not a secret. Cleanup: move to env.
-  const publicKey = process.env.MAGNUS_VAPID_PUBLIC_KEY?.trim() || DEFAULT_VAPID_PUBLIC_KEY;
   const privateKey = process.env.MAGNUS_VAPID_PRIVATE_KEY?.trim() || "";
+  // The public half follows from the private key, so only the private key has to be set.
+  const publicKey = process.env.MAGNUS_VAPID_PUBLIC_KEY?.trim() || (privateKey ? vapidPublicKeyOf(privateKey) : "");
   const subject = process.env.MAGNUS_VAPID_SUBJECT?.trim() || "mailto:magnus@example.com";
   return publicKey && privateKey ? { publicKey, privateKey, subject } : null;
 }
