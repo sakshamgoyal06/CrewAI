@@ -69,6 +69,20 @@ export async function supplementSessionOn(userProfileId: string, date: string): 
   return ((data ?? [])[0]?.meal_session_id as string | undefined) ?? null;
 }
 
+/** Everything logged on a day (meals, supplements, chat logs), as the Today screen counts it. */
+async function loggedOn(userProfileId: string, date: string): Promise<{ kcal: number; proteinG: number; carbsG: number; fatG: number; meals: number }> {
+  const { data, error } = await supabase
+    .from("meal_logs")
+    .select("meal_session_id, calories, protein_g, carbs_g, fat_g")
+    .eq("user_profile_id", userProfileId)
+    .eq("local_date", date)
+    .is("deleted_at", null);
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  const n = (k: string) => rows.reduce((a, r) => a + (Number((r as Record<string, unknown>)[k]) || 0), 0);
+  return { kcal: n("calories"), proteinG: n("protein_g"), carbsG: n("carbs_g"), fatG: n("fat_g"), meals: new Set(rows.map((r) => r.meal_session_id).filter(Boolean)).size };
+}
+
 export const OPTION_ACTIONS = ["pin", "unpin", "like", "unlike", "hide", "unhide"] as const;
 export type OptionAction = (typeof OPTION_ACTIONS)[number];
 
@@ -461,7 +475,8 @@ export async function loadPlanView(ctx: ActionContext, now = new Date()): Promis
   const days = await ensureDays(ctx, plan, prefs, today);
   const { review: _r, ...rest } = plan;
   const dates = [...new Set(days.map((x) => x.date))];
-  const accounts = dates.map((date) => accountDay({ date, targets: plan!.targets, meals: days.filter((x) => x.date === date), supplements: lines }));
+  const loggedToday = await loggedOn(ctx.userProfileId, today);
+  const accounts = dates.map((date) => accountDay({ date, targets: plan!.targets, meals: days.filter((x) => x.date === date), supplements: lines, loggedActual: date === today ? loggedToday : null }));
   return { ok: true, setup: true, plan: rest, days, accounts, ...base };
 }
 

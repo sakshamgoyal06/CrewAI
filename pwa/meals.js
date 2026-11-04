@@ -171,13 +171,14 @@ function suppRow(date) {
     try {
       await d.api(`/diet/supplements/${date}`, { method: taken ? "DELETE" : "POST" });
       sup.takenToday = !taken;
-      d.toast(taken ? "Supplements removed from today." : "Supplements logged.");
+      await loadPlan(true);
+      d.toast(taken ? "Supplements removed from today." : "Supplements logged and counted in today's totals.");
       paint();
     } catch (err) { d.toast(err.message); }
   };
   return el("div", { class: "supp-line" },
     el("span", { class: "what" }, sup.lines.map((l) => `${l.name} (${l.text})`).join(", ")),
-    el("small", { class: "sub" }, `${fmt(kcal)} kcal · ${fmt(Math.round(protein))} g protein, already taken out of your meals`),
+    el("small", { class: "sub" }, `${fmt(kcal)} kcal · ${fmt(Math.round(protein))} g protein, counted in the day's totals (meals are sized around them)`),
     isToday ? el("button", { class: "btn small", type: "button", onclick: act }, taken ? "Undo" : "Took them") : null);
 }
 

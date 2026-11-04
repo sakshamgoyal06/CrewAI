@@ -62,7 +62,12 @@ const add = (a: Macros4, b: Partial<Macros4>): Macros4 => ({
 const tidy = (m: Macros4): Macros4 => ({ kcal: Math.round(m.kcal), proteinG: r1(m.proteinG), carbsG: r1(m.carbsG), fatG: r1(m.fatG) });
 const isEaten = (m: AccountMeal) => m.status === "logged" || m.status === "partial";
 
-export function accountDay(input: { date: string; targets: MacroTargets; meals: AccountMeal[]; supplements: SupplementLine[] }): DayAccount {
+/**
+ * `loggedActual`: everything logged that day (every meal entry, the "Took them" supplements
+ * entry, food logged in chat), the same numbers the Today screen adds up. When given, "eaten"
+ * uses it, so the two screens never disagree and supplements count once they're taken.
+ */
+export function accountDay(input: { date: string; targets: MacroTargets; meals: AccountMeal[]; supplements: SupplementLine[]; loggedActual?: (Macros4 & { meals: number }) | null }): DayAccount {
   const target = { kcal: input.targets.calories, proteinG: input.targets.proteinG, carbsG: input.targets.carbsG, fatG: input.targets.fatG };
   let meals = zero();
   const allowances: DayAccount["allowances"] = [];
@@ -97,7 +102,7 @@ export function accountDay(input: { date: string; targets: MacroTargets; meals: 
     allowanceKcal,
     unallocatedKcal: Math.round(target.kcal - planned.kcal - allowanceKcal),
     proteinShortG: Math.max(0, Math.round(target.proteinG - planned.proteinG)),
-    logged: { ...tidy(logged), meals: eatenCount },
+    logged: input.loggedActual ? { ...tidy(input.loggedActual), meals: input.loggedActual.meals } : { ...tidy(logged), meals: eatenCount },
     reconcile: { fromMacrosKcal: Math.round(fromMacros), diffPct: Math.round(diffPct * 1000) / 1000, ok: diffPct <= RECONCILE_TOLERANCE },
   };
 }
