@@ -334,6 +334,8 @@ export function createHealthAppRouter(): express.Router {
     route("diet-prefs-save", async (ctx, req) => {
       const prefs = await saveDietPrefs(ctx.userProfileId, req.body);
       const r = await rebuildPlan(ctx, "prefs_changed");
+      // Saved without targets: the answers are kept and the plan builds once targets are set.
+      if (!r.ok && r.error === "no_targets") return { body: { ok: true, prefs, version: null, needsTargets: true } };
       return r.ok ? { body: { ok: true, prefs, version: r.plan.version } } : { status: 409, body: r };
     }),
   );

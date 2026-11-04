@@ -74,23 +74,36 @@ export async function renderMeals() {
     await loadPlan(!!ms.view);
   } catch (err) {
     if (ms.view) return paint();
-    if (err.code === "no_targets") {
-      host.replaceChildren(el("div", { class: "empty-block" },
-        el("p", {}, "Your meal plan splits your daily calorie and protein targets into meals. Set those first."),
-        el("button", { class: "btn primary", type: "button", onclick: () => d.openSheet("settings") }, "Set targets")));
-      return;
-    }
     host.replaceChildren(el("p", { class: "none" }, err.message), el("button", { class: "link", type: "button", onclick: renderMeals }, "Try again"));
     return;
   }
   paint();
 }
 
+/** Goal & targets, scrolled to the daily targets. */
+function openTargets() {
+  d.openSheet("settings");
+  setTimeout(() => document.querySelector('#sheet [name="kcal"]')?.scrollIntoView({ block: "center" }), 250);
+}
+
 function paint() {
   const host = document.getElementById("meals-body");
   const { el, fmt } = d;
   const v = ms.view;
-  document.getElementById("meals-edit").hidden = !v?.setup;
+  document.getElementById("meals-edit").hidden = !v?.setup || v.needsTargets;
+  // Targets come first: the plan splits them into meals, so nothing else is offered until they're set.
+  if (v.needsTargets) {
+    host.replaceChildren(
+      el("div", { class: "targets-required" },
+        el("p", { class: "eyebrow" }, "Step 1 · Required"),
+        el("h2", { class: "title-md" }, "Set your calorie and protein targets"),
+        el("p", {}, "Your meal plan splits these into meals, so they come first."),
+        el("button", { class: "btn primary block", type: "button", onclick: openTargets }, "Set targets")),
+      el("div", { class: "empty-block muted-block" },
+        el("p", { class: "eyebrow" }, "Step 2"),
+        el("p", {}, v.setup ? "Your meal answers are saved. The plan appears as soon as your targets are set." : "Then tell me when you eat and what you like, and you'll get a plan for the next three days.")));
+    return;
+  }
   if (!v.setup) {
     host.replaceChildren(el("div", { class: "empty-block" },
       el("h2", { class: "title-md" }, "Meals that fit your day"),
@@ -414,9 +427,9 @@ export function setupScreen() {
         loves: v.loves, restrictions: v.restrictions, fastingDays: v.fastingDays,
         eatOut: v.eatOut.filter((e) => v.meals.some((m) => m.on && m.slot === e.slot)),
       };
-      await d.api("/diet/prefs", { method: "PUT", body: JSON.stringify(body) });
+      const r = await d.api("/diet/prefs", { method: "PUT", body: JSON.stringify(body) });
       await loadPlan(true);
-      d.toast(saved ? "Plan updated. Today stays as it is." : "Your plan is ready.");
+      d.toast(r.needsTargets ? "Saved. Set your targets and the plan builds." : saved ? "Plan updated. Today stays as it is." : "Your plan is ready.");
       d.closeSheet();
       d.setView("meals");
       paint();

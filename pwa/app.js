@@ -359,6 +359,8 @@ async function refresh() {
     state.snapshot = await api("/today");
     renderSnapshot(state.snapshot);
     store.set(SNAPSHOT_CACHE_KEY, state.snapshot);
+    // Targets may have just been set from the Meals tab's first step.
+    if (currentView() === "meals") renderMeals();
     loadUsual();
   } catch (err) {
     toast(err.message);

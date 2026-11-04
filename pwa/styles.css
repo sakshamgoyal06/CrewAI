@@ -901,3 +901,7 @@ body.screen-open { overflow: hidden; }
 .draft.planadjust .pa-head { margin: 4px 0; }
 .draft.planadjust .pa-lines { margin: 4px 0; padding-left: 18px; }
 .draft .dp-sec .link, .draft.planadjust > .link { margin-top: 6px; }
+.targets-required { border: 1.5px solid var(--accent, #7a4fa0); border-radius: 16px; padding: 16px; margin: 4px 0 14px; }
+.targets-required h2 { margin: 4px 0 6px; }
+.targets-required p { margin: 0 0 12px; }
+.muted-block { opacity: 0.6; }
