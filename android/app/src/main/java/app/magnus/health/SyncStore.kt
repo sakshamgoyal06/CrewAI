@@ -12,7 +12,14 @@ class SyncStore(context: Context) {
 
     var token: String?
         get() = prefs.getString("token", null)
-        set(value) = prefs.edit().putString("token", value).apply()
+        set(value) {
+            // A different token means a different Magnus account (reset, new sign-in): its
+            // history is empty, so the next sync must re-read the full 30 days, not just the last few.
+            if (value != prefs.getString("token", null)) {
+                prefs.edit().remove("last_sync").remove("buckets_aligned").remove("last_error").apply()
+            }
+            prefs.edit().putString("token", value).apply()
+        }
 
     var lastSync: Instant?
         get() = prefs.getLong("last_sync", 0L).takeIf { it > 0 }?.let(Instant::ofEpochMilli)
