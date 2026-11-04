@@ -389,6 +389,9 @@ function candidates(input: ComposeInput, cat: Catalog): Map<Role, Slotted[]> {
   const out = new Map<Role, Slotted[]>();
   for (const e of cat.entries) {
     if (!dietAllows(input.diet, e)) continue;
+    // Bought or ordered food (pizza, naan, momos) isn't a home meal; eat-out meals are planned as a budget.
+    // (`ordered` comes with the food catalog's batch 3; read loosely so this works before and after it.)
+    if ((e as { ordered?: boolean }).ordered) continue;
     if (containsAny(e.key, avoid)) continue;
     if ((ONLY_IF_LOVED_CATEGORIES.has(e.category) || ONLY_IF_LOVED.has(e.key) || NICHE_BASE.has(e.key)) && !loved(e)) continue;
     const def = defaultServing(e);
