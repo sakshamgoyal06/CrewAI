@@ -8,6 +8,7 @@ import { logger } from "./logger.js";
 import { securityHeaders } from "./securityHeaders.js";
 import { loggableError } from "./util/loggableError.js";
 import { supabase } from "./tools/clients.js";
+import { serviceWorkerHandler } from "./swVersion.js";
 
 /**
  * The signing cert of the published APK: the private release key held in GitHub secrets
@@ -88,6 +89,8 @@ export function startHealthServer(): Promise<HealthServer> {
   });
 
   app.use("/api/health", createHealthAppRouter());
+  // The worker's cache name is a hash of the shell, so each deploy refreshes the app by itself.
+  app.get("/app/sw.js", serviceWorkerHandler(appDir));
   app.use(
     "/app",
     express.static(appDir, {

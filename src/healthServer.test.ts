@@ -41,7 +41,8 @@ describe("health server", () => {
     expect(await page.text()).toContain("<title>Magnus</title>");
     const sw = await fetch(`${b}/app/sw.js`);
     expect(sw.headers.get("service-worker-allowed")).toBe("/app/");
-    await sw.text();
+    expect(sw.headers.get("content-type")).toMatch(/javascript/);
+    expect(await sw.text()).toMatch(/const CACHE = "magnus-health-[0-9a-f]{12}";/);
     const root = await fetch(`${b}/`, { redirect: "manual" });
     expect(root.status).toBe(200);
     expect(await root.text()).toContain('href="/app/"');
