@@ -79,6 +79,19 @@ describe("composeOptions", () => {
     expect(text).toMatch(/chicken|egg/);
   });
 
+  it("reads real phrasings of a diet note, including 'no meat other than chicken'", () => {
+    const chicken = { meats: new Set(["chicken"]), egg: true };
+    expect(allowedMeats(["no meat other than chicken"])).toEqual(chicken);
+    expect(allowedMeats(["Vegetarian + chicken + eggs. No other meat than chicken"])).toEqual(chicken);
+    expect(allowedMeats(["No non-veg except chicken and eggs"])).toEqual(chicken);
+    expect(allowedMeats(["no meat"])!.meats.size).toBe(0);
+    expect(allowedMeats(["no red meat"])!.meats.has("mutton")).toBe(false);
+    expect(allowedMeats(["no onion on Tuesdays"])).toBeNull();
+    const all = ["breakfast", "lunch", "snack", "dinner"].flatMap((s) => compose(s, "custom", { dietNote: ["Vegetarian + chicken + eggs. No other meat than chicken"] }));
+    const text = all.flatMap((o) => o.items.map((i) => i.name.toLowerCase())).join(" | ");
+    expect(text).not.toMatch(/mutton|prawn|fish|lamb|keema|mangsho|rogan|pork|beef|crab/);
+  });
+
   it("pairs meat dishes with a plain base, not curd, a starchy sabzi or a soup", () => {
     expect(pairingProblems(["white rice cooked", "mutton curry", "greek yogurt"])).not.toEqual([]);
     expect(pairingProblems(["chapati", "chicken keema", "aloo bhindi"])).not.toEqual([]);
@@ -218,6 +231,20 @@ describe("pickDays", () => {
     const fri = picks.find((p) => p.date === "2026-11-06" && p.slot === "dinner")!;
     expect(fri.kind).toBe("eat_out");
     expect(fri.title).toBe("Eating out, about 1050 kcal");
+  });
+
+  it("keeps a planned meal whose option a rebuilt plan no longer offers", () => {
+    const picks = pickDays({
+      start: "2026-11-04",
+      days: 1,
+      budgets,
+      options: { lunch: opts("lunch", 3), dinner: opts("dinner", 3) },
+      prefs,
+      existing: [{ date: "2026-11-04", slot: "lunch", optionId: "old_lunch", title: "Old lunch" }],
+    });
+    expect(picks.map((p) => p.slot)).toEqual(["lunch", "dinner"]);
+    expect(picks[0]!.optionId).toBe("old_lunch");
+    expect(picks[0]!.title).toBe("Old lunch");
   });
 
   it("skips options eaten in the last two days", () => {

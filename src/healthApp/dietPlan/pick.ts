@@ -27,7 +27,15 @@ export type DayPick = {
   totals: Totals;
 };
 
-export type PriorPick = { date: string; slot: PlanSlot; optionId: string | null };
+export type PriorPick = {
+  date: string;
+  slot: PlanSlot;
+  optionId: string | null;
+  /** What was saved for the meal, kept when a rebuilt plan no longer offers its option. */
+  title?: string;
+  totals?: Totals;
+  kind?: "option" | "eat_out";
+};
 
 const weekday = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay();
 
@@ -61,6 +69,8 @@ export function pickDays(input: {
         note(o);
         if (o) out.push(pickOf(date, b.slot, o));
         else if (prior.optionId === null) out.push(eatOut(date, b));
+        // A rebuilt plan no longer offers this option, but the meal is already planned (or eaten): keep it, never drop it.
+        else out.push({ date, slot: b.slot, kind: prior.kind ?? "option", optionId: prior.optionId, title: prior.title ?? "Planned meal", totals: prior.totals ?? { kcal: b.calories, proteinG: b.proteinG, carbsG: b.carbsG, fatG: b.fatG, fiberG: 0 } });
         continue;
       }
       if (isEatOut(input.prefs, weekday(date), b.slot)) {

@@ -129,9 +129,15 @@ function paint() {
 
   const order = SLOT_ORDER.filter((s) => v.prefs.meals.some((m) => m.slot === s));
   const list = el("ul", { class: "list meal-plan" }, ...order.map((slot) => mealCard(ms.date, slot)).filter(Boolean));
-  host.replaceChildren(strip, summary, suppRow(ms.date), list,
-    el("div", { class: "block-links" },
-      el("button", { class: "link quiet", type: "button", onclick: rebuild }, "Make me a fresh plan")));
+  // What is still to eat today, by name ("Only dinner is left today").
+  const left = isToday ? order.filter((s) => { const p = pickOf(ms.date, s); return p && !isEaten(p); }) : [];
+  const leftLine = isToday && left.length && left.length < order.length
+    ? el("p", { class: "hint left-line" }, left.length === 1 ? `Only ${SLOT_NAME[left[0]].toLowerCase()} is left today.` : `Left today: ${left.map((s) => SLOT_NAME[s].toLowerCase()).join(", ")}.`)
+    : null;
+  host.replaceChildren(...[strip, summary, leftLine, suppRow(ms.date), list,
+    el("div", { class: "fresh-plan" },
+      el("button", { class: "btn block", type: "button", onclick: rebuild }, "Make me a fresh plan"),
+      el("p", { class: "hint" }, "New options from your current food settings. Meals you've already eaten stay."))].filter(Boolean));
 }
 
 /** One row for the day's supplements: what they are and a tap to log them (today only). */
@@ -171,7 +177,7 @@ function mealCard(date, slot) {
       el("span", { class: "slot" }, SLOT_NAME[slot], timeOf(slot) ? el("small", {}, ` · ${clock(timeOf(slot))}`) : null),
       el("span", { class: "what" }, p.kind === "eat_out" ? p.title : items.map((i) => i.text).join(", ") || p.title),
       el("span", { class: "sub" }, sub, eaten ? el("b", { class: "tick" }, p.status === "partial" ? " · Eaten, portions changed" : " · Eaten") : null),
-      eaten || p.kind === "eat_out" ? null : el("span", { class: "edit-cue" }, "Change or swap")));
+      eaten ? null : el("span", { class: "edit-cue" }, p.kind === "eat_out" ? "Tap to log what you had" : "Change portions, swap or log your own", el("i", { class: "chev-r" }))));
 }
 
 /** From a chat card: the plan's meal screen for one meal (loads the plan first if needed). */
@@ -200,13 +206,18 @@ function openMeal(date, slot) {
   d.openSheet("dietMeal");
 }
 
-async function rebuild() {
+async function rebuild(ev) {
+  const btn = ev?.currentTarget;
+  if (btn) { btn.disabled = true; btn.textContent = "Making your plan…"; }
   try {
     await d.api("/diet/plan/rebuild", { method: "POST" });
-    d.toast("New plan ready. Today stays as it is.");
     await loadPlan(true);
+    d.toast("Fresh plan ready.");
     paint();
-  } catch (err) { d.toast(err.message); }
+  } catch (err) {
+    d.toast(err.message);
+    if (btn) { btn.disabled = false; btn.textContent = "Make me a fresh plan"; }
+  }
 }
 
 // ---------- one meal: the meal editor ----------
@@ -301,7 +312,8 @@ export function mealScreen() {
     wrap.append(
       el("p", {}, p.title),
       el("p", { class: "hint" }, "Pick a dish with a protein (paneer, dal, chicken, eggs) and go easy on fried sides and refined bread. Log what you had and the rest of the day adjusts."),
-      el("button", { class: "btn primary block", type: "button", onclick: () => d.openSheet("meal") }, "Log what I ate"));
+      el("button", { class: "btn primary block", type: "button", onclick: () => d.logOwn(slot) }, "Log what I ate"),
+      el("p", { class: "hint" }, "Search the food list first. If something isn't there, describe it and I'll estimate it."));
     return wrap;
   }
 
@@ -354,7 +366,7 @@ export function mealScreen() {
       kids.push(el("button", { class: "link quiet", type: "button", onclick: () => { startEdit(date, slot, p.items); paintAdd(); repaint(); } }, "Discard changes"));
     } else if (canEat) {
       kids.push(el("button", { class: "btn primary block", type: "button", onclick: (ev) => save(ev, true) }, "Ate this"),
-        el("button", { class: "link quiet", type: "button", onclick: () => d.openSheet("meal") }, "I ate something else"));
+        el("button", { class: "btn block", type: "button", onclick: () => d.logOwn(slot) }, "Log my own instead"));
     } else {
       kids.push(el("p", { class: "hint" }, "Change it any time before the day. You can log it on the day."));
     }
