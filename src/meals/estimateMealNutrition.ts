@@ -6,6 +6,16 @@ import { estimateViaUsdaFdc } from "./providers/usdaFdc.js";
 import { estimateViaWebResearch } from "./providers/webResearchEstimate.js";
 import { estimateWithFoodDb } from "./foodDbEstimate.js";
 import { breakdownViaWebResearch } from "./providers/webBreakdown.js";
+import type { FoodContributor } from "./foodStore.js";
+
+export type EstimateOptions = {
+  /** false skips every web lookup (the person's monthly lookups are used up). Default true. */
+  webAllowed?: boolean;
+  /** Called once for each paid web lookup, before it runs. */
+  onWebLookup?: () => void;
+  /** Who is logging. Their unconfirmed web foods are used only for them (see foodStore.ts). */
+  contributor?: FoodContributor;
+};
 
 /**
  * Order: **ingredients from our food table (web_search breaks down unseen items) → USDA FDC → CalorieNinjas → optional Claude JSON**. Web runs
@@ -13,18 +23,24 @@ import { breakdownViaWebResearch } from "./providers/webBreakdown.js";
  */
 export async function estimateMealNutrition(
   query: string,
+  opts: EstimateOptions = {},
 ): Promise<MealNutritionEstimate> {
   const q = query.trim();
   if (!q) {
     return unavailable("empty query");
   }
-  const key = estimateCacheKey(q);
-  const hit = estimateCache.get(key);
-  if (hit && Date.now() - hit.at < ESTIMATE_CACHE_TTL_MS) {
-    return hit.estimate;
+  // Web results are cached per person: one person's lookup is never served to another.
+  const shared = estimateCacheKey(q);
+  const own = `${opts.contributor?.id ?? "-"}|${shared}`;
+  for (const k of [shared, own]) {
+    const hit = estimateCache.get(k);
+    if (hit && Date.now() - hit.at < ESTIMATE_CACHE_TTL_MS) {
+      return hit.estimate;
+    }
   }
-  const estimate = await estimateUncached(q);
+  const estimate = await estimateUncached(q, opts);
   if (estimate.calories !== null) {
+    const key = estimate.source === "web_research" ? own : shared;
     estimateCache.delete(key);
     estimateCache.set(key, { at: Date.now(), estimate });
     if (estimateCache.size > ESTIMATE_CACHE_MAX) {
@@ -50,8 +66,8 @@ export function clearEstimateCache(): void {
   estimateCache.clear();
 }
 
-async function estimateUncached(q: string): Promise<MealNutritionEstimate> {
-  const webEnabled = mealLogWebResearchEnabled();
+async function estimateUncached(q: string, opts: EstimateOptions): Promise<MealNutritionEstimate> {
+  const webEnabled = mealLogWebResearchEnabled() && opts.webAllowed !== false;
   // Built from ingredients in our food table; only unseen items go to the web (and get saved).
   let webTried = false;
   const fromDb = await estimateWithFoodDb(
@@ -59,9 +75,11 @@ async function estimateUncached(q: string): Promise<MealNutritionEstimate> {
     webEnabled
       ? (text, items, known) => {
           webTried = true;
+          opts.onWebLookup?.();
           return breakdownViaWebResearch(text, items, known);
         }
       : null,
+    { contributor: opts.contributor },
   ).catch(() => null);
   if (fromDb && fromDb.calories !== null) {
     return fromDb;
@@ -69,6 +87,7 @@ async function estimateUncached(q: string): Promise<MealNutritionEstimate> {
 
   // Don't pay for a second web search when the first one already failed.
   if (webEnabled && !webTried) {
+    opts.onWebLookup?.();
     const web = await estimateViaWebResearch(q);
     if (web && web.calories !== null) {
       return web;

@@ -11,6 +11,8 @@ import { loggableError } from "../util/loggableError.js";
 import { ACTIVITY_SOURCES, upsertDailyActivity } from "./activityStore.js";
 import { afterMealLogged } from "./dietPlan/rhythm.js";
 import { setActiveGoal, updateDailyTargets, upsertBodyCheckin } from "./bodyStore.js";
+import { isOwnerProfile } from "./accounts.js";
+import { webGateFor } from "./webLookups.js";
 import {
   deleteMeal,
   draftMeal,
@@ -184,7 +186,22 @@ export async function startMealDraft(
   ctx: ActionContext,
   input: z.infer<typeof mealDraftInput>,
 ): Promise<MealDraft> {
-  return draftMeal({ text: input.text, slot: input.slot, timezone: ctx.timezone, now: ctx.now });
+  const [gate, trusted] = await Promise.all([
+    webGateFor(ctx.userProfileId, ctx.timezone, ctx.now),
+    isOwnerProfile(ctx.userProfileId).catch(() => false),
+  ]);
+  const draft = await draftMeal({
+    text: input.text,
+    slot: input.slot,
+    timezone: ctx.timezone,
+    now: ctx.now,
+    options: { webAllowed: gate.allowed, onWebLookup: gate.onLookup, contributor: { id: ctx.userProfileId, trusted } },
+  });
+  if (!gate.allowed && draft.source !== "food_db") {
+    const note = "This month's web lookups are used up, so this is a rougher estimate. Check the numbers.";
+    draft.servingAssumption = draft.servingAssumption ? `${draft.servingAssumption} ${note}` : note;
+  }
+  return draft;
 }
 
 export async function confirmMeal(

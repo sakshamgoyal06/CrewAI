@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 
 import { getLocalTimeParts } from "../nutrition/localDate.js";
-import { estimateMealNutrition } from "../meals/estimateMealNutrition.js";
+import { estimateMealNutrition, type EstimateOptions } from "../meals/estimateMealNutrition.js";
 import type { MealNutritionEstimate } from "../meals/types.js";
 import { resolveTimezone } from "../nutrition/localDate.js";
 import {
@@ -117,10 +117,12 @@ export async function draftMeal(input: {
   slot?: AppMealSlot;
   timezone: string;
   now?: Date;
-  estimate?: (text: string) => Promise<MealNutritionEstimate>;
+  estimate?: (text: string, opts?: EstimateOptions) => Promise<MealNutritionEstimate>;
+  /** Web cap and who is logging (see webLookups.ts and foodStore.ts). */
+  options?: EstimateOptions;
 }): Promise<MealDraft> {
   const text = input.text.trim();
-  const estimate = await (input.estimate ?? estimateMealNutrition)(text);
+  const estimate = await (input.estimate ?? estimateMealNutrition)(text, input.options);
   const items = estimateToItems(estimate, text);
   const slot =
     input.slot && input.slot !== "unspecified"

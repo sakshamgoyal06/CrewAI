@@ -16,7 +16,7 @@ const clientEvent = z.object({
   name: z.string().max(200).nullish(),
   durationMs: z.number().finite().min(0).max(86_400_000).nullish(),
   status: z.number().int().min(0).max(999).nullish(),
-  props: z.record(z.unknown()).optional(),
+  props: z.record(z.string(), z.unknown()).optional(),
   at: z.number().int().positive().optional(),
 });
 
