@@ -531,7 +531,7 @@ const toolDefinitions: Anthropic.Tool[] = [
   {
     name: "answer_workout_check",
     description:
-      "Record the answer to the post-gym-slot workout check: recheck (look in Hevy again), skipped (with reason), or trained_unlogged (trained but didn't log in Hevy; counts as the day's workout).",
+      "Record the answer to the post-gym-slot workout check: recheck (look in Hevy again), skipped (with reason), or trained_unlogged (trained but didn't log in Hevy; counts as the day's workout). Also use trained_unlogged when someone without Hevy says they trained.",
     input_schema: {
       type: "object",
       properties: {

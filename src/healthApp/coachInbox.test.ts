@@ -102,6 +102,7 @@ describe("postCheck", () => {
 
   it("writes the merged and catch-up lines", () => {
     expect(mergedCheckText([gym("2026-11-02"), gym("2026-11-03")])).toBe("No Hevy workout after your gym slot on Mon 2 Nov and Tue 3 Nov. Trained and didn't log, or skipped? Answer each below.");
+    expect(mergedCheckText([{ ...gym("2026-11-02"), hevy: false }, { ...gym("2026-11-03"), hevy: false }])).toBe("Gym slots on Mon 2 Nov and Tue 3 Nov: did you train? Answer each below.");
     expect(catchUpText([walk("2026-11-02")])).toMatch(/piled up while you were away: morning walk\./);
   });
 });
