@@ -236,6 +236,15 @@ describe("ensureDayPlan", () => {
     expect(await ensureDayPlan("u1", "Asia/Kolkata", morning)).toBe("not_ready");
     expect(db.messages).toHaveLength(0);
   });
+
+  it("posts nothing when its timezone and the snapshot's disagree on the day", async () => {
+    // A failed profile read used to fall back to UTC: 21:44 UTC on 3 Nov is already 4 Nov in
+    // India, so the plan was keyed to the 3rd but showed the 4th, and the 4th posted again.
+    expect(await ensureDayPlan("u1", "UTC", new Date("2026-11-03T21:44:00Z"))).toBe("not_ready");
+    expect(db.messages).toHaveLength(0);
+    expect(await ensureDayPlan("u1", "Asia/Kolkata", morning)).toBe("posted");
+    expect(db.messages).toHaveLength(1);
+  });
 });
 
 describe("history across the daily split", () => {

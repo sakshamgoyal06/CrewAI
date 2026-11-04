@@ -349,6 +349,12 @@ export async function ensureDayPlan(userProfileId: string, timezone: string, now
     buildHealthSnapshot(userProfileId, now),
     listInterventions(userProfileId, 21).catch(() => [] as Intervention[]),
   ]);
+  // The snapshot reads the timezone itself; if the two disagree, one of them is wrong. Posting
+  // anyway would key the plan to one day and show another, and the real day would post again.
+  if (snapshot.today.date !== date) {
+    logger.warn({ userProfileId, date, snapshotDate: snapshot.today.date }, "day plan skipped: timezone mismatch");
+    return "not_ready";
+  }
   const open = interventions.find((i) => i.status === "offered" || i.status === "confirm") ?? null;
   const { text, card } = buildDayPlan({ snapshot, name: bits.name, localHour: hour, intervention: open });
   const cards: ChatCard[] = [card, ...(open ? [cardFromIntervention(open)] : [])];
