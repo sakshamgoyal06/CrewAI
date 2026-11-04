@@ -57,7 +57,7 @@ Core identity and access. **Hosted only — no migration in repo.**
 | `allowlisted` | BOOLEAN | Access gate |
 | `timezone` | TEXT | IANA, e.g. `Asia/Kolkata` |
 | `north_star_goal` | TEXT | Injected into memory block |
-| `display_name` | TEXT | Added in `20260802120000_user_personalization.sql` |
+| `display_name` | TEXT | Added in `20260802120001_user_personalization.sql` |
 | `user_tier` | TEXT | `standard` \| `premium` \| `internal` |
 | `access_flags` | JSONB | e.g. `{ "chat": true }` |
 | `created_at`, `updated_at` | TIMESTAMPTZ | |
@@ -124,7 +124,7 @@ Four-question gate; `onboarding_completed_at` unlocks full health coaching.
 
 ### 4.7 `user_program_memory`
 
-Per-user program sections. Migration: `20260802120000_user_personalization.sql`.
+Per-user program sections. Migration: `20260802120001_user_personalization.sql`.
 
 | Section | Purpose |
 |---------|---------|
@@ -339,7 +339,7 @@ Not Postgres, but part of durable/fast state:
 | `20260729100000_memory_summaries.sql` | `memory_summaries` |
 | `20260731120000_magnus_events.sql` | `magnus_events` + views + triggers |
 | `20260802120000_magnus_youtube.sql` | youtube tables |
-| `20260802120000_user_personalization.sql` | display_name, program_memory, integrations |
+| `20260802120001_user_personalization.sql` | display_name, program_memory, integrations |
 | `20260802140000_user_integrations_notion.sql` | notion columns |
 | `20260802150000_user_integrations_youtube.sql` | youtube token column |
 | `20260802180000_magnus_chat_messages_type.sql` | message_type, delivery_trigger |

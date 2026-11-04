@@ -40,6 +40,12 @@ async function runCase(c: EvalCase): Promise<Outcome> {
 }
 
 async function main(): Promise<void> {
+  // Evals call the real model on the API key's bill. The rule is to run them on Claude app usage
+  // instead, so an API run needs an explicit opt-in.
+  if (process.env.MAGNUS_EVALS_ALLOW_API !== "1") {
+    console.error("Evals bill the Anthropic API key. Set MAGNUS_EVALS_ALLOW_API=1 to run them anyway.");
+    process.exit(2);
+  }
   if (!process.env.ANTHROPIC_API_KEY) {
     console.error("ANTHROPIC_API_KEY is not set; the evals call the real model.");
     process.exit(2);

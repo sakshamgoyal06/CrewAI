@@ -165,4 +165,4 @@ console.log(`  user_profile.id: ${profileId}`);
 console.log(`  telegram_chat_id: ${TELEGRAM_USER_ID}`);
 console.log(`  display_name: ${OWNER.displayName}`);
 console.log("\nApply migration first if tables are missing:");
-console.log("  supabase/migrations/20260802120000_user_personalization.sql");
+console.log("  supabase/migrations/20260802120001_user_personalization.sql");
