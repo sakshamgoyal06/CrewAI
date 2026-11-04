@@ -13,6 +13,15 @@ Code lives in `src/healthApp/dietPlan/`:
 | `adjust.ts` | Same-day rebalance after an off-plan meal (moves the base: roti, rice), and the day close (a miss outside 85–105% is spread over 2 days, max 200 kcal a day, never under the floor, protein unchanged). |
 | `review.ts`, `build.ts` | Optional Haiku review of each new plan (variety, pairings, calories); flagged options are dropped, refilled and the new ones checked once. |
 | `store.ts` | Supabase storage and the API service calls. Day picks are rows in `meal_plan_entries` (source `plan`). |
+| `log.ts` | "Ate this": logs a planned meal (with any portion changes) and links it to its entry; undo; a meal deleted from Today puts its entry back to planned. |
+| `rhythm.ts` | Through the day, no model call: today's meals on the morning card; a chat card and push at each meal's time; after a meal logged outside "Ate this", the entry is marked eaten off plan and the rest of today is resized; the day close at 9:45 pm (needs 2+ meals logged) with tomorrow's meals. |
+| `carry.ts` | Applies day-close carry-overs (`health_diet_adjustments`) to planned meals once each (`metadata.carry_from`), including meals planned later. |
+| `chatTool.ts` | The coach's `meal_plan` tool: view, ate, swap, pin/unpin/like/hide, rebuild. Food that isn't the plan stays `draft_meal`. |
+| `adherence.ts` | Planned meals eaten as planned, with changed portions, off plan or not logged, and the meal that slips 4+ of 7 days. Shown in the weekly review and, when a meal slips, the morning card. |
+
+## On-track food rule
+
+From 2026-11-05 (`northStar.ts` `FOOD_RULE_FROM`), a day's food is on track on calories and macros, not meal count: calories 85–105% of target, protein at least 90%, carbs and fat each within 25% of the plan's targets. Earlier days keep the old rule (3 meals, 60–100%, full protein) so past weeks don't change.
 
 Tables: `health_diet_preferences`, `health_diet_plans`, `health_diet_plan_options`, `health_diet_adjustments` (migration `20261104150000_health_diet_plan.sql`).
 

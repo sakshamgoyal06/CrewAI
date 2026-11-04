@@ -87,3 +87,25 @@ describe("meal_plan chat tool", async () => {
     expect(mealPlanInput.safeParse({ action: "view", date: "tomorrow" }).success).toBe(false);
   });
 });
+
+describe("plan adherence", async () => {
+  const { adherenceLine, adherenceOf } = await import("./adherence.js");
+  const row = (date: string, slot: "lunch" | "dinner", status: string, offPlan = false) => ({ date, slot, status, offPlan, kind: "option" });
+  it("counts meals eaten from the plan and names the meal that slips", () => {
+    const rows = [1, 2, 3, 4, 5, 6, 7].flatMap((d) => [
+      row(`2026-11-0${d}`, "lunch", d === 3 ? "partial" : "logged"),
+      row(`2026-11-0${d}`, "dinner", d <= 5 ? "logged" : "planned", d <= 4),
+    ]);
+    const a = adherenceOf(rows);
+    expect(a).toMatchObject({ planned: 14, asPlanned: 7, portionsChanged: 1, offPlan: 4, notLogged: 2 });
+    expect(a.slipping).toEqual({ slot: "dinner", slipped: 6, of: 7, mostlyOffPlan: true });
+    expect(adherenceLine(a)).toBe(
+      "8 of 14 planned meals eaten from the plan (1 with changed portions). Dinner went off plan on 6 of 7 days. Swap it in the Meals tab for something you'd actually eat, or pin your usual one.",
+    );
+  });
+  it("names nothing when no meal slips on 4 or more days", () => {
+    const a = adherenceOf([row("2026-11-01", "lunch", "logged", true), row("2026-11-02", "lunch", "planned"), row("2026-11-03", "lunch", "logged")]);
+    expect(a.slipping).toBeNull();
+    expect(adherenceLine(a)).toBe("1 of 3 planned meals eaten from the plan.");
+  });
+});

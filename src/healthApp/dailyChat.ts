@@ -17,6 +17,7 @@ import { listInterventions } from "./interventions/store.js";
 import type { Intervention } from "./interventions/types.js";
 import type { CheckId } from "./northStar.js";
 import { clock as mealClock, mealLines, planViewOrNull, SLOT_LABEL, type DayMealLine } from "./dietPlan/rhythm.js";
+import { adherenceLine, loadAdherence } from "./dietPlan/adherence.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
 import { addDays, localClock, tzOffsetMs } from "../util/time.js";
 import { stableTurnId } from "../util/stableId.js";
@@ -182,14 +183,16 @@ const LEAD: Record<CheckId, string> = {
   meals_logged: "Log each meal right after you eat, one line is enough.",
   calories: "Plan dinner now, so the day's calories land on target.",
   protein: "Put protein in breakfast; the rest of the day gets easier.",
+  macros: "Follow the meal plan's portions; it balances carbs and fat for you.",
   steps: "A 20-minute walk after lunch covers most of the gap.",
   workout: "Put the session in your calendar like a meeting.",
   routine: "Pick the one routine item that matters most today and do that first.",
 };
 
-function focusLine(s: HealthSnapshot, intervention: Intervention | null): string | null {
+function focusLine(s: HealthSnapshot, intervention: Intervention | null, planNote: string | null): string | null {
   if (intervention) return `One thing to decide: ${intervention.title}. The options are below.`;
   if (s.goal?.checkinDue) return "Weekly weigh-in today: step on the scale before breakfast and tell me the number.";
+  if (planNote) return planNote;
   const missed = s.northStar.mostMissed;
   if (missed && missed.missedDays >= 2) {
     return `${missed.label} slipped on ${missed.missedDays} of the last 6 days. ${LEAD[missed.id]}`;
@@ -245,7 +248,7 @@ function motivationFor(date: string, s: HealthSnapshot): string {
 }
 
 /** The day's plan as a card plus a short text the model reads in history. Pure. */
-export function buildDayPlan(input: { snapshot: HealthSnapshot; name: string | null; localHour: number; intervention: Intervention | null; meals?: DayMealLine[] }): { text: string; card: DayPlanCard } {
+export function buildDayPlan(input: { snapshot: HealthSnapshot; name: string | null; localHour: number; intervention: Intervention | null; meals?: DayMealLine[]; planNote?: string | null }): { text: string; card: DayPlanCard } {
   const s = input.snapshot;
   const date = s.today.date;
   const plan = s.today.routine.map((r) => ({ time: r.startTime ? clock(r.startTime) : null, label: r.label }));
@@ -270,7 +273,7 @@ export function buildDayPlan(input: { snapshot: HealthSnapshot; name: string | n
     goal: goalLine(s),
     yesterday: yesterdayLine(s),
     week: `${s.northStar.onTrackDays} of the last 7 days on track (aim: ${s.northStar.goal})`,
-    focus: focusLine(s, input.intervention),
+    focus: focusLine(s, input.intervention, input.planNote ?? null),
     motivation: motivationFor(date, s),
     ...(input.meals?.length ? { meals: input.meals } : {}),
   };
@@ -362,7 +365,10 @@ export async function ensureDayPlan(userProfileId: string, timezone: string, now
   }
   const open = interventions.find((i) => i.status === "offered" || i.status === "confirm") ?? null;
   const meals = planView ? mealLines(planView, date) : undefined;
-  const { text, card } = buildDayPlan({ snapshot, name: bits.name, localHour: hour, intervention: open, meals });
+  // A meal that keeps slipping off the plan is worth a look (only when it does; quiet otherwise).
+  const adherence = planView ? await loadAdherence(userProfileId, date).catch(() => null) : null;
+  const planNote = adherence?.slipping ? adherenceLine(adherence) : null;
+  const { text, card } = buildDayPlan({ snapshot, name: bits.name, localHour: hour, intervention: open, meals, planNote });
   const cards: ChatCard[] = [card, ...(open ? [cardFromIntervention(open)] : [])];
   const { error } = await supabase
     .from("health_chat_messages")

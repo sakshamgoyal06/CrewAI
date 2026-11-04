@@ -8,6 +8,7 @@ import { buildHealthHistory, type HistoryDay } from "./history.js";
 import type { CheckId, HealthTargets } from "./northStar.js";
 import { WEEKLY_ON_TRACK_GOAL } from "./northStar.js";
 import { buildHealthSnapshot } from "./snapshot.js";
+import { adherenceLine, loadAdherence } from "./dietPlan/adherence.js";
 
 export type WeekStats = {
   from: string;
@@ -45,6 +46,8 @@ export type WeeklyReview = {
   focus: string;
   /** Swims, runs, sports this week, and what they meant for the strength plan; null when none. */
   activityLine: string | null;
+  /** How the meal plan went: meals eaten from it, and the meal that slips most; null without a plan. */
+  mealPlanLine?: string | null;
 };
 
 const avg = (xs: number[]): number | null => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
@@ -96,6 +99,7 @@ const FOCUS: Record<CheckId, string> = {
   meals_logged: "Log every meal, even the messy ones. A photo is enough. The plan only adjusts on what it can see.",
   calories: "Land near your calorie target. Plan the evening meal first, since that's where most days go over.",
   protein: "Hit protein: add one protein-heavy item (paneer, eggs, dal, curd, chicken or a shake) to two meals a day.",
+  macros: "Keep carbs and fat near target: the meal plan's portions do it, so eat those and go easy on oil and fried sides.",
   steps: "Get the steps in: one 20 to 30 minute walk after lunch or dinner covers most of the gap.",
   workout: "Show up on your training days, even for a short session. Logging it in Hevy counts.",
   routine: "Stick to the routine you set: each reminder is the cue, and a short session still counts when you log it.",
@@ -173,5 +177,6 @@ export async function loadWeeklyReview(userProfileId: string, now = new Date()):
     buildHealthHistory(userProfileId, { days: 14, now }),
     buildHealthSnapshot(userProfileId, now),
   ]);
-  return summarizeWeek(history.days, history.targets, snapshot.goal);
+  const adherence = await loadAdherence(userProfileId, snapshot.today.date).catch(() => null);
+  return { ...summarizeWeek(history.days, history.targets, snapshot.goal), mealPlanLine: adherence ? adherenceLine(adherence) : null };
 }
