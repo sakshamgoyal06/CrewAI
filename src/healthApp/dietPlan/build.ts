@@ -25,6 +25,8 @@ export async function buildPlanDraft(input: {
   prefs: DietPrefs;
   diet: PersonDiet;
   avoid: string[];
+  /** The person's own diet words (diet note); enforced like the avoid list. */
+  dietNote?: string | null;
   usual: UsualForPlan;
   hidden: string[];
   /** Given only when the review is switched on. */
@@ -39,6 +41,7 @@ export async function buildPlanDraft(input: {
         budget: b,
         diet: input.diet,
         avoid: input.avoid,
+        dietNote: [input.dietNote ?? "", ...input.prefs.restrictions].filter(Boolean),
         loves: input.prefs.loves,
         staples: input.prefs.staples,
         prepLimit: prepLimit(input.prefs, b.slot),

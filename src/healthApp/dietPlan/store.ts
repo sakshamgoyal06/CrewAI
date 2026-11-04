@@ -229,6 +229,7 @@ export async function rebuildPlan(ctx: ActionContext, reason: string, now = new 
     prefs: prefs.prefs,
     diet: food.diet as PersonDiet,
     avoid: food.foodAvoid,
+    dietNote: food.dietNote,
     usual,
     hidden: prefs.hidden,
     review: reviewEnabled() ? reviewPlan : undefined,
