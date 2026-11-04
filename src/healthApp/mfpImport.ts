@@ -9,11 +9,11 @@
  * derived from the person, date and meal, so importing the same file twice adds nothing. Days the
  * person already logged in Magnus are left alone, so a day is never counted twice.
  */
-import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import { localDateKey } from "../nutrition/localDate.js";
 import { supabase } from "../tools/clients.js";
+import { stableTurnId } from "../util/stableId.js";
 import type { AppMealSlot } from "./meals.js";
 
 /** Marks imported meals in raw_text; frequent-meal suggestions skip these. */
@@ -128,9 +128,7 @@ export function parseMfpNutritionSummary(csv: string, range: { from: string; to:
 
 /** A stable UUID for one imported meal, so a second import of the same file is a no-op. */
 export function mfpSessionId(userProfileId: string, date: string, label: string): string {
-  const h = createHash("sha256").update(`mfp|${userProfileId}|${date}|${label.toLowerCase()}`).digest("hex");
-  const variant = ((parseInt(h[16]!, 16) & 0x3) | 0x8).toString(16);
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+  return stableTurnId(`mfp|${userProfileId}|${date}|${label.toLowerCase()}`);
 }
 
 export type MfpImportResult =
