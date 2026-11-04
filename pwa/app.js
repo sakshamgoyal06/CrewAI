@@ -722,7 +722,7 @@ function renderMove(d, t, isToday) {
     tile("Steps", fmt(d.steps), null, `of ${fmt(stepT)}`, d.steps / stepT),
     tile("Burned", d.burn ? fmt(d.burn.kcal) : "–", d.burn ? "kcal" : null, d.burn ? (d.burn.source === "estimate" ? "estimated" : "from phone") : "no data yet", null),
     tile("Workout", d.workouts.length ? fmt(mins) : d.trainedUnlogged || d.sportCounted ? "✓" : "–", d.workouts.length ? "min" : null,
-      d.workouts.length ? `${fmt(d.workouts.reduce((a, w) => a + w.volumeKg, 0))} kg lifted` : d.trainedUnlogged ? "not in Hevy" : d.sportCounted ? d.sportCounted.split(" · ")[0] : d.isTrainingDay ? "none logged" : "rest", null),
+      d.workouts.length ? `${fmt(d.workouts.reduce((a, w) => a + w.volumeKg, 0))} kg lifted` : d.trainedUnlogged ? (hevy === "not_connected" ? "marked done" : "not in Hevy") : d.sportCounted ? d.sportCounted.split(" · ")[0] : d.isTrainingDay ? "none logged" : "rest", null),
   );
   renderRecovery(d);
   renderRoutineToday(d);
@@ -750,13 +750,37 @@ function renderMove(d, t, isToday) {
     ...(rows.length
       ? rows
       : [el("li", { class: "none" },
-          hevy === "not_connected" ? "Hevy isn't connected for this account."
-          : hevy === "unavailable" ? "Couldn't reach Hevy just now."
-          : d.trainedUnlogged ? "You trained but didn't log it in Hevy."
+          d.trainedUnlogged ? (hevy === "not_connected" ? "Marked as trained." : "You trained but didn't log it in Hevy.")
           : d.sportCounted ? `No gym today. ${d.sportCounted.split(" · ")[0]} counted as training.`
+          : hevy === "not_connected" ? "No Hevy linked. Tap below on days you train."
+          : hevy === "unavailable" ? "Couldn't reach Hevy just now."
           : d.partial ? "Loading workouts…"
-          : "No workout logged.")]),
+          : "No workout logged."),
+        trainedToggle(d)].filter(Boolean)),
   );
+}
+
+/**
+ * "I trained" for a day with no workout in Hevy (or no Hevy at all), and Undo once it's marked.
+ * Same answer as the gym check card, so the day counts toward the score either way.
+ */
+function trainedToggle(d) {
+  const today = state.history?.today;
+  if (d.partial || d.workouts.length || d.sportCounted || (today && d.date > today)) return null;
+  if (!d.trainedUnlogged && !d.isTrainingDay && state.history?.hevy !== "not_connected") return null;
+  const btn = el("button", { class: d.trainedUnlogged ? "link" : "btn", type: "button" }, d.trainedUnlogged ? "Undo" : "I trained");
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      await api("/workout-check", { method: "POST", body: JSON.stringify({ date: d.date, answer: d.trainedUnlogged ? "undo" : "trained_unlogged" }) });
+      toast(d.trainedUnlogged ? "Unmarked." : "Workout counted for the day.");
+      refresh();
+    } catch (err) {
+      btn.disabled = false;
+      toast(err.message);
+    }
+  });
+  return el("li", { class: "row-actions" }, btn);
 }
 
 /** Sleep and resting heart rate from Health Connect, when the phone has them. */
@@ -783,7 +807,17 @@ function renderRoutineToday(d) {
   list.replaceChildren(...items.map((r) => {
     const mark = r.state === "done" ? "✓" : r.state === "skipped" ? "–" : "";
     let action = null;
-    if (r.state === "pending" && !r.gym) {
+    if (r.state === "pending" && r.gym) {
+      action = el("button", { class: "btn", type: "button" }, "Done");
+      action.addEventListener("click", async () => {
+        action.disabled = true;
+        try {
+          await api("/workout-check", { method: "POST", body: JSON.stringify({ date: d.date, answer: "trained_unlogged" }) });
+          toast(`${r.label} counted.`);
+          refresh();
+        } catch (err) { action.disabled = false; toast(err.message); }
+      });
+    } else if (r.state === "pending" && !r.gym) {
       action = el("button", { class: "btn", type: "button" }, "Done");
       action.addEventListener("click", async () => {
         action.disabled = true;
@@ -792,7 +826,7 @@ function renderRoutineToday(d) {
       });
     }
     const sub = r.state === "pending"
-      ? (r.gym ? `${r.detail} · log it in Hevy` : `${r.detail} · ${r.durationMin} min`)
+      ? (r.gym ? (state.history?.hevy === "not_connected" ? r.detail : `${r.detail} · log it in Hevy`) : `${r.detail} · ${r.durationMin} min`)
       : r.detail;
     return el("li", { class: r.state },
       el("span", { class: "mark", "aria-hidden": "true" }, mark),
@@ -2496,17 +2530,19 @@ function workoutCheckCard(c) {
       const line =
         cur.status === "found" && cur.reason ? `✓ ${cur.reason} counted as training` :
         cur.status === "found" ? "✓ Workout found in Hevy" :
-        cur.status === "trained_unlogged" ? "✓ Trained, not logged in Hevy" :
+        cur.status === "trained_unlogged" ? (cur.hevy === false ? "✓ Trained" : "✓ Trained, not logged in Hevy") :
         `Skipped${cur.reason ? ` · ${cur.reason}` : ""}`;
       card.replaceChildren(el("div", { class: cur.status === "skipped" ? "muted" : "done-line" }, `${line} · ${day}`));
       return;
     }
-    const recheck = el("button", { class: "btn", type: "button" }, "Check Hevy again");
-    const trained = el("button", { class: "btn", type: "button" }, "Trained, didn't log");
+    const noHevy = cur.hevy === false;
+    const recheck = noHevy ? null : el("button", { class: "btn", type: "button" }, "Check Hevy again");
+    const trained = el("button", { class: noHevy ? "btn primary" : "btn", type: "button" }, noHevy ? "Trained" : "Trained, didn't log");
     const skipped = el("button", { class: "btn primary", type: "button" }, "Skipped");
     const other = el("button", { class: "btn", type: "button", onclick: () => { state.activityDate = cur.date; openSheet("activity"); } }, "Did something else");
-    const buttons = [recheck, trained, skipped, other];
-    recheck.addEventListener("click", () => answer({ answer: "recheck" }, buttons));
+    if (noHevy) skipped.className = "btn";
+    const buttons = [recheck, trained, skipped, other].filter(Boolean);
+    recheck?.addEventListener("click", () => answer({ answer: "recheck" }, buttons));
     trained.addEventListener("click", () => answer({ answer: "trained_unlogged" }, buttons));
     const reasons = el("div", { class: "reasons", hidden: true });
     skipped.addEventListener("click", () => { reasons.hidden = !reasons.hidden; });
@@ -2521,8 +2557,8 @@ function workoutCheckCard(c) {
     card.className = "draft check";
     card.replaceChildren(
       el("p", { class: "eyebrow" }, `Workout check · ${day}`),
-      el("p", { class: "check-line" }, `Nothing in Hevy after your ${clock(cur.gymTime)} slot.`),
-      el("div", { class: "draft-actions" }, recheck, trained),
+      el("p", { class: "check-line" }, noHevy ? `Did you train after your ${clock(cur.gymTime)} slot?` : `Nothing in Hevy after your ${clock(cur.gymTime)} slot.`),
+      el("div", { class: "draft-actions" }, ...[recheck, trained].filter(Boolean)),
       el("div", { class: "draft-actions" }, other, skipped),
       reasons,
     );

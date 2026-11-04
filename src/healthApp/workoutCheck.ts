@@ -29,7 +29,8 @@ export const SCHEDULER_INTERVAL_MS = 5 * 60_000;
 
 export const workoutCheckAnswerInput = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  answer: z.enum(["recheck", "skipped", "trained_unlogged"]),
+  /** "undo" clears an answer (back to not answered), e.g. a mistaken "I trained" tap. */
+  answer: z.enum(["recheck", "skipped", "trained_unlogged", "undo"]),
   reason: z.string().trim().max(300).optional(),
 });
 
@@ -39,6 +40,8 @@ export type WorkoutCheckCard = {
   gymTime: string;
   status: WorkoutCheckStatus;
   reason?: string | null;
+  /** False when the person has no Hevy linked: the card asks plainly and has no "check Hevy again". */
+  hevy?: boolean;
 };
 
 /**
@@ -90,6 +93,14 @@ export function missedWorkoutMessage(date: string, today: string, slot: GymSlot)
   const when = date === today ? "Your" : "Yesterday's";
   const hours = Math.round((slot.checkDelayMin / 60) * 10) / 10;
   return `${when} ${formatTime(slot.time!)} gym slot was ${hours} hours ago and there's no workout in Hevy. Did you train?`;
+}
+
+/** The same question for someone without Hevy: nothing to look in, so just ask. */
+export function noHevyWorkoutMessage(date: string, today: string, slot: GymSlot): string {
+  const day = date === today ? "today" : "yesterday";
+  if (slot.checkDelayMin === 0) return `Did you train ${day}? Tap below so it counts.`;
+  const when = date === today ? "Your" : "Yesterday's";
+  return `${when} ${formatTime(slot.time!)} gym slot has passed. Did you train? Tap below so it counts.`;
 }
 
 type Deps = {
@@ -162,13 +173,15 @@ export async function runWorkoutChecks(
   if (!pending.length) return [];
 
   const hevy = await deps.recentWorkouts(userProfileId, timezone);
-  // Without a successful Hevy read, "no workout" would be a guess, so wait for the next run.
-  if (!hevy.connected || !hevy.fetched) return [];
+  // With Hevy linked but unreachable, "no workout" would be a guess, so wait for the next run.
+  // Without Hevy at all there is nothing to read, so the check simply asks.
+  if (hevy.connected && !hevy.fetched) return [];
+  const hasHevy = hevy.connected;
 
   const today = localDateKey(now, timezone);
   const results: Array<{ date: string; status: WorkoutCheckStatus }> = [];
   for (const { date, slot: gym } of pending) {
-    const workout = workoutOn(hevy.workouts, date);
+    const workout = hasHevy ? workoutOn(hevy.workouts, date) : null;
     // A sport that burned like a gym session already covers the day; no need to ask.
     const sport = workout ? null : await deps.sportOn?.(userProfileId, timezone, date).catch(() => null) ?? null;
     const status: WorkoutCheckStatus = workout || sport ? "found" : "missing";
@@ -182,8 +195,9 @@ export async function runWorkoutChecks(
     if (!inserted) continue;
     results.push({ date, status });
     if (status === "missing") {
-      const card: WorkoutCheckCard = { type: "workout_check", date, gymTime: gym.time!, status };
-      await deps.postMessage(userProfileId, missedWorkoutMessage(date, today, gym), [card]);
+      const card: WorkoutCheckCard = { type: "workout_check", date, gymTime: gym.time!, status, ...(hasHevy ? {} : { hevy: false }) };
+      const text = hasHevy ? missedWorkoutMessage(date, today, gym) : noHevyWorkoutMessage(date, today, gym);
+      await deps.postMessage(userProfileId, text, [card]);
     } else if (workout) {
       const note = await deps.review(userProfileId, timezone, now, workout).catch(() => null);
       if (note) await deps.postMessage(userProfileId, note, []);
@@ -221,6 +235,11 @@ export async function answerWorkoutCheck(
       reason: null,
     });
     return saved.ok ? { ok: true, status: "found" } : saved;
+  }
+
+  if (input.answer === "undo") {
+    const saved = await deps.save(ctx.userProfileId, { localDate: date, gymTime, status: "missing", hevyWorkoutId: null, reason: null });
+    return saved.ok ? { ok: true, status: "missing" } : saved;
   }
 
   const saved = await deps.save(ctx.userProfileId, {
