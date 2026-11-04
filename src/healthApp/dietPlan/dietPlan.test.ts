@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { catalog } from "../../meals/catalog/index.js";
 import { closeDay, rebalanceDay } from "./adjust.js";
 import { buildPlanDraft } from "./build.js";
-import { composeOptions, dietAllows, itemFor, FIT_TOLERANCE, MAX_OPTIONS, MIN_OPTIONS, pairingProblems, type MealOption, type PersonDiet } from "./compose.js";
+import { allowedMeats, composeOptions, dietAllows, itemFor, FIT_TOLERANCE, MAX_OPTIONS, MIN_OPTIONS, pairingProblems, type MealOption, type PersonDiet } from "./compose.js";
 import { pickDays } from "./pick.js";
 import { defaultPrefs, dietPrefsInput, prepLimit } from "./prefs.js";
 import { parseReview, reviewInput } from "./review.js";
@@ -67,6 +67,22 @@ describe("composeOptions", () => {
   it("never offers a vegetarian egg or meat", () => {
     const all = ["breakfast", "lunch", "snack", "dinner"].flatMap((s) => compose(s, "vegetarian"));
     expect(all.flatMap(keysOf).filter((k) => ["egg", "nonveg"].includes(cat.byKey.get(k)!.diet))).toEqual([]);
+  });
+
+  it("reads 'only chicken and eggs' from the diet note and keeps every other meat out", () => {
+    expect(allowedMeats(["Only chicken and eggs in non veg. Rest only vegetarian"])).toEqual({ meats: new Set(["chicken"]), egg: true });
+    expect(allowedMeats(["no mutton or prawns"])!.meats.has("mutton")).toBe(false);
+    expect(allowedMeats([])).toBeNull();
+    const all = ["breakfast", "lunch", "snack", "dinner"].flatMap((s) => compose(s, "custom", { dietNote: ["Only chicken and eggs in non veg. Rest only vegetarian"] }));
+    const text = all.flatMap((o) => o.items.map((i) => i.name.toLowerCase())).join(" | ");
+    expect(text).not.toMatch(/mutton|prawn|fish|lamb|keema|mangsho|rogan|pork|beef|crab/);
+    expect(text).toMatch(/chicken|egg/);
+  });
+
+  it("pairs meat dishes with a plain base, not curd, a starchy sabzi or a soup", () => {
+    expect(pairingProblems(["white rice cooked", "mutton curry", "greek yogurt"])).not.toEqual([]);
+    expect(pairingProblems(["chapati", "chicken keema", "aloo bhindi"])).not.toEqual([]);
+    expect(pairingProblems(["chapati", "moong dal soup"])).not.toEqual([]);
   });
 
   it("keeps the avoid list out, including dishes that contain it", () => {

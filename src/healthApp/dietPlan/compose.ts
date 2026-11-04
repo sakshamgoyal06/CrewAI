@@ -62,6 +62,8 @@ export type ComposeInput = {
   budget: MealBudget;
   diet: PersonDiet;
   avoid: string[];
+  /** The person's own words about their diet (diet note, restrictions): "only chicken and eggs in non veg". */
+  dietNote?: string[];
   loves: string[];
   staples: "roti" | "rice" | "both";
   /** Most prep minutes per option; null = no limit. */
@@ -74,7 +76,7 @@ export type ComposeInput = {
 
 // ---------- catalog roles ----------
 
-type Role = "bread" | "rice" | "main" | "side" | "cool" | "complete" | "breakfast" | "breakfastBread" | "toast" | "egg" | "accompaniment" | "addon" | "protein" | "snack" | "fruit" | "nut" | "porridge";
+type Role = "bread" | "rice" | "main" | "side" | "cool" | "complete" | "breakfast" | "breakfastBread" | "toast" | "egg" | "accompaniment" | "addon" | "protein" | "snack" | "fruit" | "nut" | "porridge" | "buttermilk";
 
 const RICE_BASE = new Set(["white rice cooked", "brown rice cooked", "jeera rice", "millet cooked", "quinoa cooked"]);
 /** Bases most Indian homes don't cook daily: offered only when they love them. */
@@ -173,6 +175,84 @@ function containsAny(key: string, words: string[]): boolean {
   return false;
 }
 
+// ---------- meat policy ----------
+
+/** Words that name a kind of meat or fish; a dish counts as that meat when its name or ingredients have the word. */
+const MEATS: Record<string, string[]> = {
+  chicken: ["chicken", "murgh", "murg"],
+  mutton: ["mutton", "lamb", "goat", "gosht", "mangsho", "keema"],
+  fish: ["fish", "rohu", "salmon", "tuna", "pomfret", "surmai", "bangda", "hilsa", "ilish", "bhetki", "sardine", "mackerel", "basa", "kingfish"],
+  prawn: ["prawn", "shrimp", "crab", "lobster", "squid", "seafood"],
+  pork: ["pork", "bacon", "ham", "sausage", "salami", "pig"],
+  beef: ["beef", "buff", "veal"],
+  turkey: ["turkey"],
+  duck: ["duck"],
+};
+const MEAT_NAMES = Object.keys(MEATS);
+
+/** "mutton" for "lamb", "prawn" for "shrimp"; null when the word is no meat. */
+function meatOfWord(w: string): string | null {
+  for (const [meat, words] of Object.entries(MEATS)) if (meat === w || words.includes(w)) return meat;
+  return null;
+}
+
+/**
+ * Which meats the person's own words allow, or null when they set no limit. Reads "only chicken and
+ * eggs in non veg", "chicken and fish only", "no mutton or prawns" (everything but those).
+ */
+export function allowedMeats(notes: string[]): { meats: Set<string>; egg: boolean } | null {
+  const text = notes.join(" . ").toLowerCase();
+  if (!text.trim()) return null;
+  const sentences = text.split(/[.;\n]+/);
+  let allow: Set<string> | null = null;
+  let egg = true;
+  const banned = new Set<string>();
+  for (const sent of sentences) {
+    const words = sent.match(/[a-z]+/g) ?? [];
+    const found = new Set<string>();
+    for (const w of words) {
+      const m = meatOfWord(w);
+      if (m && w !== "keema") found.add(m);
+    }
+    const mentionsEgg = words.some((w) => w === "egg" || w === "eggs");
+    const only = /\b(only|just|sirf)\b/.test(sent);
+    const negative = /\b(no|not|never|avoid|without|don'?t|dont|allergic|hate|skip)\b/.test(sent);
+    if (only && !negative && (found.size || mentionsEgg)) {
+      allow = new Set([...(allow ?? []), ...found]);
+      egg = mentionsEgg;
+    } else if (negative) {
+      found.forEach((m) => banned.add(m));
+      if (mentionsEgg) egg = false;
+    }
+  }
+  if (!allow && !banned.size && egg) return null;
+  const meats = new Set<string>(allow ?? MEAT_NAMES);
+  banned.forEach((m) => meats.delete(m));
+  return { meats, egg };
+}
+
+/** Meats a dish is made of, through every ingredient. */
+function meatsIn(key: string): Set<string> {
+  const out = new Set<string>();
+  for (const t of termsOf(key)) for (const w of t.split(" ")) {
+    const m = meatOfWord(w);
+    if (m) out.add(m);
+  }
+  return out;
+}
+
+/** True when a food stays inside the meats the person allowed. Veg food always passes. */
+export function meatPolicyAllows(key: string, diet: Diet, policy: ReturnType<typeof allowedMeats>): boolean {
+  if (!policy) return true;
+  if (diet === "egg") return policy.egg;
+  if (diet !== "nonveg") return true;
+  const meats = meatsIn(key);
+  // Meat of an unnamed kind ("curry") can't be proven allowed, so it's left out.
+  if (!meats.size) return false;
+  for (const m of meats) if (!policy.meats.has(m)) return false;
+  return true;
+}
+
 const DIETS_ALLOWED: Record<Exclude<PersonDiet, null | "custom">, Diet[]> = {
   vegetarian: ["veg", "vegan"],
   eggetarian: ["veg", "vegan", "egg"],
@@ -215,6 +295,7 @@ function rolesFor(e: CatalogEntry): Role[] {
   if (e.category === "meal" || (e.category === "rice_dish" && !RICE_BASE.has(k))) r.push("complete");
   if (e.category === "breakfast" && e.meals.includes("breakfast") && !ACCOMPANIMENTS.has(k)) r.push(EGG_DISHES.has(k) ? "egg" : "breakfast");
   if (PORRIDGE.has(k)) r.push("porridge");
+  if (k === "buttermilk") r.push("buttermilk");
   if (ADDONS.has(k)) r.push("addon");
   if (PROTEIN_SIDES.has(k)) r.push("protein");
   if (e.category === "fruit") r.push("fruit");
@@ -399,6 +480,21 @@ export function pairingProblems(keys: string[], cat: Catalog = catalog()): strin
   const side = roles.find((x) => x.r.includes("protein") && keys.length > 1);
   const heavyMain = roles.find((x) => x !== side && x.r.includes("main") && (x.e.diet === "nonveg" || x.e.diet === "egg" || isHeavyProtein(x.e.key)));
   if (side && heavyMain) problems.push(`${side.e.name} on top of ${heavyMain.e.name} is too much`);
+  // Meat and fish dishes go with a plain base and salad or sprouts, not with curd or a starchy sabzi.
+  const meatMain = roles.find((x) => x.r.includes("main") && (x.e.diet === "nonveg"));
+  if (meatMain) {
+    const curdSide = roles.find((x) => x.e.key === "curd" || x.e.key === "greek yogurt");
+    if (curdSide) problems.push(`${curdSide.e.name} doesn't go with ${meatMain.e.name}`);
+    const starchy = roles.find((x) => x.r.includes("side") && containsAny(x.e.key, ["potato", "aloo"]));
+    if (starchy) problems.push(`${starchy.e.name} is too heavy beside ${meatMain.e.name}`);
+  }
+  // Soups are a starter, not the main dish beside roti or rice.
+  const soupMain = roles.find((x) => x.r.includes("main") && /\bsoup\b/.test(x.e.key));
+  if (soupMain && (breads.length || roles.some((x) => x.r.includes("rice")))) problems.push(`${soupMain.e.name} isn't eaten with roti or rice`);
+  // Egg or chicken already in the dish: no boiled egg on top.
+  const eggAddon = roles.find((x) => x.e.key === "egg boiled" && x.r.includes("addon"));
+  const eggy = roles.find((x) => x !== eggAddon && (x.e.diet === "nonveg" || x.e.diet === "egg" || containsAny(x.e.key, ["egg"])));
+  if (eggAddon && eggy) problems.push(`${eggAddon.e.name} on top of ${eggy.e.name} is too much`);
   const mains = roles.filter((x) => x.r.includes("main") || x.r.includes("side") || x.r.includes("protein"));
   for (let i = 0; i < mains.length; i++) {
     for (let j = i + 1; j < mains.length; j++) {
@@ -422,7 +518,7 @@ const TEMPLATES: Record<PlanSlot, Array<Array<Role | `${Role}?`>>> = {
   breakfast: [["breakfast", "accompaniment?", "addon?"], ["egg", "toast"], ["breakfastBread", "cool"], ["porridge", "fruit?"], ["egg", "fruit?"]],
   lunch: [["bread", "main", "side?"], ["rice", "main", "side?"], ["bread", "main", "addon"], ["rice", "main", "addon"], ["bread", "main", "protein"], ["rice", "main", "protein"], ["complete", "cool?"]],
   dinner: [["bread", "main", "side?"], ["rice", "main", "side?"], ["bread", "main", "addon"], ["rice", "main", "addon"], ["bread", "main", "protein"], ["rice", "main", "protein"], ["complete", "cool?"]],
-  snack: [["snack"], ["fruit", "nut"], ["addon", "fruit?"]],
+  snack: [["snack"], ["fruit", "nut"], ["addon", "fruit?"], ["fruit", "buttermilk"]],
 };
 
 const MEAL_TYPE: Record<PlanSlot, MealType> = { breakfast: "breakfast", lunch: "lunch", dinner: "dinner", snack: "snack" };
@@ -432,8 +528,10 @@ function candidates(input: ComposeInput, cat: Catalog): Map<Role, Slotted[]> {
   const loves = input.loves.map(foodKeyFor).filter(Boolean);
   const loved = (e: CatalogEntry) => loves.some((l) => containsAny(e.key, [l]));
   const out = new Map<Role, Slotted[]>();
+  const policy = allowedMeats(input.dietNote ?? []);
   for (const e of cat.entries) {
     if (!dietAllows(input.diet, e)) continue;
+    if (!meatPolicyAllows(e.key, e.diet, policy)) continue;
     // Bought or ordered food (pizza, naan, momos) isn't a home meal; eat-out meals are planned as a budget.
     // (`ordered` comes with the food catalog's batch 3; read loosely so this works before and after it.)
     if ((e as { ordered?: boolean }).ordered) continue;
@@ -450,7 +548,7 @@ function candidates(input: ComposeInput, cat: Catalog): Map<Role, Slotted[]> {
       // Tofu cubes beside dal suit a vegan; a vegetarian gets paneer unless they like tofu.
       if (role === "protein" && e.key === "tofu" && input.diet !== "vegan" && !loved(e)) continue;
       // Accompaniments, rice and add-ons follow the meal; everything else must be eaten at this meal.
-      const followsMeal = ["rice", "accompaniment", "addon", "protein", "cool", "toast", "fruit", "nut"].includes(role);
+      const followsMeal = ["buttermilk", "rice", "accompaniment", "addon", "protein", "cool", "toast", "fruit", "nut"].includes(role);
       if (!followsMeal && !e.meals.includes(MEAL_TYPE[input.budget.slot]) && !(role === "snack" && input.budget.slot === "snack")) continue;
       if (input.prepLimit !== null && (prep ?? 0) > input.prepLimit) continue;
       if (role === "snack" && input.budget.slot !== "snack") continue;
@@ -556,6 +654,8 @@ function fit(combo: Slotted[], input: ComposeInput, lovedKeys: string[], cache: 
   if (base && input.staples !== "both") score += (input.staples === "roti") === (base.role === "bread") ? -0.1 : 0.15;
   const prep = Math.max(0, ...combo.map((x) => x.e.prepMinutes ?? 20));
   score += prep * 0.002;
+  // HealthifyMe-style plans put a vegetable (sabzi or salad) in nearly every lunch and dinner.
+  if ((b.slot === "lunch" || b.slot === "dinner") && !combo.some((x) => x.role === "complete")) score += combo.some((x) => x.role === "side") ? -0.12 : 0.08;
   // Familiar food first: a meal is as familiar as its least logged core dish.
   const core = combo.filter((x) => CORE_ROLES.includes(x.role));
   const popularity = Math.min(...(core.length ? core : combo).map((x) => popularityOf(x.e)));
@@ -650,7 +750,13 @@ function composeWithin(input: ComposeInput, cat: Catalog, pad: boolean): MealOpt
   const out: MealOption[] = [];
   const anchors = new Set<string>();
 
-  for (const u of input.usual ?? []) {
+  const policy = allowedMeats(input.dietNote ?? []);
+  const usualOk = (u: NonNullable<ComposeInput["usual"]>[number]) =>
+    !policy || u.items.every((i) => {
+      const e = cat.byKey.get(foodKeyFor(i.name));
+      return e ? meatPolicyAllows(e.key, e.diet, policy) : !MEAT_NAMES.some((m) => meatOfWord(m) && containsAny(foodKeyFor(i.name), [m, ...MEATS[m]!]) && !policy.meats.has(m));
+    });
+  for (const u of (input.usual ?? []).filter(usualOk)) {
     const o = usualOption(input.budget.slot, input.budget, u, cat);
     if (o && !hidden.has(o.id) && out.length < 3) out.push(o);
   }
