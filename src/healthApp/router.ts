@@ -26,7 +26,9 @@ import {
 } from "./actions.js";
 import {
   createPersonalToken,
+  isOwnerProfileRow,
   replacePersonalToken,
+  resetOwnAccount,
   listPersonalTokens,
   publicAuthConfig,
   resolveRequestUser,
@@ -75,6 +77,11 @@ import {
   applyRazorpayEvent,
   billingEnabled,
   billingMode,
+  forgetEntitlement,
+  experienceFor,
+  hasFeature,
+  PREVIEW_STATES,
+  previewEntitlement,
   priceAmounts,
   cancelRazorpaySubscription,
   confirmInput,
@@ -298,6 +305,7 @@ export function createHealthAppRouter(): express.Router {
           onboarded,
           name: data?.display_name ?? null,
           email: data?.email ?? null,
+          owner: isOwnerProfileRow(ctx.userProfileId, data?.email),
           timezone: ctx.timezone,
           hevyConnected: hevy,
           tokens,
@@ -435,6 +443,17 @@ export function createHealthAppRouter(): express.Router {
       z.object({ confirm: z.literal("DELETE") }).parse(req.body ?? {});
       const r = await deleteAccount(ctx.userProfileId);
       return r.ok ? { body: r } : { status: r.error === "owner_account" ? 400 : 500, body: r };
+    }),
+  );
+
+  /** Owner only: wipe all data and start again as a new user, keeping the Google sign-in. */
+  router.post(
+    "/account/reset",
+    route("account-reset", async (ctx, req) => {
+      z.object({ confirm: z.literal("RESET") }).parse(req.body ?? {});
+      const r = await resetOwnAccount(ctx.userProfileId);
+      forgetEntitlement(ctx.userProfileId);
+      return r.ok ? { body: r } : { status: r.error === "owner_only" ? 403 : r.error === "needs_google_sign_in" ? 400 : 500, body: r };
     }),
   );
 
@@ -726,13 +745,20 @@ export function createHealthAppRouter(): express.Router {
   /** Plan, trial and what can be bought. */
   router.get(
     "/billing",
-    route("billing", async (ctx) => {
+    route("billing", async (ctx, req) => {
       const cfg = razorpayConfig();
+      const now = new Date();
+      const as = String(req.query.as ?? "");
+      const ent =
+        billingMode() === "preview" && (PREVIEW_STATES as readonly string[]).includes(as)
+          ? previewEntitlement(as as (typeof PREVIEW_STATES)[number], now)
+          : await loadEntitlement(ctx.userProfileId);
       return {
         body: {
           enabled: billingEnabled(),
           mode: billingMode(),
-          entitlement: await loadEntitlement(ctx.userProfileId),
+          entitlement: ent,
+          experience: experienceFor(ent, now),
           prices: priceLabels(),
           amounts: priceAmounts(),
           razorpay: cfg ? { keyId: cfg.keyId } : null,
@@ -953,6 +979,7 @@ export function createHealthAppRouter(): express.Router {
   router.post(
     "/rca",
     route("rca", async (ctx) => {
+      if (!(await hasFeature(ctx.userProfileId, "rca"))) return { status: 402, body: { ok: false, error: "pro_feature" } };
       if ((await allowUse(ctx, "rca")) !== true) return { status: 429, body: { ok: false, error: "rca_limit" } };
       const r = await runRca(ctx.userProfileId, "manual");
       return r ? { body: { ok: true, card: cardFromReport(r.report) } } : { status: 400, body: { ok: false, error: "not_enough_data" } };
