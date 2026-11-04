@@ -106,7 +106,7 @@ export const FOODS: CatalogFood[] = [
 
   // ── Dairy ────────────────────────────────────────────────────────────────
   food("Toned milk", "dairy", "veg", [61, 3.3, 4.6, 3.2, 0], usda("Milk, whole (3.25% fat, close to Indian toned milk at 3%)"),
-    [s("glass", 250, null, true), s("cup", 200), s("tbsp", 15)], { basis: "100ml", aliases: ["milk", "doodh", "cow milk", "packet milk"] }),
+    [s("glass", 250, null, true), s("cup", 200), s("tbsp", 15)], { basis: "100ml", aliases: ["hot milk", "warm milk", "garam doodh", "milk", "doodh", "cow milk", "packet milk"] }),
   food("Full cream milk", "dairy", "veg", [87, 3.2, 4.8, 6, 0], ref("Typical Indian full cream milk (6% fat)"), [s("glass", 250, null, true), s("cup", 200)], { basis: "100ml", aliases: ["full fat milk", "whole milk", "gold milk"] }),
   food("Double toned milk", "dairy", "veg", [45, 3.1, 4.7, 1.5, 0], ref("Typical Indian double toned milk (1.5% fat)"), [s("glass", 250, null, true), s("cup", 200)], { basis: "100ml", aliases: ["low fat milk"] }),
   food("Curd", "dairy", "veg", [61, 3.5, 4.7, 3.2, 0], usda("Yogurt, plain, whole milk"), [s("bowl", 150, null, true, "1 katori"), s("cup", 245), s("tbsp", 15)], { aliases: ["dahi", "yogurt", "yoghurt", "plain curd"] }),
@@ -183,6 +183,10 @@ export const FOODS: CatalogFood[] = [
   food("Kurkure", "snack", "veg", [530, 6.5, 56, 31, 2], label("Typical corn puff snack label"), [s("serving", 35, null, true, "1 small pack (35 g)"), s("handful", 15)], { aliases: ["corn puffs", "kurkure masala munch", "cheetos", "puffcorn"], prepMinutes: 0 }),
   food("Nachos", "snack", "vegan", [489, 7.3, 64.1, 23.7, 5], usda("Snacks, tortilla chips, plain"), [s("serving", 100, null, true, "1 portion (100 g)"), s("handful", 28)], { aliases: ["tortilla chips", "nacho chips", "doritos"], ordered: true, prepMinutes: 0 }),
   food("Chocolate cereal", "grain", "veg", [385, 6.5, 80, 4.5, 3.5], label("Typical chocolate cereal (Chocos) label"), [s("bowl", 30, null, true, "1 bowl (30 g)"), s("cup", 28)], { aliases: ["chocos", "choco flakes", "kelloggs chocos", "choco cereal"], prepMinutes: 0 }),
+  // ── Batch 11 (2026-11-04): leaves, dried fruit ───────────────────────────
+  food("Fenugreek leaves", "vegetable", "vegan", [49, 4.4, 6, 0.9, 1.1], ref("Fenugreek leaves (methi), typical IFCT/USDA values"), [s("bowl", 50, null, true, "1 small bowl"), PER100(false)], { aliases: ["methi", "methi leaves", "fresh methi", "fenugreek"] }),
+  food("Dried apricots", "fruit", "vegan", [241, 3.4, 62.6, 0.5, 7.3], usda("Apricots, dried, sulfured, uncooked"), [s("piece", 8, null, true), s("handful", 30)], { aliases: ["dry apricot", "dried apricot", "khubani", "apricot"] }),
+  food("Prunes", "fruit", "vegan", [240, 2.2, 63.9, 0.4, 7.1], usda("Plums, dried (prunes), uncooked"), [s("piece", 9, null, true), s("handful", 30)], { aliases: ["dried plum", "dry plum", "prune"] }),
   food("Milk chocolate", "sweet", "veg", [535, 7.7, 59.4, 29.7, 3.4], usda("Candies, milk chocolate"), [s("piece", 10, null, true, "1 small square"), PER100(false)], { aliases: ["chocolate", "dairy milk"] }),
   food("Vanilla ice cream", "sweet", "veg", [207, 3.5, 23.6, 11, 0.7], usda("Ice cream, vanilla"), [s("scoop", 45, null, true), s("cup", 130)], { aliases: ["ice cream cup", "ice cream"] }),
   food("Papad", "snack", "vegan", [371, 25.6, 59.9, 3.2, 18.6], usda("Papad"), [s("piece", 12, null, true)], { aliases: ["papadum", "roasted papad"] , prepMinutes: 0 }),

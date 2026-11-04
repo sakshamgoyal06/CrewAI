@@ -289,7 +289,23 @@ oats with milk and banana
 1 bowl chana
 1 bowl kala chana
 1 bowl lobia
-1 bowl matki usal`.split("\n");
+1 bowl matki usal
+2 palak paratha
+1 bowl methi aloo
+1 bowl panchmel dal
+2 rava idli
+1 plate gobi 65
+1 plate paneer 65
+1 bowl sev tamatar
+1 bowl sheer khurma
+2 veg cutlet
+1 masala papad
+1 plate baingan masala
+1 bowl chicken do pyaza
+1 glass iced tea
+1 cup hot milk
+1 dry apricot
+2 prunes`.split("\n");
 
 describe("common phrases resolve from the catalog", () => {
   it("answers all of them without the web", async () => {
