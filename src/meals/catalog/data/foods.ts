@@ -254,6 +254,14 @@ export const FOODS: CatalogFood[] = [
   food("Basa", "fish", "nonveg", [119, 15.2, 0, 5.9, 0], usda("Fish, catfish, channel, farmed, raw (basa is a catfish)"), [PER100(), s("piece", 120, null, false, "1 fillet")], { aliases: ["basa fish", "basa fillet", "pangasius"] }),
   food("Hot chocolate", "drink", "veg", [72, 1.8, 13.9, 1, 0.2], usda("Hot chocolate / cocoa, NFS"), [s("cup", 200, null, true)], { basis: "100ml", aliases: ["hot cocoa", "drinking chocolate", "cocoa"] }),
   food("Masala oats, dry", "grain", "veg", [390, 10, 64, 9, 9], label("Typical instant masala oats"), [s("serving", 40, null, true, "1 pack (40 g)")], { aliases: ["masala oats pack"] }),
+  // ── Batch 8 (2026-11-04): fruit, snacks and juices ──
+  food("Popcorn", "snack", "vegan", [387, 12.9, 77.8, 4.5, 14.5], usda("Snacks, popcorn, air-popped"), [s("bowl", 25, null, true, "1 bowl popped (25 g)"), s("handful", 10)], { aliases: ["plain popcorn", "air popped popcorn"], prepMinutes: 10 }),
+  food("Blueberries", "fruit", "vegan", [57, 0.7, 14.5, 0.3, 2.4], usda("Blueberries, raw"), [s("bowl", 75, null, true, "½ cup"), s("handful", 30)], { aliases: ["blueberry"] }),
+  food("Peach", "fruit", "vegan", [46, 0.9, 10.1, 0.3, 1.5], usda("Peach, raw"), [s("piece", 150, null, true)], { aliases: ["peaches", "aadoo", "aadu"] }),
+  food("Dragon fruit", "fruit", "vegan", [68, 0.7, 16.2, 0.2, 1.8], usda("Dragon fruit"), [s("piece", 300, null, true, "1 fruit"), s("bowl", 150, null, false, "1 katori")], { aliases: ["pitaya", "kamalam"] }),
+  food("Cherries", "fruit", "vegan", [63, 1.1, 16, 0.2, 2.1], usda("Cherries, sweet, raw"), [s("handful", 40, null, true), s("piece", 8)], { aliases: ["cherry", "fresh cherries"] }),
+  food("Pomegranate juice", "drink", "vegan", [54, 0.1, 13.1, 0.3, 0.1], usda("Pomegranate juice, 100%"), [s("glass", 200, null, true)], { basis: "100ml", aliases: ["anar juice", "anar ka juice"] }),
+  food("Soan papdi", "sweet", "veg", [510, 6, 62, 26, 2], label("Typical packaged soan papdi"), [s("piece", 20, null, true)], { aliases: ["son papdi", "soan papri", "patisa"], ordered: true, prepMinutes: 0 }),
   food("Water", "drink", "vegan", [0, 0, 0, 0, 0], ref("Plain drinking water"), [s("glass", 250, null, true)], { basis: "100ml", aliases: ["drinking water", "paani", "pani"], prepMinutes: 0 }),
   food("Muesli", "grain", "veg", [380, 10, 66, 7.5, 8], label("Typical fruit and nut muesli label"), [s("serving", 40, null, true, "40 g (½ cup)"), s("bowl", 40, null, false, "1 bowl"), s("cup", 80)], { meals: ["breakfast"], prepMinutes: 0 }),
 ];

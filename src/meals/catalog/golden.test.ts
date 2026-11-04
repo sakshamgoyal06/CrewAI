@@ -169,6 +169,19 @@ const GOLDEN: [meal: string, minKcal: number, maxKcal: number][] = [
   ["glass of milk with bournvita", 190, 240],
   ["2 motichoor ladoo", 300, 420],
   ["mango lassi", 200, 300],
+  // Batch 8
+  ["veg thali", 480, 620],
+  ["mess thali", 480, 620],
+  ["2 kerala parotta, egg roast", 650, 850],
+  ["chicken chettinad, 1 cup rice", 420, 560],
+  ["dal baati churma", 850, 1050],
+  ["chole kulche", 600, 760],
+  ["masala khichdi", 180, 260],
+  ["handful of mixed nuts", 170, 200],
+  ["bowl of roasted makhana", 90, 120],
+  ["fresh lime soda", 55, 85],
+  ["falooda", 330, 450],
+  ["thukpa", 200, 300],
   ["2 khakhra", 150, 170],
 ];
 

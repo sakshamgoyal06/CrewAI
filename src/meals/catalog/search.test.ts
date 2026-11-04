@@ -46,7 +46,7 @@ describe("searchCatalog", () => {
   it("filters by diet and meal", () => {
     expect(names("chicken", { diet: "veg" })).toEqual([]);
     expect(names("egg", { diet: "vegan" })).toEqual([]);
-    expect(names("", { diet: "jain", limit: 100 }).filter((n) => /onion|aloo|potato/i.test(n))).toEqual([]);
+    expect(names("", { diet: "jain", limit: 100 }).filter((n) => /\b(onion|aloo|potato)/i.test(n))).toEqual([]);
     expect(searchCatalog("", { meal: "breakfast", limit: 30 }).every((h) => h.entry.meals.includes("breakfast"))).toBe(true);
   });
 
