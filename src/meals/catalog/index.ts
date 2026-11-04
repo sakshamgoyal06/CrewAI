@@ -4,7 +4,7 @@
  */
 import { foodKeyFor, type FoodComponent } from "../foodParse.js";
 import { DISHES } from "./data/dishes.js";
-import { FOODS } from "./data/foods.js";
+import { FOODS, NOT_JAIN } from "./data/foods.js";
 import type { Category, CatalogDish, CatalogFood, Macros, MealType, PrepMinutes, Serving, ServingSize, ServingUnit } from "./types.js";
 
 export type CatalogEntry = {
@@ -22,6 +22,8 @@ export type CatalogEntry = {
   prepMinutes: PrepMinutes | null;
   /** Usually bought or ordered, not made at home; prepMinutes 0 then means "no prep", not "home-made in 0 min". */
   ordered: boolean;
+  /** Fits a Jain diet: vegetarian, with no onion, garlic, root vegetables, mushroom or honey (data/foods.ts NOT_JAIN). */
+  jain: boolean;
 };
 
 /** Whole foods that are eaten as they are. */
@@ -102,6 +104,7 @@ export function buildCatalog(foods: CatalogFood[] = FOODS, dishes: CatalogDish[]
     const e: CatalogEntry = {
       key: foodKeyFor(f.name), name: f.name, kind: "food", basis: f.basis ?? "100g", per100: f.per100,
       servings: f.servings, diet: f.diet, category: f.category, meals: f.meals ?? MEALS_BY_CATEGORY[f.category], prepMinutes: foodPrep(f), ordered: f.ordered ?? false,
+      jain: f.diet !== "egg" && f.diet !== "nonveg" && !NOT_JAIN.includes(f.name),
     };
     ingredients.set(e.key, e);
     add(e, f.aliases);
@@ -111,6 +114,7 @@ export function buildCatalog(foods: CatalogFood[] = FOODS, dishes: CatalogDish[]
     const e: CatalogEntry = {
       key: foodKeyFor(d.name), name: d.name, kind: "dish", basis: d.basis ?? "100g", per100: dishPer100(d, ingredients),
       servings: d.servings, diet: d.diet, category: d.category, meals: d.meals ?? MEALS_BY_CATEGORY[d.category], prepMinutes: d.prepMinutes ?? null, ordered: d.ordered ?? false,
+      jain: d.diet !== "egg" && d.diet !== "nonveg" && d.recipe.every(([n]) => ingredients.get(foodKeyFor(n))?.jain === true),
     };
     ingredients.set(e.key, e);
     add(e, d.aliases);

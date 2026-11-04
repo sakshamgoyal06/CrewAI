@@ -104,6 +104,27 @@ const GOLDEN: [meal: string, minKcal: number, maxKcal: number][] = [
   ["sattu drink", 90, 140],
   ["handful of roasted chana", 95, 125],
   ["egg pulao", 400, 560],
+  // Batch 4: diet-planner gaps
+  ["jain dal tadka, 2 roti", 320, 420],
+  ["gatte ki sabzi, 2 roti", 380, 520],
+  ["dal dhokli", 250, 360],
+  ["egg sandwich", 330, 420],
+  ["2 peanut butter toast", 300, 380],
+  ["overnight oats", 300, 400],
+  ["a glass of soy milk", 65, 90],
+  ["tofu tikka", 180, 260],
+  ["lobia curry and rice", 330, 450],
+  ["misal pav", 520, 680],
+  ["puttu kadala", 380, 520],
+  ["litti chokha", 440, 600],
+  ["vegetable dalia", 140, 220],
+  ["chicken soup", 70, 130],
+  ["prawn masala, 1 cup rice", 340, 450],
+  ["macher jhol with rice", 350, 480],
+  ["moong dal soup", 110, 170],
+  ["paneer salad bowl", 280, 380],
+  ["1 protein bar", 210, 250],
+  ["soya bhurji, 2 roti", 300, 420],
 ];
 
 describe("golden meals from the catalog", () => {

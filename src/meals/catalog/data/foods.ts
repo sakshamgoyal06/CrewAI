@@ -7,7 +7,7 @@
  * values, noted as such. Serving weights follow how each food is measured at home in India.
  */
 import type { CatalogFood } from "../types.js";
-import { food, label, PER100, ref, s, usda } from "./helpers.js";
+import { food, KATORI, label, PER100, ref, s, usda } from "./helpers.js";
 
 const flour = [s("tbsp", 8), s("cup", 120), PER100()];
 const oilServings = [s("tsp", 4.5, null, true), s("tbsp", 13.5)];
@@ -182,6 +182,27 @@ export const FOODS: CatalogFood[] = [
   food("Chocolate chip cookie", "snack", "veg", [492, 5.1, 65.4, 24.7, 2], usda("Cookie, chocolate chip"), [s("piece", 15, null, true, "1 cookie")], { aliases: ["cookie", "cookies", "choco chip cookie"], prepMinutes: 0 }),
   food("Roasted chana", "pulse", "vegan", [369, 22.5, 58.8, 5.2, 16.8], ref("Typical roasted Bengal gram values; no USDA entry"), [s("handful", 30, null, true), s("bowl", 50, null, false, "1 small bowl")], { aliases: ["bhuna chana", "roasted gram", "chana roasted", "phutana", "roasted chickpeas"], meals: ["snack"], prepMinutes: 0 }),
   food("Sattu", "grain", "vegan", [387, 22.4, 57.8, 6.7, 10.8], ref("Roasted gram flour; values as USDA 'Chickpea flour (besan)'"), [s("tbsp", 10, null, true), s("cup", 100)], { aliases: ["sattu flour", "chana sattu"] }),
+  // ── Batch 4 (2026-11-04): diet-planner gaps (vegan and lactose-free protein, regional staples) ──
+  food("Soy milk", "drink", "vegan", [38, 3.5, 1.3, 2.1, 0], usda("Soy milk, unsweetened"), [s("glass", 200, null, true), s("cup", 150)], { basis: "100ml", aliases: ["soya milk", "soymilk", "soy milk unsweetened"] }),
+  food("Soy curd", "dairy", "vegan", [66, 2.6, 9.7, 1.8, 0.4], usda("SILK Plain soy yogurt"), [KATORI(), s("bowl", 100, "small", false, "1 small katori")], { aliases: ["soy yogurt", "soya curd", "soya dahi", "soy dahi", "vegan curd"] }),
+  food("Almond milk", "drink", "vegan", [15, 0.6, 0.3, 1.2, 0], usda("Almond milk, unsweetened"), [s("glass", 200, null, true), s("cup", 150)], { basis: "100ml", aliases: ["almond milk unsweetened", "badam milk unsweetened"] }),
+  food("Lactose-free milk", "dairy", "veg", [50, 3.4, 4.9, 1.9, 0], usda("Milk, lactose free, reduced fat (2%)"), [s("glass", 200, null, true), s("cup", 150)], { basis: "100ml", aliases: ["lactose free milk", "lactose free toned milk"] }),
+  food("Hummus", "snack", "vegan", [237, 7.8, 15, 17.8, 5.5], usda("Hummus, commercial"), [s("tbsp", 15, null, true), s("bowl", 60, null, false, "1 small bowl")], { aliases: ["houmous", "hummus dip"], meals: ["snack"], prepMinutes: 10 }),
+  food("Protein bar", "supplement", "veg", [380, 33, 38, 12, 8], label("Typical Indian whey protein bar, 20 g protein per 60 g bar"), [s("piece", 60, null, true, "1 bar")], { aliases: ["protein bars", "whey protein bar"] }),
+  food("Lobia, raw", "pulse", "vegan", [343, 23.9, 59.6, 2.1, 10.7], usda("Cowpeas, catjang, mature seeds, raw"), [PER100(), s("cup", 170, null, false, "1 cup dry")], { aliases: ["black eyed peas", "chawli", "rongi", "lobia dry"] }),
+  food("Moth beans, raw", "pulse", "vegan", [343, 22.9, 61.5, 1.6, 0], usda("Mothbeans, mature seeds, raw (no fibre value)"), [PER100(), s("cup", 190, null, false, "1 cup dry")], { aliases: ["matki", "moth", "math beans", "matki dry"] }),
+  food("Dalia, raw", "grain", "vegan", [342, 12.3, 75.9, 1.3, 12.5], usda("Bulgur, dry"), [PER100(), s("cup", 140, null, false, "1 cup dry")], { aliases: ["broken wheat", "bulgur", "lapsi raw", "daliya raw"] }),
+  food("Rice flour", "grain", "vegan", [366, 6, 80.1, 1.4, 2.4], usda("Rice flour, white, unenriched"), [PER100(), s("cup", 160)], { aliases: ["chawal ka atta", "akki hittu"] }),
+  food("Lettuce", "vegetable", "vegan", [17, 1.2, 3.3, 0.3, 2.1], usda("Lettuce, cos or romaine, raw"), [s("bowl", 50, null, true, "1 cup shredded"), s("piece", 10, null, false, "1 leaf")], { aliases: ["romaine", "salad leaves", "iceberg lettuce"] }),
   food("Water", "drink", "vegan", [0, 0, 0, 0, 0], ref("Plain drinking water"), [s("glass", 250, null, true)], { basis: "100ml", aliases: ["drinking water", "paani", "pani"], prepMinutes: 0 }),
   food("Muesli", "grain", "veg", [380, 10, 66, 7.5, 8], label("Typical fruit and nut muesli label"), [s("serving", 40, null, true, "40 g (½ cup)"), s("bowl", 40, null, false, "1 bowl"), s("cup", 80)], { aliases: ["granola"], meals: ["breakfast"], prepMinutes: 0 }),
+];
+
+/**
+ * Not eaten by Jains: root vegetables, onion, garlic, mushroom and honey, and foods made with them.
+ * Dishes are Jain when every ingredient is (catalog/index.ts).
+ */
+export const NOT_JAIN: string[] = [
+  "Onion", "Garlic", "Potato", "Carrot", "Ginger", "Radish", "Beetroot", "Sweet potato", "Mushroom", "Honey",
+  "Aloo bhujia", "French fries", "Potato chips", "Ketchup", "Instant noodles (masala), dry",
 ];
