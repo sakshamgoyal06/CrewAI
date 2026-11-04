@@ -332,10 +332,18 @@ details.stack > summary { cursor: pointer; padding: 4px 0; }
 .tag.on_pace { color: var(--accent); background: var(--accent-soft); }
 .tag.behind { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
 .tag.not_enough_data { color: var(--muted); background: var(--sunken); }
-.spark { width: 100%; height: 56px; margin-top: 10px; }
-.spark path.line { fill: none; stroke: var(--accent); stroke-width: 1.6; }
-.spark path.area { fill: var(--accent); opacity: 0.07; }
-.spark line.target { stroke: var(--faint); stroke-dasharray: 3 4; stroke-width: 1; }
+/* Goal chart: start to deadline, weigh-ins, the trend carried forward, the target. */
+.goal-chart { display: block; width: 100%; height: auto; margin-top: 12px; overflow: visible; }
+.goal-chart .axis { fill: var(--faint); font-size: 10px; font-variant-numeric: tabular-nums; }
+.goal-chart .axis.tlabel { fill: var(--muted); font-weight: 700; }
+.goal-chart .target { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; }
+.goal-chart .deadline { stroke: var(--hair-strong); stroke-width: 1; }
+.goal-chart .trendline { fill: none; stroke: var(--text); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.goal-chart .dot { fill: var(--text); }
+.goal-chart .dot.now { fill: var(--accent); stroke: var(--bg); stroke-width: 2; }
+.goal-chart .proj { fill: none; stroke-width: 1.6; stroke-dasharray: 4 4; stroke: var(--muted); }
+.goal-chart .proj.ahead, .goal-chart .proj.on_pace, .goal-chart .proj.reached { stroke: var(--good); }
+.goal-chart .proj.behind { stroke: var(--warn); }
 .empty-goal { color: var(--muted); font-size: 0.92rem; }
 
 .checks { list-style: none; margin: 0; padding: 0; }
@@ -867,7 +875,7 @@ body.screen-open { overflow: hidden; }
 .meal-card, .option-row {
   display: grid; gap: 4px; width: 100%; text-align: left; padding: 14px 0; border: 0; background: none; color: var(--text); font: inherit;
 }
-.meal-card .slot { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.meal-card .slot { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 700; } /* gold is for actions */
 .meal-card .slot small { letter-spacing: 0; text-transform: none; color: var(--faint); font-size: 0.8rem; }
 .meal-card .what, .option-row .what { font-size: 1rem; line-height: 1.35; }
 .meal-card .sub, .option-row .sub { color: var(--muted); font-size: 0.82rem; }
@@ -994,3 +1002,12 @@ body.screen-open { overflow: hidden; }
 .draft-actions.split { align-items: center; justify-content: space-between; }
 .draft-actions.split .link { flex: none; padding: 8px 4px; }
 .draft-actions.split .btn { flex: 0 1 60%; }
+
+/* Trends: four main charts plus "More"; bars that missed the target are muted. */
+.trend-tabs { overflow: visible; }
+.trend-tabs.extra { margin-top: -6px; }
+.trend-tabs button { padding: 7px 4px; }
+.trend-tabs .more { flex: 0 0 auto; padding: 7px 12px; }
+.chart .col.miss .bar.one { fill: var(--hair-strong); }
+.sw.hit { background: var(--accent); }
+.sw.miss { background: var(--hair-strong); }

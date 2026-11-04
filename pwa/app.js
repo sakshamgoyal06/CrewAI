@@ -548,26 +548,52 @@ function renderGoal(s) {
           el("span", {}, `Trend ${signed(m.actualPerWeek)} ${m.unit}/wk`),
           m.projectedDate ? el("span", {}, `Lands ${dateOf(m.projectedDate).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}`) : null,
         ),
-        series.length >= 2 ? sparkline(series, m.target) : null,
+        series.length ? goalChart(series, m, g.goal) : null,
       );
     }),
   );
 }
 
-function sparkline(series, target) {
-  const W = 300, H = 56, pad = 4;
-  const vals = series.map((p) => p.v).concat(target);
-  const min = Math.min(...vals), max = Math.max(...vals);
-  const t0 = dateOf(series[0].d).getTime(), t1 = dateOf(series.at(-1).d).getTime() || t0 + 1;
-  const x = (d) => pad + ((dateOf(d).getTime() - t0) / Math.max(1, t1 - t0)) * (W - 2 * pad);
-  const y = (v) => pad + (1 - (v - min) / Math.max(0.0001, max - min)) * (H - 2 * pad);
-  const line = series.map((p, i) => `${i ? "L" : "M"} ${x(p.d).toFixed(1)} ${y(p.v).toFixed(1)}`).join(" ");
-  const s = svg("svg", { class: "spark", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", "aria-hidden": "true" });
-  s.append(
-    svg("path", { class: "area", d: `${line} L ${x(series.at(-1).d)} ${H} L ${x(series[0].d)} ${H} Z` }),
-    svg("line", { class: "target", x1: "0", x2: String(W), y1: String(y(target)), y2: String(y(target)) }),
-    svg("path", { class: "line", d: line }),
-  );
+/**
+ * One body metric from the goal's start to its deadline: weigh-ins as a line, the current trend
+ * carried forward as a dashed projection, the target as a labelled line, the deadline marked.
+ */
+function goalChart(series, m, goal) {
+  const W = 320, H = 132, padL = 30, padR = 8, padT = 12, padB = 20;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const day = (d) => dateOf(d).getTime() / 86_400_000;
+  const t0 = Math.min(day(goal.startDate), day(series[0].d)), t1 = Math.max(day(goal.deadline), day(series.at(-1).d) + 1);
+  const last = series.at(-1);
+  // Projection: the fitted weekly change carried from the latest weigh-in to the deadline (or to the target, if sooner).
+  let proj = null;
+  if (m.actualPerWeek != null && m.actualPerWeek !== 0 && day(last.d) < t1) {
+    let endDay = t1, endV = last.v + (m.actualPerWeek / 7) * (t1 - day(last.d));
+    const towards = (m.target - last.v) / m.actualPerWeek > 0;
+    if (towards && (m.target - endV) * (m.target - last.v) < 0) { endV = m.target; endDay = day(last.d) + ((m.target - last.v) / m.actualPerWeek) * 7; }
+    proj = { d: endDay, v: endV };
+  }
+  const vals = series.map((p) => p.v).concat(m.target, proj ? [proj.v] : []);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = Math.max((hi - lo) * 0.12, m.unit === "%" ? 0.4 : 0.8);
+  lo -= pad; hi += pad;
+  const x = (t) => padL + ((t - t0) / Math.max(1, t1 - t0)) * iw;
+  const y = (v) => padT + (1 - (v - lo) / (hi - lo)) * ih;
+  const s = svg("svg", { class: "goal-chart", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${m.label}: ${fmt(last.v, 1)} ${m.unit} now, target ${fmt(m.target, 1)} by ${shortDate(goal.deadline)}` });
+  const text = (cls, tx, ty, anchor, str) => { const n = svg("text", { class: cls, x: String(tx), y: String(ty), "text-anchor": anchor }); n.textContent = str; s.append(n); };
+  // Target line, labelled at its right end.
+  s.append(svg("line", { class: "target", x1: String(padL), x2: String(W - padR), y1: String(y(m.target)), y2: String(y(m.target)) }));
+  // Labelled at the left, on the side away from the weigh-ins, so it clears the deadline label.
+  text("axis tlabel", padL + 2, y(m.target) + (m.target < last.v ? -5 : 12), "start", `Target ${fmt(m.target, 1)}`);
+  // Deadline.
+  s.append(svg("line", { class: "deadline", x1: String(x(day(goal.deadline))), x2: String(x(day(goal.deadline))), y1: String(padT - 4), y2: String(H - padB) }));
+  // Axis: the first weigh-in's value and the date span.
+  text("axis", padL - 6, y(series[0].v) + 3.5, "end", fmt(series[0].v, m.unit === "%" ? 1 : 0));
+  const md = (t) => new Date(t * 86_400_000).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+  text("axis", padL, H - 5, "start", md(t0));
+  text("axis", x(day(goal.deadline)), H - 5, "end", md(day(goal.deadline)));
+  if (proj) s.append(svg("path", { class: `proj ${m.pace}`, d: `M ${x(day(last.d)).toFixed(1)} ${y(last.v).toFixed(1)} L ${x(proj.d).toFixed(1)} ${y(proj.v).toFixed(1)}` }));
+  if (series.length > 1) s.append(svg("path", { class: "trendline", d: series.map((p, i) => `${i ? "L" : "M"} ${x(day(p.d)).toFixed(1)} ${y(p.v).toFixed(1)}`).join(" ") }));
+  series.forEach((p, i) => s.append(svg("circle", { class: `dot${i === series.length - 1 ? " now" : ""}`, cx: String(x(day(p.d))), cy: String(y(p.v)), r: i === series.length - 1 ? "4" : "2.5" })));
   return s;
 }
 
@@ -1033,6 +1059,7 @@ const TREND = {
       return [`${fmt(avg)} kcal`, `average on ${logged.length} logged day${logged.length === 1 ? "" : "s"}${inRange != null ? ` · ${inRange} within target` : ""}`];
     },
     tip: (d) => [`${fmt(d.calories)} kcal`, `${d.meals.length} meal${d.meals.length === 1 ? "" : "s"}`],
+    hit: (d, t) => !t.calorieTarget || (d.calories >= t.calorieTarget * 0.6 && d.calories <= t.calorieTarget),
   },
   macros: {
     unit: "kcal",
@@ -1057,6 +1084,7 @@ const TREND = {
       return [`${fmt(avg)} steps`, `daily average · ${hit} day${hit === 1 ? "" : "s"} at ${fmt(t.stepTarget || 8000)}+`];
     },
     tip: (d) => [`${fmt(d.steps)} steps`, d.walkMinutes ? `${d.walkMinutes} min walking` : null],
+    hit: (d, t) => d.steps >= (t.stepTarget || 8000),
   },
   burn: {
     unit: "kcal",
@@ -1087,13 +1115,17 @@ function niceMax(v) {
   if (v <= 0) return 1;
   const p = 10 ** Math.floor(Math.log10(v));
   const n = v / p;
-  return ([1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find((s) => n <= s) ?? 10) * p;
+  // Only maxima whose half is also a round number, so the three axis labels read cleanly.
+  return ([1, 2, 3, 4, 5, 6, 8, 10].find((s) => n <= s) ?? 10) * p;
 }
 const compact = (v) => (v >= 10000 ? `${fmt(v / 1000)}K` : v >= 1000 ? `${fmt(v / 1000, 1)}K` : fmt(v));
 
 function renderTrend() {
   const { metric, range } = state.trend;
-  for (const b of document.querySelectorAll("#trend-tabs button")) b.classList.toggle("on", b.dataset.metric === metric);
+  for (const b of document.querySelectorAll(".trend-tabs button[data-metric]")) b.classList.toggle("on", b.dataset.metric === metric);
+  const inExtra = !!document.querySelector(`#trend-extra [data-metric="${metric}"]`);
+  if (inExtra) setTrendMore(true);
+  $("trend-more").classList.toggle("on", inExtra);
   const h = state.history;
   if (!h) return;
   if (BODY_TREND[metric]) return renderBodyTrend(metric);
@@ -1133,10 +1165,21 @@ function renderTrend() {
     ...(metric === "macros" ? MACROS.map(([, label, , cls]) => el("span", { class: "lg" }, el("i", { class: `sw ${cls}` }), label)) : []),
     ...(target ? [el("span", { class: "lg" }, el("i", { class: "key-target" }), `Target ${fmt(target)}`)] : []),
   );
-  barChart($("trend-chart"), days, cfg, target, showDay);
+  barChart($("trend-chart"), days, cfg, target, showDay, t);
+  if (cfg.hit) {
+    $("trend-legend").prepend(
+      el("span", { class: "lg" }, el("i", { class: "sw hit" }), "On target"),
+      el("span", { class: "lg" }, el("i", { class: "sw miss" }), "Missed"));
+  }
 }
 
-function barChart(host, days, cfg, target, onPick) {
+function setTrendMore(open) {
+  $("trend-extra").hidden = !open;
+  $("trend-more").setAttribute("aria-expanded", String(open));
+  $("trend-more").textContent = open ? "Less" : "More";
+}
+
+function barChart(host, days, cfg, target, onPick, targets = {}) {
   const W = Math.max(260, host.clientWidth || 320), H = 168;
   const padL = 34, padR = 4, padT = 10, padB = 22;
   const iw = W - padL - padR, ih = H - padT - padB;
@@ -1158,7 +1201,9 @@ function barChart(host, days, cfg, target, onPick) {
   const bars = [];
   days.forEach((d, i) => {
     const cx = padL + slot * i + slot / 2;
-    const g = svg("g", { class: `col${d.date === state.selectedDate ? " sel" : ""}${cfg.estimated?.(d) ? " est" : ""}` });
+    // Today isn't over, so it isn't a miss yet.
+    const miss = cfg.hit && !d.week && totals[i] > 0 && d.date !== todayKey() && !cfg.hit(d, targets);
+    const g = svg("g", { class: `col${d.date === state.selectedDate ? " sel" : ""}${cfg.estimated?.(d) ? " est" : ""}${miss ? " miss" : ""}` });
     let base = 0;
     const segs = stacks[i];
     const lastNonZero = segs.reduce((acc, v, j) => (v > 0 ? j : acc), -1);
@@ -1216,7 +1261,14 @@ function barChart(host, days, cfg, target, onPick) {
   hit.addEventListener("pointerleave", (e) => { if (hover && e.pointerType === "mouse") show(-1); });
 }
 
-for (const b of document.querySelectorAll("#trend-tabs button")) b.addEventListener("click", () => { state.trend.metric = b.dataset.metric; saveTrend(); renderTrend(); });
+for (const b of document.querySelectorAll(".trend-tabs button[data-metric]")) b.addEventListener("click", () => { state.trend.metric = b.dataset.metric; saveTrend(); renderTrend(); });
+$("trend-more").addEventListener("click", () => {
+  const open = $("trend-extra").hidden;
+  // Closing the row while one of its charts is showing goes back to Calories.
+  if (!open && document.querySelector(`#trend-extra [data-metric="${state.trend.metric}"]`)) { state.trend.metric = "calories"; saveTrend(); }
+  setTrendMore(open);
+  renderTrend();
+});
 
 // ---------- 12-week view ----------
 // Twelve bars, one per week (oldest left), from a longer /history read fetched only when asked for.

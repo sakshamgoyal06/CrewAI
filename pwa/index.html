@@ -208,9 +208,13 @@
           <button type="button" data-metric="calories" class="on">Calories</button>
           <button type="button" data-metric="macros">Macros</button>
           <button type="button" data-metric="steps">Steps</button>
+          <button type="button" data-metric="weight">Weight</button>
+          <button type="button" class="more" id="trend-more" aria-expanded="false">More</button>
+        </div>
+        <!-- The rarer charts, one tap away so the main row fits a phone without scrolling. -->
+        <div class="seg trend-tabs extra" id="trend-extra" role="tablist" hidden>
           <button type="button" data-metric="burn">Burned</button>
           <button type="button" data-metric="training">Training</button>
-          <button type="button" data-metric="weight">Weight</button>
           <button type="button" data-metric="bodyfat">Body fat</button>
         </div>
         <div class="trend-summary" id="trend-summary"></div>
