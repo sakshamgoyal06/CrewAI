@@ -102,6 +102,7 @@ import {
 import { cardFromReport, rcaResponseInput, respondToRca, runRca } from "./rca.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
 import { logWater, waterInput } from "./water.js";
+import { eatingOutInput, planEatingOut } from "./eatingOut.js";
 import { loadCalorieReview } from "./calorieTarget.js";
 import { cardFromIntervention, checkNewGoal, recordManualPlan, respond as respondToIntervention, revertToVersion } from "./interventions/engine.js";
 import { listVersions } from "./interventions/plan.js";
@@ -576,6 +577,12 @@ export function createHealthAppRouter(): express.Router {
   router.post(
     "/steps",
     route("steps", async (ctx, req) => fromResult(await logSteps(ctx, stepsInput.parse(req.body)))),
+  );
+
+  /** "Eating out tonight" from the quick-log sheet: a plan card in the chat, no model call. */
+  router.post(
+    "/plan/eating-out",
+    route("plan-eating-out", async (ctx, req) => ({ body: await planEatingOut(ctx, eatingOutInput.parse(req.body ?? {}), { record: true }) })),
   );
 
   /** Water: add a glass (ml), or undo the day's latest. */

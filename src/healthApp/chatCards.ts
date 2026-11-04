@@ -162,6 +162,8 @@ export function cardHistoryNote(card: ChatCard, states: CardStates): string {
     case "day_plan":
       // The plan's text is the message itself; nothing to add.
       return "";
+    case "eating_out":
+      return `[Eating-out plan for ${live.meal}: ${live.reserveKcal != null ? `keep ${live.reserveKcal} kcal for it, ${live.beforeKcal} kcal before it` : "no calorie target, rules only"}]`;
     case "calorie_review":
       return `[Calorie target card: suggests ${live.review.suggestedTarget} kcal (current ${live.review.currentTarget ?? "unset"}); the person applies it from the card]`;
     default:
