@@ -1011,3 +1011,11 @@ body.screen-open { overflow: hidden; }
 .chart .col.miss .bar.one { fill: var(--hair-strong); }
 .sw.hit { background: var(--accent); }
 .sw.miss { background: var(--hair-strong); }
+
+/* Goal & targets: one Save, a readable deadline line, the date field in the app's colours. */
+.settings-form .section-label:not(:first-child) { margin-top: 12px; }
+.date-line { margin: -4px 0 4px; }
+.field.date { color-scheme: inherit; }
+.field.date::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: pointer; filter: invert(0.7) sepia(0.4) hue-rotate(230deg); }
+:root[data-theme="light"] .field.date::-webkit-calendar-picker-indicator { filter: none; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .field.date::-webkit-calendar-picker-indicator { filter: none; } }
