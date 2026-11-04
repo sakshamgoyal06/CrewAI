@@ -128,8 +128,8 @@ export function razorpayConfig(env: NodeJS.ProcessEnv = process.env): RazorpayCo
 
 export function priceLabels(env: NodeJS.ProcessEnv = process.env): Record<PlanId, string> {
   return {
-    monthly: env.MAGNUS_PRICE_MONTHLY_LABEL?.trim() || "₹299 / month",
-    yearly: env.MAGNUS_PRICE_YEARLY_LABEL?.trim() || "₹1,999 / year",
+    monthly: env.MAGNUS_PRICE_MONTHLY_LABEL?.trim() || "₹649 / month",
+    yearly: env.MAGNUS_PRICE_YEARLY_LABEL?.trim() || "₹6,999 / year",
   };
 }
 
