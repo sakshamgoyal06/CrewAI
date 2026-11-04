@@ -216,6 +216,8 @@ function steps(role: Role, s: Serving): number[] {
     if (role === "bread" || role === "breakfastBread") return s.grams <= 60 ? [1, 2, 3, 4] : [1, 2, 3];
     if (role === "addon" || role === "egg") return [1, 2];
     if (role === "protein") return s.grams <= 30 ? [2, 3, 4] : [1];
+    // A big piece (an omelette, a chicken fillet, a slice of pizza): one or two.
+    if (s.grams >= 100) return [1, 2];
     if (role === "fruit") return s.grams >= 100 ? [1, 2] : [1, 2, 3];
     if (s.grams <= 50) return role === "snack" ? [1, 2, 3, 4] : [1, 2, 3, 4, 5, 6];
     if (s.grams <= 100) return [1, 2, 3, 4];
@@ -261,21 +263,24 @@ export function shortName(name: string): string {
 }
 
 export function itemFor(e: CatalogEntry, s: Serving, qty: number): PlanItem {
-  const grams = s.grams * qty;
-  const f = grams / 100;
   const name = shortName(e.name);
   const label = servingLabel(s).split(",")[0]!.trim();
   let text: string;
-  const eggs = /(\d+)[- ]eggs?\b/.exec(label);
+  const eggs = /(\d+)[- ](eggs?|whites)\b/.exec(label);
   if (e.key === "egg boiled") {
     text = `${fmtQty(qty)} boiled egg${qty === 1 ? "" : "s"}`;
   } else if (eggs) {
     // "1 2-egg serving egg bhurji" reads badly: "egg bhurji (2 eggs)".
-    text = `${name} (${fmtQty(Number(eggs[1]) * qty)} eggs)`;
+    text = `${name} (${fmtQty(Number(eggs[1]) * qty)} ${eggs[2] === "whites" ? "whites" : "eggs"})`;
   } else if (!s.label && (s.unit === "piece" || s.unit === "serving")) {
     text = `${fmtQty(qty)} ${s.size && s.size !== "medium" ? `${s.size} ` : ""}${name}`;
   } else {
     const unitLabel = label.replace(/\s*\(edible part\)/, "");
+    if (/^[2-9]\d* /.test(unitLabel)) {
+      // A label that already counts ("2 slices with butter"): "bread butter (2 slices with butter)".
+      text = `${qty === 1 ? "" : `${fmtQty(qty)} × `}${name} (${unitLabel})`;
+      return item(e, s, qty, text);
+    }
     text = unitLabel.startsWith("1 ") ? `${fmtQty(qty)} ${unitLabel.slice(2)}` : `${fmtQty(qty)} ${unitLabel}`;
     if (qty > 1) text = text.replace(/^(\S+) (cube|slice|fillet)\b/, "$1 $2s");
     // "1 breast fillet chicken breast" → "1 chicken breast".
@@ -283,6 +288,12 @@ export function itemFor(e: CatalogEntry, s: Serving, qty: number): PlanItem {
     const words = name.split(/\s+/).filter((w) => w.length > 2);
     if (!words.every((w) => text.toLowerCase().includes(w.replace(/s$/, "")))) text = `${text} ${name}`;
   }
+  return item(e, s, qty, text);
+}
+
+function item(e: CatalogEntry, s: Serving, qty: number, text: string): PlanItem {
+  const grams = s.grams * qty;
+  const f = grams / 100;
   return {
     key: e.key,
     name: e.name,
