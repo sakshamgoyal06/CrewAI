@@ -89,3 +89,22 @@ describe("sendNotification", () => {
     expect(db.sent.size).toBe(0);
   });
 });
+
+describe("VAPID keys from the environment", () => {
+  it("derives the public key from the private key", async () => {
+    const { generateVapidKeys, vapidPublicKeyOf, pushConfig } = await import("./push.js");
+    const k = generateVapidKeys();
+    expect(vapidPublicKeyOf(k.privateKey)).toBe(k.publicKey);
+    expect(vapidPublicKeyOf("not-a-key")).toBe("");
+    const saved = { ...process.env };
+    try {
+      delete process.env.MAGNUS_VAPID_PUBLIC_KEY;
+      process.env.MAGNUS_VAPID_PRIVATE_KEY = k.privateKey;
+      expect(pushConfig()?.publicKey).toBe(k.publicKey);
+      delete process.env.MAGNUS_VAPID_PRIVATE_KEY;
+      expect(pushConfig()).toBeNull();
+    } finally {
+      process.env = saved;
+    }
+  });
+});

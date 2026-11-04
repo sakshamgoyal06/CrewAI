@@ -12,6 +12,11 @@ import { ensureFoodSeed } from "./meals/indianFoodSeed.js";
 async function main(): Promise<void> {
   const server = await startHealthServer();
   const owner = healthAppAuthConfig()?.userProfileId;
+  // Optional. Without it there is no owner: everyone, the deploy owner included, is a normal
+  // Google account (trial, billing, delete account). Set it only to keep the old owner shortcuts.
+  if (process.env.MAGNUS_HEALTH_APP_TOKEN?.trim() && !owner) {
+    logger.info("MAGNUS_HEALTH_APP_USER_PROFILE_ID not set: the legacy owner token is off; everyone signs in with Google as a normal user");
+  }
   const stopProactive = startProactiveScheduler(owner ? [owner] : []);
   // Everyday Indian foods, so a new account's first meals resolve from our own table.
   void ensureFoodSeed().catch(() => {});

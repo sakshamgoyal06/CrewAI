@@ -8,6 +8,7 @@ import { logger } from "./logger.js";
 import { securityHeaders } from "./securityHeaders.js";
 import { loggableError } from "./util/loggableError.js";
 import { supabase } from "./tools/clients.js";
+import { serviceWorkerHandler } from "./swVersion.js";
 
 /**
  * The signing cert of the published APK: the private release key held in GitHub secrets
@@ -59,6 +60,7 @@ export function startHealthServer(): Promise<HealthServer> {
   // Meal photos arrive as base64 JPEG, resized on the phone to ~1280 px (usually under 400 KB).
   app.use("/api/health/meals/photo", express.json({ limit: "8mb" }));
   app.use("/api/health/events", express.json({ limit: "128kb" }));
+  app.use("/api/health/import/myfitnesspal", express.json({ limit: "2mb" }));
   // Razorpay signs the exact bytes, so the webhook needs the raw body.
   app.use("/api/health/billing/razorpay/webhook", express.raw({ type: "*/*", limit: "256kb" }));
   app.use(express.json({ limit: "32kb" }));
@@ -88,6 +90,8 @@ export function startHealthServer(): Promise<HealthServer> {
   });
 
   app.use("/api/health", createHealthAppRouter());
+  // The worker's cache name is a hash of the shell, so each deploy refreshes the app by itself.
+  app.get("/app/sw.js", serviceWorkerHandler(appDir));
   app.use(
     "/app",
     express.static(appDir, {
