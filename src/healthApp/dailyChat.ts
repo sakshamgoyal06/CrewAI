@@ -7,7 +7,6 @@
  * today's routine, targets, where the goal stands, how yesterday went, one thing worth a look,
  * and a short line to start on. An open plan-change card rides along with it.
  */
-import { createHash } from "node:crypto";
 import { logger } from "../logger.js";
 import { localDateKey, resolveTimezone } from "../nutrition/localDate.js";
 import { supabase } from "../tools/clients.js";
@@ -17,8 +16,10 @@ import { cardFromIntervention } from "./interventions/card.js";
 import { listInterventions } from "./interventions/store.js";
 import type { Intervention } from "./interventions/types.js";
 import type { CheckId } from "./northStar.js";
+import { clock as mealClock, mealLines, planViewOrNull, SLOT_LABEL, type DayMealLine } from "./dietPlan/rhythm.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
 import { addDays, localClock, tzOffsetMs } from "../util/time.js";
+import { stableTurnId } from "../util/stableId.js";
 
 /** The day's plan isn't posted before this local hour, so a late-night chat doesn't get "Good morning". */
 export const MORNING_FROM_HOUR = 5;
@@ -40,6 +41,8 @@ export type DayPlanCard = {
   /** The one thing worth a look today, if any. */
   focus: string | null;
   motivation: string;
+  /** Today's planned meals, when they use the meal plan. */
+  meals?: DayMealLine[];
 };
 
 export type ChatDay = { date: string; count: number; preview: string };
@@ -128,8 +131,7 @@ export async function listChatDays(userProfileId: string, timezone: string, now 
 
 /** A stable turn id per person per day, so the plan posts once however many places try. */
 export function morningTurnId(userProfileId: string, date: string): string {
-  const h = createHash("sha256").update(`magnus-day-plan:${userProfileId}:${date}`).digest("hex");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-${((parseInt(h[16]!, 16) & 0x3) | 0x8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+  return stableTurnId(`magnus-day-plan:${userProfileId}:${date}`);
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
@@ -243,7 +245,7 @@ function motivationFor(date: string, s: HealthSnapshot): string {
 }
 
 /** The day's plan as a card plus a short text the model reads in history. Pure. */
-export function buildDayPlan(input: { snapshot: HealthSnapshot; name: string | null; localHour: number; intervention: Intervention | null }): { text: string; card: DayPlanCard } {
+export function buildDayPlan(input: { snapshot: HealthSnapshot; name: string | null; localHour: number; intervention: Intervention | null; meals?: DayMealLine[] }): { text: string; card: DayPlanCard } {
   const s = input.snapshot;
   const date = s.today.date;
   const plan = s.today.routine.map((r) => ({ time: r.startTime ? clock(r.startTime) : null, label: r.label }));
@@ -270,6 +272,7 @@ export function buildDayPlan(input: { snapshot: HealthSnapshot; name: string | n
     week: `${s.northStar.onTrackDays} of the last 7 days on track (aim: ${s.northStar.goal})`,
     focus: focusLine(s, input.intervention),
     motivation: motivationFor(date, s),
+    ...(input.meals?.length ? { meals: input.meals } : {}),
   };
   return { text: dayPlanText(card), card };
 }
@@ -281,6 +284,7 @@ export function dayPlanText(c: DayPlanCard): string {
     `${c.greeting}. Today's plan for ${dayLabel(c.date)}.`,
     today ? `Today: ${today}.` : null,
     `Targets: ${c.targets.map((x) => `${x.value} ${x.label}`).join(" · ")}.`,
+    c.meals?.length ? `Meals: ${c.meals.map((m) => `${SLOT_LABEL[m.slot]}${m.time ? ` ${mealClock(m.time)}` : ""} ${m.title} (${Math.round(m.kcal)} kcal)`).join(" · ")}.` : null,
     c.goal ? `Goal: ${c.goal}.` : null,
     c.yesterday ? `Yesterday: ${c.yesterday}` : null,
     `Week: ${c.week}.`,
@@ -345,9 +349,10 @@ export async function ensureDayPlan(userProfileId: string, timezone: string, now
     handled.set(userProfileId, date);
     return "not_ready";
   }
-  const [snapshot, interventions] = await Promise.all([
+  const [snapshot, interventions, planView] = await Promise.all([
     buildHealthSnapshot(userProfileId, now),
     listInterventions(userProfileId, 21).catch(() => [] as Intervention[]),
+    planViewOrNull({ userProfileId, timezone: tz, now }, now),
   ]);
   // The snapshot reads the timezone itself; if the two disagree, one of them is wrong. Posting
   // anyway would key the plan to one day and show another, and the real day would post again.
@@ -356,7 +361,8 @@ export async function ensureDayPlan(userProfileId: string, timezone: string, now
     return "not_ready";
   }
   const open = interventions.find((i) => i.status === "offered" || i.status === "confirm") ?? null;
-  const { text, card } = buildDayPlan({ snapshot, name: bits.name, localHour: hour, intervention: open });
+  const meals = planView ? mealLines(planView, date) : undefined;
+  const { text, card } = buildDayPlan({ snapshot, name: bits.name, localHour: hour, intervention: open, meals });
   const cards: ChatCard[] = [card, ...(open ? [cardFromIntervention(open)] : [])];
   const { error } = await supabase
     .from("health_chat_messages")

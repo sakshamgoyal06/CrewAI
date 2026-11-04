@@ -28,6 +28,7 @@ import { activityDraftInput, buildActivityDraft, deleteActivity, type ActivityDr
 import { routineInput } from "./routine.js";
 import { answerRoutineCheck, routineCheckAnswerInput, setRoutine, type RoutineCheckCard } from "./routineCheck.js";
 import type { DayPlanCard } from "./dailyChat.js";
+import type { PlanAdjustCard, PlanMealCard } from "./dietPlan/rhythm.js";
 import { dayLabel } from "./dailyChat.js";
 import { localDateKey } from "../nutrition/localDate.js";
 import { cardHistoryNote, emptyCardStates, loadCardStates, type CardStates } from "./chatCards.js";
@@ -197,7 +198,9 @@ export type ChatCard =
   | CalorieReviewCard
   | InterventionCard
   | DayPlanCard
-  | EatingOutCard;
+  | EatingOutCard
+  | PlanMealCard
+  | PlanAdjustCard;
 
 export type ChatReply = {
   text: string;

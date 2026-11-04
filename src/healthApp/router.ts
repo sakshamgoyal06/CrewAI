@@ -68,6 +68,7 @@ import { draftMealFromPhoto } from "./mealCards.js";
 import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
 import { loadWeeklyReview } from "./weeklyReview.js";
 import { eatInput, eatPlanned, undoPlanned, unlinkDeletedMeal } from "./dietPlan/log.js";
+import { rebalanceToday } from "./dietPlan/rhythm.js";
 import { loadDietPrefs, loadPlanView, markOption, OPTION_ACTIONS, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
 import { PLAN_SLOTS } from "./dietPlan/targets.js";
 import {
@@ -370,6 +371,8 @@ export function createHealthAppRouter(): express.Router {
       const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
       const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
       const r = await eatPlanned(ctx, date, slot, eatInput.parse(req.body ?? {}));
+      // Ate more or less than planned: the rest of today follows (before the reply, so the tab shows it).
+      if (r.ok && r.status === "partial") await rebalanceToday(ctx).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance failed"));
       return r.ok ? { body: r } : { status: r.error === "already_logged" ? 409 : 400, body: r };
     }),
   );

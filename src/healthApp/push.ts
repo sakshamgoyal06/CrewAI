@@ -39,6 +39,7 @@ export const NOTIFICATION_KINDS = [
   "routine_reminder",
   "routine_check",
   "intervention",
+  "plan_meal",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

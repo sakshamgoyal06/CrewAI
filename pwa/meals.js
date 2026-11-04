@@ -137,6 +137,13 @@ function mealCard(date, slot) {
       el("span", { class: "sub" }, sub, eaten ? el("b", { class: "tick" }, p.status === "partial" ? " · Eaten, portions changed" : " · Eaten") : null)));
 }
 
+/** From a chat card: the plan's meal screen for one meal (loads the plan first if needed). */
+export async function openPlannedMeal(date, slot) {
+  try { await loadPlan(true); } catch (err) { d.toast(err.message); return; }
+  if (!pickOf(date, slot)) { d.setView("meals"); return; }
+  openMeal(date, slot);
+}
+
 function openMeal(date, slot) {
   ms.sel = { date, slot };
   ms.qty = null;
