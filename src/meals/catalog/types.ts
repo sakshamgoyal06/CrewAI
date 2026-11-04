@@ -93,6 +93,8 @@ type Base = {
   prepMinutes?: PrepMinutes;
   /** Usually bought or ordered rather than made at home (pizza, naan, mithai). The planner offers it only for eat-out meals. */
   ordered?: boolean;
+  /** Grams of alcohol per 100 g or 100 ml (7 kcal/g), so drinks add up in the calorie check. */
+  alcohol?: number;
   basis?: "100g" | "100ml";
   servings: Serving[];
 };

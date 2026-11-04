@@ -132,6 +132,25 @@ const GOLDEN: [meal: string, minKcal: number, maxKcal: number][] = [
   ["tofu scramble toast", 200, 280],
   ["2 pesarattu with ginger chutney", 300, 420],
   ["2 ragi dosa", 240, 330],
+  // Batch 6
+  ["rasam rice", 220, 330],
+  ["bisi bele bath", 280, 380],
+  ["2 appam with kadala curry", 380, 520],
+  ["3 neer dosa", 150, 230],
+  ["sarson ka saag, 2 makki roti", 380, 520],
+  ["shahi paneer, 2 roti", 480, 640],
+  ["aloo matar and 2 roti", 300, 420],
+  ["mutton keema, 2 pav", 400, 560],
+  ["2 sabudana vada", 250, 360],
+  ["4 luchi, aloo posto", 500, 680],
+  ["gajar halwa", 160, 240],
+  ["chicken shawarma", 450, 600],
+  ["2 beers", 260, 310],
+  ["2 whisky", 130, 150],
+  ["glass of red wine", 120, 135],
+  ["1 avocado", 210, 240],
+  ["handful of banana chips", 120, 140],
+  ["2 khakhra", 150, 170],
 ];
 
 describe("golden meals from the catalog", () => {

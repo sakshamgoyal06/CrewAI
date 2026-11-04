@@ -61,7 +61,8 @@ describe("food catalog", () => {
     const off = cat.entries
       .map((e) => {
         const p = e.per100;
-        const atwater = 4 * p.protein + 4 * Math.max(0, p.carbs - p.fiber) + 2 * p.fiber + 9 * p.fat;
+        const alcohol = FOODS.find((f) => f.name === e.name)?.alcohol ?? 0;
+        const atwater = 4 * p.protein + 4 * Math.max(0, p.carbs - p.fiber) + 2 * p.fiber + 9 * p.fat + 7 * alcohol;
         return { name: e.name, kcal: p.kcal, atwater: Math.round(atwater) };
       })
       .filter((x) => Math.abs(x.kcal - x.atwater) > Math.max(10, 0.15 * x.kcal));
