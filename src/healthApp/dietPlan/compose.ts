@@ -70,7 +70,7 @@ export type ComposeInput = {
 
 // ---------- catalog roles ----------
 
-type Role = "bread" | "rice" | "main" | "side" | "cool" | "complete" | "breakfast" | "breakfastBread" | "toast" | "egg" | "accompaniment" | "addon" | "snack" | "fruit" | "nut" | "porridge";
+type Role = "bread" | "rice" | "main" | "side" | "cool" | "complete" | "breakfast" | "breakfastBread" | "toast" | "egg" | "accompaniment" | "addon" | "protein" | "snack" | "fruit" | "nut" | "porridge";
 
 const RICE_BASE = new Set(["white rice cooked", "brown rice cooked", "jeera rice", "millet cooked", "quinoa cooked"]);
 /** Bases most Indian homes don't cook daily: offered only when they love them. */
@@ -87,6 +87,15 @@ const ADDONS = new Set(["curd", "greek yogurt", "egg boiled", "toned milk", "moo
 const TOAST = new Set(["brown bread", "white bread"]);
 const EGG_DISHES = new Set(["omelette", "egg bhurji"]);
 const PORRIDGE = new Set(["oat porridge"]);
+/** Plain protein served beside dal and roti (paneer cubes, tofu, a chicken breast), for meals short on protein. */
+const PROTEIN_SIDES = new Set(["paneer", "tofu", "chicken breast cooked"]);
+/** Curd and the dishes made from it: one per meal (no kadhi with curd, no curd rice with raita). */
+const CURD_BASED = new Set(["curd", "greek yogurt", "raita", "kadhi", "kadhi chawal", "curd rice", "sweet lassi", "buttermilk"]);
+/** In the catalog as snacks but not a snack on a plan: drinks, papad, cheese slices. */
+const NOT_A_PLAN_SNACK = new Set(["papad", "cheese"]);
+/** Dal-family mains: different dals in one meal's options are near copies, so at most two of them. */
+const isPlainDal = (e: CatalogEntry) => e.category === "dal_curry" && / dal\b|^dal /.test(e.key) && !e.key.includes("makhani");
+const MAX_DAL_OPTIONS = 2;
 /** Heavy on oil for the calories; offered, but ranked down. */
 const HEAVY = new Set(["puri", "samosa", "medu vada", "vada pav", "bhaji", "plain paratha", "paneer butter masala", "butter chicken"]);
 /** Only when they love it or log it: sweets, whey, instant noodles. */
@@ -184,9 +193,10 @@ function roleOf(e: CatalogEntry): Role[] {
   if (e.category === "breakfast" && e.meals.includes("breakfast") && !ACCOMPANIMENTS.has(k)) r.push(EGG_DISHES.has(k) ? "egg" : "breakfast");
   if (PORRIDGE.has(k)) r.push("porridge");
   if (ADDONS.has(k)) r.push("addon");
+  if (PROTEIN_SIDES.has(k)) r.push("protein");
   if (e.category === "fruit") r.push("fruit");
   if (e.category === "nut_seed" && e.meals.includes("snack") && !["chia seed", "flax seed", "sesame seed", "sunflower seed", "peanut butter"].includes(k)) r.push("nut");
-  if (e.meals.includes("snack") || k === "moong sprout" || k === "egg boiled") r.push("snack");
+  if ((e.meals.includes("snack") && e.category !== "drink" && !NOT_A_PLAN_SNACK.has(k)) || k === "moong sprout" || k === "egg boiled") r.push("snack");
   return r;
 }
 
@@ -205,6 +215,8 @@ function steps(role: Role, s: Serving): number[] {
     if (role === "toast") return [2, 3, 4];
     if (role === "bread" || role === "breakfastBread") return s.grams <= 60 ? [1, 2, 3, 4] : [1, 2, 3];
     if (role === "addon" || role === "egg") return [1, 2];
+    if (role === "protein") return s.grams <= 30 ? [2, 3, 4] : [1];
+    if (role === "fruit") return s.grams >= 100 ? [1, 2] : [1, 2, 3];
     if (s.grams <= 50) return role === "snack" ? [1, 2, 3, 4] : [1, 2, 3, 4, 5, 6];
     if (s.grams <= 100) return [1, 2, 3, 4];
     return [1, 2, 3];
@@ -254,10 +266,20 @@ export function itemFor(e: CatalogEntry, s: Serving, qty: number): PlanItem {
   const name = shortName(e.name);
   const label = servingLabel(s).split(",")[0]!.trim();
   let text: string;
-  if (!s.label && (s.unit === "piece" || s.unit === "serving")) {
+  const eggs = /(\d+)[- ]eggs?\b/.exec(label);
+  if (e.key === "egg boiled") {
+    text = `${fmtQty(qty)} boiled egg${qty === 1 ? "" : "s"}`;
+  } else if (eggs) {
+    // "1 2-egg serving egg bhurji" reads badly: "egg bhurji (2 eggs)".
+    text = `${name} (${fmtQty(Number(eggs[1]) * qty)} eggs)`;
+  } else if (!s.label && (s.unit === "piece" || s.unit === "serving")) {
     text = `${fmtQty(qty)} ${s.size && s.size !== "medium" ? `${s.size} ` : ""}${name}`;
   } else {
-    text = label.startsWith("1 ") ? `${fmtQty(qty)} ${label.slice(2)}` : `${fmtQty(qty)} ${label}`;
+    const unitLabel = label.replace(/\s*\(edible part\)/, "");
+    text = unitLabel.startsWith("1 ") ? `${fmtQty(qty)} ${unitLabel.slice(2)}` : `${fmtQty(qty)} ${unitLabel}`;
+    if (qty > 1) text = text.replace(/^(\S+) (cube|slice|fillet)\b/, "$1 $2s");
+    // "1 breast fillet chicken breast" → "1 chicken breast".
+    if (/ breast fillet$/.test(unitLabel)) text = `${fmtQty(qty)} ${name}`;
     const words = name.split(/\s+/).filter((w) => w.length > 2);
     if (!words.every((w) => text.toLowerCase().includes(w.replace(/s$/, "")))) text = `${text} ${name}`;
   }
@@ -313,7 +335,16 @@ export function pairingProblems(keys: string[], cat: Catalog = catalog()): strin
     const c = roles.find((x) => x.r.includes("complete"))!;
     if (c.e.category === "rice_dish") problems.push(`${c.e.name} doesn't go with ${breads[0]}`);
   }
-  const mains = roles.filter((x) => x.r.includes("main") || x.r.includes("side"));
+  const curd = [...new Set(roles.filter((x) => CURD_BASED.has(x.e.key)).map((x) => x.e.name))];
+  if (curd.length > 1) problems.push(`${curd[0]} and ${curd[1]} are both curd`);
+  const south = roles.find((x) => SOUTH.has(x.e.key));
+  const vadaWithCurd = south?.e.key === "medu vada" && roles.some((x) => x.e.key === "curd");
+  if (south && !vadaWithCurd && !roles.some((x) => x.r.includes("accompaniment"))) problems.push(`${south.e.name} needs sambar or chutney`);
+  // A protein side goes with dal or a veg dish, not with a meat curry or another paneer dish.
+  const side = roles.find((x) => x.r.includes("protein") && keys.length > 1);
+  const heavyMain = roles.find((x) => x !== side && x.r.includes("main") && (x.e.diet === "nonveg" || x.e.diet === "egg" || containsAny(x.e.key, ["paneer"])));
+  if (side && heavyMain) problems.push(`${side.e.name} on top of ${heavyMain.e.name} is too much`);
+  const mains = roles.filter((x) => x.r.includes("main") || x.r.includes("side") || x.r.includes("protein"));
   for (let i = 0; i < mains.length; i++) {
     for (let j = i + 1; j < mains.length; j++) {
       const a = mains[i]!.e.key;
@@ -333,8 +364,8 @@ type Slotted = { role: Role; e: CatalogEntry; s: Serving };
 /** The templates a meal is built from: each is a list of roles, optional ones marked with `?`. */
 const TEMPLATES: Record<PlanSlot, Array<Array<Role | `${Role}?`>>> = {
   breakfast: [["breakfast", "accompaniment?", "addon?"], ["egg", "toast"], ["breakfastBread", "cool"], ["porridge", "fruit?"], ["egg", "fruit?"]],
-  lunch: [["bread", "main", "side?"], ["rice", "main", "side?"], ["bread", "main", "addon"], ["rice", "main", "addon"], ["complete", "cool?"]],
-  dinner: [["bread", "main", "side?"], ["rice", "main", "side?"], ["bread", "main", "addon"], ["rice", "main", "addon"], ["complete", "cool?"]],
+  lunch: [["bread", "main", "side?"], ["rice", "main", "side?"], ["bread", "main", "addon"], ["rice", "main", "addon"], ["bread", "main", "protein"], ["rice", "main", "protein"], ["complete", "cool?"]],
+  dinner: [["bread", "main", "side?"], ["rice", "main", "side?"], ["bread", "main", "addon"], ["rice", "main", "addon"], ["bread", "main", "protein"], ["rice", "main", "protein"], ["complete", "cool?"]],
   snack: [["snack"], ["fruit", "nut"], ["addon", "fruit?"]],
 };
 
@@ -349,12 +380,18 @@ function candidates(input: ComposeInput, cat: Catalog): Map<Role, Slotted[]> {
     if (!dietAllows(input.diet, e)) continue;
     if (containsAny(e.key, avoid)) continue;
     if ((ONLY_IF_LOVED_CATEGORIES.has(e.category) || ONLY_IF_LOVED.has(e.key) || NICHE_BASE.has(e.key)) && !loved(e)) continue;
-    const s = defaultServing(e);
-    if (!s || s.unit === "serving" && s.grams === 100 && e.kind === "food" && !["egg boiled"].includes(e.key)) continue;
+    const def = defaultServing(e);
+    // A bare "100 g" serving isn't a household portion; protein sides use their piece serving (cubes, a fillet).
+    const plain100 = !def || (def.unit === "serving" && def.grams === 100 && e.kind === "food" && e.key !== "egg boiled");
+    const piece = e.servings.find((x) => x.unit === "piece") ?? null;
     const prep = e.prepMinutes ?? (RICE_BASE.has(e.key) ? 20 : null);
     for (const role of roleOf(e)) {
+      const s = role === "protein" ? piece : plain100 ? null : def;
+      if (!s) continue;
+      // Tofu cubes beside dal suit a vegan; a vegetarian gets paneer unless they like tofu.
+      if (role === "protein" && e.key === "tofu" && input.diet !== "vegan" && !loved(e)) continue;
       // Accompaniments, rice and add-ons follow the meal; everything else must be eaten at this meal.
-      const followsMeal = ["rice", "accompaniment", "addon", "cool", "toast", "fruit", "nut"].includes(role);
+      const followsMeal = ["rice", "accompaniment", "addon", "protein", "cool", "toast", "fruit", "nut"].includes(role);
       if (!followsMeal && !e.meals.includes(MEAL_TYPE[input.budget.slot]) && !(role === "snack" && input.budget.slot === "snack")) continue;
       if (input.prepLimit !== null && (prep ?? 0) > input.prepLimit) continue;
       if (role === "snack" && input.budget.slot !== "snack") continue;
@@ -385,7 +422,9 @@ function combos(template: Array<Role | `${Role}?`>, pool: Map<Role, Slotted[]>):
   return acc.filter((c) => c.length);
 }
 
-type Scored = { option: MealOption; score: number; anchor: string; base: string | null; highProtein: boolean; rice: boolean };
+type Scored = { option: MealOption; score: number; anchor: string; base: string | null; highProtein: boolean; rice: boolean; dal: boolean };
+/** How much a protein shortfall costs in an option's score, against 2 for its calorie error. */
+const PROTEIN_WEIGHT = 3;
 /** No add-on or side in more than this many of a meal's options. */
 const MAX_ITEM_REPEATS = 2;
 
@@ -412,7 +451,8 @@ function fit(combo: Slotted[], input: ComposeInput, lovedKeys: string[]): Scored
     if (kcalErr <= FIT_TOLERANCE) {
       const pr = b.proteinG ? totals.proteinG / b.proteinG : 1;
       const fatOver = b.fatG ? Math.max(0, totals.fatG / b.fatG - 1.25) : 0;
-      const score = kcalErr * 2 + Math.max(0, 1 - pr) * 1.5 + fatOver * 0.6;
+      // Protein counts most: plans fell short on protein far more often than on calories.
+      const score = kcalErr * 2 + Math.max(0, 1 - pr) * PROTEIN_WEIGHT + fatOver * 0.6;
       if (!best || score < best.score) best = { score, items, totals };
     }
     let i = 0;
@@ -446,6 +486,7 @@ function fit(combo: Slotted[], input: ComposeInput, lovedKeys: string[]): Scored
     base: base?.e.key ?? null,
     highProtein: b.proteinG > 0 && best.totals.proteinG >= b.proteinG * 0.9,
     rice: base?.role === "rice" || combo.some((x) => x.e.category === "rice_dish" || x.e.key.endsWith("chawal")),
+    dal: combo.some((x) => x.role === "main" && isPlainDal(x.e)),
   };
 }
 
@@ -493,6 +534,23 @@ export function usualOption(
  * dish twice, and at least two that cover the meal's protein when the catalog has them.
  */
 export function composeOptions(input: ComposeInput, cat: Catalog = catalog()): MealOption[] {
+  let limit = input.prepLimit;
+  const out = composeWithin(input, cat, limit === null);
+  // Too few meals fit their cooking time (10 minutes for lunch): step the limit up until there
+  // are enough, keeping the quick ones first. Repeats of one dish only as a last resort.
+  while (out.length < MIN_OPTIONS && limit !== null) {
+    limit = PREP_LADDER.find((m) => m > limit!) ?? null;
+    for (const o of composeWithin({ ...input, prepLimit: limit }, cat, limit === null)) {
+      if (out.length >= MIN_OPTIONS) break;
+      if (!out.some((x) => x.id === o.id || x.title === o.title)) out.push(o);
+    }
+  }
+  return out;
+}
+
+const PREP_LADDER = [10, 20, 30];
+
+function composeWithin(input: ComposeInput, cat: Catalog, pad: boolean): MealOption[] {
   const hidden = new Set(input.hidden ?? []);
   const lovedKeys = input.loves.map(foodKeyFor).filter(Boolean);
   const out: MealOption[] = [];
@@ -532,6 +590,7 @@ export function composeOptions(input: ComposeInput, cat: Catalog = catalog()): M
     // Variety: the same base (roti) at most three times.
     if (s.base && (bases.get(s.base) ?? 0) >= 3) continue;
     if (overused(s)) continue;
+    if (s.dal && picked.filter((p) => p.dal).length >= MAX_DAL_OPTIONS) continue;
     take(s);
   }
   // Rice eaters get at least one rice option.
@@ -552,7 +611,7 @@ export function composeOptions(input: ComposeInput, cat: Catalog = catalog()): M
     take(s);
   }
   // Short of the minimum: relax variety (a second option with the same main, different base).
-  for (const s of scored) {
+  for (const s of pad ? scored : []) {
     if (out.length + picked.length >= MIN_OPTIONS) break;
     if (!picked.includes(s)) take(s);
   }

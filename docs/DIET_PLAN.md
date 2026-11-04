@@ -8,7 +8,7 @@ Code lives in `src/healthApp/dietPlan/`:
 | --- | --- |
 | `targets.ts` | Splits the profile's calorie and protein targets into fat (28%, min 0.6 g/kg), carbs (the rest) and fibre (14 g per 1,000 kcal), then into one budget per meal. The plan never sets its own calories. |
 | `prefs.ts` | Setup answers: meals and times, share of the day, cooking time per meal, who cooks, kitchen, staples, loves, restrictions, fasting days, eat-out meals. |
-| `compose.ts` | 5 to 8 options per meal from usual meals and the food catalog, portioned in household units to within 10% of the budget. Pairing rules (no roti with cheela, no rice with a rice dish, no paneer twice) and variety rules. |
+| `compose.ts` | 5 to 8 options per meal from usual meals and the food catalog, portioned in household units to within 10% of the budget, protein weighted above calories. Pairing rules (no roti with cheela, no rice with a rice dish, no paneer twice, one curd item per meal, dosa with sambar or chutney, a protein side only with dal or a veg dish) and variety rules (at most two plain dals per meal). When too few meals fit the cooking time, the limit steps up (10, 20, 30 minutes) and the quick ones stay first. No kitchen means mess or canteen food, so no cooking limit. |
 | `pick.ts` | The rolling 3-day plan: pinned options every day, no repeat within 3 days, eat-out meals as a budget. |
 | `adjust.ts` | Same-day rebalance after an off-plan meal (moves the base: roti, rice), and the day close (a miss outside 85–105% is spread over 2 days, max 200 kcal a day, never under the floor, protein unchanged). |
 | `review.ts`, `build.ts` | Optional Haiku review of each new plan (variety, pairings, calories); flagged options are dropped, refilled and the new ones checked once. |
@@ -23,6 +23,8 @@ API (bearer auth, under `/api/health`):
 - `POST /diet/plan/rebuild`
 - `POST /diet/options/:id` with `{ action: pin | unpin | like | unlike | hide | unhide }`
 - `POST /diet/days/:date/:slot/swap` with `{ optionId }`
+
+Checking plan quality without API spend: `npx tsx scripts/dietPlanSample.ts` (needs any SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and ANTHROPIC_API_KEY values; nothing is called) prints plans for 8 sample people in the text the model review reads, plus each one's typical and best day of protein. Review it in a Claude session, fix what code rules can catch, and rerun.
 
 Settings:
 

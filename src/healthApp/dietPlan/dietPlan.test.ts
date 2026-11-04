@@ -42,7 +42,8 @@ describe("prefs", () => {
     expect(prepLimit(p, "lunch")).toBe(10);
     expect(prepLimit({ ...p, whoCooks: "family" }, "lunch")).toBeNull();
     expect(prepLimit({ ...p, whoCooks: "family", kitchen: "basic" }, "lunch")).toBe(10);
-    expect(prepLimit({ ...p, kitchen: "none" }, "lunch")).toBe(0);
+    // No kitchen: food comes from a mess or canteen, so no cooking limit.
+    expect(prepLimit({ ...p, kitchen: "none" }, "lunch")).toBeNull();
   });
 });
 
@@ -85,9 +86,50 @@ describe("composeOptions", () => {
     expect(all.flatMap(keysOf)).not.toContain("dal tadka"); // has onion and garlic
   });
 
-  it("respects the time they have to cook", () => {
+  it("puts meals that fit their cooking time first, and only steps the limit up to reach 5 options", () => {
     const opts = compose("lunch", "vegetarian", { prepLimit: 10 });
-    for (const o of opts) expect(o.prepMinutes).toBeLessThanOrEqual(10);
+    expect(opts.length).toBeGreaterThanOrEqual(5);
+    const quick = opts.filter((o) => o.prepMinutes <= 10);
+    expect(opts.slice(0, quick.length)).toEqual(quick);
+    const roomy = compose("lunch", "vegetarian", { prepLimit: 30 });
+    for (const o of roomy) expect(o.prepMinutes).toBeLessThanOrEqual(30);
+  });
+
+  it("adds a protein side to dal meals, never to a meat or paneer curry", () => {
+    const veg = compose("lunch", "vegetarian").flatMap((o) => o.items.map((i) => i.key));
+    expect(veg).toContain("paneer");
+    expect(veg).not.toContain("tofu");
+    for (const diet of ["vegetarian", "non_vegetarian"] as const) {
+      for (const o of compose("dinner", diet)) {
+        const keys = o.items.map((i) => i.key!);
+        expect(pairingProblems(keys)).toEqual([]);
+      }
+    }
+    expect(pairingProblems(["roti", "butter chicken", "chicken breast cooked"]).join()).toMatch(/too much/);
+    expect(pairingProblems(["roti", "palak paneer", "paneer"]).length).toBeGreaterThan(0);
+    expect(pairingProblems(["roti", "moong dal", "paneer"])).toEqual([]);
+  });
+
+  it("keeps curd to one per meal and gives dosa its sambar or chutney", () => {
+    expect(pairingProblems(["kadhi chawal", "curd"]).join()).toMatch(/both curd/);
+    expect(pairingProblems(["curd rice", "raita"]).join()).toMatch(/both curd/);
+    expect(pairingProblems(["plain dosa", "greek yogurt"]).join()).toMatch(/needs sambar/);
+    expect(pairingProblems(["plain dosa", "sambar"])).toEqual([]);
+    expect(pairingProblems(["medu vada", "curd"])).toEqual([]);
+  });
+
+  it("doesn't offer drinks, papad or cheese slices as a snack", () => {
+    for (const diet of ["vegetarian", "jain", "non_vegetarian"] as const) {
+      for (const o of compose("snack", diet)) for (const i of o.items) expect(["papad", "cheese", "coffee", "chai", "black coffee"]).not.toContain(i.key);
+    }
+  });
+
+  it("writes portions the way people say them", () => {
+    const texts = [...compose("breakfast", "eggetarian"), ...compose("lunch", "non_vegetarian"), ...compose("snack", "eggetarian")].flatMap((o) => o.items.map((i) => i.text));
+    for (const t of texts) {
+      expect(t).not.toMatch(/2-egg serving|edible part|breast fillet chicken|egg \(\d/);
+      expect(t).not.toMatch(/^[2-9]\d* (cube|slice) /);
+    }
   });
 
   it("puts a usual meal first, rescaled to the budget", () => {

@@ -52,11 +52,12 @@ export function shares(p: DietPrefs): Partial<Record<PlanSlot, number>> {
 }
 
 /**
- * Most prep minutes an option may need for a meal. Someone else cooking lifts the limit; no
- * kitchen means ready-to-eat only; a basic kitchen (microwave, kettle) caps it at 10.
+ * Most prep minutes an option may need for a meal. Someone else cooking lifts the limit, and so
+ * does no kitchen: their food comes from a mess, canteen or tiffin, and the plan says what to
+ * pick there. A basic kitchen (microwave, kettle) caps it at 10.
  */
 export function prepLimit(p: DietPrefs, slot: PlanSlot): number | null {
-  if (p.kitchen === "none") return 0;
+  if (p.kitchen === "none") return null;
   const own = p.meals.find((m) => m.slot === slot)?.cookMinutes ?? null;
   const cap = p.kitchen === "basic" ? 10 : null;
   if (p.whoCooks === "family" || p.whoCooks === "cook") return cap;
