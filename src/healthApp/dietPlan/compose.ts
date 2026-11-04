@@ -76,7 +76,7 @@ export type ComposeInput = {
 
 // ---------- catalog roles ----------
 
-type Role = "bread" | "rice" | "main" | "side" | "cool" | "complete" | "breakfast" | "breakfastBread" | "toast" | "egg" | "accompaniment" | "addon" | "protein" | "snack" | "fruit" | "nut" | "porridge";
+type Role = "bread" | "rice" | "main" | "side" | "cool" | "complete" | "breakfast" | "breakfastBread" | "toast" | "egg" | "accompaniment" | "addon" | "protein" | "snack" | "fruit" | "nut" | "porridge" | "buttermilk";
 
 const RICE_BASE = new Set(["white rice cooked", "brown rice cooked", "jeera rice", "millet cooked", "quinoa cooked"]);
 /** Bases most Indian homes don't cook daily: offered only when they love them. */
@@ -295,6 +295,7 @@ function rolesFor(e: CatalogEntry): Role[] {
   if (e.category === "meal" || (e.category === "rice_dish" && !RICE_BASE.has(k))) r.push("complete");
   if (e.category === "breakfast" && e.meals.includes("breakfast") && !ACCOMPANIMENTS.has(k)) r.push(EGG_DISHES.has(k) ? "egg" : "breakfast");
   if (PORRIDGE.has(k)) r.push("porridge");
+  if (k === "buttermilk") r.push("buttermilk");
   if (ADDONS.has(k)) r.push("addon");
   if (PROTEIN_SIDES.has(k)) r.push("protein");
   if (e.category === "fruit") r.push("fruit");
@@ -517,7 +518,7 @@ const TEMPLATES: Record<PlanSlot, Array<Array<Role | `${Role}?`>>> = {
   breakfast: [["breakfast", "accompaniment?", "addon?"], ["egg", "toast"], ["breakfastBread", "cool"], ["porridge", "fruit?"], ["egg", "fruit?"]],
   lunch: [["bread", "main", "side?"], ["rice", "main", "side?"], ["bread", "main", "addon"], ["rice", "main", "addon"], ["bread", "main", "protein"], ["rice", "main", "protein"], ["complete", "cool?"]],
   dinner: [["bread", "main", "side?"], ["rice", "main", "side?"], ["bread", "main", "addon"], ["rice", "main", "addon"], ["bread", "main", "protein"], ["rice", "main", "protein"], ["complete", "cool?"]],
-  snack: [["snack"], ["fruit", "nut"], ["addon", "fruit?"]],
+  snack: [["snack"], ["fruit", "nut"], ["addon", "fruit?"], ["fruit", "buttermilk"]],
 };
 
 const MEAL_TYPE: Record<PlanSlot, MealType> = { breakfast: "breakfast", lunch: "lunch", dinner: "dinner", snack: "snack" };
@@ -547,7 +548,7 @@ function candidates(input: ComposeInput, cat: Catalog): Map<Role, Slotted[]> {
       // Tofu cubes beside dal suit a vegan; a vegetarian gets paneer unless they like tofu.
       if (role === "protein" && e.key === "tofu" && input.diet !== "vegan" && !loved(e)) continue;
       // Accompaniments, rice and add-ons follow the meal; everything else must be eaten at this meal.
-      const followsMeal = ["rice", "accompaniment", "addon", "protein", "cool", "toast", "fruit", "nut"].includes(role);
+      const followsMeal = ["buttermilk", "rice", "accompaniment", "addon", "protein", "cool", "toast", "fruit", "nut"].includes(role);
       if (!followsMeal && !e.meals.includes(MEAL_TYPE[input.budget.slot]) && !(role === "snack" && input.budget.slot === "snack")) continue;
       if (input.prepLimit !== null && (prep ?? 0) > input.prepLimit) continue;
       if (role === "snack" && input.budget.slot !== "snack") continue;
@@ -653,6 +654,8 @@ function fit(combo: Slotted[], input: ComposeInput, lovedKeys: string[], cache: 
   if (base && input.staples !== "both") score += (input.staples === "roti") === (base.role === "bread") ? -0.1 : 0.15;
   const prep = Math.max(0, ...combo.map((x) => x.e.prepMinutes ?? 20));
   score += prep * 0.002;
+  // HealthifyMe-style plans put a vegetable (sabzi or salad) in nearly every lunch and dinner.
+  if ((b.slot === "lunch" || b.slot === "dinner") && !combo.some((x) => x.role === "complete")) score += combo.some((x) => x.role === "side") ? -0.12 : 0.08;
   // Familiar food first: a meal is as familiar as its least logged core dish.
   const core = combo.filter((x) => CORE_ROLES.includes(x.role));
   const popularity = Math.min(...(core.length ? core : combo).map((x) => popularityOf(x.e)));
