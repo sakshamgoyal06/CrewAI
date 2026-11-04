@@ -308,6 +308,8 @@ export type PlannedMeal = DayPick & {
   /** When eaten with changed portions: what they ate. */
   eatenItems?: MealOption["items"];
   loggedSessionId?: string;
+  /** Items were added or removed in the meal editor. */
+  edited?: boolean;
 };
 
 /** Today and the next two days, picking and saving any meal not yet planned. */
@@ -344,7 +346,9 @@ export async function ensureDays(ctx: ActionContext, plan: ActivePlan, prefs: Pr
       : {};
     // Totals follow the saved items (a day-close carry or rebalance resized them).
     const totals = (r?.metadata?.totals as DayPick["totals"] | undefined) ?? p.totals;
-    return { ...p, totals, ...saved, entryId: r?.id ?? null, status: r?.status ?? "planned", items, ...(eatenItems ? { eatenItems } : {}), ...(loggedSessionId ? { loggedSessionId } : {}) };
+    // An edited meal (items added or removed) goes by its own title.
+    const edited = r?.metadata?.edited ? { title: r.title, edited: true } : {};
+    return { ...p, totals, ...saved, ...edited, entryId: r?.id ?? null, status: r?.status ?? "planned", items, ...(eatenItems ? { eatenItems } : {}), ...(loggedSessionId ? { loggedSessionId } : {}) };
   });
 }
 

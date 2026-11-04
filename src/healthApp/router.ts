@@ -72,6 +72,7 @@ import { listMealsForDate } from "./meals.js";
 import { draftMealFromPhoto } from "./mealCards.js";
 import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
 import { loadWeeklyReview } from "./weeklyReview.js";
+import { editInput, editPick, restrictionsFor, searchMealFoods } from "./dietPlan/edit.js";
 import { eatInput, eatPlanned, undoPlanned, unlinkDeletedMeal } from "./dietPlan/log.js";
 import { logSupplements, undoSupplements } from "./dietPlan/supplementLog.js";
 import { rebalanceToday } from "./dietPlan/rhythm.js";
@@ -400,6 +401,27 @@ export function createHealthAppRouter(): express.Router {
       const { optionId } = z.object({ optionId: z.string().min(1).max(40) }).parse(req.body);
       const r = await swapPick(ctx, date, slot, optionId);
       return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+
+  /** The meal editor: save a planned meal's items (portions, removed items, added foods). */
+  router.put(
+    "/diet/days/:date/:slot/items",
+    route("diet-edit", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
+      const r = await editPick(ctx, date, slot, editInput.parse(req.body));
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  /** Foods to add to a meal, already filtered by the person's diet, avoid list and meat limits. */
+  router.get(
+    "/diet/foods",
+    route("diet-foods", async (ctx, req) => {
+      const q = z.string().max(60).default("").parse(req.query.q ?? "");
+      const slot = z.enum(PLAN_SLOTS).parse(req.query.slot);
+      const foods = searchMealFoods(q, slot, await restrictionsFor(ctx.userProfileId));
+      return { body: { ok: true, foods } };
     }),
   );
 

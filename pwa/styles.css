@@ -1059,3 +1059,33 @@ body.screen-open { overflow: hidden; }
 .supp-line .sub { flex: 1; color: var(--muted); font-size: 0.8rem; }
 .supp-row { padding: 6px 0; }
 .supp-row .row-right { gap: 8px; align-items: center; }
+
+/* Meal editor (one planned meal): live totals, items with portions, add a food, swap. */
+.meal-card .edit-cue { justify-self: start; margin-top: 2px; color: var(--accent); font-size: 0.82rem; font-weight: 600; }
+.meal-edit-totals { display: grid; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--hair); }
+.meal-edit-totals .meal-totals { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
+.meal-totals .side .good { color: var(--good); font-weight: 600; }
+.meal-totals .side .warn { color: var(--warn); font-weight: 600; }
+.mt-macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.mt-macro { display: grid; gap: 3px; font-size: 0.8rem; min-width: 0; }
+.mt-macro .k { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.mt-macro .v { font-variant-numeric: tabular-nums; font-weight: 600; }
+.mt-macro .v small { color: var(--muted); font-weight: 400; }
+.meter.thin { height: 4px; margin: 2px 0 0; }
+.mt-macro .meter.thin > i { background: var(--accent); }
+.mt-macro.over .meter.thin > i { background: var(--warn); }
+.edit-list li.added .iname { color: var(--text); }
+.stepper.small .remove { border-color: transparent; background: transparent; color: var(--muted); font-size: 1.2rem; width: 30px; }
+.add-food .row-input .field { min-width: 0; }
+.food-hits { margin: 0; }
+.food-hits li { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid var(--hair); }
+.food-hits li:first-child { border-top: 0; }
+.food-hits .fname { font-size: 0.95rem; }
+.food-hits .chips.wrap { padding-bottom: 0; }
+.food-hits .chip { font-size: 0.8rem; padding: 6px 11px; }
+.supp-note { margin: 0; }
+.meal-actions { margin-top: 4px; }
+.plan-line-wrap { display: grid; gap: 8px; }
+.plan-line-wrap .plan-line { margin-bottom: 0; }
+.plan-line-wrap .plan-change { justify-self: start; }
+.dp-plan .dp-meal { text-align: left; font-weight: 500; }
