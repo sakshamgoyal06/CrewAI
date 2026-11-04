@@ -101,6 +101,7 @@ import {
 } from "./push.js";
 import { cardFromReport, rcaResponseInput, respondToRca, runRca } from "./rca.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
+import { logWater, waterInput } from "./water.js";
 import { loadCalorieReview } from "./calorieTarget.js";
 import { cardFromIntervention, checkNewGoal, recordManualPlan, respond as respondToIntervention, revertToVersion } from "./interventions/engine.js";
 import { listVersions } from "./interventions/plan.js";
@@ -575,6 +576,12 @@ export function createHealthAppRouter(): express.Router {
   router.post(
     "/steps",
     route("steps", async (ctx, req) => fromResult(await logSteps(ctx, stepsInput.parse(req.body)))),
+  );
+
+  /** Water: add a glass (ml), or undo the day's latest. */
+  router.post(
+    "/water",
+    route("water", async (ctx, req) => fromResult(await logWater(ctx, waterInput.parse(req.body)))),
   );
 
   /** Android: HC Webhook pushes Health Connect steps, distance, exercise and scale readings here. */

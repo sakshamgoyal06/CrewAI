@@ -58,6 +58,7 @@ import { forgetLine, loadCoachMemory, memoryToday, rememberLine, type MemoryLine
 import { enqueueEvents } from "./events.js";
 import { randomUUID } from "node:crypto";
 import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
+import { logWater, waterInput } from "./water.js";
 import { checkNewGoal, openInterventions, recordManualPlan, respond as respondToIntervention } from "./interventions/engine.js";
 import type { InterventionCard } from "./interventions/types.js";
 import { chatFastModel, chatModel } from "../models.js";
@@ -533,6 +534,18 @@ const toolDefinitions: Anthropic.Tool[] = [
     },
   },
   {
+    name: "log_water",
+    description: "Log water they drank, in ml (a glass is about 250 ml, a bottle 500–1000 ml). undo: true removes the latest water log for the day.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ml: { type: "integer", description: "Millilitres drunk." },
+        undo: { type: "boolean" },
+        date: { type: "string", description: "YYYY-MM-DD; defaults to today." },
+      },
+    },
+  },
+  {
     name: "answer_workout_check",
     description:
       "Record the answer to the post-gym-slot workout check: recheck (look in Hevy again), skipped (with reason), or trained_unlogged (trained but didn't log in Hevy; counts as the day's workout). Also use trained_unlogged when someone without Hevy says they trained.",
@@ -831,6 +844,12 @@ export async function runTool(
       const r = await answerRoutineCheck(ctx, p.data);
       return { result: r, changed: r.ok };
     }
+    case "log_water": {
+      const p = waterInput.safeParse(input);
+      if (!p.success) return invalid(p.error);
+      const r = await logWater(ctx, p.data, "chat");
+      return { result: r, changed: r.ok };
+    }
     case "answer_workout_check": {
       const p = workoutCheckAnswerInput.safeParse(input);
       if (!p.success) return invalid(p.error);
@@ -917,6 +936,7 @@ const TOOL_PROGRESS: Record<string, string> = {
   set_daily_routine: "Updating your routine",
   answer_routine_check: "Noting that",
   answer_workout_check: "Noting that",
+  log_water: "Logging water",
   get_training_analysis: "Reading your Hevy history",
   get_routines: "Reading your Hevy routines",
   search_exercises: "Finding the exercise",
