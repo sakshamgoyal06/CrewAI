@@ -9,7 +9,8 @@ import { logger } from "../logger.js";
 import { localDateKey } from "../nutrition/localDate.js";
 import { loggableError } from "../util/loggableError.js";
 import { checkFoodQuery, cleanLookupItems } from "./foodLookup.js";
-import { searchFoods } from "./foodPick.js";
+import { searchFoods, type FoodPick } from "./foodPick.js";
+import { approveLookup, recordLookup, saveOwnFood, searchMyFoods, type MyFood } from "./myFoods.js";
 import {
   checkinInput,
   confirmMeal,
@@ -436,7 +437,10 @@ export function createHealthAppRouter(): express.Router {
     route("diet-foods", async (ctx, req) => {
       const q = z.string().max(60).default("").parse(req.query.q ?? "");
       const slot = z.enum(PLAN_SLOTS).parse(req.query.slot);
-      const foods = searchMealFoods(q, slot, await restrictionsFor(ctx.userProfileId));
+      const [allows, mine] = await Promise.all([restrictionsFor(ctx.userProfileId), searchMyFoods(ctx.userProfileId, q)]);
+      // Saved foods first (their own and approved web foods, checked against the diet by name), then the catalog.
+      const own = mine.filter((f) => allows.byName(f.name)).map(myFoodHit);
+      const foods = [...own, ...searchMealFoods(q, slot, allows)].slice(0, 14);
       return { body: { ok: true, foods } };
     }),
   );
@@ -773,9 +777,10 @@ export function createHealthAppRouter(): express.Router {
   /** Picks from the food database for "log my own": ranked matches with their household servings and macros per serving. */
   router.get(
     "/foods/search",
-    route("foods-search", async (_ctx, req) => {
+    route("foods-search", async (ctx, req) => {
       const q = typeof req.query.q === "string" ? req.query.q.slice(0, 60) : "";
-      return { body: { foods: searchFoods(q, 20) } };
+      const mine = await searchMyFoods(ctx.userProfileId, q);
+      return { body: { foods: [...mine.map(myFoodPick), ...searchFoods(q, 20)].slice(0, 20) } };
     }),
   );
 
@@ -793,16 +798,36 @@ export function createHealthAppRouter(): express.Router {
       if ((await allowUse(ctx, "draft")) !== true) return { status: 429, body: { ok: false, error: "draft_limit" } };
       const draft = await startMealDraft(ctx, { text: q.text }, { webFirst: true });
       const items = cleanLookupItems(draft.items);
+      // Kept unapproved; "Add to my meal" saves them to their foods (POST /foods/mine). Food-table
+      // answers (web lookups used up) are already in the searches, so there is nothing to keep.
+      const lookupId = draft.source === "food_db" ? null : await recordLookup(ctx.userProfileId, items);
       return {
         body: {
           ok: true,
           text: q.text,
           source: draft.source,
           estimated: items.length > 0,
+          lookupId,
           items,
           note: draft.servingAssumption ? draft.servingAssumption.slice(0, 400) : null,
         },
       };
+    }),
+  );
+
+  /**
+   * Saves foods the person approved so the searches offer them next time: a lookup's results by
+   * its id (only what that lookup returned), or one food typed in from a label (name-checked).
+   */
+  router.post(
+    "/foods/mine",
+    route("foods-mine", async (ctx, req) => {
+      const body = z
+        .union([z.object({ lookupId: z.string().uuid() }), z.object({ item: z.object({ name: z.string().max(120), calories: z.number(), protein_g: z.number(), carbs_g: z.number(), fat_g: z.number() }) })])
+        .parse(req.body);
+      if ("lookupId" in body) return { body: { ok: true, saved: await approveLookup(ctx.userProfileId, body.lookupId) } };
+      const saved = await saveOwnFood(ctx.userProfileId, body.item);
+      return saved ? { body: { ok: true, saved: 1 } } : { status: 400, body: { ok: false, error: "not_a_food" } };
     }),
   );
 
@@ -1151,4 +1176,32 @@ export function createHealthAppRouter(): express.Router {
   );
 
   return router;
+}
+
+/** A saved food as a "Make your meal" pick: one serving with its own numbers. */
+function myFoodPick(f: MyFood): FoodPick & { mine: boolean } {
+  return {
+    key: `mine:${f.id}`,
+    name: f.name,
+    diet: "",
+    mine: f.mine,
+    servings: [{ id: `mine:${f.id}`, label: "1 serving", grams: 0, default: true, kcal: f.calories, proteinG: f.protein_g, carbsG: f.carbs_g, fatG: f.fat_g, fiberG: 0 }],
+  };
+}
+
+/** A saved food in the planned-meal editor: added as a custom item (edit.ts) with these numbers. */
+function myFoodHit(f: MyFood) {
+  const custom = { name: f.name, kcal: f.calories, proteinG: f.protein_g, carbsG: f.carbs_g, fatG: f.fat_g };
+  return {
+    key: `mine:${f.id}`,
+    name: f.name,
+    mine: f.mine,
+    servings: [{
+      id: `mine:${f.id}`,
+      label: "1 serving",
+      default: true,
+      custom,
+      item: { key: null, name: f.name, servingId: null, qty: 1, text: f.name, grams: null, kcal: f.calories, proteinG: f.protein_g, carbsG: f.carbs_g, fatG: f.fat_g, fiberG: 0 },
+    }],
+  };
 }

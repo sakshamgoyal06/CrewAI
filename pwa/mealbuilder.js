@@ -176,7 +176,7 @@ export function mealBuilder({ api, el, fmt, openMini }, build, { applyLabel, onA
     const rows = foods.slice(0, 8).map((food) => {
       const s = food.servings.find((x) => x.default) || food.servings[0];
       return el("li", { role: "option", class: "mb-opt", onpointerdown: (e) => e.preventDefault(), onclick: () => add(food, s) },
-        el("span", { class: "n" }, food.name), el("small", {}, `${s.label} · ${fmt(s.kcal)} kcal`));
+        el("span", { class: "n" }, food.name, food.mine ? el("small", { class: "tag" }, "yours") : null), el("small", {}, `${s.label} · ${fmt(s.kcal)} kcal`));
     });
     const tail = q
       ? el("li", { class: "mb-opt more", title: `Search the web for “${q}”`, onpointerdown: (e) => e.preventDefault(), onclick: findMore },

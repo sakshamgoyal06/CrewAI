@@ -1195,7 +1195,7 @@ body.screen-open { overflow: hidden; }
 .mb-name { flex: 1; min-width: 0; display: grid; gap: 2px; text-align: left; background: none; border: 0; padding: 0; color: var(--text); font: inherit; cursor: pointer; }
 .mb-name .n { font-size: 0.95rem; overflow-wrap: anywhere; }
 .mb-name small { color: var(--muted); font-size: 0.8rem; }
-.mb-name .tag { margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 0.7rem; vertical-align: 1px; }
+.mb-name .tag, .mb-opt .n .tag, .food-hits .fname .tag { margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 0.7rem; vertical-align: 1px; }
 .mb-item .stepper .q { min-width: 1.8em; text-align: center; font-variant-numeric: tabular-nums; }
 .mb-empty { color: var(--muted); font-size: 0.9rem; padding: 6px 0; }
 .mb-totals { display: grid; gap: 4px; padding: 12px 0 2px; border-top: 1px solid var(--hair-strong); }

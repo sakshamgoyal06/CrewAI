@@ -466,9 +466,10 @@ export function mealScreen() {
     const canFind = e.q.trim().length >= 2;
     if (!e.hits.length) { hitsBox.replaceChildren(canFind ? findRow(true) : el("li", { class: "hint" }, "Type a food to add.")); return; }
     hitsBox.replaceChildren(...e.hits.map((h) => el("li", {},
-      el("span", { class: "fname" }, h.name),
+      el("span", { class: "fname" }, h.name, h.mine ? el("small", { class: "tag" }, "yours") : null),
       el("div", { class: "chips wrap" }, ...h.servings.map((s) => el("button", { class: "chip", type: "button", onclick: () => {
-        e.rows.push({ servingId: s.id, base: s.item, qty: 1 });
+        // A saved food of theirs has no catalog serving: it goes in with its own numbers.
+        e.rows.push(s.custom ? { custom: s.custom, base: s.item, qty: 1 } : { servingId: s.id, base: s.item, qty: 1 });
         e.adding = false;
         e.q = "";
         paintAdd();
