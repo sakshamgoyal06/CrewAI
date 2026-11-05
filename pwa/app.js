@@ -2690,7 +2690,40 @@ async function enablePush() {
   const perm = await Notification.requestPermission();
   if (perm !== "granted") throw new Error("Notifications are blocked for this app in Android settings.");
   const reg = await navigator.serviceWorker.ready;
-  const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) }));
+  let sub = await reg.pushManager.getSubscription();
+  if (sub && !sameKey(sub.options?.applicationServerKey, publicKey)) {
+    await sub.unsubscribe().catch(() => {});
+    sub = null;
+  }
+  sub ||= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
+  await api("/push/subscribe", { method: "POST", body: JSON.stringify(sub.toJSON()) });
+}
+
+function sameKey(buf, b64) {
+  if (!buf) return true; // the browser didn't say which key; assume it's still the right one
+  const a = new Uint8Array(buf);
+  const b = b64ToBytes(b64);
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+/**
+ * Makes sure the server knows this phone's subscription. The switch only looks at the phone, so
+ * without this a subscription the server lost (an account reset, a failed save, a removed row)
+ * left the switch On while nothing was sent. Runs on every app open; the save is an upsert.
+ * A subscription made with an old VAPID key can never receive, so it's replaced.
+ */
+async function syncPush() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  if (Notification.permission !== "granted") return;
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) return; // turned off on this phone: leave it off
+  const { publicKey } = await api("/push");
+  if (!publicKey) return;
+  if (!sameKey(sub.options?.applicationServerKey, publicKey)) {
+    await sub.unsubscribe().catch(() => {});
+    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
+  }
   await api("/push/subscribe", { method: "POST", body: JSON.stringify(sub.toJSON()) });
 }
 
@@ -4697,6 +4730,7 @@ async function start() {
   flushQueue();
   checkHealthConnectPrompt();
   withCache("/billing", () => { paintPlanSection(); paintPlanBanner(); }, () => {});
+  syncPush().catch(() => {});
 }
 
 window.addEventListener("online", flushQueue);
