@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { catalog } from "../../meals/catalog/index.js";
-import { composeOptions, restrictionCheck } from "./compose.js";
-import { applyEdit, searchMealFoods, servingFor } from "./edit.js";
+import { composeOptions, nameRestrictionCheck, restrictionCheck } from "./compose.js";
+import { applyEdit, editInput, searchMealFoods, servingFor } from "./edit.js";
 import { DEFAULT_SHARES, macroTargets, mealBudgets } from "./targets.js";
 
 const lunch = () => {
@@ -75,5 +75,29 @@ describe("food search in the meal editor", () => {
       expect(s.item.kcal).toBeGreaterThan(0);
       expect(s.item.servingId).toBe(s.id);
     }
+  });
+
+  it("adds a food the catalog doesn't have, with its own numbers (web lookup)", () => {
+    const fali = { name: "Fali sabzi", kcal: 120, proteinG: 4, carbsG: 10, fatG: 7 };
+    const input = editInput.parse({ items: [{ custom: fali, qty: 1.5 }] });
+    const r = applyEdit([], input, anyFood);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.items[0]).toMatchObject({ key: null, servingId: null, name: "Fali sabzi", text: "1.5 × Fali sabzi", kcal: 180, proteinG: 6 });
+    expect(r.totals.kcal).toBe(180);
+  });
+
+  it("checks a web food's name against the diet and foods to avoid", () => {
+    const veg = nameRestrictionCheck({ diet: "vegetarian", avoid: ["peanut"] });
+    const custom = (name: string) => editInput.parse({ items: [{ custom: { name, kcal: 200, proteinG: 5, carbsG: 20, fatG: 8 }, qty: 1 }] });
+    expect(applyEdit([], custom("Boondi raita"), anyFood, catalog(), veg).ok).toBe(true);
+    expect(applyEdit([], custom("Chicken momos"), anyFood, catalog(), veg)).toMatchObject({ ok: false, error: "not_allowed" });
+    expect(applyEdit([], custom("Peanut chikki"), anyFood, catalog(), veg)).toMatchObject({ ok: false, error: "not_allowed" });
+    expect(applyEdit([], custom("Egg curry"), anyFood, catalog(), nameRestrictionCheck({ diet: "eggetarian", avoid: [] })).ok).toBe(true);
+  });
+
+  it("rejects a custom food with markup or silly numbers", () => {
+    expect(editInput.safeParse({ items: [{ custom: { name: "<script>x</script>", kcal: 100, proteinG: 1, carbsG: 1, fatG: 1 }, qty: 1 }] }).success).toBe(false);
+    expect(editInput.safeParse({ items: [{ custom: { name: "Rice", kcal: 99999, proteinG: 1, carbsG: 1, fatG: 1 }, qty: 1 }] }).success).toBe(false);
   });
 });

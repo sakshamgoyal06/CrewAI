@@ -11,18 +11,32 @@ import { supabase } from "../../tools/clients.js";
 import type { ActionContext } from "../actions.js";
 import { loadFoodPrefs } from "../onboarding.js";
 import { setQty } from "./adjust.js";
-import { itemFor, restrictionCheck, sumTotals, titleOf, type PersonDiet, type PlanItem, type Totals } from "./compose.js";
+import { itemFor, nameRestrictionCheck, restrictionCheck, sumTotals, titleOf, type PersonDiet, type PlanItem, type Totals } from "./compose.js";
 import { loadDietPrefs } from "./store.js";
 import type { PlanSlot } from "./targets.js";
 
 export const MAX_MEAL_ITEMS = 12;
 
 const qty = z.number().gt(0).max(20);
+const customFood = z.object({
+  name: z.string().trim().min(2).max(80).regex(/^[\p{L}\p{M}\p{N}\s.,'’&%/()+×½¼¾-]+$/u),
+  kcal: z.number().gt(0).max(3000),
+  proteinG: z.number().min(0).max(300),
+  carbsG: z.number().min(0).max(500),
+  fatG: z.number().min(0).max(300),
+});
 
 export const editInput = z.object({
   /** The meal's items in order: a planned item kept at a portion, or a catalog serving added. */
   items: z
-    .array(z.union([z.object({ keep: z.number().int().min(0).max(40), qty }), z.object({ servingId: z.string().min(3).max(120), qty })]))
+    .array(
+      z.union([
+        z.object({ keep: z.number().int().min(0).max(40), qty }),
+        z.object({ servingId: z.string().min(3).max(120), qty }),
+        /** A food the catalog doesn't have, with its own numbers (the "Can't find it? Search" web lookup). */
+        z.object({ custom: customFood, qty }),
+      ]),
+    )
     .min(1)
     .max(MAX_MEAL_ITEMS),
 });
@@ -42,9 +56,35 @@ export type EditResult = { ok: true; items: PlanItem[]; totals: Totals } | { ok:
  * The meal after an edit. Kept items are re-portioned (catalog items exactly, usual-meal items
  * scaled); added foods must pass the person's restrictions. Pure.
  */
-export function applyEdit(current: PlanItem[], input: EditInput, allows: (e: CatalogEntry) => boolean, cat: Catalog = catalog()): EditResult {
+export function applyEdit(
+  current: PlanItem[],
+  input: EditInput,
+  allows: (e: CatalogEntry) => boolean,
+  cat: Catalog = catalog(),
+  allowsName: (name: string) => boolean = () => true,
+): EditResult {
   const out: PlanItem[] = [];
   for (const x of input.items) {
+    if ("custom" in x) {
+      const c = x.custom;
+      const name = c.name.replace(/\s+/g, " ").trim();
+      if (!allowsName(name)) return { ok: false, error: "not_allowed", name };
+      const r1 = (n: number) => Math.round(n * x.qty * 10) / 10;
+      out.push({
+        key: null,
+        name,
+        servingId: null,
+        qty: x.qty,
+        text: x.qty === 1 ? name : `${x.qty} × ${name}`,
+        grams: null,
+        kcal: Math.round(c.kcal * x.qty),
+        proteinG: r1(c.proteinG),
+        carbsG: r1(c.carbsG),
+        fatG: r1(c.fatG),
+        fiberG: 0,
+      });
+      continue;
+    }
     if ("keep" in x) {
       const base = current[x.keep];
       if (!base) return { ok: false, error: "unknown_item" };
@@ -60,13 +100,14 @@ export function applyEdit(current: PlanItem[], input: EditInput, allows: (e: Cat
 }
 
 /** What the person's food settings allow, read fresh: diet, foods to avoid, diet note and plan restrictions. */
-export async function restrictionsFor(userProfileId: string): Promise<(e: CatalogEntry) => boolean> {
+export async function restrictionsFor(userProfileId: string): Promise<((e: CatalogEntry) => boolean) & { byName: (name: string) => boolean }> {
   const [food, prefs] = await Promise.all([loadFoodPrefs(userProfileId), loadDietPrefs(userProfileId)]);
-  return restrictionCheck({
+  const byName = nameRestrictionCheck({ diet: food.diet as PersonDiet, avoid: food.foodAvoid });
+  return Object.assign(restrictionCheck({
     diet: food.diet as PersonDiet,
     avoid: food.foodAvoid,
     dietNote: [food.dietNote ?? "", ...prefs.prefs.restrictions].filter(Boolean),
-  });
+  }), { byName });
 }
 
 export type FoodHit = {
@@ -110,7 +151,8 @@ export async function editPick(ctx: ActionContext, date: string, slot: PlanSlot,
   if (!entry) return { ok: false, error: "meal_not_planned" };
   const meta = entry.metadata ?? {};
   if (meta.kind === "eat_out") return { ok: false, error: "eat_out" };
-  const r = applyEdit((meta.items as PlanItem[] | undefined) ?? [], input, await restrictionsFor(ctx.userProfileId));
+  const allows = await restrictionsFor(ctx.userProfileId);
+  const r = applyEdit((meta.items as PlanItem[] | undefined) ?? [], input, allows, catalog(), allows.byName);
   if (!r.ok) return r;
   const { error: e2 } = await supabase
     .from("meal_plan_entries")
