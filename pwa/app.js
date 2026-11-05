@@ -1841,19 +1841,25 @@ function cardSummary(c) {
   }
 }
 
-/** A card shown as its one-line summary; a tap swaps in the full card (and keeps it open). */
-function foldedCard(c, full, key, nudge) {
+/** A card that folds to its one-line summary. The same row stays on top when it's open,
+ *  so a second tap folds it again. The open/closed choice is kept across refreshes. */
+function foldedCard(c, full, key, nudge, startOpen = false) {
   const s = cardSummary(c);
   const { text, open, done } = typeof s === "string" ? { text: s } : s;
   const row = el("button", { class: `card-row${nudge ? " from-nudge" : ""}`, type: "button", "aria-expanded": "false" },
     el("span", { class: "card-row-text" }, text || "Card"),
     open ? el("span", { class: "card-row-tag" }, "Needs answer") : done ? el("span", { class: "card-row-done" }, "✓") : null,
     el("i", { class: "chev" }));
-  row.addEventListener("click", () => {
-    state.openCards.add(key);
-    row.replaceWith(full);
-  });
-  return row;
+  const box = el("div", { class: "card-fold-box" }, row);
+  const set = (on) => {
+    box.classList.toggle("open", on);
+    row.setAttribute("aria-expanded", String(on));
+    if (on) { state.openCards.add(key); box.append(full); }
+    else { state.openCards.delete(key); full.remove(); }
+  };
+  row.addEventListener("click", () => set(!box.classList.contains("open")));
+  if (startOpen) set(true);
+  return box;
 }
 
 /** Cards that say everything their message says: the text bubble is skipped (the model still reads it). */
@@ -1888,7 +1894,7 @@ function renderMessages(messages, into, { retry = false, newSince = null, from =
       // A card the coach sent on its own carries the same gold edge as a nudge's text.
       if (nudge) node.classList.add("from-nudge");
       const key = `${m.createdAt}|${ci}`;
-      into.append(fold && !state.openCards.has(key) ? foldedCard(c, node, key, nudge) : node);
+      into.append(fold ? foldedCard(c, node, key, nudge, state.openCards.has(key)) : node);
     });
     if (retry && m.role === "user" && unanswered(m)) {
       failedTurn("That one didn't get a reply.", m.turnId ? () => send(m.content, m.turnId, () => {}) : null);

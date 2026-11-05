@@ -1351,4 +1351,7 @@ body.screen-open { overflow: hidden; }
 .card-row-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .card-row-tag { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 0.7rem; font-weight: 700; }
 .card-row-done { flex: none; color: var(--good); font-weight: 700; }
+.card-fold-box { display: flex; flex-direction: column; gap: 6px; }
+.card-fold-box.open > .card-row { padding-block: 7px; }
+.card-fold-box.open > .card-row .chev { transform: rotate(-135deg) translate(-2px, -2px); }
 .earlier-hide { align-self: center; font-size: 0.82rem; padding: 4px 10px; }
