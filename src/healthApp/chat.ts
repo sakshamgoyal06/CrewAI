@@ -1215,6 +1215,8 @@ type TurnStats = {
   changed: boolean;
   /** Which budget ended the turn early, if any. */
   budgetHit?: "wall" | "rounds" | "tokens";
+  /** The person tapped Stop mid-answer. */
+  stopped?: boolean;
   /** Why the turn moved from the fast model to the main one, if it did. */
   escalated?: "no_tool" | "coaching_tool" | "refusal";
   /** The person's local day, for the spend caps. */
@@ -1278,6 +1280,7 @@ function logTurn(userProfileId: string, stats: TurnStats, outcome: "ok" | "refus
     changed: stats.changed,
     guardFired: stats.guardFired,
     ...(stats.budgetHit ? { budgetHit: stats.budgetHit } : {}),
+    ...(stats.stopped ? { stopped: true } : {}),
     ...(stats.escalated ? { escalated: stats.escalated } : {}),
     ...(stats.braked ? { braked: true } : {}),
     ...(stats.fastOnly ? { fastOnly: true } : {}),
@@ -1395,6 +1398,24 @@ export type RunChatOptions = {
   fastOnly?: boolean;
 };
 
+/** Turns that can be stopped, by `${userProfileId}:${turnId}`. One process serves the app. */
+const stoppable = new Map<string, AbortController>();
+
+/** The person tapped Stop: the turn ends at its next step and says so. False when nothing is running. */
+export function stopChatTurn(userProfileId: string, turnId: string): boolean {
+  const ctl = stoppable.get(`${userProfileId}:${turnId}`);
+  if (!ctl) return false;
+  ctl.abort();
+  return true;
+}
+
+/** What a stopped turn says: plain, and honest about anything it already did. */
+export function stoppedReply(stats: Pick<TurnStats, "cards" | "changed">): string {
+  if (stats.cards.length) return "Stopped. The card above is what I had so far.";
+  if (stats.changed) return "Stopped. What I'd already saved stays saved.";
+  return "Stopped.";
+}
+
 export type RunChatResult = ChatReply | { error: "in_progress" | "busy"; turnId: string };
 
 /** Turns running per person. Two at once covers a retry overlapping a slow turn; more is a flood. */
@@ -1466,10 +1487,14 @@ async function runTurn(ctx: ActionContext, userText: string, options: RunChatOpt
     return { text, cards: [], changed: false, turnId };
   }
 
+  const stopKey = `${ctx.userProfileId}:${turnId}`;
+  const stop = new AbortController();
+  stoppable.set(stopKey, stop);
   try {
     const reply = await answerTurn(ctx, userText, history, options.create ?? defaultCreate(), stats, { ...TURN_BUDGET, ...options.budget }, {
       onEvent: options.onEvent,
       fastOnly: options.fastOnly,
+      signal: stop.signal,
     });
     if (stats.tools.some((t) => t.name === "decline_off_topic")) {
       const extra = await strikeLine(ctx, declinesToday(ctx.userProfileId, day));
@@ -1484,6 +1509,8 @@ async function runTurn(ctx: ActionContext, userText: string, options: RunChatOpt
     await setTurnStatus(ctx.userProfileId, turnId, "failed");
     logTurn(ctx.userProfileId, stats, "error", performance.now() - startedAt, err instanceof Error ? err.message : String(err));
     throw err;
+  } finally {
+    stoppable.delete(stopKey);
   }
 }
 
@@ -1505,6 +1532,8 @@ export type TurnDeps = {
   onEvent?: (event: ChatStreamEvent) => void;
   /** Past the day's soft spend cap: the fast model answers everything, with no escalation. */
   fastOnly?: boolean;
+  /** Aborted when the person taps Stop. */
+  signal?: AbortSignal;
 };
 
 export type TurnAnswer = { text: string; cards: ChatCard[]; changed: boolean; refused: boolean };
@@ -1570,9 +1599,13 @@ async function answerTurn(
   const abort = new AbortController();
   const abortTimer = setTimeout(() => abort.abort(), budget.wallMs);
   abortTimer.unref?.();
+  const onStop = () => { stats.stopped = true; abort.abort(); };
+  if (deps.signal?.aborted) onStop();
+  else deps.signal?.addEventListener("abort", onStop, { once: true });
 
   try {
   for (let round = 0; round < budget.maxRounds; round++) {
+    if (stats.stopped) break;
     if (remaining() < budget.minCallMs) {
       stats.budgetHit = "wall";
       break;
@@ -1605,6 +1638,7 @@ async function answerTurn(
       );
     } catch (err) {
       // Out of time mid-call: answer with what's done so far rather than failing the whole turn.
+      if (stats.stopped) break;
       if (err instanceof TurnBudgetExceeded || abort.signal.aborted) {
         stats.budgetHit = "wall";
         break;
@@ -1709,9 +1743,13 @@ async function answerTurn(
 
   } finally {
     clearTimeout(abortTimer);
+    deps.signal?.removeEventListener("abort", onStop);
   }
 
   stats.changed = changed;
+  if (stats.stopped && !done) {
+    return { text: stoppedReply({ cards: stats.cards, changed }), cards, changed, refused };
+  }
   // The loop ended without the coach's closing reply: it ran out of rounds or time. Say so
   // plainly instead of showing a stale "let me check" line or "Done.".
   if (!done) {

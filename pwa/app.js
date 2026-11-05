@@ -316,6 +316,7 @@ function setView(view, { fromHistory = false } = {}) {
     else history.pushState({ tab: true }, "", `#${view}`);
   }
   for (const v of VIEWS) $(`view-${v}`).hidden = v !== view;
+  if (view === "coach") $("tab-coach")?.classList.remove("has-new");
   for (const t of document.querySelectorAll(".tab")) {
     t.classList.toggle("active", t.dataset.view === view);
     t.setAttribute("aria-current", t.dataset.view === view ? "page" : "false");
@@ -1563,8 +1564,82 @@ function setCoachText(node, text) {
   node.replaceChildren(linkified(text));
 }
 
-function addMessage(role, text, into = $("thread")) {
-  const node = el("div", { class: `msg ${role}` }, role === "coach" ? linkified(text) : text);
+// ---------- who said what, and when ----------
+
+const TZ_OPT = TIMEZONE ? { timeZone: TIMEZONE } : {};
+const TIME_FMT = new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", ...TZ_OPT });
+const DAY_KEY_FMT = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", ...TZ_OPT });
+const DAY_FMT = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", ...TZ_OPT });
+
+/** Same speaker within this long reads as one turn under one header. */
+const TURN_GAP_MS = 10 * 60_000;
+
+const timeLabel = (at) => TIME_FMT.format(at).replace(/\s?([ap])\.?m\.?$/i, (_, x) => ` ${x.toLowerCase()}m`);
+const dayKeyOf = (at) => DAY_KEY_FMT.format(at);
+
+/** "Today · Thu 5 Nov", "Yesterday · Wed 4 Nov", or just "Mon 2 Nov". */
+function dayLabel(at) {
+  const key = dayKeyOf(at);
+  const now = new Date();
+  const yest = new Date(now.getTime() - 86_400_000);
+  const pretty = DAY_FMT.format(at).replace(",", "");
+  if (key === dayKeyOf(now)) return `Today · ${pretty}`;
+  if (key === dayKeyOf(yest)) return `Yesterday · ${pretty}`;
+  return pretty;
+}
+
+/** What the coach posted on its own, named by what it carries. */
+const NUDGE_LABELS = {
+  day_plan: "Morning plan", plan_meal: "Meal reminder", plan_adjust: "Plan update", workout_check: "Workout check",
+  routine_check: "Check-in", intervention: "Check-in", rca: "Weekly insight", calorie_review: "Review",
+};
+function nudgeLabel(cards = [], m = {}) {
+  for (const c of cards) if (NUDGE_LABELS[c.type]) return NUDGE_LABELS[c.type];
+  // Text-only posts: the evening recap is the one written under a fixed turn id; the rest are notes.
+  if (!cards.length) return m.turnId ? "Evening recap" : "Coach note";
+  return "Nudge";
+}
+
+/** One-tap follow-ups under the evening recap while it's the newest message. Each sends as typed. */
+const RECAP_REPLIES = [["Plan tomorrow's meals", "Plan my meals for tomorrow"], ["How was my week?", "How was my week?"]];
+
+function avatar(who) {
+  if (who === "coach") return el("span", { class: "ava coach", "aria-hidden": "true" }, "M");
+  const icon = svg("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" });
+  icon.append(svg("circle", { cx: "12", cy: "8.5", r: "3.6" }), svg("path", { d: "M4.8 19.5c1.2-3.4 4-5 7.2-5s6 1.6 7.2 5" }));
+  return el("span", { class: "ava user", "aria-hidden": "true" }, icon);
+}
+
+/**
+ * Starts a new turn when the speaker changes, time has passed, or the coach posts on its own: a day
+ * divider for each new day, then avatar, name and time. Same-speaker follow-ups stay under one header.
+ */
+function markTurn(into, who, at = new Date(), { nudge = null } = {}) {
+  const marks = into.querySelectorAll(":scope > .turn, :scope > .day-div");
+  const last = marks[marks.length - 1];
+  const day = dayKeyOf(at);
+  if (last?.dataset.day !== day) {
+    into.append(el("div", { class: "day-div", role: "separator", "data-day": day }, el("span", {}, dayLabel(at))));
+  } else if (!nudge && last.classList.contains("turn") && last.dataset.who === who && !last.classList.contains("nudge")
+    && at.getTime() - Number(last.dataset.at) < TURN_GAP_MS) {
+    return;
+  }
+  const time = el("time", { datetime: at.toISOString() }, timeLabel(at));
+  const name = el("b", {}, who === "coach" ? "Magnus" : "You");
+  const head = el("div", { class: `turn ${who}${nudge ? " nudge" : ""}`, "data-who": who, "data-at": String(at.getTime()), "data-day": day },
+    ...(who === "coach"
+      ? [avatar("coach"), name, nudge ? el("span", { class: "turn-tag" }, nudge) : null, time]
+      : [time, name, avatar("user")]));
+  into.append(head);
+}
+
+// The newest message seen in Coach before this visit; later coach messages sit under a "New" line.
+const CHAT_SEEN_KEY = "magnus-chat-seen";
+
+function addMessage(role, text, into = $("thread"), { at, mark = true } = {}) {
+  const who = role.startsWith("user") ? "user" : "coach";
+  if (mark) markTurn(into, who, at ? new Date(at) : new Date());
+  const node = el("div", { class: `msg ${role}` }, who === "coach" && !role.includes("err") ? linkified(text) : text);
   into.append(node);
   if (into.id === "thread") scrollThread();
   return node;
@@ -1595,33 +1670,166 @@ function unanswered(m) {
   return m.status === "pending" && Date.now() - new Date(m.createdAt).getTime() > STALE_TURN_MS;
 }
 
+/** Within this many px of the bottom counts as reading the latest. */
+const NEAR_BOTTOM_PX = 120;
+const nearBottom = (t) => t.scrollHeight - t.scrollTop - t.clientHeight < NEAR_BOTTOM_PX;
+
+/**
+ * Today's thread from the server. New messages at the end are appended (so a card being edited
+ * survives a refresh); anything else rebuilds. Reading further up keeps its place, and new coach
+ * messages show as a "↓ new" button instead of a jump.
+ */
 function renderHistory(messages) {
   const sig = historySig(messages);
   // Rebuilding the whole thread is the slow part on a phone; skip it when nothing changed.
   if (sig === state.historySig) return;
-  state.historySig = sig;
-  if (!messages.length) return renderEmpty();
   const t = $("thread");
+  const prevLen = state.historyLen ?? 0;
+  const live = state.liveBase;
+  state.liveBase = null;
+  // Where the screen already shows messages[0..from): append the rest only.
+  let from = -1;
+  if (state.historySig && prevLen && messages.length >= prevLen && historySig(messages.slice(0, prevLen)) === state.historySig) from = prevLen;
+  else if (live && messages.length >= live.len + 2 && historySig(messages.slice(0, live.len)) === live.sig
+    && messages[live.len].role === "user" && messages[live.len + 1].role !== "user") from = live.len + 2;
+  const seenAt = state.lastRenderedAt;
+  const fresh = seenAt ? messages.filter((m) => m.role !== "user" && m.createdAt > seenAt).length : 0;
+  state.historySig = sig;
+  state.historyLen = messages.length;
+  state.lastRenderedAt = messages.at(-1)?.createdAt ?? null;
+  if (!messages.length) return renderEmpty();
+  if (state.newSince === undefined) state.newSince = store.get(CHAT_SEEN_KEY, null);
+  store.set(CHAT_SEEN_KEY, state.lastRenderedAt);
+  const showsThread = !t.querySelector(":scope > .empty");
+  const stay = showsThread && t.children.length > 0 && !nearBottom(t);
+  const top = t.scrollTop;
   const prevBehavior = t.style.scrollBehavior;
   t.style.scrollBehavior = "auto";
-  t.replaceChildren();
-  renderMessages(messages, t, { retry: true });
-  requestAnimationFrame(() => { t.scrollTop = t.scrollHeight; t.style.scrollBehavior = prevBehavior; });
+  // A rebuild jumps to the top for a frame; that isn't the person scrolling up for earlier days.
+  state.rendering = true;
+  if (from >= 0 && showsThread) {
+    t.querySelector(":scope > .quick-replies")?.remove();
+    renderMessages(messages, t, { retry: true, from });
+  } else {
+    t.replaceChildren(...(state.earlier ? [state.earlier] : []));
+    renderMessages(messages, t, { retry: true, newSince: state.newSince });
+  }
+  if (fresh && ($("view-coach").hidden || document.hidden)) $("tab-coach")?.classList.add("has-new");
+  requestAnimationFrame(() => {
+    if (stay) {
+      t.scrollTop = top;
+      if (fresh) showJump(fresh);
+    } else {
+      t.scrollTop = t.scrollHeight;
+      showJump(0);
+    }
+    t.style.scrollBehavior = prevBehavior;
+    requestAnimationFrame(() => { state.rendering = false; });
+  });
+}
+
+/** "↓ 2 new" above the composer while reading further up; tap to go to the latest. */
+function showJump(count) {
+  const b = $("jump");
+  if (!b) return;
+  const total = count ? (Number(b.dataset.count) || 0) + count : 0;
+  b.dataset.count = String(total);
+  b.hidden = !total;
+  b.textContent = `↓ ${total} new`;
+}
+
+// Earlier days load above today's thread when you scroll to its top (or tap "Earlier").
+async function loadEarlier() {
+  if (state.loadingEarlier || state.earlierDone) return;
+  const t = $("thread");
+  if (!state.historyLen || t.querySelector(":scope > .empty")) return;
+  state.loadingEarlier = true;
+  const btn = state.earlier?.querySelector(".earlier-btn");
+  if (btn) btn.textContent = "Loading…";
+  try {
+    if (!state.pastDays) state.pastDays = (await api("/chat/days")).days || [];
+    const shown = state.earlierDays || (state.earlierDays = []);
+    const next = state.pastDays.find((d) => !shown.includes(d.date));
+    if (!next) {
+      state.earlierDone = true;
+      state.earlier?.querySelector(".earlier-btn")?.replaceWith(el("p", { class: "hint center earlier-end" }, "That's the start of your chats."));
+      return;
+    }
+    const { messages } = await api(`/chat?date=${encodeURIComponent(next.date)}`);
+    shown.push(next.date);
+    const block = el("div", { class: "thread-day" });
+    renderMessages(messages, block);
+    const before = t.scrollHeight;
+    const prevBehavior = t.style.scrollBehavior;
+    t.style.scrollBehavior = "auto";
+    earlierBox().querySelector(".earlier-btn").after(block);
+    t.scrollTop += t.scrollHeight - before;
+    t.style.scrollBehavior = prevBehavior;
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    state.loadingEarlier = false;
+    const b = state.earlier?.querySelector(".earlier-btn");
+    if (b) b.textContent = "Earlier";
+  }
+}
+
+/** The box above today's thread that holds earlier days, newest at the bottom. */
+function earlierBox() {
+  if (!state.earlier) {
+    state.earlier = el("div", { class: "earlier" },
+      el("button", { class: "link quiet earlier-btn", type: "button", onclick: () => loadEarlier() }, "Earlier"));
+  }
+  const t = $("thread");
+  if (state.earlier.parentNode !== t && !t.querySelector(":scope > .empty")) t.prepend(state.earlier);
+  return state.earlier;
+}
+
+/** A new local day: today's thread starts over and earlier days reload from the top. */
+function resetEarlier() {
+  state.earlier?.remove();
+  state.earlier = null;
+  state.earlierDays = [];
+  state.earlierDone = false;
+  state.pastDays = null;
 }
 
 /** Cards that say everything their message says: the text bubble is skipped (the model still reads it). */
 const CARD_ONLY = new Set(["day_plan", "plan_meal", "plan_adjust"]);
 
 /** Messages and their cards into a thread. */
-function renderMessages(messages, into, { retry = false } = {}) {
-  for (const m of messages) {
+function renderMessages(messages, into, { retry = false, newSince = null, from = 0 } = {}) {
+  const userTurns = new Set(messages.filter((m) => m.role === "user" && m.turnId).map((m) => m.turnId));
+  let markedNew = false;
+  messages.forEach((m, i) => {
+    if (i < from) return;
     const cards = m.cards || [];
-    if (!cards.some((c) => CARD_ONLY.has(c.type))) addMessage(m.role === "user" ? "user" : "coach", m.content, into);
-    for (const c of cards) appendCard(c, into);
+    const who = m.role === "user" ? "user" : "coach";
+    // A reply shares its question's turn id; anything else from the coach came on its own.
+    const nudge = who === "coach" && !(m.turnId ? userTurns.has(m.turnId) : messages[i - 1]?.role === "user");
+    const at = m.createdAt ? new Date(m.createdAt) : new Date();
+    if (newSince && !markedNew && who === "coach" && i > 0 && m.createdAt > newSince) {
+      markedNew = true;
+      into.append(el("div", { class: "new-div", role: "separator" }, el("span", {}, "New")));
+    }
+    const label = nudge ? nudgeLabel(cards, m) : null;
+    markTurn(into, who, at, { nudge: label });
+    if (!cards.some((c) => CARD_ONLY.has(c.type))) addMessage(nudge ? "coach nudge" : who, m.content, into, { mark: false });
+    for (const c of cards) {
+      appendCard(c, into);
+      // A card the coach sent on its own carries the same gold edge as a nudge's text.
+      if (nudge) into.lastElementChild?.classList.add("from-nudge");
+    }
     if (retry && m.role === "user" && unanswered(m)) {
       failedTurn("That one didn't get a reply.", m.turnId ? () => send(m.content, m.turnId, () => {}) : null);
     }
-  }
+    if (label === "Evening recap" && i === messages.length - 1 && into.id === "thread") {
+      const row = el("div", { class: "quick-replies" }, ...RECAP_REPLIES.map(([shown, text]) =>
+        el("button", { type: "button", onclick: () => { row.remove(); send(text); } }, shown)));
+      into.append(row);
+    }
+  });
+  if (into.id === "thread" && into.querySelector(":scope > .turn")) earlierBox();
 }
 
 /** The phone's own date, to tell whether the saved thread is still today's. */
@@ -1636,6 +1844,13 @@ async function loadHistory() {
   try {
     const { messages, date } = await api("/chat");
     if (state.sending) return;
+    const day = date || localToday();
+    if (state.threadDate && state.threadDate !== day) {
+      resetEarlier();
+      state.historySig = null;
+      state.historyLen = 0;
+    }
+    state.threadDate = day;
     renderHistory(messages);
     store.set(CHAT_CACHE_KEY, { date: date || localToday(), messages: messages.slice(-50) });
   } catch (err) {
@@ -1655,7 +1870,7 @@ function newTurnId() {
 async function send(text, turnId = newTurnId(), showUser = addMessage.bind(null, "user", text)) {
   if (!text.trim()) return false;
   const request = (live) => streamChat({ text, turnId }, live);
-  return coachTurn(showUser, request, () => send(text, turnId, () => {}));
+  return coachTurn(showUser, request, () => send(text, turnId, () => {}), turnId);
 }
 
 // Nothing from the server for this long mid-turn means the connection died (it sends a keepalive every 5 s).
@@ -1720,16 +1935,28 @@ async function streamChat(body, live = {}) {
  * One exchange in the thread: the person's bubble, a typing indicator, then the reply and its
  * cards. Shared by typed messages, meal photos and repeat meals.
  */
-async function coachTurn(showUser, request, retry) {
+async function coachTurn(showUser, request, retry, turnId = null) {
   if (state.sending) {
     toast("Still answering your last message. One moment.");
     return false;
   }
   state.sending = true;
+  // What the screen showed before this exchange: the next refresh appends after it (see renderHistory).
+  state.liveBase = state.historySig != null ? { sig: state.historySig, len: state.historyLen ?? 0 } : null;
   state.historySig = null;
   $("send").disabled = true;
+  // Typed turns can be stopped: Stop takes the send button's place until the answer lands.
+  state.turnId = turnId;
+  $("send").hidden = !!turnId;
+  $("stop").hidden = !turnId;
+  $("stop").disabled = false;
   if ($("thread").querySelector(".empty")) $("thread").replaceChildren();
+  $("thread").querySelector(":scope > .quick-replies")?.remove();
+  showJump(0);
+  // Once the person writes, the "New" line has done its job for this visit.
+  state.newSince = null;
   showUser();
+  markTurn($("thread"), "coach");
   const progress = el("span", { class: "progress" });
   const typing = el("div", { class: "msg coach typing" }, el("i"), el("i"), el("i"), progress);
   $("thread").append(typing);
@@ -1759,15 +1986,32 @@ async function coachTurn(showUser, request, retry) {
   } catch (err) {
     typing.remove();
     bubble?.remove();
+    state.liveBase = null;
     const failed = failedTurn(err.message, err.code === "free_limit" ? null : retry);
     if (err.code === "free_limit") failed.append(" ", el("button", { class: "link", type: "button", onclick: () => openSheet("plans") }, "See plans"));
     // The server may still be answering: pick the reply up from history shortly.
     if (err.inProgress) setTimeout(() => { if (!state.sending) loadHistory(); }, 8000);
   } finally {
     state.sending = false;
+    state.turnId = null;
     $("send").disabled = false;
+    $("send").hidden = false;
+    $("stop").hidden = true;
   }
   return true;
+}
+
+/** Stop: the server ends the turn at its next step and the stream answers "Stopped.". */
+async function stopTurn() {
+  const turnId = state.turnId;
+  if (!turnId) return;
+  $("stop").disabled = true;
+  try {
+    await api("/chat/stop", { method: "POST", body: JSON.stringify({ turnId }) });
+  } catch (err) {
+    $("stop").disabled = false;
+    toast(err.message);
+  }
 }
 
 /** The error line under a message that got no reply, with a Retry that reuses the same turn id. */
@@ -1814,6 +2058,7 @@ async function sendPhoto(file) {
   const preview = URL.createObjectURL(file);
   await coachTurn(
     () => {
+      markTurn($("thread"), "user");
       $("thread").append(el("div", { class: "msg user photo" },
         el("img", { src: preview, alt: "Meal photo", onload: () => scrollThread() }),
         note ? el("span", {}, note) : null));
@@ -4267,7 +4512,53 @@ $("composer").addEventListener("submit", (e) => {
   send(text);
 });
 
+// While the app is open, new coach messages (nudges, check-ins) show without a reopen: a push
+// from the server refreshes at once, and a light check runs every minute as a fallback.
+const CHAT_POLL_MS = 60_000;
+setInterval(() => {
+  if (!document.hidden && signedIn() && !state.sending) loadHistory();
+}, CHAT_POLL_MS);
+navigator.serviceWorker?.addEventListener("message", (e) => {
+  const msg = e.data || {};
+  if (msg.type === "push" && signedIn() && !state.sending) loadHistory();
+  // A tapped notification while the app is open: go to its tab instead of reloading the page.
+  if (msg.type === "open") {
+    try { setView(viewFromHash(new URL(msg.url, location.href).hash)); } catch { setView("coach"); }
+    if (signedIn() && !state.sending) loadHistory();
+  }
+});
+
+$("thread").addEventListener("scroll", () => {
+  const t = $("thread");
+  if (nearBottom(t)) showJump(0);
+  if (!state.rendering && t.scrollTop < 40 && state.earlier?.isConnected) loadEarlier();
+}, { passive: true });
+
+$("jump").addEventListener("click", () => {
+  showJump(0);
+  const t = $("thread");
+  t.scrollTop = t.scrollHeight;
+});
+
+$("stop").addEventListener("click", stopTurn);
+
+// Long-press (or right-click) a message to copy its words.
+$("thread").addEventListener("contextmenu", (e) => {
+  const m = e.target.closest?.(".msg");
+  if (!m || m.classList.contains("typing") || m.classList.contains("photo")) return;
+  const text = [...m.childNodes].filter((n) => n.nodeName !== "BUTTON").map((n) => n.textContent).join("").trim();
+  if (!text || !navigator.clipboard) return;
+  e.preventDefault();
+  navigator.clipboard.writeText(text).then(() => {
+    m.classList.add("copied");
+    setTimeout(() => m.classList.remove("copied"), 900);
+    toast("Copied");
+  }).catch(() => {});
+});
+
 document.addEventListener("visibilitychange", () => {
+  // Leaving the app ends the visit: what arrives meanwhile shows under "New" on return.
+  if (document.hidden) state.newSince = undefined;
   if (document.hidden || !signedIn()) return;
   refresh();
   // The workout check posts into chat on its own, so pick that up when the app comes back.

@@ -56,7 +56,7 @@ import {
   startingPlan,
 } from "./onboarding.js";
 import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from "./events.js";
-import { loadChatHistory, runHealthChat, type ChatStreamEvent } from "./chat.js";
+import { loadChatHistory, runHealthChat, stopChatTurn, type ChatStreamEvent } from "./chat.js";
 import { alertOwnerCoachOffline, COACH_OFFLINE_MESSAGE, isCoachOffline } from "./coachOffline.js";
 import { hydrateCard, loadCardStates } from "./chatCards.js";
 import { isDateKey, listChatDays, localDayRange, tryDayPlan } from "./dailyChat.js";
@@ -603,6 +603,15 @@ export function createHealthAppRouter(): express.Router {
       const states = await loadCardStates(ctx.userProfileId, messages.flatMap((m) => m.cards));
       for (const m of messages) m.cards = m.cards.map((c) => hydrateCard(c, states));
       return { body: { messages, date, today } };
+    }),
+  );
+
+  /** Stop: the running turn ends at its next step and answers "Stopped." over its stream. */
+  router.post(
+    "/chat/stop",
+    route("chat-stop", async (ctx, req) => {
+      const { turnId } = z.object({ turnId: z.string().uuid() }).parse(req.body);
+      return { body: { stopped: stopChatTurn(ctx.userProfileId, turnId) } };
     }),
   );
 

@@ -183,8 +183,41 @@ body.composing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 
 
 .thread {
   flex: 1; overflow-y: auto; padding: 18px 4px 18px;
-  display: flex; flex-direction: column; gap: 18px; scroll-behavior: smooth; overscroll-behavior: contain; }
+  display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; overscroll-behavior: contain; }
 .thread > * { flex-shrink: 0; min-width: 0; }
+/* Turns: avatar, name and time open each one; air above separates them. */
+.turn { display: flex; align-items: center; gap: 8px; margin-top: 16px; font-size: 0.78rem; color: var(--faint); }
+.turn b { font-weight: 700; color: var(--muted); letter-spacing: 0.01em; }
+.turn time { font-variant-numeric: tabular-nums; }
+.turn.user { align-self: flex-end; }
+.turn.coach { align-self: flex-start; }
+.thread > .turn:first-child, .day-div + .turn, .new-div + .turn { margin-top: 0; }
+.ava { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; }
+.ava.coach {
+  border: 1.5px solid var(--accent); color: var(--text); background: var(--sunken);
+  font-weight: 900; font-size: 0.78rem; line-height: 1; }
+.ava.user { background: var(--raised); color: var(--muted); }
+.ava.user svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.turn-tag {
+  padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+/* Day and "New" lines: a centred label between hairlines. */
+.day-div, .new-div { display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+.thread > .day-div:first-child { margin-top: 0; }
+.day-div::before, .day-div::after, .new-div::before, .new-div::after { content: ""; flex: 1; height: 1px; background: var(--hair-strong); }
+.day-div span { padding: 4px 12px; border: 1px solid var(--hair-strong); border-radius: 999px; }
+.new-div { color: var(--accent); }
+/* Earlier days above today's thread. */
+.earlier, .thread-day { display: flex; flex-direction: column; gap: 10px; }
+.earlier-btn { align-self: center; font-size: 0.82rem; padding: 4px 10px; }
+.earlier-end { margin: 0; font-size: 0.8rem; }
+/* One-tap follow-ups under the evening recap. */
+.quick-replies { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 34px; }
+.quick-replies button {
+  padding: 8px 14px; border-radius: 999px; border: 1px solid var(--hair-strong); background: transparent;
+  color: var(--text); font-size: 0.88rem; }
+.msg.copied { opacity: 0.6; transition: opacity 0.2s; }
+.new-div::before, .new-div::after { background: color-mix(in srgb, var(--accent) 45%, transparent); }
 .empty { margin: auto 0; padding: 24px 4px; display: grid; gap: 10px; }
 .empty .display { font-size: 2rem; }
 .empty p { color: var(--muted); max-width: 32ch; margin: 0; }
@@ -198,7 +231,11 @@ body.composing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 
   align-self: flex-end; background: var(--raised); color: var(--text);
   padding: 10px 15px; border-radius: 20px 20px 6px 20px;
 }
-.msg.coach { align-self: flex-start; font-size: 1rem; line-height: 1.6; max-width: 92%; }
+.msg.coach { align-self: flex-start; font-size: 1rem; line-height: 1.6; max-width: 92%; padding-left: 34px; }
+/* What the coach sent on its own: a gold rule down the side so it reads apart from replies. */
+.msg.coach.nudge { margin-left: 12px; padding-left: 21px; border-left: 2px solid var(--accent); }
+.msg.coach.typing { padding-left: 34px; }
+.draft.from-nudge { border-color: color-mix(in srgb, var(--accent) 35%, var(--hair)); box-shadow: inset 3px 0 0 var(--accent); }
 .msg.coach a, .hint a.ext { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 .msg.err { color: var(--bad); }
 .msg.user.photo { padding: 4px; display: flex; flex-direction: column; gap: 6px; max-width: 64%; }
@@ -251,6 +288,16 @@ body.composing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 
 .send:disabled { opacity: 0.35; }
 .send svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .composer .icon-btn { color: var(--muted); }
+.send[hidden] { display: none !important; }
+.composer .send.stop:not([hidden]) { display: grid; }
+.send.stop svg { fill: currentColor; stroke: none; width: 14px; height: 14px; }
+/* "↓ 2 new": sits on the thread's bottom edge, just above the composer, never over it. */
+.jump-wrap { position: relative; height: 0; flex: none; }
+.jump {
+  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 2;
+  padding: 7px 14px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--hair-strong));
+  background: var(--surface); color: var(--accent); font-size: 0.82rem; font-weight: 700; box-shadow: var(--shadow); }
+.jump[hidden] { display: none; }
 
 /* Meal draft card (chat + sheet) */
 .draft { align-self: stretch; max-width: 100%; background: var(--surface); border: 1px solid var(--hair); border-radius: 20px; padding: 16px; animation: rise 0.25s ease both; }
@@ -391,6 +438,11 @@ body.composing .tabbar { display: none; }
 }
 .tab.active { color: var(--text); }
 .tab.active svg { background: var(--accent-soft); color: var(--accent); }
+/* A coach message arrived while you were on another tab. */
+.tab { position: relative; }
+.tab.has-new::after {
+  content: ""; position: absolute; top: 6px; left: calc(50% + 12px); width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--bg); }
 
 /* Sheet */
 .scrim { position: fixed; inset: 0; background: rgba(10, 6, 14, 0.6); z-index: 30; animation: fade 0.2s ease both; }
@@ -934,6 +986,7 @@ body.screen-open { overflow: hidden; }
 .draft.planmeal .pm-items { margin: 6px 0 4px; padding-left: 18px; }
 .draft.planmeal .pm-items li { margin: 2px 0; }
 .draft.planmeal .pm-sub, .draft.planadjust .pa-lines { color: var(--muted); font-size: 0.9rem; }
+.draft.planmeal .draft-actions .btn { font-size: 0.86rem; white-space: nowrap; padding: 10px 8px; }
 .draft.planadjust .pa-head { margin: 4px 0; }
 .draft.planadjust .pa-lines { margin: 4px 0; padding-left: 18px; }
 .draft .dp-sec .link, .draft.planadjust > .link { margin-top: 6px; }

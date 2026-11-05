@@ -73,6 +73,7 @@ import {
   historyWindow,
   mealDraftReply,
   runHealthChat,
+  stopChatTurn,
   TURN_BUDGET,
   withHistoryCacheMarker,
 } from "./chat.js";
@@ -408,6 +409,23 @@ describe("turn budgets", () => {
       ["assistant", "ok"],
     ]);
     expect(events.at(-1)).toMatchObject({ props: { outcome: "budget", budgetHit: "wall" } });
+  });
+
+  it("ends a turn the person stopped mid-answer with a plain 'Stopped.'", async () => {
+    const create = vi.fn((_body: unknown, req?: { signal?: AbortSignal }) => new Promise<Anthropic.Message>((_, reject) => {
+      req?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+    }));
+    const running = runHealthChat(ctx, "plan my week", { create, history: [], turnId: TURN });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(stopChatTurn(ctx.userProfileId, TURN)).toBe(true);
+    const reply = await running;
+    expect(reply).toMatchObject({ text: "Stopped.", cards: [], changed: false });
+    expect(saved.map((r) => [r.role, r.status])).toEqual([
+      ["user", "ok"],
+      ["assistant", "ok"],
+    ]);
+    expect(events.at(-1)).toMatchObject({ props: { outcome: "ok", stopped: true } });
+    expect(stopChatTurn(ctx.userProfileId, TURN)).toBe(false);
   });
 
   it("stops after the round cap and says so instead of 'Done.'", async () => {
