@@ -21,7 +21,7 @@ describe("buildTurnContext", () => {
     expect(ctx).toContain("About them: male, born 1996");
     expect(ctx).toContain("Goal: Weight 81.9kg → 74kg (on pace); deadline 2027-01-31, 89 days left.");
     expect(ctx).toContain("Targets: 1800 kcal, protein 120 g, 8000 steps, training days 1,3,5 (0=Sun).");
-    expect(ctx).toContain("Today: 610 kcal eaten (1190 left), 28 g protein, 4200 steps, 1 meal logged, training day.");
+    expect(ctx).toContain("Today: 610 kcal eaten (1190 left), 28 g protein, 4200 steps (synced from their phone; never ask them for steps), 1 meal logged, training day.");
     expect(ctx).toContain("Routine today: Morning walk done (Walking · 30 min); Gym pending (6:30 pm).");
     expect(ctx).toContain("This week: 3 of the last 7 days on track (goal 5); most missed: Protein (4 days).");
     expect(ctx).toContain("Last weigh-in: 81.9 kg on 2026-11-02, 22.8% body fat.");

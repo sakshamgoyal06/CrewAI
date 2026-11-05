@@ -49,6 +49,8 @@ export type HealthSnapshot = {
     calories: number;
     proteinG: number;
     steps: number;
+    /** Steps sync from the phone (Health Connect): the coach never asks for a step count. */
+    stepsFromPhone: boolean;
     walkMinutes: number | null;
     /** Last night's sleep and today's resting heart rate, when Health Connect has them. */
     sleepMinutes: number | null;
@@ -359,6 +361,7 @@ export async function buildHealthSnapshot(
       calories: Math.round(todayMeals?.calories ?? 0),
       proteinG: Math.round(todayMeals?.proteinG ?? 0),
       steps: todayActivity?.steps ?? 0,
+      stepsFromPhone: [...activity.values()].some((x) => x.source === "health_connect"),
       walkMinutes: todayActivity?.walkMinutes ?? null,
       sleepMinutes: todayActivity?.sleepMinutes ?? null,
       restingHr: todayActivity?.restingHr ?? null,

@@ -68,7 +68,8 @@ They have an outcome goal (target weight, body fat % or muscle mass by a deadlin
 - deadline_passed: say it plainly once, ask whether to set a new deadline or new target, and call set_goal when they answer.
 
 # Style
-1 to 4 sentences, plain text, no headings, no bullet lists, no emoji. One question at a time. kg and kcal. Indian food by its real names. Warm, never preachy.`;
+1 to 4 sentences, plain text, no headings, no bullet lists, no emoji. One question at a time. kg and kcal. Indian food by its real names. Warm, never preachy.
+Stay on what they asked: no food tip on a workout or routine answer unless they asked about food.`;
 
 export const LEGACY_SYSTEM_PROMPT = `You are Magnus, a personal health coach inside an app. You are talking with one person about their own health.
 
@@ -179,7 +180,7 @@ export function buildTurnContext(
   const room = t.calorieTarget != null ? t.calorieTarget - s.today.calories : null;
   const todayChecks = s.today.checks.map((c) => `${c.label}: ${c.met ? "met" : c.detail}`).join("; ");
   lines.push(
-    `Today: ${s.today.calories} kcal eaten${room != null ? ` (${room >= 0 ? `${room} left` : `${-room} over`})` : ""}, ${Math.round(s.today.proteinG)} g protein, ${s.today.steps} steps, ${s.meals.length} meal${s.meals.length === 1 ? "" : "s"} logged${s.today.isTrainingDay ? ", training day" : ""}. Checks: ${todayChecks}.`,
+    `Today: ${s.today.calories} kcal eaten${room != null ? ` (${room >= 0 ? `${room} left` : `${-room} over`})` : ""}, ${Math.round(s.today.proteinG)} g protein, ${s.today.steps} steps${s.today.stepsFromPhone ? " (synced from their phone; never ask them for steps)" : ""}, ${s.meals.length} meal${s.meals.length === 1 ? "" : "s"} logged${s.today.isTrainingDay ? ", training day" : ""}. Checks: ${todayChecks}.`,
   );
   if (s.today.routine.length) {
     lines.push(`Routine today: ${s.today.routine.map((r) => `${r.label} ${r.state}${r.detail ? ` (${r.detail})` : ""}`).join("; ")}.`);
