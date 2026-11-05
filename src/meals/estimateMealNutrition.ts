@@ -15,6 +15,12 @@ export type EstimateOptions = {
   onWebLookup?: () => void;
   /** Who is logging. Their unconfirmed web foods are used only for them (see foodStore.ts). */
   contributor?: FoodContributor;
+  /**
+   * "Can't find it? Search": the person already looked in the food list and it wasn't there, so
+   * go straight to the web instead of rebuilding the dish from the food table (which turns
+   * "boondi raita" back into plain raita). Falls back to the usual order only when the web is off.
+   */
+  webFirst?: boolean;
 };
 
 /**
@@ -30,7 +36,8 @@ export async function estimateMealNutrition(
     return unavailable("empty query");
   }
   // Web results are cached per person: one person's lookup is never served to another.
-  const shared = estimateCacheKey(q);
+  // A web-first lookup never reuses a food-table answer for the same words.
+  const shared = `${opts.webFirst ? "web|" : ""}${estimateCacheKey(q)}`;
   const own = `${opts.contributor?.id ?? "-"}|${shared}`;
   for (const k of [shared, own]) {
     const hit = estimateCache.get(k);
@@ -68,6 +75,14 @@ export function clearEstimateCache(): void {
 
 async function estimateUncached(q: string, opts: EstimateOptions): Promise<MealNutritionEstimate> {
   const webEnabled = mealLogWebResearchEnabled() && opts.webAllowed !== false;
+  if (opts.webFirst && webEnabled) {
+    opts.onWebLookup?.();
+    const web = await estimateViaWebResearch(q);
+    if (web && web.calories !== null) {
+      return web;
+    }
+    return (await outsideSources(q)) ?? unavailable("web lookup found nothing");
+  }
   // Built from ingredients in our food table; only unseen items go to the web (and get saved).
   let webTried = false;
   const fromDb = await estimateWithFoodDb(
@@ -94,6 +109,11 @@ async function estimateUncached(q: string, opts: EstimateOptions): Promise<MealN
     }
   }
 
+  return (await outsideSources(q)) ?? unavailable("no provider returned calories");
+}
+
+/** USDA FDC → CalorieNinjas → optional Claude JSON: the sources after our table and the web. */
+async function outsideSources(q: string): Promise<MealNutritionEstimate | null> {
   const usda = await estimateViaUsdaFdc(q);
   if (usda && usda.calories !== null) {
     return usda;
@@ -110,8 +130,7 @@ async function estimateUncached(q: string, opts: EstimateOptions): Promise<MealN
       return llm;
     }
   }
-
-  return unavailable("no provider returned calories");
+  return null;
 }
 
 function unavailable(reason: string): MealNutritionEstimate {
