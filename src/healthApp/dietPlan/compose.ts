@@ -196,6 +196,27 @@ function containsAny(key: string, words: string[]): boolean {
   return false;
 }
 
+/**
+ * The same restrictions for a food that isn't in the catalog (a web lookup added to a planned
+ * meal): only its name is known, so the diet's excluded foods and the foods to avoid are matched
+ * by word. Pure.
+ */
+export function nameRestrictionCheck(input: { diet: PersonDiet; avoid: string[] }): (name: string) => boolean {
+  const words = new Set(avoidWords(input.avoid));
+  const groups: string[] =
+    input.diet === "vegetarian" || input.diet === "jain" ? ["meat", "seafood", "egg"]
+    : input.diet === "vegan" ? ["meat", "seafood", "egg", "dairy"]
+    : input.diet === "eggetarian" ? ["meat", "seafood"]
+    : [];
+  for (const g of groups) AVOID_GROUPS[g]!.forEach((w) => words.add(w));
+  for (const w of ["mutton", "lamb", "pork", "beef", "bacon", "ham", "keema", "prawn", "shrimp", "crab", "tuna"]) if (groups.includes("meat")) words.add(w);
+  const list = [...words];
+  return (name) => {
+    const key = foodKeyFor(name);
+    return !list.some((w) => hasWord(key, w) || hasWord(key, `${w}s`));
+  };
+}
+
 // ---------- meat policy ----------
 
 /** Words that name a kind of meat or fish; a dish counts as that meat when its name or ingredients have the word. */

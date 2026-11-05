@@ -4238,7 +4238,8 @@ const SHEETS = {
     const input = el("input", { class: "field", name: "text", type: "search", required: true, minlength: "2", maxlength: "120", autocomplete: "off", value: b.seed || "", placeholder: "e.g. 1 plate chicken biryani, Amul lassi 200 ml", "aria-label": "Food to search" });
     const go = el("button", { class: "btn primary", type: "submit" }, "Search");
     const backToMeal = (added) => {
-      b.items.push(...added);
+      // The planned-meal editor takes the foods itself; "Make your meal" keeps them in its list.
+      if (b.onAdd) b.onAdd(added); else b.items.push(...added);
       toast(added.length === 1 ? `Added ${added[0].name}.` : `Added ${added.length} items.`);
       backSheet();
     };
@@ -4663,7 +4664,8 @@ async function ensureOnboarded() {
   return true;
 }
 
-initMeals({ api, el, svg, toast, logOwn: (slot, date) => { state.mealSlot = slot || null; state.mealDate = date && date !== (todayKey() || localToday()) ? date : null; openSheet("meal"); }, openSheet, closeSheet, backSheet, setView, fmt, todayKey: () => todayKey() || localToday(), refresh });
+initMeals({ api, el, svg, toast,
+  findFood: (q, onAdd) => { state.mealBuild = { items: [], seed: q, onAdd }; openSheet("mealFind"); }, logOwn: (slot, date) => { state.mealSlot = slot || null; state.mealDate = date && date !== (todayKey() || localToday()) ? date : null; openSheet("meal"); }, openSheet, closeSheet, backSheet, setView, fmt, todayKey: () => todayKey() || localToday(), refresh });
 
 async function start() {
   if (!(await ensureOnboarded())) return;

@@ -312,7 +312,16 @@ const editDirty = (e) => e.rows.length !== e.rows.filter((r) => r.keep != null).
   || e.rows.some((r, k) => r.keep !== k || r.qty !== r.base.qty)
   || e.rows.length !== (pickOf(e.date, e.slot)?.items.length ?? 0);
 
-const editBody = (e) => JSON.stringify({ items: e.rows.map((r) => (r.keep != null ? { keep: r.keep, qty: r.qty } : { servingId: r.servingId, qty: r.qty })) });
+const editBody = (e) => JSON.stringify({ items: e.rows.map((r) => (r.keep != null ? { keep: r.keep, qty: r.qty } : r.custom ? { custom: r.custom, qty: r.qty } : { servingId: r.servingId, qty: r.qty })) });
+
+/** A food from "Can't find it? Search" (web lookup or typed in) as an editor row with its own numbers. */
+function customRow(it) {
+  // Same characters the server accepts for a food name; anything else becomes a space.
+  const name = it.name.replace(/[^\p{L}\p{M}\p{N}\s.,'’&%/()+×½¼¾-]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Food";
+  const cap = (n, max) => Math.min(max, Math.max(0, Math.round((+n || 0) * 10) / 10));
+  const c = { name, kcal: Math.max(1, Math.round(cap(it.per.kcal, 3000))), proteinG: cap(it.per.p, 300), carbsG: cap(it.per.c, 500), fatG: cap(it.per.f, 300) };
+  return { custom: c, base: { name: c.name, text: c.name, qty: 1, servingId: null, kcal: c.kcal, proteinG: c.proteinG, carbsG: c.carbsG, fatG: c.fatG }, qty: 1 };
+}
 
 function totalsOf(rows) {
   return rows.reduce((a, r) => { const s = scaled(r.base, r.qty); return { kcal: a.kcal + s.kcal, proteinG: a.proteinG + s.proteinG, carbsG: a.carbsG + s.carbsG, fatG: a.fatG + s.fatG }; }, { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 });
@@ -436,9 +445,26 @@ export function mealScreen() {
     paintHits();
   };
   const hitsBox = el("ul", { class: "list food-hits" });
+  // Not in the food list (or only a near miss, like plain raita for boondi raita): look it up on the web.
+  const findOnWeb = () => {
+    const q = e.q.trim();
+    d.findFood(q, (added) => {
+      const room = 12 - e.rows.length;
+      e.rows.push(...added.slice(0, Math.max(0, room)).map(customRow));
+      e.adding = false;
+      e.q = "";
+    });
+  };
+  const findRow = (none) => {
+    const q = e.q.trim();
+    return el("li", { class: "find-more" },
+      none ? el("p", { class: "hint" }, `“${q}” isn't in the food list for your diet.`) : null,
+      el("button", { class: "btn block", type: "button", title: `Search the web for “${q}”`, onclick: findOnWeb }, none ? `Search the web for “${q}”` : `Not here? Search for “${q}”`));
+  };
   const paintHits = () => {
     if (!e.hits) { hitsBox.replaceChildren(el("li", { class: "hint" }, "Loading…")); return; }
-    if (!e.hits.length) { hitsBox.replaceChildren(el("li", { class: "hint" }, e.q ? "Nothing that fits your diet matches that. Try another name." : "Type a food to add.")); return; }
+    const canFind = e.q.trim().length >= 2;
+    if (!e.hits.length) { hitsBox.replaceChildren(canFind ? findRow(true) : el("li", { class: "hint" }, "Type a food to add.")); return; }
     hitsBox.replaceChildren(...e.hits.map((h) => el("li", {},
       el("span", { class: "fname" }, h.name),
       el("div", { class: "chips wrap" }, ...h.servings.map((s) => el("button", { class: "chip", type: "button", onclick: () => {
@@ -448,7 +474,7 @@ export function mealScreen() {
         paintAdd();
         repaint();
         d.toast(`Added ${s.item.text}.`);
-      } }, `${s.label} · ${fmt(s.item.kcal)} kcal`))))));
+      } }, `${s.label} · ${fmt(s.item.kcal)} kcal`))))), canFind ? findRow(false) : null);
   };
   const paintAdd = () => {
     if (!e.adding) {
@@ -459,7 +485,7 @@ export function mealScreen() {
     input.addEventListener("input", () => { e.q = input.value; clearTimeout(timer); timer = setTimeout(search, 250); });
     addBox.replaceChildren(
       el("div", { class: "row-input" }, input, el("button", { class: "btn small", type: "button", onclick: () => { e.adding = false; e.q = ""; paintAdd(); } }, "Done")),
-      el("p", { class: "hint" }, "Only foods that fit your diet and foods to avoid are shown."),
+      el("p", { class: "hint" }, "Only foods that fit your diet and foods to avoid are shown. Not listed? Search the web for it."),
       hitsBox);
     paintHits();
     setTimeout(() => input.focus(), 0);

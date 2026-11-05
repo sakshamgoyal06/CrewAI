@@ -109,7 +109,7 @@ svg { display: block; }
 .eyebrow { margin: 0 0 4px; font-size: 0.7rem; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .muted { color: var(--muted); }
 .meta { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
-.stack { display: grid; gap: 10px; }
+.stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 
 /* Controls */
 .field {
@@ -448,7 +448,7 @@ body.composing .tabbar { display: none; }
 .scrim { position: fixed; inset: 0; background: rgba(10, 6, 14, 0.6); z-index: 30; animation: fade 0.2s ease both; }
 .sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 31; max-width: 560px; margin: 0 auto;
-  max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain; background: var(--bg); border: 1px solid var(--hair-strong); border-bottom: 0;
+  max-height: 92dvh; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; background: var(--bg); border: 1px solid var(--hair-strong); border-bottom: 0;
   border-radius: 28px 28px 0 0; padding: 8px 20px calc(env(safe-area-inset-bottom) + 24px);
   animation: up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
@@ -969,7 +969,7 @@ body.screen-open { overflow: hidden; }
 .setup-meal .cook { display: grid; gap: 6px; font-size: 0.82rem; color: var(--muted); }
 .setup-meal .cook .seg { margin-bottom: 0; }
 .row-right { display: flex; align-items: center; gap: 10px; }
-.field.time { width: 7.5em; padding: 8px 10px; }
+.field.time { width: 9.5em; flex: none; padding: 8px 10px; }
 .row-input { display: flex; gap: 8px; }
 .row-input .field { flex: 1; }
 .weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
@@ -1146,6 +1146,9 @@ body.screen-open { overflow: hidden; }
 .food-hits .fname { font-size: 0.95rem; }
 .food-hits .chips.wrap { padding-bottom: 0; }
 .food-hits .chip { font-size: 0.8rem; padding: 6px 11px; }
+.food-hits .find-more p { margin: 0; overflow-wrap: anywhere; }
+/* The label carries the typed food, so a long one is cut with "…" inside the button. */
+.food-hits .find-more .btn { display: block; width: 100%; max-width: 100%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .supp-note { margin: 0; }
 .meal-actions { margin-top: 4px; }
 .plan-line-wrap { display: grid; gap: 8px; }
@@ -1177,12 +1180,12 @@ body.screen-open { overflow: hidden; }
   background: var(--raised); border: 1px solid var(--hair-strong); border-radius: 16px; box-shadow: var(--shadow);
   max-height: min(56vh, 420px); overflow-y: auto;
 }
-.mb-opt { display: grid; gap: 2px; padding: 11px 14px; cursor: pointer; border-top: 1px solid var(--hair); }
+.mb-opt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 11px 14px; cursor: pointer; border-top: 1px solid var(--hair); }
 .mb-opt:first-child { border-top: 0; }
 .mb-opt:active, .mb-opt:hover { background: var(--accent-soft); }
 .mb-opt .n { font-size: 0.95rem; }
 .mb-opt small { color: var(--muted); font-size: 0.8rem; }
-.mb-opt.more .n { color: var(--accent); font-weight: 600; }
+.mb-opt.more .n { color: var(--accent); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mb-opt.none { color: var(--muted); cursor: default; }
 .mb-list .section-label { margin-top: 4px; }
 .mb-items { list-style: none; margin: 0; padding: 0; }
@@ -1230,10 +1233,14 @@ body.screen-open { overflow: hidden; }
 /* Can't find it? Search: the web result to approve. */
 .find-form { display: flex; gap: 8px; }
 .find-form .field { flex: 1; min-width: 0; }
-.find-card { display: grid; gap: 10px; padding: 14px; border-radius: 18px; background: var(--surface); border: 1px solid var(--hair); }
+.find-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px; border-radius: 18px; background: var(--surface); border: 1px solid var(--hair); }
 .find-card > p { margin: 0; }
-.find-card .section-label { margin: 0; }
+.find-card .section-label, .sheet.screen .find-card .section-label { margin: 0; }
 .find-card.loading p { color: var(--text); }
+.find-card .items-ro { margin: 0; }
+.find-card .items-ro li { flex-direction: column; gap: 2px; }
+.find-card .items-ro li span:last-child { flex: initial; }
+.find-card .draft-why, .find-card .draft-note { margin: 0; }
 .find-total { margin: 0; font-size: 0.85rem; }
 .mm-edit summary { list-style: none; cursor: pointer; color: var(--accent); font-size: 0.9rem; }
 .mm-edit summary::-webkit-details-marker { display: none; }
