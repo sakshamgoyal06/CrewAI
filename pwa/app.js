@@ -86,7 +86,14 @@ async function api(path, options = {}) {
   let res;
   const started = performance.now();
   try {
-    res = await request(path, options);
+    try {
+      res = await request(path, options);
+    } catch (err) {
+      // A read right after the phone wakes often fails once while the network comes back: retry it quietly.
+      if ((options.method || "GET") !== "GET") throw err;
+      await new Promise((r) => setTimeout(r, 1200));
+      res = await request(path, options);
+    }
     // A Google session can expire between the check and the request: refresh once and retry.
     if (res.status === 401) res = await request(path, options, true);
   } catch (err) {
