@@ -38,7 +38,7 @@ const saveTrend = () => store.set(TREND_KEY, state.trend);
 
 const state = {
   snapshot: null, sending: false, sheetStack: [], overlayDepth: 0, ignorePop: false, historySig: null, trainingLoaded: false,
-  history: null, selectedDate: null, open: new Set(), trend: loadTrend(),
+  history: null, selectedDate: null, open: new Set(), trend: loadTrend(), openCards: new Set(),
 };
 // Last good responses, so a cold open paints instantly and the network only fills in changes.
 const CHAT_CACHE_KEY = "magnus-chat-cache";
@@ -1767,6 +1767,10 @@ async function loadEarlier() {
     const prevBehavior = t.style.scrollBehavior;
     t.style.scrollBehavior = "auto";
     earlierBox().querySelector(".earlier-btn").after(block);
+    // Once older days show, one tap folds them all away again.
+    if (!state.earlier.querySelector(".earlier-hide")) {
+      state.earlier.append(el("button", { class: "link quiet earlier-hide", type: "button", onclick: hideEarlier }, "Hide older messages"));
+    }
     t.scrollTop += t.scrollHeight - before;
     t.style.scrollBehavior = prevBehavior;
   } catch (err) {
@@ -1774,7 +1778,7 @@ async function loadEarlier() {
   } finally {
     state.loadingEarlier = false;
     const b = state.earlier?.querySelector(".earlier-btn");
-    if (b) b.textContent = "Earlier";
+    if (b) b.textContent = "Older messages";
   }
 }
 
@@ -1782,11 +1786,17 @@ async function loadEarlier() {
 function earlierBox() {
   if (!state.earlier) {
     state.earlier = el("div", { class: "earlier" },
-      el("button", { class: "link quiet earlier-btn", type: "button", onclick: () => loadEarlier() }, "Earlier"));
+      el("button", { class: "link quiet earlier-btn", type: "button", onclick: () => loadEarlier() }, "Older messages"));
   }
   const t = $("thread");
   if (state.earlier.parentNode !== t && !t.querySelector(":scope > .empty")) t.prepend(state.earlier);
   return state.earlier;
+}
+
+/** Folds the older days away again: back to just today under an "Older messages" button. */
+function hideEarlier() {
+  resetEarlier();
+  earlierBox();
 }
 
 /** A new local day: today's thread starts over and earlier days reload from the top. */
@@ -1796,6 +1806,54 @@ function resetEarlier() {
   state.earlierDays = [];
   state.earlierDone = false;
   state.pastDays = null;
+}
+
+/** Cards past this age fold to one line in chat (unless they're the newest message). */
+const CARD_FOLD_MS = 30 * 60_000;
+
+/** One line that says what a folded card is and where it stands. */
+function cardSummary(c) {
+  const kcal = (n) => (n != null ? `${fmt(n)} kcal` : null);
+  const join = (...parts) => parts.filter(Boolean).join(" · ");
+  switch (c.type) {
+    case "day_plan": return join(`${longDay(c.date)}'s plan`, ...(c.targets || []).slice(0, 2).map((t) => `${t.value} ${t.label}`));
+    case "meal_draft": {
+      const d = c.draft || {};
+      const total = d.totals?.calories ?? (d.items || []).reduce((a, i) => a + (+i.calories || 0), 0);
+      const done = c.saved || confirmedDrafts()[d.draftId];
+      return { text: join(SLOT_LABEL[d.slot] || "Meal", d.text, kcal(done?.calories ?? total)), open: !done };
+    }
+    case "activity_draft": {
+      const d = c.draft || {};
+      const done = c.saved || confirmedDrafts()[d.draftId];
+      return { text: join(d.label, `${d.durationMin} min`, kcal(done?.kcal ?? d.kcal)), open: !done };
+    }
+    case "plan_meal": return { text: join(`${SLOT_LABEL[c.slot] || "Meal"} on your plan`, (c.items || []).join(", "), kcal(c.kcal)), open: c.status === "planned" || !c.status, done: c.status === "logged" || c.status === "partial" };
+    case "plan_adjust": return join(c.kind === "day_close" ? "Day close" : "Rest of today", c.headline);
+    case "workout_check": return { text: join("Workout check", c.status === "missing" ? null : c.status === "skipped" ? "skipped" : "done"), open: c.status === "missing" };
+    case "routine_check": return { text: join(c.label, c.status === "missing" ? null : c.status), open: c.status === "missing" };
+    case "eating_out": return join(`Eating out · ${c.meal}`, c.reserveKcal != null ? `keep ${fmt(c.reserveKcal)} kcal` : null);
+    case "intervention": return { text: c.title, open: c.status === "open" };
+    case "rca": return c.hypothesis;
+    case "hevy_proposal": return "Hevy change";
+    case "calorie_review": return "Calorie review";
+    default: return "Card";
+  }
+}
+
+/** A card shown as its one-line summary; a tap swaps in the full card (and keeps it open). */
+function foldedCard(c, full, key, nudge) {
+  const s = cardSummary(c);
+  const { text, open, done } = typeof s === "string" ? { text: s } : s;
+  const row = el("button", { class: `card-row${nudge ? " from-nudge" : ""}`, type: "button", "aria-expanded": "false" },
+    el("span", { class: "card-row-text" }, text || "Card"),
+    open ? el("span", { class: "card-row-tag" }, "Needs answer") : done ? el("span", { class: "card-row-done" }, "✓") : null,
+    el("i", { class: "chev" }));
+  row.addEventListener("click", () => {
+    state.openCards.add(key);
+    row.replaceWith(full);
+  });
+  return row;
 }
 
 /** Cards that say everything their message says: the text bubble is skipped (the model still reads it). */
@@ -1819,11 +1877,19 @@ function renderMessages(messages, into, { retry = false, newSince = null, from =
     const label = nudge ? nudgeLabel(cards, m) : null;
     markTurn(into, who, at, { nudge: label });
     if (!cards.some((c) => CARD_ONLY.has(c.type))) addMessage(nudge ? "coach nudge" : who, m.content, into, { mark: false });
-    for (const c of cards) {
-      appendCard(c, into);
+    // Cards older than half an hour fold to one line unless they're the newest message;
+    // on earlier days every card folds. A tap opens the full card.
+    const fold = into.id !== "thread" || (i < messages.length - 1 && Date.now() - at.getTime() > CARD_FOLD_MS);
+    cards.forEach((c, ci) => {
+      const box = document.createDocumentFragment();
+      appendCard(c, box);
+      const node = box.firstElementChild;
+      if (!node) return;
       // A card the coach sent on its own carries the same gold edge as a nudge's text.
-      if (nudge) into.lastElementChild?.classList.add("from-nudge");
-    }
+      if (nudge) node.classList.add("from-nudge");
+      const key = `${m.createdAt}|${ci}`;
+      into.append(fold && !state.openCards.has(key) ? foldedCard(c, node, key, nudge) : node);
+    });
     if (retry && m.role === "user" && unanswered(m)) {
       failedTurn("That one didn't get a reply.", m.turnId ? () => send(m.content, m.turnId, () => {}) : null);
     }
@@ -4542,7 +4608,6 @@ navigator.serviceWorker?.addEventListener("message", (e) => {
 $("thread").addEventListener("scroll", () => {
   const t = $("thread");
   if (nearBottom(t)) showJump(0);
-  if (!state.rendering && t.scrollTop < 40 && state.earlier?.isConnected) loadEarlier();
 }, { passive: true });
 
 $("jump").addEventListener("click", () => {
