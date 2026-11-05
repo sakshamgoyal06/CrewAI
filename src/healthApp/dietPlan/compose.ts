@@ -74,6 +74,8 @@ export type MealOption = {
   popularity?: number;
   /** The main dish's cuisine ("south_indian"); the day's picks vary it (pick.ts). */
   cuisine?: string;
+  /** Made for weekdays with their own rule (a fast, "no onion on Tuesdays"): offered on those days only. 0 = Sunday. */
+  onlyDays?: number[];
 };
 
 /** The person's diet type as onboarding stores it. */
@@ -95,6 +97,8 @@ export type ComposeInput = {
   hidden?: string[];
   /** What they actually eat (familiarity.ts). Missing answers use a starter set for the diet. */
   habits?: Habits;
+  /** A fasting day (vrat): only food eaten on a fast (sabudana, kuttu, fruit, milk, potato, nuts). */
+  fasting?: boolean;
 };
 
 // ---------- catalog roles ----------
@@ -159,6 +163,23 @@ function buildTerms(): Map<string, Set<string>> {
 }
 let TERMS: Map<string, Set<string>> | null = null;
 const termsOf = (key: string): Set<string> => (TERMS ??= buildTerms()).get(key) ?? new Set([key]);
+
+/** Not eaten on a vrat: grains, pulses, onion and garlic, and anything made from them. */
+const NOT_FASTING = ["wheat", "atta", "maida", "refined flour", "flour", "bread", "pav", "rice", "poha", "semolina", "sooji", "rava", "oat", "oats", "noodle", "pasta", "vermicelli", "corn", "millet", "bajra", "jowar", "ragi", "quinoa", "dalia", "dal", "besan", "gram", "chana", "rajma", "moong", "urad", "toor", "masoor", "lentil", "soya", "tofu", "onion", "garlic", "egg", "chicken", "mutton", "fish", "prawn"];
+/** Flours and grains that are fasting food. */
+const FASTING_OK = ["buckwheat", "kuttu", "rajgira", "amaranth", "singhara", "water chestnut", "samak", "barnyard", "sabudana", "sago", "tapioca", "makhana", "fox nut"];
+
+/** True when a food is eaten on a fast: veg, and none of its ingredients is a grain, pulse, onion or garlic (fasting flours excepted). */
+export function fastingSafe(e: CatalogEntry): boolean {
+  if (e.diet !== "veg" && e.diet !== "vegan") return false;
+  for (const t of termsOf(e.key)) {
+    if (FASTING_OK.some((w) => t.includes(w))) continue;
+    // Cooking oil is fine whatever it's pressed from (rice bran, corn).
+    if (/\boil$/.test(t)) continue;
+    if (NOT_FASTING.some((w) => hasWord(t, w) || hasWord(t, `${w}s`))) return false;
+  }
+  return true;
+}
 
 /** Words in an avoid entry that stand for a whole group. */
 const AVOID_GROUPS: Record<string, string[]> = {
@@ -701,6 +722,7 @@ function candidates(input: ComposeInput, cat: Catalog, fam: FamiliarityContext =
     // (`ordered` comes with the food catalog's batch 3; read loosely so this works before and after it.)
     if ((e as { ordered?: boolean }).ordered) continue;
     if (containsAny(e.key, avoid)) continue;
+    if (input.fasting && !fastingSafe(e)) continue;
     if ((ONLY_IF_LOVED_CATEGORIES.has(e.category) || ONLY_IF_LOVED.has(e.key)) && !loved(e)) continue;
     // Allowed is not the same as eaten: dishes they never cook are out; specialities are only "try something new".
     const tier = tierOf(e, fam);
@@ -984,11 +1006,19 @@ function composeWithin(input: ComposeInput, cat: Catalog, pad: boolean): { every
 
   const policy = allowedMeats(input.dietNote ?? []);
   const fam = familiarityFor(input, cat);
+  // A usual meal keeps the same rules as everything else: diet, avoid list, fast, and the meats their words allow.
+  const usualByName = nameRestrictionCheck({ diet: input.diet, avoid: input.avoid });
+  const usualAvoid = avoidWords(input.avoid);
   const usualOk = (u: NonNullable<ComposeInput["usual"]>[number]) =>
-    !policy || u.items.every((i) => {
+    u.items.every((i) => {
+      const e = cat.byKey.get(foodKeyFor(i.name));
+      if (!e) return usualByName(i.name);
+      return dietAllows(input.diet, e) && !containsAny(e.key, usualAvoid) && (!input.fasting || fastingSafe(e));
+    }) &&
+    (!policy || u.items.every((i) => {
       const e = cat.byKey.get(foodKeyFor(i.name));
       return e ? meatPolicyAllows(e.key, e.diet, policy) : !MEAT_NAMES.some((m) => meatOfWord(m) && containsAny(foodKeyFor(i.name), [m, ...MEATS[m]!]) && !policy.meats.has(m));
-    });
+    }));
   const usualNotRuledOut = (u: NonNullable<ComposeInput["usual"]>[number]) =>
     u.items.every((i) => !fam.neverCook.has(cat.byKey.get(foodKeyFor(i.name))?.key ?? ""));
   for (const u of (input.usual ?? []).filter(usualOk).filter(usualNotRuledOut)) {

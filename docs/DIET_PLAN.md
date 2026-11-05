@@ -43,3 +43,17 @@ Checking plan quality without API spend: `npx tsx scripts/dietPlanSample.ts` (ne
 Settings:
 
 - `MAGNUS_PLAN_REVIEW=on` switches on the model review. Off by default: it adds about ₹15 per user a month (estimate) and needs Saksham's OK on cost first.
+
+## Food rules: every source reaches the plan
+
+`src/healthApp/dietPlan/rules.ts` gathers every food rule into one `PlanRules`. The planner (`build.ts`), the 3-day picks (`pick.ts` via `ensureDays`), swaps and the meal editor all read it, so a rebuild or "Make me a fresh plan" can't drop one.
+
+| Source | Where it lives | How the plan keeps it |
+| --- | --- | --- |
+| Diet, diet note, foods to avoid | `user_health_profile` (Settings, onboarding) | every day |
+| "Anything else to keep in mind" lines | `prefs.restrictions` | foods named after "no / avoid / allergic to …" are avoided; a line naming a weekday applies on that day only ("no non veg on Thursdays") |
+| Fasting days | `prefs.fastingDays` | fasting-safe options are made for those days (`compose.ts fastingSafe`); a meal with none is a "Fasting meal" allowance |
+| Temporary diet or foods ("veg only 20 days") | `prefs.dietOverride` (coach: `meal_plan diet_period`) | narrows the diet until `until`, then ends on its own |
+| Lasting food to avoid said in chat | coach: `meal_plan avoid` → food settings | every day |
+
+Rebuilds keep meals the person edited or swapped by hand unless they now break a rule; only "Make me a fresh plan" replaces them. Coach memory is for context only: a food rule must go through `meal_plan` to change the plan.

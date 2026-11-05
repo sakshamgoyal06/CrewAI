@@ -260,8 +260,24 @@ export async function isOnboarded(userProfileId: string): Promise<boolean> {
   return !!(hp.data as { onboarded_at?: string | null } | null)?.onboarded_at || (goal.data ?? []).length > 0;
 }
 
+const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Food rules from the plan setup and any temporary diet, for the coach (the planner enforces them too). */
+export function planRulesLine(prefs: unknown, today: string): string | null {
+  const p = (prefs ?? {}) as { restrictions?: string[]; fastingDays?: number[]; dietOverride?: { diet?: string | null; avoid?: string[]; until?: string } | null };
+  const out: string[] = [];
+  const o = p.dietOverride;
+  if (o?.until && o.until >= today) {
+    const what = [o.diet ? `${o.diet}${o.diet === "vegetarian" ? " (no egg)" : ""}` : null, o.avoid?.length ? `no ${o.avoid.join(", ")}` : null].filter(Boolean).join(", ");
+    if (what) out.push(`TEMPORARY RULE until ${o.until}: ${what}; never suggest anything that breaks it`);
+  }
+  if (p.restrictions?.length) out.push(`plan notes: ${p.restrictions.join("; ")}`);
+  if (p.fastingDays?.length) out.push(`fasts on ${p.fastingDays.map((x) => WD[x]).join(", ")}`);
+  return out.length ? out.join("; ") : null;
+}
+
 /** The person's own details, for the coach's prompt. Null before onboarding. */
-export async function loadPersonalDetails(userProfileId: string): Promise<string | null> {
+export async function loadPersonalDetails(userProfileId: string, today: string = localDateKey(new Date(), "UTC")): Promise<string | null> {
   const { data } = await supabase
     .from("user_health_profile")
     .select("sex, birth_year, height_cm, activity_level, diet, diet_note, food_avoid, goal_type")
@@ -269,6 +285,7 @@ export async function loadPersonalDetails(userProfileId: string): Promise<string
     .maybeSingle();
   const d = (data ?? null) as Record<string, unknown> | null;
   if (!d || !d.sex) return null;
+  const { data: dp } = await supabase.from("health_diet_preferences").select("prefs").eq("user_profile_id", userProfileId).maybeSingle();
   const parts = [
     `${String(d.sex)}`,
     d.birth_year ? `born ${String(d.birth_year)}` : null,
@@ -276,6 +293,7 @@ export async function loadPersonalDetails(userProfileId: string): Promise<string
     d.activity_level ? `${String(d.activity_level)} job/day` : null,
     foodPrefsLine(d),
     d.goal_type ? `goal type: ${String(d.goal_type)}` : null,
+    planRulesLine((dp as { prefs?: unknown } | null)?.prefs, today),
   ];
   return parts.filter(Boolean).join(", ");
 }
@@ -364,6 +382,12 @@ export async function loadFoodPrefs(userProfileId: string): Promise<FoodPrefs> {
     .maybeSingle();
   const d = (data ?? {}) as { diet?: FoodPrefs["diet"]; diet_note?: string | null; food_avoid?: string[] | null };
   return { diet: d.diet ?? null, dietNote: d.diet_note ?? null, foodAvoid: d.food_avoid ?? [] };
+}
+
+/** Replaces only the foods-to-avoid list (the coach adds an allergy or a food they won't eat). */
+export async function saveFoodAvoid(userProfileId: string, foodAvoid: string[]): Promise<void> {
+  const { error } = await supabase.from("user_health_profile").upsert({ user_profile_id: userProfileId, food_avoid: cleanAvoidList(foodAvoid) }, { onConflict: "user_profile_id" });
+  if (error) throw new Error(error.message);
 }
 
 export async function saveFoodPrefs(userProfileId: string, input: z.infer<typeof foodPrefsInput>): Promise<{ ok: boolean; error?: string }> {

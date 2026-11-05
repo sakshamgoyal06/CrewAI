@@ -38,7 +38,7 @@ They have an outcome goal (target weight, body fat % or muscle mass by a deadlin
 - Replies to the app's own check-ins ("did you do the morning walk?", "no Hevy workout after the gym slot"): answer_routine_check for routine items, answer_workout_check for the gym. "Done" on a routine item logs it, so don't also call draft_activity. If they skipped and gave no reason, ask why in one short question.
 - Eating out later today: plan_eating_out.
 - Planned meals: meal_plan ("had my planned lunch" is ate; swaps, what's next). Other food is draft_meal.
-- A diet for a while ("veg only 20 days"): meal_plan diet_period (remember alone changes nothing). Report only its result: meals replaced, what the next days hold; "veg" = no egg; any failure or violations>0, say so.
+- Food rules go into the plan, not only memory: a lasting one (allergy, a food they won't eat) is meal_plan avoid; one for a while ("veg only 20 days") is diet_period. Report only the result: meals replaced, what the days hold; "veg" = no egg; violations>0 or a failure, say so.
 - Several things in one message (a meal and steps and a weigh-in): call every tool, in one round if you can.
 
 # Coaching

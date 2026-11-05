@@ -1595,7 +1595,7 @@ async function answerTurn(
   const now = new Date(ctx.now ?? Date.now());
   // One snapshot per turn: it feeds the context block and answers get_status without a second load.
   const [details, memory, snapshot, loops] = await Promise.all([
-    deps.details !== undefined ? Promise.resolve(deps.details) : loadPersonalDetails(ctx.userProfileId).catch(() => null),
+    deps.details !== undefined ? Promise.resolve(deps.details) : loadPersonalDetails(ctx.userProfileId, localDateKey(ctx.now ?? new Date(), ctx.timezone)).catch(() => null),
     deps.memory !== undefined
       ? Promise.resolve(deps.memory)
       : Promise.resolve()

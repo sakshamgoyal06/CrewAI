@@ -62,7 +62,7 @@ export const dietPrefsInput = z.object({
   unavailable: z.array(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), optionId: z.string().min(1).max(40) })).max(60).default([]),
   /** A temporary stricter diet ("veg only for 20 days"): the plan follows it until `until`, then their own diet again. */
   dietOverride: z
-    .object({ diet: z.enum(PERIOD_DIETS), from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })
+    .object({ diet: z.enum(PERIOD_DIETS).nullable().optional(), avoid: z.array(z.string().trim().min(1).max(40)).max(20).optional(), from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })
     .nullable()
     .optional(),
 });

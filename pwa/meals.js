@@ -3,6 +3,8 @@
 
 const SLOT_NAME = { breakfast: "Breakfast", lunch: "Lunch", snack: "Snack", dinner: "Dinner" };
 const SLOT_ORDER = ["breakfast", "lunch", "snack", "dinner"];
+/** A fasting-day allowance (pick.ts): planned like a meal out, with its own words. */
+const isFast = (p) => p.kind === "eat_out" && /^Fasting meal/.test(p.title || "");
 const DEFAULT_SHARES = { breakfast: 25, lunch: 35, snack: 10, dinner: 30 };
 const DEFAULT_TIMES = { breakfast: "08:30", lunch: "13:30", snack: "17:00", dinner: "20:30" };
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -204,7 +206,7 @@ function mealCard(date, slot) {
   const eaten = isEaten(p);
   const items = itemsOf(p);
   const sub = p.kind === "eat_out"
-    ? "Eating out"
+    ? (isFast(p) ? "Fasting day" : "Eating out")
     : `${fmt(eaten ? sum(items, "kcal") : p.totals.kcal)} kcal · ${fmt(eaten ? sum(items, "proteinG") : p.totals.proteinG)} g protein`;
   return el("li", {},
     el("button", { class: `meal-card${eaten ? " eaten" : ""}`, type: "button", onclick: () => openMeal(date, slot) },
@@ -351,6 +353,14 @@ export function mealScreen() {
   const eaten = isEaten(p);
   const budget = budgetOf(slot);
 
+  if (p.kind === "eat_out" && isFast(p)) {
+    wrap.append(
+      el("p", {}, p.title),
+      el("p", { class: "hint" }, "Your fasting day. There's no fasting dish in your plan for this meal yet, so it's a calorie allowance."),
+      el("p", { class: "hint" }, "Sabudana, kuttu or rajgira, potato, fruit, makhana, milk, curd and nuts all work. Log what you had and the rest of the day adjusts."),
+      el("button", { class: "btn primary block", type: "button", onclick: () => d.logOwn(slot, date) }, "Log what I ate"));
+    return wrap;
+  }
   if (p.kind === "eat_out") {
     wrap.append(
       el("p", {}, p.title),

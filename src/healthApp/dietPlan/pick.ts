@@ -50,6 +50,10 @@ export function pickDays(input: {
   existing?: PriorPick[];
   /** "Ingredients unavailable today": skip these options on these dates only. */
   unavailable?: Array<{ date: string; optionId: string }>;
+  /** Whether an option keeps the rules for that date (weekday rules, fasting); default all. */
+  allowOn?: (date: string, o: MealOption) => boolean;
+  /** A fasting day: with no fasting option for a meal, it's planned as a fasting allowance. */
+  fastingOn?: (date: string) => boolean;
 }): DayPick[] {
   const pinned = new Set(input.pinned ?? []);
   const days = input.days ?? PLAN_DAYS;
@@ -64,10 +68,13 @@ export function pickDays(input: {
       if (o?.cuisine && o.cuisine !== "everyday") dayCuisines.add(o.cuisine);
     };
     for (const b of input.budgets) {
-      const list = input.options[b.slot] ?? [];
+      const wd = weekday(date);
+      const all = input.options[b.slot] ?? [];
+      // Options made for other weekdays' rules are off; the rest must keep this date's rules.
+      const list = all.filter((o) => (!o.onlyDays || o.onlyDays.includes(wd)) && (!input.allowOn || input.allowOn(date, o)));
       const prior = known.get(`${date}|${b.slot}`);
       if (prior) {
-        const o = list.find((x) => x.id === prior.optionId);
+        const o = all.find((x) => x.id === prior.optionId);
         note(o);
         if (o) out.push(pickOf(date, b.slot, o));
         else if (prior.optionId === null) out.push(eatOut(date, b));
@@ -80,7 +87,13 @@ export function pickDays(input: {
         history.push({ date, slot: b.slot, optionId: null });
         continue;
       }
-      if (!list.length) continue;
+      if (!list.length) {
+        if (input.fastingOn?.(date)) {
+          out.push(fastAllowance(date, b));
+          history.push({ date, slot: b.slot, optionId: null });
+        }
+        continue;
+      }
       const recent = new Set(
         history
           .filter((h) => h.slot === b.slot && h.optionId && dayNumber(h.date) < dayNumber(date) && dayNumber(h.date) >= dayNumber(date) - NO_REPEAT_DAYS)
@@ -112,6 +125,11 @@ function leastRecent(list: MealOption[], history: PriorPick[], slot: PlanSlot): 
   const last = new Map<string, number>();
   for (const h of history) if (h.slot === slot && h.optionId) last.set(h.optionId, Math.max(last.get(h.optionId) ?? -Infinity, dayNumber(h.date)));
   return [...list].sort((a, b) => (last.get(a.id) ?? -Infinity) - (last.get(b.id) ?? -Infinity))[0]!;
+}
+
+/** A fasting-day meal with no fasting option to plan: a calorie allowance, like a meal out. */
+function fastAllowance(date: string, b: MealBudget): DayPick {
+  return { ...eatOut(date, b), title: `Fasting meal (vrat food), about ${b.calories} kcal` };
 }
 
 function pickOf(date: string, slot: PlanSlot, o: MealOption): DayPick {

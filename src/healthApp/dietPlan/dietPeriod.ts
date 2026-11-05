@@ -6,7 +6,7 @@ import type { PersonDiet } from "./compose.js";
 
 export const PERIOD_DIETS = ["vegetarian", "eggetarian", "vegan", "jain"] as const;
 export type PeriodDiet = (typeof PERIOD_DIETS)[number];
-export type DietOverride = { diet: PeriodDiet; from: string; until: string };
+export type DietOverride = { diet?: PeriodDiet | null; avoid?: string[]; from: string; until: string };
 
 /** Higher = fewer foods allowed. */
 const STRICT: Record<string, number> = { non_vegetarian: 0, custom: 0, eggetarian: 1, vegetarian: 2, vegan: 3, jain: 3 };
@@ -19,6 +19,6 @@ export function activeOverride(o: DietOverride | null | undefined, today: string
 /** The diet the plan follows today: a temporary diet only ever narrows their own, never widens it. */
 export function effectiveDiet(base: PersonDiet, o: DietOverride | null | undefined, today: string): PersonDiet {
   const a = activeOverride(o, today);
-  if (!a) return base;
+  if (!a?.diet) return base;
   return (STRICT[a.diet] ?? 0) > (STRICT[base ?? "non_vegetarian"] ?? 0) ? a.diet : base;
 }

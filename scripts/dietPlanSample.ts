@@ -25,7 +25,7 @@ async function main() {
   const summary: string[] = [];
   for (const p of PERSONAS) {
     const prefs = p.prefs ? dietPrefsInput.parse({ ...defaultPrefs(), ...p.prefs }) : defaultPrefs();
-    const d = await buildPlanDraft({ calories: p.calories, proteinG: p.proteinG, weightKg: p.weightKg, prefs, diet: p.diet, avoid: p.avoid ?? [], usual: [], hidden: [] });
+    const d = await buildPlanDraft({ calories: p.calories, proteinG: p.proteinG, weightKg: p.weightKg, prefs, rules: { diet: p.diet, avoid: p.avoid ?? [], dietNote: [], days: {} }, usual: [], hidden: [] });
     const meals = d.budgets.map((b) => ({ budget: b, options: d.options[b.slot] ?? [] }));
     console.log(`\n===== ${p.name} =====`);
     const prot = (f: (xs: number[]) => number) => Math.round(meals.reduce((a, m) => a + (m.options.length ? f(m.options.map((o) => o.totals.proteinG)) : 0), 0));
