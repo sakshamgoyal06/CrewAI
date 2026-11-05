@@ -4288,7 +4288,10 @@ const SHEETS = {
         const n = (k) => Math.max(0, parseFloat(fd.get(k)) || 0);
         const name = String(fd.get("name") || "").trim().slice(0, 80);
         if (!name || n("kcal") <= 0) { toast("Add a name and its calories."); return; }
-        backToMeal([fixedItem({ name, calories: Math.round(n("kcal")), protein_g: n("p"), carbs_g: n("c"), fat_g: n("f") }, "own")]);
+        const item = { name, calories: Math.round(n("kcal")), protein_g: n("p"), carbs_g: n("c"), fat_g: n("f") };
+        // Saved to their foods so the search finds it next time (the server checks it's a food name).
+        api("/foods/mine", { method: "POST", body: JSON.stringify({ item }) }).catch(() => {});
+        backToMeal([fixedItem(item, "own")]);
       } },
         el("label", { class: "mm-field" }, "Name", el("input", { class: "field", name: "name", value: q, maxlength: "80", required: true })),
         el("div", { class: "grid2" }, f("kcal", "kcal"), f("Protein g", "p"), f("Carbs g", "c"), f("Fat g", "f")),
@@ -4314,6 +4317,8 @@ const SHEETS = {
         const tot = r.items.reduce((a, i) => ({ k: a.k + i.calories, p: a.p + i.protein_g }), { k: 0, p: 0 });
         const approve = el("button", { class: "btn primary block", type: "button", onclick: () => {
           b.webSource = r.source;
+          // Approved: saved to their foods, so the food search offers it next time.
+          if (r.lookupId) api("/foods/mine", { method: "POST", body: JSON.stringify({ lookupId: r.lookupId }) }).catch(() => {});
           backToMeal(r.items.map((i) => fixedItem(i, "web")));
         } }, r.items.length === 1 ? "Add to my meal" : `Add all ${r.items.length} to my meal`);
         out.replaceChildren(el("div", { class: "find-card" },

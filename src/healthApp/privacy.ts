@@ -19,6 +19,7 @@ export const EXPORT_TABLES = [
   "health_activity_samples",
   "health_activities",
   "health_water_logs",
+  "health_my_foods",
   "health_routine_items",
   "health_routine_checks",
   "health_chat_messages",
