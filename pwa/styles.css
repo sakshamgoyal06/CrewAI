@@ -1413,3 +1413,10 @@ body.screen-open { overflow: hidden; }
 .dm-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; padding: 0 4px; }
 .dm-foot b { color: var(--text); font-weight: 600; }
 .dm-body .row-actions .link { font-size: 0.85rem; font-weight: 600; padding: 4px 0; }
+/* A logged meal card's place in the plan: instead of a planned meal, or extra. */
+.plan-role { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--hair); font-size: 0.85rem; color: var(--muted); }
+.plan-role span { min-width: 0; overflow-wrap: anywhere; flex: 1 1 12rem; }
+.plan-role.instead span { color: var(--accent); }
+.plan-role.extra span { color: var(--warn); }
+.plan-role .link { font-size: 0.85rem; }
+.done-line.instead { color: var(--accent); }

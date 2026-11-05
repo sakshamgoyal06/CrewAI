@@ -1830,7 +1830,8 @@ function cardSummary(c) {
       const d = c.draft || {};
       const total = d.totals?.calories ?? (d.items || []).reduce((a, i) => a + (+i.calories || 0), 0);
       const done = c.saved || confirmedDrafts()[d.draftId];
-      return { text: join(SLOT_LABEL[d.slot] || "Meal", d.text, kcal(done?.calories ?? total)), open: !done };
+      const role = done?.plan?.role === "instead" ? "instead of plan" : done?.plan?.role === "extra" ? "extra" : null;
+      return { text: join(SLOT_LABEL[d.slot] || "Meal", d.text, kcal(done?.calories ?? total), role), open: !done };
     }
     case "activity_draft": {
       const d = c.draft || {};
@@ -2375,6 +2376,28 @@ function planMealCard(c) {
       el("p", { class: "pm-items" }, cur.items.join(" · ")),
       el("p", { class: "pm-sub" }, `${fmt(cur.kcal)} kcal · ${cur.proteinG} g protein`),
     ];
+    if (eaten(cur.status) && cur.offPlan) {
+      // They logged their own food for this meal: show what they had, and let them call it extra.
+      const extra = cur.loggedSessionId ? actLink("It was extra", async () => {
+        await api(`/meals/${encodeURIComponent(cur.loggedSessionId)}/plan`, { method: "POST", body: JSON.stringify({ role: "extra" }) });
+        c.status = "planned";
+        delete c.offPlan;
+        delete c.loggedSessionId;
+        toast(`${SLOT_LABEL[cur.slot]} is back on your plan.`);
+        loadPlan(true).catch(() => {});
+        refresh();
+        // The card's items were what they had; the plan's own food comes back on the next load.
+        render(c);
+      }) : null;
+      card.replaceChildren(
+        head,
+        el("p", { class: "pm-items" }, cur.items.join(" · ")),
+        el("p", { class: "pm-sub" }, `${fmt(cur.kcal)} kcal · ${cur.proteinG} g protein`),
+        el("div", { class: "done-row" },
+          el("div", { class: "done-line instead" }, `⇄ Had this instead of the planned ${SLOT_LABEL[cur.slot].toLowerCase()}`),
+          doneActions(extra)));
+      return;
+    }
     if (eaten(cur.status)) {
       // Edit changes what was logged for it; Undo takes it out of the day and the card asks again.
       const edit = cur.loggedSessionId ? actLink("Edit", () => editLoggedMeal(cur.loggedSessionId, (res, items) => {
@@ -4028,7 +4051,7 @@ function markDraft(id, status) {
  * the card; re-confirming the same card never double-logs.
  */
 function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
-  const status = saved ? { state: "logged", calories: saved.calories } : confirmedDrafts()[draft.draftId];
+  const status = saved ? { state: "logged", calories: saved.calories, ...(saved.plan ? { plan: saved.plan } : {}) } : confirmedDrafts()[draft.draftId];
   const card = el("div", { class: "draft" });
   if (status) return finishedCard(card, draft, status, { onDone, onEdit });
 
@@ -4093,7 +4116,7 @@ function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
         ...(draft.date ? { date: draft.date } : {}),
       };
       const r = await api("/meals/confirm", { method: "POST", body: JSON.stringify(body) });
-      const done = { state: "logged", calories: r.totals.calories };
+      const done = { state: "logged", calories: r.totals.calories, ...(r.plan ? { plan: { slot, canCount: false, ...r.plan } } : {}) };
       markDraft(draft.draftId, done);
       finishedCard(card, draft, done, { onDone, onEdit });
       toast(r.alreadySaved ? "Already logged." : `Logged ${fmt(r.totals.calories)} kcal.`);
@@ -4131,6 +4154,27 @@ function assumptionNote(text) {
 }
 
 /**
+ * Where a logged meal went in the day's plan, in the meal list's words: in place of a planned meal
+ * (with "It was extra"), or extra (with "Count it as my snack" while that meal is still planned).
+ */
+function planRoleLine(draft, status, onChange) {
+  const p = status.plan;
+  if (!p) return null;
+  const name = SLOT_LABEL[p.slot]?.toLowerCase() || "meal";
+  const set = (role) => actLink(role === "extra" ? "It was extra" : `Count as my ${name}`, async () => {
+    const r = await api(`/meals/${encodeURIComponent(draft.draftId)}/plan`, { method: "POST", body: JSON.stringify({ role }) });
+    const res = r.result || { role };
+    onChange({ ...status, plan: res.role === "instead" ? res : { role: "extra", slot: p.slot, canCount: true } });
+    toast(role === "extra" ? `Counted as extra. Your ${name} is back on the plan.` : `Counted as your ${name}.`);
+    refresh();
+    loadPlan(true).catch(() => {});
+  });
+  return p.role === "instead"
+    ? el("div", { class: "plan-role instead" }, el("span", {}, `⇄ Your ${name}, instead of ${p.insteadOf}`), set("extra"))
+    : el("div", { class: "plan-role extra" }, el("span", {}, "+ Extra, on top of your plan"), p.canCount ? set("instead") : null);
+}
+
+/**
  * A meal card once it's logged (Edit changes what was logged, Undo takes it out of the day and the
  * card can be confirmed again) or discarded (Undo brings the card back).
  */
@@ -4159,6 +4203,11 @@ function finishedCard(card, draft, status, opts = {}) {
         loadPlan(true).catch(() => {});
         reopen();
       }))));
+  const role = planRoleLine(draft, status, (next) => {
+    markDraft(draft.draftId, next);
+    finishedCard(card, draft, next, opts);
+  });
+  if (role) card.append(role);
   return card;
 }
 

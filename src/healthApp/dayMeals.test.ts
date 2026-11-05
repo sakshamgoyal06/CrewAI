@@ -139,3 +139,13 @@ describe("dayMealLines", () => {
     expect(lines[1]).toContain("portions changed");
   });
 });
+
+describe("meal card plan line", () => {
+  it("carries where a logged meal went onto its chat card", async () => {
+    const { emptyCardStates, hydrateCard } = await import("./chatCards.js");
+    const states = emptyCardStates();
+    states.mealsLogged.set("s1", { calories: 225, plan: { role: "instead", slot: "snack", insteadOf: "2 glasses double toned milk" } });
+    const card = hydrateCard({ type: "meal_draft", draft: { draftId: "s1" } } as never, states) as { saved?: { calories: number; plan?: { role: string } } };
+    expect(card.saved).toEqual({ calories: 225, plan: { role: "instead", slot: "snack", insteadOf: "2 glasses double toned milk" } });
+  });
+});

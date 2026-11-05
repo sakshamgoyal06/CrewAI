@@ -16,9 +16,14 @@ import { getInterventions } from "./interventions/store.js";
 import type { Intervention } from "./interventions/types.js";
 import { receiptLine } from "./logEdits.js";
 
+/** Where a logged meal sits in its day's plan (dayMeals.ts words): in place of a planned meal, or extra. */
+export type MealPlanLink =
+  | { role: "instead"; slot: string; insteadOf: string }
+  | { role: "extra"; slot: string; canCount: boolean };
+
 export type CardStates = {
   /** Meal draft id → calories logged under it (summed from meal_logs, deleted rows excluded). */
-  mealsLogged: Map<string, { calories: number }>;
+  mealsLogged: Map<string, { calories: number; plan?: MealPlanLink }>;
   /** Activity draft id → what was saved. */
   activitiesSaved: Map<string, { id: string; durationMin: number; kcal: number }>;
   /** Gym date → the current answer. */
@@ -32,6 +37,8 @@ export type CardStates = {
   planMeals: Map<string, string>;
   /** `${date}|${slot}` → the meal log session an eaten planned meal wrote (for Edit). */
   planSessions: Map<string, string>;
+  /** `${date}|${slot}` of planned meals replaced by food they logged themselves. */
+  planOffPlan: Set<string>;
   /** Planned meals as they stand now (after an edit, swap or resize), by date|slot. */
   planMealNow: Map<string, { title: string; items: string[]; kcal: number; proteinG: number }>;
   /** Every planned meal's current title (eating out included), by date|slot. */
@@ -39,7 +46,7 @@ export type CardStates = {
 };
 
 export function emptyCardStates(): CardStates {
-  return { mealsLogged: new Map(), activitiesSaved: new Map(), workoutChecks: new Map(), routineChecks: new Map(), proposals: new Map(), reports: new Map(), interventions: new Map(), planMeals: new Map(), planSessions: new Map(), planMealNow: new Map(), planTitles: new Map() };
+  return { mealsLogged: new Map(), activitiesSaved: new Map(), workoutChecks: new Map(), routineChecks: new Map(), proposals: new Map(), reports: new Map(), interventions: new Map(), planMeals: new Map(), planSessions: new Map(), planOffPlan: new Set(), planMealNow: new Map(), planTitles: new Map() };
 }
 
 /** Loads the live state behind every card in `cards`, in as few queries as the mix needs. */
@@ -71,7 +78,7 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
 
   const [meals, activities, workouts, routines, proposals, reports, interventions, planMeals] = await Promise.all([
     mealIds.length
-      ? supabase.from("meal_logs").select("meal_session_id, calories").eq("user_profile_id", userProfileId).in("meal_session_id", mealIds).is("deleted_at", null)
+      ? supabase.from("meal_logs").select("meal_session_id, calories, local_date, meal_slot").eq("user_profile_id", userProfileId).in("meal_session_id", mealIds).is("deleted_at", null)
       : Promise.resolve({ data: [] }),
     activityIds.length
       ? supabase.from("health_activities").select("id, draft_id, duration_min, kcal").eq("user_profile_id", userProfileId).in("draft_id", activityIds).is("deleted_at", null)
@@ -86,11 +93,13 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
       : Promise.resolve({ data: [] }),
   ]);
 
-  for (const r of (meals.data ?? []) as Array<{ meal_session_id: string; calories: number | null }>) {
+  const mealRows = (meals.data ?? []) as Array<{ meal_session_id: string; calories: number | null; local_date?: string | null; meal_slot?: string | null }>;
+  for (const r of mealRows) {
     const cur = states.mealsLogged.get(r.meal_session_id) ?? { calories: 0 };
     cur.calories += Number(r.calories) || 0;
     states.mealsLogged.set(r.meal_session_id, cur);
   }
+  await addPlanLinks(userProfileId, mealRows, states).catch(() => {});
   for (const r of (activities.data ?? []) as Array<{ id: string; draft_id: string; duration_min: number | null; kcal: number | null }>) {
     states.activitiesSaved.set(r.draft_id, { id: r.id, durationMin: Number(r.duration_min) || 0, kcal: Number(r.kcal) || 0 });
   }
@@ -101,6 +110,7 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
   states.interventions = interventions;
   for (const r of (planMeals.data ?? []) as Array<{ local_date: string; meal_slot: string; status: string; title?: string; metadata?: Record<string, unknown> | null }>) {
     states.planMeals.set(`${r.local_date}|${r.meal_slot}`, r.status);
+    if (r.metadata?.off_plan === true && r.metadata?.kind !== "eat_out") states.planOffPlan.add(`${r.local_date}|${r.meal_slot}`);
     if (typeof r.metadata?.logged_session_id === "string") states.planSessions.set(`${r.local_date}|${r.meal_slot}`, r.metadata.logged_session_id);
     if (r.title) states.planTitles.set(`${r.local_date}|${r.meal_slot}`, r.title);
     const items = (r.metadata?.eaten_items ?? r.metadata?.items) as Array<{ text: string; kcal: number; proteinG: number }> | undefined;
@@ -116,12 +126,47 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
   return states;
 }
 
+/**
+ * For each logged meal card: did it take a planned meal's place, or is it extra? (Same rule as the
+ * day list.) Only on days with a meal plan; without one a meal is just logged.
+ */
+async function addPlanLinks(userProfileId: string, rows: Array<{ meal_session_id: string; local_date?: string | null; meal_slot?: string | null }>, states: CardStates): Promise<void> {
+  const first = new Map<string, { date: string; slot: string }>();
+  for (const r of rows) if (r.local_date && !first.has(r.meal_session_id)) first.set(r.meal_session_id, { date: r.local_date, slot: r.meal_slot ?? "snack" });
+  const dates = [...new Set([...first.values()].map((x) => x.date))];
+  if (!dates.length) return;
+  const { data, error } = await supabase
+    .from("meal_plan_entries")
+    .select("local_date, meal_slot, status, title, metadata")
+    .eq("user_profile_id", userProfileId)
+    .eq("source", "plan")
+    .in("local_date", dates)
+    .in("status", ["planned", "logged", "partial"]);
+  if (error) return;
+  const entries = (data ?? []) as Array<{ local_date: string; meal_slot: string; status: string; title: string; metadata: Record<string, unknown> | null }>;
+  for (const [session, at] of first) {
+    const cur = states.mealsLogged.get(session);
+    if (!cur) continue;
+    const day = entries.filter((e) => e.local_date === at.date);
+    if (!day.length) continue;
+    const linked = day.find((e) => e.metadata?.logged_session_id === session);
+    if (linked) {
+      const items = (linked.metadata?.items as Array<{ text?: string }> | undefined) ?? [];
+      const planned = linked.metadata?.kind === "eat_out" ? linked.title : items.map((i) => i.text).filter(Boolean).join(", ") || linked.title;
+      cur.plan = { role: "instead", slot: linked.meal_slot, insteadOf: planned };
+      continue;
+    }
+    const slotEntry = day.find((e) => e.meal_slot === at.slot);
+    cur.plan = { role: "extra", slot: at.slot, canCount: !!slotEntry && slotEntry.status === "planned" && slotEntry.metadata?.kind !== "eat_out" };
+  }
+}
+
 /** The card with its live state folded in, as the app should render it. */
 export function hydrateCard(card: ChatCard, states: CardStates): ChatCard {
   switch (card.type) {
     case "meal_draft": {
       const logged = states.mealsLogged.get(card.draft.draftId);
-      return logged ? { ...card, saved: { calories: logged.calories } } : card;
+      return logged ? { ...card, saved: { calories: logged.calories, ...(logged.plan ? { plan: logged.plan } : {}) } } : card;
     }
     case "activity_draft": {
       const saved = states.activitiesSaved.get(card.draft.draftId);
@@ -153,7 +198,7 @@ export function hydrateCard(card: ChatCard, states: CardStates): ChatCard {
       // The card shows the meal as it is now, so an edit or swap made later shows up here too.
       const now = states.planMealNow.get(key);
       const session = states.planSessions.get(key);
-      return { ...card, ...(now ?? {}), ...(status ? { status } : {}), ...(session ? { loggedSessionId: session } : {}) };
+      return { ...card, ...(now ?? {}), ...(status ? { status } : {}), ...(session ? { loggedSessionId: session } : {}), ...(states.planOffPlan.has(key) ? { offPlan: true } : {}) };
     }
     case "plan_adjust": {
       // Tomorrow's meals as they stand now: a plan rebuilt after the card was posted (a new food
