@@ -43,6 +43,8 @@ export type PlanMealCard = {
   status?: string;
   /** Live: the meal log an eaten meal wrote, so the card can open it for editing. */
   loggedSessionId?: string;
+  /** Live: eaten by logging their own food instead of the planned meal; items are what they had. */
+  offPlan?: boolean;
 };
 
 export type PlanAdjustCard = {
@@ -191,7 +193,7 @@ export function rebalanceCard(date: string, eatenKcal: number, targetKcal: numbe
  * the log takes that meal's place ("instead"); otherwise it's an extra. Then, for today, the meals
  * still to come are resized. Returns where the log went, for the card that saved it.
  */
-export async function afterMealLogged(ctx: ActionContext, input: { date: string; slot: string; mealSessionId: string }, now = new Date()): Promise<MealPlanRole> {
+export async function afterMealLogged(ctx: ActionContext, input: { date: string; slot: string; mealSessionId: string }, now = new Date()): Promise<MealPlanRole | null> {
   const role = await linkToPlan(ctx.userProfileId, input.date, input.slot, input.mealSessionId);
   if (input.date === localDateKey(now, ctx.timezone)) {
     void rebalanceToday(ctx, now).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance after a meal failed"));
@@ -200,7 +202,7 @@ export async function afterMealLogged(ctx: ActionContext, input: { date: string;
 }
 
 /** Where a logged meal sits in the day's plan: in place of a planned meal, or extra. */
-export type MealPlanRole = { role: "instead"; slot: PlanSlot; insteadOf: string } | { role: "extra" };
+export type MealPlanRole = { role: "instead"; slot: PlanSlot; insteadOf: string } | { role: "extra"; slot?: string };
 
 const plannedText = (meta: Record<string, unknown> | null, title: string) => {
   const items = (meta?.items as Array<{ text?: string }> | undefined) ?? [];
@@ -208,9 +210,15 @@ const plannedText = (meta: Record<string, unknown> | null, title: string) => {
 };
 
 /** Links a logged meal to its slot's planned meal, if that meal hasn't been eaten yet. */
-async function linkToPlan(userProfileId: string, date: string, slotIn: string, mealSessionId: string): Promise<MealPlanRole> {
+async function hasPlanOn(userProfileId: string, date: string): Promise<boolean> {
+  const { data } = await supabase.from("meal_plan_entries").select("id").eq("user_profile_id", userProfileId).eq("local_date", date).eq("source", "plan").limit(1);
+  return !!data?.length;
+}
+
+/** null: that day has no meal plan, so the log is simply a meal. */
+async function linkToPlan(userProfileId: string, date: string, slotIn: string, mealSessionId: string): Promise<MealPlanRole | null> {
   const slot = (PLAN_SLOTS as readonly string[]).includes(slotIn) ? (slotIn as PlanSlot) : null;
-  if (!slot) return { role: "extra" };
+  if (!slot) return (await hasPlanOn(userProfileId, date)) ? { role: "extra" } : null;
   const { data } = await supabase
     .from("meal_plan_entries")
     .select("id, title, metadata")
@@ -221,7 +229,7 @@ async function linkToPlan(userProfileId: string, date: string, slotIn: string, m
     .eq("status", "planned")
     .limit(1);
   const entry = (data ?? [])[0] as { id: string; title: string; metadata: Record<string, unknown> | null } | undefined;
-  if (!entry) return { role: "extra" };
+  if (!entry) return (await hasPlanOn(userProfileId, date)) ? { role: "extra" } : null;
   // What they actually ate, so every screen and card shows it (not the planned food).
   const { data: logRows } = await supabase
     .from("meal_logs")
@@ -286,11 +294,12 @@ export async function setMealPlanRole(ctx: ActionContext, mealSessionId: string,
       if (error) throw new Error(error.message);
       await supabase.from("meal_logs").update({ plan_entry_id: null }).eq("user_profile_id", ctx.userProfileId).eq("meal_session_id", mealSessionId);
     }
-    result = { role: "extra" };
+    result = { role: "extra", slot: log.meal_slot ?? "snack" };
   } else {
     if (linked) return { ok: false, error: "already_counted" };
-    result = await linkToPlan(ctx.userProfileId, log.local_date, log.meal_slot ?? "", mealSessionId);
-    if (result.role === "extra") return { ok: false, error: "meal_not_planned" };
+    const linkedNow = await linkToPlan(ctx.userProfileId, log.local_date, log.meal_slot ?? "", mealSessionId);
+    if (!linkedNow || linkedNow.role === "extra") return { ok: false, error: "meal_not_planned" };
+    result = linkedNow;
   }
   if (log.local_date === localDateKey(now, ctx.timezone)) await rebalanceToday(ctx, now).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance failed"));
   return { ok: true, result };

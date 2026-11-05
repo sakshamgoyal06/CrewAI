@@ -4,6 +4,7 @@
  * nothing is logged as a meal until the user confirms it.
  */
 import { dayMealLines } from "./dayMeals.js";
+import type { MealPlanLink } from "./chatCards.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 
@@ -236,7 +237,7 @@ export type CalorieReviewCard = { type: "calorie_review"; review: Extract<Calori
 
 export type ActivityDraftCard = { type: "activity_draft"; draft: ActivityDraft; saved?: { id?: string; durationMin: number; kcal: number } };
 
-export type MealDraftCard = { type: "meal_draft"; draft: MealDraft; saved?: { calories: number } };
+export type MealDraftCard = { type: "meal_draft"; draft: MealDraft; saved?: { calories: number; plan?: MealPlanLink } };
 
 export type ChatCard =
   | MealDraftCard

@@ -194,7 +194,7 @@ export function buildDayMeals(input: {
         state: instead ? "instead" : "eaten",
         ...fromLog(log),
         ...(instead ? { insteadOf: plannedText(e) } : {}),
-        ...(e.status === "partial" ? { changed: true } : {}),
+        ...(e.status === "partial" && !instead ? { changed: true } : {}),
         time,
       });
       continue;

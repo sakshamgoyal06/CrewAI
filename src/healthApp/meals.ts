@@ -160,7 +160,7 @@ export type ConfirmMealResult =
       totals: MealTotals;
       alreadySaved: boolean;
       /** Where the log sits in the day's plan: in place of a planned meal, or extra (dietPlan/rhythm.ts). */
-      plan?: { role: "instead"; slot: string; insteadOf: string } | { role: "extra" };
+      plan?: { role: "instead"; slot: string; insteadOf: string } | { role: "extra"; slot?: string };
     }
   | { ok: false; error: string };
 
