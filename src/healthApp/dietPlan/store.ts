@@ -11,10 +11,12 @@ import { addDays } from "../../util/time.js";
 import type { ActionContext } from "../actions.js";
 import { getBodyCheckins } from "../bodyStore.js";
 import { FREQUENT_WINDOW_DAYS, loadLoggedSessions, rankUsualMeals } from "../frequentMeals.js";
-import { loadFoodPrefs } from "../onboarding.js";
+import { cleanAvoidList, loadFoodPrefs, saveFoodAvoid } from "../onboarding.js";
 import { loadHealthProfile } from "../snapshot.js";
 import { buildPlanDraft, type PlanDraft } from "./build.js";
-import { restrictionCheck, type MealOption, type PersonDiet } from "./compose.js";
+import { activeOverride, type DietOverride, type PeriodDiet } from "./dietPeriod.js";
+import { checkOn, isFastingDay, itemsAllowedOn, planRules, type PlanRules } from "./rules.js";
+import type { MealOption } from "./compose.js";
 import { catalog } from "../../meals/catalog/index.js";
 import { pickDays, PLAN_DAYS, type DayPick, type PriorPick } from "./pick.js";
 import { defaultPrefs, dietPrefsInput, type DietPrefs, type DietPrefsInput } from "./prefs.js";
@@ -45,7 +47,16 @@ export async function loadDietPrefs(userProfileId: string): Promise<PrefsRow> {
 }
 
 export async function saveDietPrefs(userProfileId: string, input: DietPrefsInput): Promise<DietPrefs> {
-  const prefs = dietPrefsInput.parse(input);
+  const parsed = dietPrefsInput.parse(input);
+  // The setup screen doesn't send these: saving its answers must not wipe a running temporary diet,
+  // what they never cook, or the skipped-today list.
+  const raw = (input ?? {}) as Record<string, unknown>;
+  const missing = ["dietOverride", "habits", "unavailable"].filter((k) => !(k in raw));
+  let prefs = parsed;
+  if (missing.length) {
+    const old = await loadDietPrefs(userProfileId);
+    prefs = { ...parsed, ...Object.fromEntries(missing.map((k) => [k, (old.prefs as Record<string, unknown>)[k]])) } as DietPrefs;
+  }
   const { error } = await supabase
     .from("health_diet_preferences")
     .upsert({ user_profile_id: userProfileId, prefs, updated_at: new Date().toISOString() }, { onConflict: "user_profile_id" });
@@ -143,7 +154,7 @@ export type ActivePlan = {
   createdAt: string;
 };
 
-type OptionMeta = { novelty: boolean; prep: MealOption["prep"] | null; proteinGroup: string | null };
+type OptionMeta = { novelty: boolean; prep: MealOption["prep"] | null; proteinGroup: string | null; onlyDays?: number[] };
 
 type OptionRow = {
   id: string;
@@ -185,6 +196,7 @@ export async function loadActivePlan(userProfileId: string): Promise<ActivePlan 
       ...(meta?.novelty ? { novelty: true } : {}),
       ...(meta?.prep ? { prep: meta.prep } : {}),
       ...(meta?.proteinGroup !== undefined ? { proteinGroup: meta.proteinGroup } : {}),
+      ...(meta?.onlyDays?.length ? { onlyDays: meta.onlyDays } : {}),
       origin: r.origin,
       prepMinutes: r.prep_minutes,
       ...(r.usual_key ? { usualKey: r.usual_key } : {}),
@@ -241,7 +253,7 @@ async function savePlan(userProfileId: string, draft: PlanDraft, reason: string,
       position,
       title: o.title,
       items: o.items,
-      totals: { ...o.totals, meta: { novelty: !!o.novelty, prep: o.prep ?? null, proteinGroup: o.proteinGroup ?? null } satisfies OptionMeta },
+      totals: { ...o.totals, meta: { novelty: !!o.novelty, prep: o.prep ?? null, proteinGroup: o.proteinGroup ?? null, ...(o.onlyDays?.length ? { onlyDays: o.onlyDays } : {}) } satisfies OptionMeta },
       origin: o.origin,
       usual_key: o.usualKey ?? null,
       prep_minutes: o.prepMinutes,
@@ -282,9 +294,7 @@ export async function rebuildPlan(ctx: ActionContext, reason: string, now = new 
     proteinG: proteinTarget,
     weightKg: weight,
     prefs: prefs.prefs,
-    diet: food.diet as PersonDiet,
-    avoid: food.foodAvoid,
-    dietNote: food.dietNote,
+    rules: planRules(food, prefs.prefs, today),
     usual,
     hidden: prefs.hidden,
     review: reviewEnabled() ? reviewPlan : undefined,
@@ -293,34 +303,33 @@ export async function rebuildPlan(ctx: ActionContext, reason: string, now = new 
   const plan = await savePlan(ctx.userProfileId, draft, reason, previous);
   // Today keeps its picks (the same-day rebalance handles today); later days are picked again.
   // After a diet or food-list change, or "Make me a fresh plan", today's meals not yet eaten go too, so nothing they ruled out stays.
-  await dropFuturePicks(ctx.userProfileId, reason === "food_prefs_changed" || reason === "rebuild" ? today : addDays(today, 1));
+  // "Make me a fresh plan" replaces every meal not yet eaten, hand edits too. A change to their food
+  // rules re-picks today's meals as well; meals they edited by hand stay unless they now break a rule
+  // (ensureDays drops those). Any other rebuild leaves today alone.
+  const fresh = reason === "rebuild";
+  const fromToday = fresh || reason === "food_prefs_changed" || reason === "diet_period" || reason === "diet_period_end";
+  await dropFuturePicks(ctx.userProfileId, fromToday ? today : addDays(today, 1), { keepCustom: !fresh });
   logger.info({ userProfileId: ctx.userProfileId, version: plan.version, reason, reviewed: !!draft.review }, "diet plan built");
   return { ok: true, plan };
 }
 
 /** What the person's food settings allow right now (diet, avoid list, diet note, plan restrictions). */
-async function allowsFor(userProfileId: string, restrictions: string[]) {
-  const food = await loadFoodPrefs(userProfileId);
-  return restrictionCheck({ diet: food.diet as PersonDiet, avoid: food.foodAvoid, dietNote: [food.dietNote ?? "", ...restrictions].filter(Boolean) });
+export async function rulesFor(userProfileId: string, prefs: DietPrefs, today: string): Promise<PlanRules> {
+  return planRules(await loadFoodPrefs(userProfileId), prefs, today);
 }
 
-/** True when every catalog food in the items passes. Usual-meal items outside the catalog can't be checked here. */
-function itemsAllowed(items: Array<{ key: string | null }> | undefined, allows: ReturnType<typeof restrictionCheck>): boolean {
-  const cat = catalog();
-  return (items ?? []).every((i) => {
-    const e = i.key ? cat.byKey.get(i.key) : undefined;
-    return !e || allows(e);
-  });
-}
+type ItemLike = Array<{ key: string | null; name: string }> | undefined;
 
 // ---------- the 3-day picks ----------
 
 type EntryRow = { id: string; local_date: string; meal_slot: PlanSlot; title: string; status: string; metadata: Record<string, unknown> | null; estimated_calories: number | null };
 
 /** Removes planned (not yet eaten) picks from `fromDate` on, or every future pick of one option. */
-async function dropFuturePicks(userProfileId: string, fromDate: string | null, opts: { optionId?: string } = {}): Promise<void> {
+async function dropFuturePicks(userProfileId: string, fromDate: string | null, opts: { optionId?: string; keepCustom?: boolean } = {}): Promise<void> {
   let q = supabase.from("meal_plan_entries").delete().eq("user_profile_id", userProfileId).eq("source", "plan").eq("status", "planned");
   if (fromDate) q = q.gte("local_date", fromDate);
+  // Meals they edited or swapped by hand stay through a rebuild (ensureDays drops any that now break their diet).
+  if (opts.keepCustom) q = q.or("metadata->>edited.is.null,metadata->>edited.neq.true").or("metadata->>swapped.is.null,metadata->>swapped.neq.true");
   if (opts.optionId) q = q.eq("metadata->>option_id", opts.optionId);
   const { error } = await q;
   if (error) logger.warn({ err: loggableError(error) }, "dropping planned meals failed");
@@ -372,8 +381,8 @@ export async function ensureDays(ctx: ActionContext, plan: ActivePlan, prefs: Pr
   const to = addDays(today, PLAN_DAYS - 1);
   let rows = await loadEntries(ctx.userProfileId, addDays(today, -2), to);
   // A planned meal made before they changed their diet or note, with food it now rules out, is picked again.
-  const allows = await allowsFor(ctx.userProfileId, prefs.prefs.restrictions);
-  const stale = rows.filter((r) => r.status === "planned" && !itemsAllowed(r.metadata?.items as Array<{ key: string | null }> | undefined, allows));
+  const rules = await rulesFor(ctx.userProfileId, prefs.prefs, today);
+  const stale = rows.filter((r) => r.status === "planned" && r.local_date >= today && r.metadata?.kind !== "eat_out" && !itemsAllowedOn(rules, r.local_date, r.metadata?.items as ItemLike));
   if (stale.length) {
     await supabase.from("meal_plan_entries").delete().in("id", stale.map((r) => r.id)).eq("status", "planned");
     const gone = new Set(stale.map((r) => r.id));
@@ -387,7 +396,13 @@ export async function ensureDays(ctx: ActionContext, plan: ActivePlan, prefs: Pr
     totals: r.metadata?.totals as PriorPick["totals"],
     kind: r.metadata?.kind as PriorPick["kind"],
   }));
-  const picks = pickDays({ start: today, budgets: plan.budgets, options: plan.options, prefs: prefs.prefs, pinned: prefs.pinned, existing, unavailable: prefs.prefs.unavailable });
+  const checks = new Map<string, ReturnType<typeof checkOn>>();
+  const picks = pickDays({
+    start: today, budgets: plan.budgets, options: plan.options, prefs: prefs.prefs, pinned: prefs.pinned, existing, unavailable: prefs.prefs.unavailable,
+    // Weekday rules ("no onion on Tuesdays") and fasting days: only options that keep them on that date.
+    allowOn: (date, o) => o.items.every((checks.get(date) ?? checks.set(date, checkOn(rules, date)).get(date)!)),
+    fastingOn: (date) => isFastingDay(rules, date),
+  });
   const byId = new Map(Object.values(plan.options).flat().map((o) => [o!.id, o!]));
   const known = new Map(rows.map((r) => [`${r.local_date}|${r.meal_slot}`, r]));
   const missing = picks.filter((p) => !known.has(`${p.date}|${p.slot}`));
@@ -428,7 +443,7 @@ export async function swapPick(ctx: ActionContext, date: string, slot: PlanSlot,
   const option = plan?.options[slot]?.find((o) => o.id === optionId);
   if (!plan || !option) return { ok: false, error: "option_not_found" };
   const prefsNow = await loadDietPrefs(ctx.userProfileId);
-  if (!itemsAllowed(option.items, await allowsFor(ctx.userProfileId, prefsNow.prefs.restrictions))) return { ok: false, error: "not_allowed" };
+  if (!itemsAllowedOn(await rulesFor(ctx.userProfileId, prefsNow.prefs, localDateKey(ctx.now ?? new Date(), ctx.timezone)), date, option.items)) return { ok: false, error: "not_allowed" };
   const { data, error } = await supabase
     .from("meal_plan_entries")
     .update({
@@ -484,6 +499,15 @@ export async function loadPlanView(ctx: ActionContext, now = new Date()): Promis
   const base = { today, prefs: prefs.prefs, marks: { pinned: prefs.pinned, liked: prefs.liked, hidden: prefs.hidden }, reviewOn: reviewEnabled(), needsTargets, supplements: { lines, takenToday, choices: supplementChoices() } };
   if (!prefs.saved || needsTargets) return { ok: true, setup: prefs.saved, plan: null, days: [], ...base };
   let plan = await loadActivePlan(ctx.userProfileId);
+  // A temporary diet that has run out: back to their own diet, with fresh options.
+  const ov = prefs.prefs.dietOverride;
+  if (ov && !activeOverride(ov, today)) {
+    prefs.prefs = await saveDietPrefs(ctx.userProfileId, { ...prefs.prefs, dietOverride: null });
+    const r = await rebuildPlan(ctx, "diet_period_end", now);
+    if (!r.ok) return r;
+    plan = r.plan;
+    base.prefs = prefs.prefs;
+  }
   // A plan built before supplements became meal items has none in its options: rebuild it once.
   const suppKeys = new Set(lines.map((l) => l.key));
   const missingSupps = !!plan && suppKeys.size > 0 && !Object.values(plan.options).flat().some((o) => o!.items.some((i) => i.key && suppKeys.has(i.key)));
@@ -494,8 +518,9 @@ export async function loadPlanView(ctx: ActionContext, now = new Date()): Promis
     plan = r.plan;
   }
   // Options saved in an older plan version may include food they have since ruled out: never show them.
-  const allows = await allowsFor(ctx.userProfileId, prefs.prefs.restrictions);
-  plan = { ...plan, options: Object.fromEntries(Object.entries(plan.options).map(([slot, list]) => [slot, (list ?? []).filter((o) => itemsAllowed(o.items, allows))])) as typeof plan.options };
+  const rules = await rulesFor(ctx.userProfileId, prefs.prefs, today);
+  const every = { ...rules, days: {} };
+  plan = { ...plan, options: Object.fromEntries(Object.entries(plan.options).map(([slot, list]) => [slot, (list ?? []).filter((o) => itemsAllowedOn(every, today, o.items))])) as typeof plan.options };
   const days = await ensureDays(ctx, plan, prefs, today);
   const { review: _r, ...rest } = plan;
   const dates = [...new Set(days.map((x) => x.date))];
@@ -505,6 +530,80 @@ export async function loadPlanView(ctx: ActionContext, now = new Date()): Promis
   const lists = dates.map((date) => buildDayMeals({ date, today, plan: days.filter((x) => x.date === date).map(plannedLite), logs: date === today ? logs : [], times }));
   const accounts = dates.map((date, k) => accountDay({ date, targets: plan!.targets, meals: days.filter((x) => x.date === date), supplements: [], list: lists[k] }));
   return { ok: true, setup: true, plan: rest, days, accounts, lists, ...base };
+}
+
+// ---------- food rules changed from chat ----------
+
+export type ReplanReport = {
+  /** Planned meals (today on) that broke the new rules and were picked again. */
+  replaced: Array<{ date: string; slot: PlanSlot; was: string; edited: boolean }>;
+  /** Meals they changed by hand that still fit, left as they are. */
+  keptEdits: Array<{ date: string; slot: PlanSlot }>;
+  /** The plan now, so the reply can say what is really there. */
+  meals: Array<{ date: string; slot: PlanSlot; meal: string; status: string }>;
+  /** Planned meals that still break a rule: expected 0. */
+  violations: number;
+};
+
+export type DietPeriodResult =
+  | ({ ok: true; diet: PeriodDiet | null; avoid: string[]; from: string | null; until: string | null } & ReplanReport)
+  | { ok: false; error: "no_setup" | "no_targets" | "bad_dates" | "nothing_to_change" };
+
+/**
+ * Applies a change to their food rules, rebuilds the plan and re-picks every planned meal from
+ * today that now breaks a rule (meals they edited that still fit stay), then reports the plan as
+ * it really is afterwards, so the coach can't describe a change that didn't happen.
+ */
+async function replanAfter(ctx: ActionContext, reason: string, now: Date): Promise<({ ok: true } & ReplanReport) | { ok: false; error: "no_setup" | "no_targets" }> {
+  const today = localDateKey(now, ctx.timezone);
+  const prefs = await loadDietPrefs(ctx.userProfileId);
+  const rules = await rulesFor(ctx.userProfileId, prefs.prefs, today);
+  const planned = (await loadEntries(ctx.userProfileId, today, addDays(today, PLAN_DAYS - 1))).filter((r) => r.status === "planned" && r.metadata?.kind !== "eat_out");
+  const custom = (r: EntryRow) => r.metadata?.edited === true || r.metadata?.swapped === true;
+  const bad = planned.filter((r) => !itemsAllowedOn(rules, r.local_date, r.metadata?.items as ItemLike));
+  const badIds = new Set(bad.map((r) => r.id));
+  const built = await rebuildPlan(ctx, reason, now);
+  if (!built.ok) return built;
+  const view = await loadPlanView(ctx, now);
+  if (!view.ok || !("days" in view)) return { ok: false, error: "no_setup" };
+  return {
+    ok: true,
+    replaced: bad.map((r) => ({ date: r.local_date, slot: r.meal_slot, was: r.title, edited: custom(r) })),
+    keptEdits: planned.filter((r) => !badIds.has(r.id) && custom(r)).map((r) => ({ date: r.local_date, slot: r.meal_slot })),
+    meals: view.days.map((d) => ({ date: d.date, slot: d.slot, meal: d.kind === "eat_out" ? d.title : d.items.map((i) => i.text).join(", "), status: d.status })),
+    violations: view.days.filter((d) => d.status === "planned" && d.kind !== "eat_out" && !itemsAllowedOn(rules, d.date, d.items)).length,
+  };
+}
+
+/**
+ * Starts a temporary diet and/or foods to avoid until a date ("veg only for 20 days", "no sweets
+ * this week"); with neither, ends the one running.
+ */
+export async function setDietPeriod(ctx: ActionContext, input: { diet: PeriodDiet | null; avoid?: string[]; until?: string }, now = new Date()): Promise<DietPeriodResult> {
+  const today = localDateKey(now, ctx.timezone);
+  const row = await loadDietPrefs(ctx.userProfileId);
+  if (!row.saved) return { ok: false, error: "no_setup" };
+  const avoid = cleanAvoidList(input.avoid ?? []).slice(0, 20);
+  const starting = !!input.diet || avoid.length > 0;
+  if (starting && (!input.until || input.until < today)) return { ok: false, error: "bad_dates" };
+  const override: DietOverride | null = starting ? { ...(input.diet ? { diet: input.diet } : {}), ...(avoid.length ? { avoid } : {}), from: today, until: input.until! } : null;
+  await saveDietPrefs(ctx.userProfileId, { ...row.prefs, dietOverride: override });
+  const r = await replanAfter(ctx, override ? "diet_period" : "diet_period_end", now);
+  if (!r.ok) return r;
+  return { ...r, diet: override?.diet ?? null, avoid, from: override?.from ?? null, until: override?.until ?? null };
+}
+
+export type AvoidResult = ({ ok: true; avoid: string[] } & ReplanReport) | { ok: false; error: "no_setup" | "no_targets" | "nothing_to_change" };
+
+/** Adds foods to (or takes them off) the lasting avoid list in their food settings, then re-plans. */
+export async function changeAvoidList(ctx: ActionContext, input: { add?: string[]; remove?: string[] }, now = new Date()): Promise<AvoidResult> {
+  const food = await loadFoodPrefs(ctx.userProfileId);
+  const drop = new Set((input.remove ?? []).map((x) => x.trim().toLowerCase()));
+  const next = cleanAvoidList([...food.foodAvoid.filter((x) => !drop.has(x.toLowerCase())), ...(input.add ?? [])]).slice(0, 40);
+  if (next.join("|") === food.foodAvoid.join("|")) return { ok: false, error: "nothing_to_change" };
+  await saveFoodAvoid(ctx.userProfileId, next);
+  const r = await replanAfter(ctx, "food_prefs_changed", now);
+  return r.ok ? { ...r, avoid: next } : r;
 }
 
 // ---------- swap feedback ----------
@@ -569,6 +668,8 @@ export async function mealFeedback(
   await saveDietPrefs(ctx.userProfileId, prefs);
   if (remembered) {
     // A dish they don't cook (or find too much work) leaves every option: rebuild, keeping eaten meals.
+    // This meal goes too, even if they had edited it: it's the one they just said no to.
+    await supabase.from("meal_plan_entries").delete().eq("id", entry.id).eq("status", "planned");
     const r = await rebuildPlan(ctx, "food_prefs_changed", now);
     if (!r.ok) return r;
   } else {

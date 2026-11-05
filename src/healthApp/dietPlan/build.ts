@@ -3,6 +3,7 @@
  * per meal, and (when switched on) the model review with one refill-and-recheck round.
  */
 import { composeOptions, type MealOption, type PersonDiet } from "./compose.js";
+import type { DayRule, PlanRules } from "./rules.js";
 import { prepLimit, shares, type DietPrefs } from "./prefs.js";
 import { budgetsAfterSupplements, supplementLines, supplementsBySlot, withSupplements } from "./supplements.js";
 import type { PlanReview, ReviewIssue } from "./review.js";
@@ -24,10 +25,8 @@ export async function buildPlanDraft(input: {
   proteinG: number;
   weightKg: number | null;
   prefs: DietPrefs;
-  diet: PersonDiet;
-  avoid: string[];
-  /** The person's own diet words (diet note); enforced like the avoid list. */
-  dietNote?: string | null;
+  /** Every food rule they gave, from every source (rules.ts). */
+  rules: PlanRules;
   usual: UsualForPlan;
   hidden: string[];
   /** Given only when the review is switched on. */
@@ -39,22 +38,48 @@ export async function buildPlanDraft(input: {
   const budgets = mealBudgets(targets, shares(input.prefs));
   const bySlot = supplementsBySlot(supplementLines(input.prefs.supplements), budgets.map((b) => b.slot));
   const foodBudgets = budgetsAfterSupplements(budgets, [...bySlot.values()].flat());
+  const r = input.rules;
+  // Weekdays with their own rule (a fast, "no onion on Tuesdays") get options made for them too.
+  const dayGroups = new Map<string, { rule: DayRule; days: number[] }>();
+  for (const [d, rule] of Object.entries(r.days)) {
+    if (!rule) continue;
+    const key = JSON.stringify([rule.fasting, rule.nonVeg, [...rule.avoid].sort()]);
+    (dayGroups.get(key) ?? dayGroups.set(key, { rule, days: [] }).get(key)!).days.push(Number(d));
+  }
   const compose = (extraHidden: string[]) => {
     const out: Partial<Record<PlanSlot, MealOption[]>> = {};
     for (const b of foodBudgets) {
       const supps = bySlot.get(b.slot) ?? [];
-      out[b.slot] = composeOptions({
+      const base = {
         budget: b,
-        diet: input.diet,
-        avoid: input.avoid,
-        dietNote: [input.dietNote ?? "", ...input.prefs.restrictions].filter(Boolean),
+        diet: r.diet,
+        avoid: r.avoid,
+        dietNote: r.dietNote,
         loves: input.prefs.loves,
         staples: input.prefs.staples,
         prepLimit: prepLimit(input.prefs, b.slot),
         usual: input.usual.filter((u) => u.slot === b.slot),
         hidden: [...input.hidden, ...extraHidden],
         habits: input.prefs.habits,
-      }).map((o) => withSupplements(o, supps));
+      };
+      const list = composeOptions(base).map((o) => withSupplements(o, supps));
+      const byId = new Map(list.map((o) => [o.id, o]));
+      for (const { rule, days } of dayGroups.values()) {
+        const narrow = (rule.nonVeg || rule.fasting) && !["vegetarian", "vegan", "jain"].includes(r.diet ?? "");
+        const diet: PersonDiet = narrow ? "vegetarian" : r.diet;
+        for (const o of composeOptions({ ...base, diet, avoid: [...r.avoid, ...rule.avoid], fasting: rule.fasting, usual: rule.fasting ? [] : base.usual }).map((x) => withSupplements(x, supps))) {
+          const had = byId.get(o.id);
+          // Already an every-day option: it fits these days as it is.
+          if (had && !had.onlyDays) continue;
+          if (had) had.onlyDays = [...new Set([...had.onlyDays!, ...days])].sort();
+          else {
+            const extra = { ...o, onlyDays: [...days].sort() };
+            byId.set(o.id, extra);
+            list.push(extra);
+          }
+        }
+      }
+      out[b.slot] = list;
     }
     return out;
   };
@@ -86,9 +111,9 @@ export async function buildPlanDraft(input: {
   return { targets, budgets, options, review: { ...first, issues } };
 }
 
-function personSummary(input: { diet: PersonDiet; avoid: string[]; prefs: DietPrefs }): string {
-  const parts = [`diet ${input.diet ?? "not set"}`];
-  if (input.avoid.length) parts.push(`avoids ${input.avoid.join(", ")}`);
+function personSummary(input: { rules: PlanRules; prefs: DietPrefs }): string {
+  const parts = [`diet ${input.rules.diet ?? "not set"}`];
+  if (input.rules.avoid.length) parts.push(`avoids ${input.rules.avoid.join(", ")}`);
   if (input.prefs.restrictions.length) parts.push(`restrictions: ${input.prefs.restrictions.join("; ")}`);
   parts.push(`staple ${input.prefs.staples}`);
   const supps = supplementLines(input.prefs.supplements);

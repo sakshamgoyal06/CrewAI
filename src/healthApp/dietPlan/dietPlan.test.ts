@@ -330,8 +330,7 @@ describe("review", () => {
       proteinG: 150,
       weightKg: 80,
       prefs: defaultPrefs(),
-      diet: "vegetarian",
-      avoid: [],
+      rules: { diet: "vegetarian", avoid: [], dietNote: [], days: {} },
       usual: [],
       hidden: [],
       review: async (meals) => {
@@ -348,7 +347,7 @@ describe("review", () => {
   });
 
   it("skips the model when the review is off", async () => {
-    const draft = await buildPlanDraft({ calories: 2100, proteinG: 150, weightKg: 80, prefs: defaultPrefs(), diet: null, avoid: [], usual: [], hidden: [] });
+    const draft = await buildPlanDraft({ calories: 2100, proteinG: 150, weightKg: 80, prefs: defaultPrefs(), rules: { diet: null, avoid: [], dietNote: [], days: {} }, usual: [], hidden: [] });
     expect(draft.review).toBeNull();
     expect(Object.keys(draft.options)).toEqual(["breakfast", "lunch", "snack", "dinner"]);
   });

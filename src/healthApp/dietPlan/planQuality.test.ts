@@ -190,7 +190,7 @@ describe("day accounting", () => {
 
   it("supplements are meal items: whey sits inside every breakfast option and the day adds up", async () => {
     const prefs = dietPrefsInput.parse({ ...defaultPrefs(), supplements: [{ name: "Whey protein", servings: 1, slot: null }] });
-    const d = await buildPlanDraft({ calories: 2232, proteinG: 165, weightKg: 80, prefs, diet: "non_vegetarian", avoid: [], dietNote: null, usual: [], hidden: [] } as never);
+    const d = await buildPlanDraft({ calories: 2232, proteinG: 165, weightKg: 80, prefs, rules: { diet: "non_vegetarian", avoid: [], dietNote: [], days: {} }, usual: [], hidden: [] } as never);
     // Budgets are whole meals again; the supplement is inside one of them, not beside them.
     expect(Math.abs(d.budgets.reduce((a, b) => a + b.calories, 0) - 2232)).toBeLessThanOrEqual(5);
     for (const o of d.options.breakfast!) {
