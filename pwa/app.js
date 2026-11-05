@@ -1563,8 +1563,77 @@ function setCoachText(node, text) {
   node.replaceChildren(linkified(text));
 }
 
-function addMessage(role, text, into = $("thread")) {
-  const node = el("div", { class: `msg ${role}` }, role === "coach" ? linkified(text) : text);
+// ---------- who said what, and when ----------
+
+const TZ_OPT = TIMEZONE ? { timeZone: TIMEZONE } : {};
+const TIME_FMT = new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", ...TZ_OPT });
+const DAY_KEY_FMT = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", ...TZ_OPT });
+const DAY_FMT = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", ...TZ_OPT });
+
+/** Same speaker within this long reads as one turn under one header. */
+const TURN_GAP_MS = 10 * 60_000;
+
+const timeLabel = (at) => TIME_FMT.format(at).replace(/\s?([ap])\.?m\.?$/i, (_, x) => ` ${x.toLowerCase()}m`);
+const dayKeyOf = (at) => DAY_KEY_FMT.format(at);
+
+/** "Today · Thu 5 Nov", "Yesterday · Wed 4 Nov", or just "Mon 2 Nov". */
+function dayLabel(at) {
+  const key = dayKeyOf(at);
+  const now = new Date();
+  const yest = new Date(now.getTime() - 86_400_000);
+  const pretty = DAY_FMT.format(at).replace(",", "");
+  if (key === dayKeyOf(now)) return `Today · ${pretty}`;
+  if (key === dayKeyOf(yest)) return `Yesterday · ${pretty}`;
+  return pretty;
+}
+
+/** What the coach posted on its own, named by what it carries. */
+const NUDGE_LABELS = {
+  day_plan: "Morning plan", plan_meal: "Meal reminder", plan_adjust: "Plan update", workout_check: "Workout check",
+  routine_check: "Check-in", intervention: "Check-in", rca: "Weekly insight", calorie_review: "Review",
+};
+function nudgeLabel(cards = []) {
+  for (const c of cards) if (NUDGE_LABELS[c.type]) return NUDGE_LABELS[c.type];
+  return "Nudge";
+}
+
+function avatar(who) {
+  if (who === "coach") return el("span", { class: "ava coach", "aria-hidden": "true" }, "M");
+  const icon = svg("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" });
+  icon.append(svg("circle", { cx: "12", cy: "8.5", r: "3.6" }), svg("path", { d: "M4.8 19.5c1.2-3.4 4-5 7.2-5s6 1.6 7.2 5" }));
+  return el("span", { class: "ava user", "aria-hidden": "true" }, icon);
+}
+
+/**
+ * Starts a new turn when the speaker changes, time has passed, or the coach posts on its own: a day
+ * divider for each new day, then avatar, name and time. Same-speaker follow-ups stay under one header.
+ */
+function markTurn(into, who, at = new Date(), { nudge = null } = {}) {
+  const marks = into.querySelectorAll(":scope > .turn, :scope > .day-div");
+  const last = marks[marks.length - 1];
+  const day = dayKeyOf(at);
+  if (last?.dataset.day !== day) {
+    into.append(el("div", { class: "day-div", role: "separator", "data-day": day }, el("span", {}, dayLabel(at))));
+  } else if (!nudge && last.classList.contains("turn") && last.dataset.who === who && !last.classList.contains("nudge")
+    && at.getTime() - Number(last.dataset.at) < TURN_GAP_MS) {
+    return;
+  }
+  const time = el("time", { datetime: at.toISOString() }, timeLabel(at));
+  const name = el("b", {}, who === "coach" ? "Magnus" : "You");
+  const head = el("div", { class: `turn ${who}${nudge ? " nudge" : ""}`, "data-who": who, "data-at": String(at.getTime()), "data-day": day },
+    ...(who === "coach"
+      ? [avatar("coach"), name, nudge ? el("span", { class: "turn-tag" }, nudge) : null, time]
+      : [time, name, avatar("user")]));
+  into.append(head);
+}
+
+// The newest message seen in Coach before this visit; later coach messages sit under a "New" line.
+const CHAT_SEEN_KEY = "magnus-chat-seen";
+
+function addMessage(role, text, into = $("thread"), { at, mark = true } = {}) {
+  const who = role.startsWith("user") ? "user" : "coach";
+  if (mark) markTurn(into, who, at ? new Date(at) : new Date());
+  const node = el("div", { class: `msg ${role}` }, who === "coach" && !role.includes("err") ? linkified(text) : text);
   into.append(node);
   if (into.id === "thread") scrollThread();
   return node;
@@ -1605,7 +1674,9 @@ function renderHistory(messages) {
   const prevBehavior = t.style.scrollBehavior;
   t.style.scrollBehavior = "auto";
   t.replaceChildren();
-  renderMessages(messages, t, { retry: true });
+  if (state.newSince === undefined) state.newSince = store.get(CHAT_SEEN_KEY, null);
+  renderMessages(messages, t, { retry: true, newSince: state.newSince });
+  store.set(CHAT_SEEN_KEY, messages.at(-1)?.createdAt ?? null);
   requestAnimationFrame(() => { t.scrollTop = t.scrollHeight; t.style.scrollBehavior = prevBehavior; });
 }
 
@@ -1613,15 +1684,26 @@ function renderHistory(messages) {
 const CARD_ONLY = new Set(["day_plan", "plan_meal", "plan_adjust"]);
 
 /** Messages and their cards into a thread. */
-function renderMessages(messages, into, { retry = false } = {}) {
-  for (const m of messages) {
+function renderMessages(messages, into, { retry = false, newSince = null } = {}) {
+  const userTurns = new Set(messages.filter((m) => m.role === "user" && m.turnId).map((m) => m.turnId));
+  let markedNew = false;
+  messages.forEach((m, i) => {
     const cards = m.cards || [];
-    if (!cards.some((c) => CARD_ONLY.has(c.type))) addMessage(m.role === "user" ? "user" : "coach", m.content, into);
+    const who = m.role === "user" ? "user" : "coach";
+    // A reply shares its question's turn id; anything else from the coach came on its own.
+    const nudge = who === "coach" && !(m.turnId ? userTurns.has(m.turnId) : messages[i - 1]?.role === "user");
+    const at = m.createdAt ? new Date(m.createdAt) : new Date();
+    if (newSince && !markedNew && who === "coach" && i > 0 && m.createdAt > newSince) {
+      markedNew = true;
+      into.append(el("div", { class: "new-div", role: "separator" }, el("span", {}, "New")));
+    }
+    markTurn(into, who, at, { nudge: nudge ? nudgeLabel(cards) : null });
+    if (!cards.some((c) => CARD_ONLY.has(c.type))) addMessage(nudge ? "coach nudge" : who, m.content, into, { mark: false });
     for (const c of cards) appendCard(c, into);
     if (retry && m.role === "user" && unanswered(m)) {
       failedTurn("That one didn't get a reply.", m.turnId ? () => send(m.content, m.turnId, () => {}) : null);
     }
-  }
+  });
 }
 
 /** The phone's own date, to tell whether the saved thread is still today's. */
@@ -1729,7 +1811,10 @@ async function coachTurn(showUser, request, retry) {
   state.historySig = null;
   $("send").disabled = true;
   if ($("thread").querySelector(".empty")) $("thread").replaceChildren();
+  // Once the person writes, the "New" line has done its job for this visit.
+  state.newSince = null;
   showUser();
+  markTurn($("thread"), "coach");
   const progress = el("span", { class: "progress" });
   const typing = el("div", { class: "msg coach typing" }, el("i"), el("i"), el("i"), progress);
   $("thread").append(typing);
@@ -1814,6 +1899,7 @@ async function sendPhoto(file) {
   const preview = URL.createObjectURL(file);
   await coachTurn(
     () => {
+      markTurn($("thread"), "user");
       $("thread").append(el("div", { class: "msg user photo" },
         el("img", { src: preview, alt: "Meal photo", onload: () => scrollThread() }),
         note ? el("span", {}, note) : null));
@@ -4268,6 +4354,8 @@ $("composer").addEventListener("submit", (e) => {
 });
 
 document.addEventListener("visibilitychange", () => {
+  // Leaving the app ends the visit: what arrives meanwhile shows under "New" on return.
+  if (document.hidden) state.newSince = undefined;
   if (document.hidden || !signedIn()) return;
   refresh();
   // The workout check posts into chat on its own, so pick that up when the app comes back.
