@@ -1699,7 +1699,11 @@ function renderMessages(messages, into, { retry = false, newSince = null } = {})
     }
     markTurn(into, who, at, { nudge: nudge ? nudgeLabel(cards) : null });
     if (!cards.some((c) => CARD_ONLY.has(c.type))) addMessage(nudge ? "coach nudge" : who, m.content, into, { mark: false });
-    for (const c of cards) appendCard(c, into);
+    for (const c of cards) {
+      appendCard(c, into);
+      // A card the coach sent on its own carries the same gold edge as a nudge's text.
+      if (nudge) into.lastElementChild?.classList.add("from-nudge");
+    }
     if (retry && m.role === "user" && unanswered(m)) {
       failedTurn("That one didn't get a reply.", m.turnId ? () => send(m.content, m.turnId, () => {}) : null);
     }

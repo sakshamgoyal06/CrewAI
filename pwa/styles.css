@@ -225,6 +225,7 @@ body.composing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 
 /* What the coach sent on its own: a gold rule down the side so it reads apart from replies. */
 .msg.coach.nudge { margin-left: 12px; padding-left: 21px; border-left: 2px solid var(--accent); }
 .msg.coach.typing { padding-left: 34px; }
+.draft.from-nudge { border-color: color-mix(in srgb, var(--accent) 35%, var(--hair)); box-shadow: inset 3px 0 0 var(--accent); }
 .msg.coach a, .hint a.ext { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 .msg.err { color: var(--bad); }
 .msg.user.photo { padding: 4px; display: flex; flex-direction: column; gap: 6px; max-width: 64%; }
@@ -960,6 +961,7 @@ body.screen-open { overflow: hidden; }
 .draft.planmeal .pm-items { margin: 6px 0 4px; padding-left: 18px; }
 .draft.planmeal .pm-items li { margin: 2px 0; }
 .draft.planmeal .pm-sub, .draft.planadjust .pa-lines { color: var(--muted); font-size: 0.9rem; }
+.draft.planmeal .draft-actions .btn { font-size: 0.86rem; white-space: nowrap; padding: 10px 8px; }
 .draft.planadjust .pa-head { margin: 4px 0; }
 .draft.planadjust .pa-lines { margin: 4px 0; padding-left: 18px; }
 .draft .dp-sec .link, .draft.planadjust > .link { margin-top: 6px; }
