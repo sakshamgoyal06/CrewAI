@@ -122,9 +122,20 @@ const COACHING_TOOLS = new Set([
 /** A message with a number, a food, a weigh-in or an activity in it almost always wants a log. */
 const LOGGABLE = /\d|\b(ate|had|eat|eating|khaya|khayi|khaaya|piya|drank|walk(ed)?|ran|run|swam|swim|cycled|gym|lifted|kg|kgs|steps|roti|rice|dal|chai|coffee|breakfast|lunch|dinner|snack|weigh(ed)?|weight)\b/i;
 
-/** True when the fast model answered a loggable message with words only: it should have called a tool. */
-export function fastModelDodgedLog(userText: string, toolCalls: number, round: number): boolean {
-  return round === 0 && toolCalls === 0 && LOGGABLE.test(userText);
+/** Words that make a message a meal. The prompt says to estimate a meal, never to ask for portions first. */
+const MEAL_WORDS = /\b(ate|had|eat|eating|khaya|khayi|khaaya|piya|drank|roti|rice|dal|chai|coffee|breakfast|lunch|dinner|snack)\b/i;
+
+/**
+ * True when the fast model answered a loggable message with words only: it should have called a
+ * tool. One exception follows the prompt: when an activity's amount is missing ("I did my evening
+ * walk"), the intended answer is one short question, so a reply that asks one is not a dodge. A
+ * meal, or a message that already carries a number, has what a log needs, so a question there
+ * still counts as a miss.
+ */
+export function fastModelDodgedLog(userText: string, toolCalls: number, round: number, replyText = ""): boolean {
+  if (round !== 0 || toolCalls !== 0 || !LOGGABLE.test(userText)) return false;
+  const askedForMissingAmount = replyText.includes("?") && !/\d/.test(userText) && !MEAL_WORDS.test(userText);
+  return !askedForMissingAmount;
 }
 
 /** How turns are split between the two models; `MAGNUS_HEALTH_CHAT_ROUTING`. */
@@ -1747,7 +1758,7 @@ async function answerTurn(
     if (response.stop_reason !== "tool_use" || toolUses.length === 0) {
       // The fast model answered a log with words only (no tool, so nothing saved): one retry on
       // the main model, which is far better at turning a plain sentence into the right tool call.
-      if (mayEscalate && model !== healthChatModel() && fastModelDodgedLog(userText, toolUses.length, round) && remaining() > budget.minCallMs) {
+      if (mayEscalate && model !== healthChatModel() && fastModelDodgedLog(userText, toolUses.length, round, text) && remaining() > budget.minCallMs) {
         stats.escalated = "no_tool";
         model = healthChatModel();
         messages.pop();

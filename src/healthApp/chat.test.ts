@@ -496,6 +496,27 @@ describe("escalation from the fast model", () => {
     expect(events.at(-1)).toMatchObject({ props: { escalated: "no_tool", models: ["claude-haiku-5-5", "claude-sonnet-5-5"] } });
   });
 
+  it("keeps a short question about a missing activity length on the fast model, as the prompt asks", async () => {
+    const create = vi.fn().mockResolvedValueOnce(text("Nice swap. How many minutes was the walk?"));
+    const reply = await runHealthChat(ctx, "I did my evening walk", { create, history: [], turnId: TURN });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(reply.text).toBe("Nice swap. How many minutes was the walk?");
+    expect(events.at(-1)?.props).not.toHaveProperty("escalated");
+  });
+
+  it("still retries a meal answered with a question: meals are estimated, never asked about first", async () => {
+    const create = vi.fn().mockResolvedValueOnce(text("How many cups?")).mockResolvedValueOnce(text("Logged."));
+    await runHealthChat(ctx, "I had chai for snacks", { create, history: [], turnId: TURN });
+    expect(create.mock.calls.map((c) => c[0].model)).toEqual(["claude-haiku-5-5", "claude-sonnet-5-5"]);
+    expect(events.at(-1)).toMatchObject({ props: { escalated: "no_tool" } });
+  });
+
+  it("still retries a question when the message already gave the number", async () => {
+    const create = vi.fn().mockResolvedValueOnce(text("Was that a brisk walk?")).mockResolvedValueOnce(text("Logged."));
+    await runHealthChat(ctx, "walked 30 mins", { create, history: [], turnId: TURN });
+    expect(create.mock.calls.map((c) => c[0].model)).toEqual(["claude-haiku-5-5", "claude-sonnet-5-5"]);
+  });
+
   it("does not retry a plain chat answer that has nothing to log", async () => {
     const create = vi.fn().mockResolvedValueOnce(text("Hello!"));
     await runHealthChat(ctx, "hello", { create, history: [], turnId: TURN });
