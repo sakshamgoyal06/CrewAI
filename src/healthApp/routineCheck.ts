@@ -10,7 +10,7 @@ import { z } from "zod";
 import { localDateKey } from "../nutrition/localDate.js";
 import type { ActionContext } from "./actions.js";
 import { trainingActivity, typicalTrainingBurn } from "./activities.js";
-import { FALLBACK_WEIGHT_KG, getActivities, latestWeightKg, saveActivity } from "./activityLog.js";
+import { deleteActivity, FALLBACK_WEIGHT_KG, getActivities, latestWeightKg, saveActivity } from "./activityLog.js";
 import { getActivityRange } from "./activityStore.js";
 import { zonedInstant } from "./gymSlot.js";
 import { getPrefs, sendNotification } from "./push.js";
@@ -25,11 +25,12 @@ import {
   routineInput,
   routineDayStatus,
   type DayEvidence,
+  type RoutineCheck,
   type RoutineItem,
   type RoutineItemStatus,
 } from "./routine.js";
 import { postCheck } from "./coachInbox.js";
-import { checksOn, getRoutineChecks, insertRoutineCheck, saveRoutine, saveRoutineCheckAnswer } from "./routineStore.js";
+import { checkKey, checksOn, getRoutineChecks, insertRoutineCheck, saveRoutine, saveRoutineCheckAnswer } from "./routineStore.js";
 import { loadHealthProfile, loadRecentWorkouts, weekdayOfDate } from "./snapshot.js";
 import { getWorkoutChecks, postCoachMessage } from "./workoutCheckStore.js";
 
@@ -50,7 +51,8 @@ const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const routineCheckAnswerInput = z.object({
   itemId: z.string().uuid(),
   date: DATE.optional(),
-  answer: z.enum(["done", "skipped", "recheck"]),
+  /** undo clears an answer (back to not answered) and removes the activity a "done" logged. */
+  answer: z.enum(["done", "skipped", "recheck", "undo"]),
   /** With done: minutes actually done, when different from the plan. */
   durationMin: z.coerce.number().int().min(1).max(600).optional(),
   reason: z.string().trim().max(300).optional(),
@@ -196,7 +198,15 @@ export async function runRoutineTick(
 export async function answerRoutineCheck(
   ctx: ActionContext,
   input: z.infer<typeof routineCheckAnswerInput>,
-  deps: { loadProfile: typeof loadHealthProfile; status: typeof routineStatusFor; save: typeof saveRoutineCheckAnswer; logActivity: typeof saveActivity } = {
+  deps: {
+    loadProfile: typeof loadHealthProfile;
+    status: typeof routineStatusFor;
+    save: typeof saveRoutineCheckAnswer;
+    logActivity: typeof saveActivity;
+    /** The stored answer for the item and day (undo and skipped read the activity it logged). */
+    current?: (userProfileId: string, itemId: string, date: string) => Promise<RoutineCheck | undefined>;
+    removeActivity?: typeof deleteActivity;
+  } = {
     loadProfile: (id) => loadHealthProfile(id),
     status: routineStatusFor,
     save: saveRoutineCheckAnswer,
@@ -220,6 +230,20 @@ export async function answerRoutineCheck(
     return saved.ok ? { ok: true, status: "done", label: item.label } : { ok: false, error: saved.error ?? "save_failed" };
   }
 
+  // Undo, or a "done" changed to skipped: the activity that "done" logged comes out too.
+  if (input.answer === "undo" || input.answer === "skipped") {
+    const current = deps.current ?? (async (uid: string, itemId: string, d: string) => (await getRoutineChecks(uid, d, d)).get(checkKey(itemId, d)));
+    const cur = await current(ctx.userProfileId, item.id, date);
+    if (cur?.activityId) {
+      const del = await (deps.removeActivity ?? deleteActivity)(ctx, cur.activityId);
+      if (!del.ok && del.error !== "activity_not_found") return { ok: false, error: del.error ?? "undo_failed" };
+    }
+  }
+  if (input.answer === "undo") {
+    const saved = await deps.save(ctx.userProfileId, { ...base, status: "missing", reason: null, activityId: null });
+    return saved.ok ? { ok: true, status: "missing", label: item.label } : { ok: false, error: saved.error ?? "save_failed" };
+  }
+
   if (input.answer === "skipped") {
     const saved = await deps.save(ctx.userProfileId, { ...base, status: "skipped", reason: input.reason?.trim() || null, activityId: null });
     return saved.ok ? { ok: true, status: "skipped", label: item.label } : { ok: false, error: saved.error ?? "save_failed" };
@@ -236,6 +260,8 @@ export async function answerRoutineCheck(
     intensity: "moderate",
     kcalSource: "estimate",
     source: "quick_add",
+    // A changed answer ("it was 20 minutes, not 40") rewrites the activity it logged before.
+    replace: input.durationMin !== undefined,
   });
   if (!logged.ok) return { ok: false, error: logged.error };
   const saved = await deps.save(ctx.userProfileId, { ...base, status: "done", reason: null, activityId: logged.activity.id });

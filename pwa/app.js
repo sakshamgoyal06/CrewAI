@@ -1837,6 +1837,7 @@ function cardSummary(c) {
     case "rca": return c.hypothesis;
     case "hevy_proposal": return "Hevy change";
     case "calorie_review": return "Calorie review";
+    case "log_receipt": return { text: join(receiptLine(c), c.state === "undone" ? "undone" : null), done: c.state !== "undone" };
     default: return "Card";
   }
 }
@@ -1897,7 +1898,9 @@ function renderMessages(messages, into, { retry = false, newSince = null, from =
       into.append(fold ? foldedCard(c, node, key, nudge, state.openCards.has(key)) : node);
     });
     if (retry && m.role === "user" && unanswered(m)) {
-      failedTurn("That one didn't get a reply.", m.turnId ? () => send(m.content, m.turnId, () => {}) : null);
+      // Name the message: the failed one may be far up the thread (it was hours ago, say).
+      const said = m.content.length > 40 ? `${m.content.slice(0, 40).trim()}…` : m.content;
+      failedTurn(`“${said}” didn't get a reply.`, m.turnId ? () => send(m.content, m.turnId, () => {}) : null);
     }
     if (label === "Evening recap" && i === messages.length - 1 && into.id === "thread") {
       const row = el("div", { class: "quick-replies" }, ...RECAP_REPLIES.map(([shown, text]) =>
@@ -2226,6 +2229,84 @@ function appendCard(c, into = $("thread")) {
   else if (c.type === "eating_out") into.append(eatingOutCard(c));
   else if (c.type === "plan_meal") into.append(planMealCard(c));
   else if (c.type === "plan_adjust") into.append(planAdjustCard(c));
+  else if (c.type === "log_receipt") into.append(logReceiptCard(c));
+}
+
+// ---------- what the coach logged straight from chat ----------
+
+const r1 = (v) => String(Math.round(v * 10) / 10);
+
+/** "Weigh-in · 72.4 kg · 18% body fat", "Steps · 8,000", "Water · 250 ml". */
+function receiptLine(c) {
+  const v = c.value || {};
+  switch (c.kind) {
+    case "weigh_in": return ["Weigh-in", v.weightKg != null ? `${r1(v.weightKg)} kg` : null, v.bodyFatPct != null ? `${r1(v.bodyFatPct)}% body fat` : null, v.muscleMassKg != null ? `${r1(v.muscleMassKg)} kg muscle` : null].filter(Boolean).join(" · ");
+    case "steps": return `Steps · ${fmt(v.steps)}`;
+    case "water": return `Water · ${fmt(v.ml)} ml`;
+    case "meal_removed": return `Removed meal · ${v.text}`;
+    case "activity_removed": return `Removed activity · ${v.label} · ${v.durationMin} min`;
+    default: return "Logged";
+  }
+}
+
+/**
+ * A one-line record of what the coach wrote without a card to confirm (a weigh-in, steps, water,
+ * a meal or activity it removed), with Undo, and Edit where there's a number to change.
+ */
+function logReceiptCard(c) {
+  const card = el("div", { class: "draft done receipt" });
+  const day = c.date === todayKey() ? "" : ` · ${shortDate(c.date)}`;
+  const removed = c.kind === "meal_removed" || c.kind === "activity_removed";
+
+  function render(cur) {
+    if (cur.state === "undone") {
+      card.replaceChildren(el("div", { class: "muted" }, `Undone · ${receiptLine(cur)}${day}`));
+      return;
+    }
+    const editable = cur.kind === "weigh_in" || cur.kind === "steps";
+    card.replaceChildren(el("div", { class: "done-row" },
+      el("div", { class: removed ? "muted" : "done-line" }, `${removed ? "" : "✓ "}${receiptLine(cur)}${day}${cur.state === "edited" ? " · changed" : ""}`),
+      doneActions(
+        editable ? actLink("Edit", async () => editForm(cur)) : null,
+        actLink("Undo", async () => {
+          const r = await api(`/chat/receipts/${cur.receiptId}/undo`, { method: "POST", body: "{}" });
+          Object.assign(c, r.card);
+          toast(removed ? "Put back." : "Undone.");
+          render(c);
+          refresh();
+        }))));
+  }
+
+  function editForm(cur) {
+    const field = (name, label, value, attrs = {}) => el("label", { class: "rc-field" }, el("small", {}, label),
+      el("input", { class: "field", name, type: "number", inputmode: "decimal", step: "any", value: value ?? "", ...attrs }));
+    const fields = cur.kind === "steps"
+      ? [field("steps", "Steps", cur.value.steps, { inputmode: "numeric", step: "1", min: "0", max: "200000" })]
+      : [field("weightKg", "Weight (kg)", cur.value.weightKg, { min: "25", max: "350" }),
+        field("bodyFatPct", "Body fat %", cur.value.bodyFatPct, { min: "2", max: "70" }),
+        field("muscleMassKg", "Muscle (kg)", cur.value.muscleMassKg, { min: "10", max: "150" })];
+    const save = el("button", { class: "btn primary small", type: "submit" }, "Save");
+    const form = el("form", { class: "rc-edit", onsubmit: async (e) => {
+      e.preventDefault();
+      const body = {};
+      for (const [k, v] of new FormData(form)) if (String(v).trim() !== "") body[k] = Number(v);
+      save.disabled = true;
+      try {
+        const r = await api(`/chat/receipts/${cur.receiptId}/edit`, { method: "POST", body: JSON.stringify(body) });
+        Object.assign(c, r.card);
+        toast("Updated.");
+        render(c);
+        refresh();
+      } catch (err) { save.disabled = false; toast(err.message); }
+    } },
+    el("div", { class: "rc-fields" }, ...fields),
+    el("div", { class: "draft-actions" }, el("button", { class: "btn small", type: "button", onclick: () => render(c) }, "Cancel"), save));
+    card.replaceChildren(el("p", { class: "eyebrow" }, `${cur.kind === "steps" ? "Steps" : "Weigh-in"}${day || " · today"}`), form);
+    form.querySelector("input")?.focus();
+  }
+
+  render(c);
+  return card;
 }
 
 // ---------- the day's plan ----------
@@ -2286,7 +2367,26 @@ function planMealCard(c) {
       el("p", { class: "pm-sub" }, `${fmt(cur.kcal)} kcal · ${cur.proteinG} g protein`),
     ];
     if (eaten(cur.status)) {
-      card.replaceChildren(...body, el("div", { class: "done-line" }, cur.status === "partial" ? "✓ Eaten, portions changed" : "✓ Eaten"));
+      // Edit changes what was logged for it; Undo takes it out of the day and the card asks again.
+      const edit = cur.loggedSessionId ? actLink("Edit", () => editLoggedMeal(cur.loggedSessionId, (res, items) => {
+        c.status = "partial";
+        c.items = items.map((i) => i.name);
+        c.kcal = res.totals.calories;
+        c.proteinG = Math.round(res.totals.protein_g);
+        render(c);
+      })) : null;
+      const undo = actLink("Undo", async () => {
+        await api(`/diet/days/${cur.date}/${cur.slot}/undo`, { method: "POST" });
+        c.status = "planned";
+        delete c.loggedSessionId;
+        toast("Taken out of today's log.");
+        render(c);
+        loadPlan(true).catch(() => {});
+        refresh();
+      });
+      card.replaceChildren(...body, el("div", { class: "done-row" },
+        el("div", { class: "done-line" }, cur.status === "partial" ? "✓ Eaten, portions changed" : "✓ Eaten"),
+        doneActions(edit, undo)));
       return;
     }
     const ate = el("button", { class: "btn primary small", type: "button" }, "Ate this");
@@ -2295,8 +2395,9 @@ function planMealCard(c) {
     ate.addEventListener("click", async () => {
       ate.disabled = change.disabled = true;
       try {
-        await api(`/diet/days/${cur.date}/${cur.slot}/eat`, { method: "POST", body: "{}" });
+        const r = await api(`/diet/days/${cur.date}/${cur.slot}/eat`, { method: "POST", body: "{}" });
         c.status = "logged";
+        if (r.mealSessionId) c.loggedSessionId = r.mealSessionId;
         render(c);
         toast("Logged as planned.");
         loadPlan(true).catch(() => {});
@@ -3600,7 +3701,17 @@ function workoutCheckCard(c) {
         cur.status === "found" ? "✓ Workout found in Hevy" :
         cur.status === "trained_unlogged" ? (cur.hevy === false ? "✓ Trained" : "✓ Trained, not logged in Hevy") :
         `Skipped${cur.reason ? ` · ${cur.reason}` : ""}`;
-      card.replaceChildren(el("div", { class: cur.status === "skipped" ? "muted" : "done-line" }, `${line} · ${day}`));
+      // An answer they gave (not one Hevy or a logged activity settled) can be changed or undone.
+      const theirs = cur.status === "skipped" || cur.status === "trained_unlogged";
+      card.replaceChildren(el("div", { class: "done-row" },
+        el("div", { class: cur.status === "skipped" ? "muted" : "done-line" }, `${line} · ${day}`),
+        theirs ? doneActions(
+          actLink("Change", async () => render({ ...cur, status: "missing", changing: cur })),
+          actLink("Undo", async () => {
+            await api("/workout-check", { method: "POST", body: JSON.stringify({ date: c.date, answer: "undo" }) });
+            render({ ...cur, status: "missing", reason: null, changing: null });
+            refresh();
+          })) : null));
       return;
     }
     const noHevy = cur.hevy === false;
@@ -3623,13 +3734,14 @@ function workoutCheckCard(c) {
         otherReason, el("button", { class: "btn", type: "submit" }, "Save")),
     );
     card.className = "draft check";
-    card.replaceChildren(
+    card.replaceChildren(...[
       el("p", { class: "eyebrow" }, `Workout check · ${day}`),
       el("p", { class: "check-line" }, noHevy ? `Did you train after your ${clock(cur.gymTime)} slot?` : `Nothing in Hevy after your ${clock(cur.gymTime)} slot.`),
       el("div", { class: "draft-actions" }, ...[recheck, trained].filter(Boolean)),
       el("div", { class: "draft-actions" }, other, skipped),
       reasons,
-    );
+      cur.changing ? el("div", { class: "row-actions" }, el("button", { class: "link", type: "button", onclick: () => render(cur.changing) }, "Keep my answer")) : null,
+    ].filter(Boolean));
   }
 
   render(c);
@@ -3677,8 +3789,17 @@ function routineCheckCard(c) {
   function render() {
     if (cur.status !== "missing") {
       card.className = "draft done";
-      card.replaceChildren(el("div", { class: cur.status === "skipped" ? "muted" : "done-line" },
-        cur.status === "done" ? `✓ ${cur.label} · ${cur.durationMin} min · ${day}` : `Skipped ${cur.label.toLowerCase()}${cur.reason ? ` · ${cur.reason}` : ""} · ${day}`));
+      const answered = cur;
+      card.replaceChildren(el("div", { class: "done-row" },
+        el("div", { class: cur.status === "skipped" ? "muted" : "done-line" },
+          cur.status === "done" ? `✓ ${cur.label} · ${cur.durationMin} min · ${day}` : `Skipped ${cur.label.toLowerCase()}${cur.reason ? ` · ${cur.reason}` : ""} · ${day}`),
+        doneActions(
+          actLink("Change", async () => { cur = { ...answered, status: "missing", changing: answered }; render(); }),
+          actLink("Undo", async () => {
+            await answerRoutine({ itemId: c.itemId, date: c.date, answer: "undo" });
+            cur = { ...answered, status: "missing", reason: null, changing: null };
+            render();
+          }))));
       return;
     }
     const done = el("button", { class: "btn primary", type: "button" }, `Done · ${cur.durationMin} min`);
@@ -3708,7 +3829,8 @@ function routineCheckCard(c) {
       el("div", { class: "draft-actions" }, other, skipped),
       shorter,
       reasons,
-      el("div", { class: "row-actions" }, instead),
+      el("div", { class: "row-actions" }, instead,
+        cur.changing ? el("button", { class: "link", type: "button", onclick: () => { cur = cur.changing; render(); } }, "Keep my answer") : null),
     );
   }
 
@@ -3719,16 +3841,33 @@ function routineCheckCard(c) {
 // ---------- activity draft card ----------
 
 /** An activity's estimate: change minutes or effort and it re-estimates; Save logs it once. */
-function activityDraftCard(draft, { onDone, saved } = {}) {
+function activityDraftCard(draft, { onDone, saved, editing } = {}) {
   // The server knows what was saved (on any phone); this phone also remembers a discard.
-  const status = saved ? { state: "logged", durationMin: saved.durationMin, kcal: saved.kcal } : confirmedDrafts()[draft.draftId];
+  const status = editing ? null : saved ? { state: "logged", id: saved.id, durationMin: saved.durationMin, kcal: saved.kcal } : confirmedDrafts()[draft.draftId];
   const card = el("div", { class: "draft" });
   const label = draft.label;
+  const reopen = (opts = {}) => card.replaceWith(activityDraftCard(opts.draft || draft, { onDone, ...opts }));
   const finish = (st) => {
     card.className = "draft done";
-    card.replaceChildren(st.state === "logged"
-      ? el("div", { class: "done-line" }, `✓ Saved · ${label} · ${st.durationMin ?? draft.durationMin} min · ${fmt(st.kcal)} kcal`)
-      : el("div", { class: "muted" }, `Discarded · ${label}`));
+    if (st.state !== "logged") {
+      card.replaceChildren(el("div", { class: "done-row" },
+        el("div", { class: "muted" }, `Discarded · ${label}`),
+        doneActions(actLink("Undo", async () => { unmarkDraft(draft.draftId); reopen(); }))));
+      return card;
+    }
+    const mins = st.durationMin ?? draft.durationMin;
+    card.replaceChildren(el("div", { class: "done-row" },
+      el("div", { class: "done-line" }, `✓ Saved · ${label} · ${mins} min · ${fmt(st.kcal)} kcal`),
+      doneActions(
+        // Edit opens the card again with what was saved; its Save writes over the same activity.
+        actLink("Edit", async () => reopen({ draft: { ...draft, durationMin: mins, kcal: st.kcal }, editing: st })),
+        st.id ? actLink("Undo", async () => {
+          await api(`/activities/${st.id}`, { method: "DELETE" });
+          unmarkDraft(draft.draftId);
+          toast("Taken out of your activities.");
+          refresh();
+          reopen();
+        }) : null)));
     return card;
   };
   if (status) return finish(status);
@@ -3739,7 +3878,8 @@ function activityDraftCard(draft, { onDone, saved } = {}) {
   const note = el("p", { class: "training-note" });
   const mins = el("input", { class: "field", type: "number", inputmode: "numeric", min: "1", max: "1440", value: String(draft.durationMin), "aria-label": "Minutes" });
   const seg = el("div", { class: "seg", role: "radiogroup", "aria-label": "How hard" });
-  const save = el("button", { class: "btn primary", type: "button" }, draft.duplicateOf ? "Save as separate session" : "Save");
+  const saveLabel = editing ? "Save changes" : draft.duplicateOf ? "Save as separate session" : "Save";
+  const save = el("button", { class: "btn primary", type: "button" }, saveLabel);
 
   function paint() {
     kcal.replaceChildren(fmt(cur.kcal), el("small", {}, "kcal"));
@@ -3788,24 +3928,27 @@ function activityDraftCard(draft, { onDone, saved } = {}) {
         draftId: draft.draftId, date: cur.date, startTime: cur.startTime, durationMin: cur.durationMin, key: cur.key, label,
         intensity: cur.intensity, distanceM: cur.distanceM, kcal: cur.kcalSource === "user" ? cur.kcal : undefined,
         kcalSource: cur.kcalSource === "user" ? "user" : "estimate", source: cur.source, separateSession: Boolean(cur.duplicateOf),
+        ...(editing ? { replace: true } : {}),
       }) });
-      const done = { state: "logged", kcal: r.activity?.kcal ?? cur.kcal, durationMin: cur.durationMin };
+      const done = { state: "logged", id: r.activity?.id, kcal: r.activity?.kcal ?? cur.kcal, durationMin: cur.durationMin };
       markDraft(draft.draftId, done);
       finish(done);
-      toast(r.alreadySaved ? "Already saved." : `Saved ${fmt(done.kcal)} kcal burned.`);
+      toast(editing ? "Updated." : r.alreadySaved ? "Already saved." : `Saved ${fmt(done.kcal)} kcal burned.`);
       refresh();
       if (r.training?.note && cur.source !== "chat") setTimeout(loadHistory, 600);
       onDone?.();
     } catch (err) {
       save.disabled = false;
-      save.textContent = "Save";
+      save.textContent = saveLabel;
       toast(err.message);
     }
   });
-  const discard = el("button", { class: "btn", type: "button", onclick: () => { markDraft(draft.draftId, { state: "discarded" }); finish({ state: "discarded" }); onDone?.(); } }, "Discard");
+  const discard = editing
+    ? el("button", { class: "btn", type: "button", onclick: () => reopen({ saved: editing }) }, "Cancel")
+    : el("button", { class: "btn", type: "button", onclick: () => { markDraft(draft.draftId, { state: "discarded" }); finish({ state: "discarded" }); onDone?.(); } }, "Discard");
 
   card.append(
-    el("p", { class: "eyebrow" }, `Activity · ${draft.date === todayKey() ? "today" : shortDate(draft.date)} · check and save`),
+    el("p", { class: "eyebrow" }, `Activity · ${draft.date === todayKey() ? "today" : shortDate(draft.date)} · ${editing ? "change and save" : "check and save"}`),
     kcal, meta,
     el("div", { class: "stepper" },
       el("button", { type: "button", "aria-label": "5 minutes less", onclick: () => { cur.durationMin = Math.max(5, cur.durationMin - 5); mins.value = String(cur.durationMin); reestimate(); } }, "−"),
@@ -3820,9 +3963,48 @@ function activityDraftCard(draft, { onDone, saved } = {}) {
   return card;
 }
 
+// ---------- undo and edit on cards that recorded something ----------
+
+/** The small Edit / Undo links under a card that logged something. */
+function doneActions(...buttons) {
+  return el("div", { class: "done-actions" }, ...buttons.filter(Boolean));
+}
+
+/** A link that runs `fn` once (disabled while it runs; a failure shows and re-enables it). */
+function actLink(label, fn) {
+  const b = el("button", { class: "link", type: "button" }, label);
+  b.addEventListener("click", async () => {
+    b.disabled = true;
+    try { await fn(); } catch (err) { toast(err.message); b.disabled = false; }
+  });
+  return b;
+}
+
+/** "Make your meal" on a meal that's already logged: Save changes writes over the same log. */
+async function editLoggedMeal(sessionId, onSaved) {
+  const r = await api(`/meals/${sessionId}/items`);
+  state.mealBuild = {
+    items: r.items.map((i) => fixedItem(i, "own")),
+    applyLabel: "Save changes",
+    apply: async (items) => {
+      const res = await api(`/meals/${sessionId}`, { method: "PUT", body: JSON.stringify({ items }) });
+      toast(`Updated to ${fmt(res.totals.calories)} kcal.`);
+      onSaved(res, items);
+      refresh();
+      loadPlan(true).catch(() => {});
+    },
+  };
+  openSheet("mealEdit");
+}
+
 // ---------- meal draft card ----------
 
 function confirmedDrafts() { return store.get(CONFIRMED_KEY, {}); }
+function unmarkDraft(id) {
+  const all = confirmedDrafts();
+  delete all[id];
+  store.set(CONFIRMED_KEY, all);
+}
 function markDraft(id, status) {
   const all = confirmedDrafts();
   all[id] = status;
@@ -3839,7 +4021,7 @@ function markDraft(id, status) {
 function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
   const status = saved ? { state: "logged", calories: saved.calories } : confirmedDrafts()[draft.draftId];
   const card = el("div", { class: "draft" });
-  if (status) return finishedCard(card, draft, status);
+  if (status) return finishedCard(card, draft, status, { onDone, onEdit });
 
   const original = JSON.stringify(draft.items);
   const items = draft.items.length ? draft.items.map((i) => ({ ...i })) : [{ name: draft.text, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }];
@@ -3904,7 +4086,7 @@ function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
       const r = await api("/meals/confirm", { method: "POST", body: JSON.stringify(body) });
       const done = { state: "logged", calories: r.totals.calories };
       markDraft(draft.draftId, done);
-      finishedCard(card, draft, done);
+      finishedCard(card, draft, done, { onDone, onEdit });
       toast(r.alreadySaved ? "Already logged." : `Logged ${fmt(r.totals.calories)} kcal.`);
       refresh();
       onDone?.();
@@ -3915,7 +4097,7 @@ function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
     }
   });
 
-  const discard = el("button", { class: "link quiet", type: "button", onclick: () => { markDraft(draft.draftId, { state: "discarded" }); finishedCard(card, draft, { state: "discarded" }); onDone?.(); } }, "Discard");
+  const discard = el("button", { class: "link quiet", type: "button", onclick: () => { markDraft(draft.draftId, { state: "discarded" }); finishedCard(card, draft, { state: "discarded" }, { onDone, onEdit }); onDone?.(); } }, "Discard");
 
   card.append(...[
     el("div", { class: "draft-top" }, seg, edit),
@@ -3939,13 +4121,35 @@ function assumptionNote(text) {
     el("p", {}, text));
 }
 
-function finishedCard(card, draft, status) {
+/**
+ * A meal card once it's logged (Edit changes what was logged, Undo takes it out of the day and the
+ * card can be confirmed again) or discarded (Undo brings the card back).
+ */
+function finishedCard(card, draft, status, opts = {}) {
+  const reopen = () => card.replaceWith(mealDraftCard(draft, { onDone: opts.onDone, onEdit: opts.onEdit }));
   card.className = "draft done";
-  card.replaceChildren(
-    status.state === "logged"
-      ? el("div", { class: "done-line" }, "✓ ", `Logged · ${draft.text} · ${fmt(status.calories)} kcal`)
-      : el("div", { class: "muted" }, `Discarded · ${draft.text}`),
-  );
+  if (status.state !== "logged") {
+    card.replaceChildren(el("div", { class: "done-row" },
+      el("div", { class: "muted" }, `Discarded · ${draft.text}`),
+      doneActions(actLink("Undo", async () => { unmarkDraft(draft.draftId); reopen(); }))));
+    return card;
+  }
+  card.replaceChildren(el("div", { class: "done-row" },
+    el("div", { class: "done-line" }, "✓ ", `Logged · ${draft.text} · ${fmt(status.calories)} kcal`),
+    doneActions(
+      actLink("Edit", () => editLoggedMeal(draft.draftId, (res) => {
+        const next = { state: "logged", calories: res.totals.calories };
+        markDraft(draft.draftId, next);
+        finishedCard(card, draft, next, opts);
+      })),
+      actLink("Undo", async () => {
+        await api(`/meals/${draft.draftId}`, { method: "DELETE" });
+        unmarkDraft(draft.draftId);
+        toast("Taken out of today's log.");
+        refresh();
+        loadPlan(true).catch(() => {});
+        reopen();
+      }))));
   return card;
 }
 
@@ -4254,8 +4458,9 @@ const SHEETS = {
     if (!b?.apply) return el("p", { class: "hint" }, "That meal was closed. Open it again from the chat.");
     return el("div", { class: "stack" },
       mealBuilder({ api, el, fmt, openMini }, b, {
-        applyLabel: "Update meal",
-        onApply: (items) => { b.apply(items); closeSheet(); },
+        applyLabel: b.applyLabel || "Update meal",
+        // A logged meal saves on Update; stay on the screen if that fails.
+        onApply: async (items) => { try { await b.apply(items); closeSheet(); } catch (err) { toast(err.message); } },
         onSearchMore: (text) => { b.seed = text; openSheet("mealFind"); },
       }));
   },

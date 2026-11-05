@@ -330,6 +330,16 @@ body.composing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 
 .draft-why p { margin: 6px 0 0; line-height: 1.5; overflow-wrap: anywhere; }
 .draft.done { border-color: var(--hair); }
 .draft.done .done-line { display: flex; align-items: center; gap: 8px; color: var(--good); font-weight: 500; }
+/* Edit / Undo on a card that logged something: quiet links at the end of its done line. */
+.done-row { display: flex; align-items: center; justify-content: space-between; gap: 6px 12px; flex-wrap: wrap; }
+.done-row > :first-child { min-width: 0; flex: 1 1 12rem; overflow-wrap: anywhere; }
+.done-actions { display: flex; gap: 16px; flex: none; margin-left: auto; }
+.done-actions .link { font-size: 0.84rem; font-weight: 500; padding: 6px 0; }
+.done-actions .link:last-child { color: var(--muted); }
+.rc-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin: 6px 0 10px; }
+.rc-field { display: grid; gap: 4px; }
+.rc-field small { color: var(--muted); font-size: 0.76rem; }
+.rc-field .field { min-width: 0; padding: 8px 10px; }
 .add-line { background: none; border: 0; color: var(--accent); font-size: 0.85rem; padding: 0 0 12px; }
 .draft-top .link { font-size: 0.85rem; }
 .items-ro { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 6px; font-size: 0.9rem; }

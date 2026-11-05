@@ -14,12 +14,13 @@ import { getWorkoutChecks } from "./workoutCheckStore.js";
 import { cardFromIntervention, interventionNote } from "./interventions/card.js";
 import { getInterventions } from "./interventions/store.js";
 import type { Intervention } from "./interventions/types.js";
+import { receiptLine } from "./logEdits.js";
 
 export type CardStates = {
   /** Meal draft id → calories logged under it (summed from meal_logs, deleted rows excluded). */
   mealsLogged: Map<string, { calories: number }>;
   /** Activity draft id → what was saved. */
-  activitiesSaved: Map<string, { durationMin: number; kcal: number }>;
+  activitiesSaved: Map<string, { id: string; durationMin: number; kcal: number }>;
   /** Gym date → the current answer. */
   workoutChecks: Map<string, { status: string; reason: string | null }>;
   /** `${itemId}|${date}` → the current answer. */
@@ -29,6 +30,8 @@ export type CardStates = {
   interventions: Map<string, Intervention>;
   /** `${date}|${slot}` → the planned meal's status (planned, logged, partial). */
   planMeals: Map<string, string>;
+  /** `${date}|${slot}` → the meal log session an eaten planned meal wrote (for Edit). */
+  planSessions: Map<string, string>;
   /** Planned meals as they stand now (after an edit, swap or resize), by date|slot. */
   planMealNow: Map<string, { title: string; items: string[]; kcal: number; proteinG: number }>;
   /** Every planned meal's current title (eating out included), by date|slot. */
@@ -36,7 +39,7 @@ export type CardStates = {
 };
 
 export function emptyCardStates(): CardStates {
-  return { mealsLogged: new Map(), activitiesSaved: new Map(), workoutChecks: new Map(), routineChecks: new Map(), proposals: new Map(), reports: new Map(), interventions: new Map(), planMeals: new Map(), planMealNow: new Map(), planTitles: new Map() };
+  return { mealsLogged: new Map(), activitiesSaved: new Map(), workoutChecks: new Map(), routineChecks: new Map(), proposals: new Map(), reports: new Map(), interventions: new Map(), planMeals: new Map(), planSessions: new Map(), planMealNow: new Map(), planTitles: new Map() };
 }
 
 /** Loads the live state behind every card in `cards`, in as few queries as the mix needs. */
@@ -71,7 +74,7 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
       ? supabase.from("meal_logs").select("meal_session_id, calories").eq("user_profile_id", userProfileId).in("meal_session_id", mealIds).is("deleted_at", null)
       : Promise.resolve({ data: [] }),
     activityIds.length
-      ? supabase.from("health_activities").select("draft_id, duration_min, kcal").eq("user_profile_id", userProfileId).in("draft_id", activityIds).is("deleted_at", null)
+      ? supabase.from("health_activities").select("id, draft_id, duration_min, kcal").eq("user_profile_id", userProfileId).in("draft_id", activityIds).is("deleted_at", null)
       : Promise.resolve({ data: [] }),
     workoutDates.length ? getWorkoutChecks(userProfileId, ...range(workoutDates)) : Promise.resolve(new Map()),
     routineDates.length ? getRoutineChecks(userProfileId, ...range(routineDates)) : Promise.resolve(new Map<string, RoutineCheck>()),
@@ -88,8 +91,8 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
     cur.calories += Number(r.calories) || 0;
     states.mealsLogged.set(r.meal_session_id, cur);
   }
-  for (const r of (activities.data ?? []) as Array<{ draft_id: string; duration_min: number | null; kcal: number | null }>) {
-    states.activitiesSaved.set(r.draft_id, { durationMin: Number(r.duration_min) || 0, kcal: Number(r.kcal) || 0 });
+  for (const r of (activities.data ?? []) as Array<{ id: string; draft_id: string; duration_min: number | null; kcal: number | null }>) {
+    states.activitiesSaved.set(r.draft_id, { id: r.id, durationMin: Number(r.duration_min) || 0, kcal: Number(r.kcal) || 0 });
   }
   for (const [date, c] of workouts as Map<string, { status: string; reason: string | null }>) states.workoutChecks.set(date, { status: c.status, reason: c.reason ?? null });
   states.routineChecks = routines;
@@ -98,6 +101,7 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
   states.interventions = interventions;
   for (const r of (planMeals.data ?? []) as Array<{ local_date: string; meal_slot: string; status: string; title?: string; metadata?: Record<string, unknown> | null }>) {
     states.planMeals.set(`${r.local_date}|${r.meal_slot}`, r.status);
+    if (typeof r.metadata?.logged_session_id === "string") states.planSessions.set(`${r.local_date}|${r.meal_slot}`, r.metadata.logged_session_id);
     if (r.title) states.planTitles.set(`${r.local_date}|${r.meal_slot}`, r.title);
     const items = (r.metadata?.eaten_items ?? r.metadata?.items) as Array<{ text: string; kcal: number; proteinG: number }> | undefined;
     if (items?.length && r.metadata?.kind !== "eat_out") {
@@ -148,7 +152,8 @@ export function hydrateCard(card: ChatCard, states: CardStates): ChatCard {
       const status = states.planMeals.get(key);
       // The card shows the meal as it is now, so an edit or swap made later shows up here too.
       const now = states.planMealNow.get(key);
-      return { ...card, ...(now ?? {}), ...(status ? { status } : {}) };
+      const session = states.planSessions.get(key);
+      return { ...card, ...(now ?? {}), ...(status ? { status } : {}), ...(session ? { loggedSessionId: session } : {}) };
     }
     case "plan_adjust": {
       // Tomorrow's meals as they stand now: a plan rebuilt after the card was posted (a new food
@@ -214,6 +219,10 @@ export function cardHistoryNote(card: ChatCard, states: CardStates): string {
       return `[Planned ${live.slot} card for ${live.date}, ${live.title}: ${live.status === "logged" || live.status === "partial" ? "eaten" : "not eaten yet"}]`;
     case "plan_adjust":
       return `[${live.kind === "day_close" ? "Day close" : "Rest-of-day rebalance"} card: ${live.headline}]`;
+    case "log_receipt": {
+      const state = live.state === "undone" ? "undone by the person, no longer logged" : live.state === "edited" ? "changed by the person to this" : "logged";
+      return `[Logged from chat for ${live.date}: ${receiptLine(live)}: ${state}]`;
+    }
     case "calorie_review":
       return `[Calorie target card: suggests ${live.review.suggestedTarget} kcal (current ${live.review.currentTarget ?? "unset"}); the person applies it from the card]`;
     default:

@@ -41,6 +41,8 @@ export type PlanMealCard = {
   proteinG: number;
   /** Live: planned, logged or partial. */
   status?: string;
+  /** Live: the meal log an eaten meal wrote, so the card can open it for editing. */
+  loggedSessionId?: string;
 };
 
 export type PlanAdjustCard = {
