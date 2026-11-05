@@ -438,7 +438,7 @@ export function createHealthAppRouter(): express.Router {
     route("diet-foods", async (ctx, req) => {
       const q = z.string().max(60).default("").parse(req.query.q ?? "");
       const slot = z.enum(PLAN_SLOTS).parse(req.query.slot);
-      const [allows, mine] = await Promise.all([restrictionsFor(ctx.userProfileId), searchMyFoods(ctx.userProfileId, q)]);
+      const [allows, mine] = await Promise.all([restrictionsFor(ctx.userProfileId, localDateKey(new Date(), ctx.timezone)), searchMyFoods(ctx.userProfileId, q)]);
       // Saved foods first (their own and approved web foods, checked against the diet by name), then the catalog.
       const own = mine.filter((f) => allows.byName(f.name)).map(myFoodHit);
       const foods = [...own, ...searchMealFoods(q, slot, allows)].slice(0, 14);

@@ -12,6 +12,8 @@ import type { ActionContext } from "../actions.js";
 import { loadFoodPrefs } from "../onboarding.js";
 import { setQty } from "./adjust.js";
 import { itemFor, nameRestrictionCheck, restrictionCheck, sumTotals, titleOf, type PersonDiet, type PlanItem, type Totals } from "./compose.js";
+import { localDateKey } from "../../nutrition/localDate.js";
+import { effectiveDiet } from "./dietPeriod.js";
 import { loadDietPrefs } from "./store.js";
 import type { PlanSlot } from "./targets.js";
 
@@ -100,11 +102,12 @@ export function applyEdit(
 }
 
 /** What the person's food settings allow, read fresh: diet, foods to avoid, diet note and plan restrictions. */
-export async function restrictionsFor(userProfileId: string): Promise<((e: CatalogEntry) => boolean) & { byName: (name: string) => boolean }> {
+export async function restrictionsFor(userProfileId: string, today: string): Promise<((e: CatalogEntry) => boolean) & { byName: (name: string) => boolean }> {
   const [food, prefs] = await Promise.all([loadFoodPrefs(userProfileId), loadDietPrefs(userProfileId)]);
-  const byName = nameRestrictionCheck({ diet: food.diet as PersonDiet, avoid: food.foodAvoid });
+  const diet = effectiveDiet(food.diet as PersonDiet, prefs.prefs.dietOverride, today);
+  const byName = nameRestrictionCheck({ diet, avoid: food.foodAvoid });
   return Object.assign(restrictionCheck({
-    diet: food.diet as PersonDiet,
+    diet,
     avoid: food.foodAvoid,
     dietNote: [food.dietNote ?? "", ...prefs.prefs.restrictions].filter(Boolean),
   }), { byName });
@@ -151,7 +154,7 @@ export async function editPick(ctx: ActionContext, date: string, slot: PlanSlot,
   if (!entry) return { ok: false, error: "meal_not_planned" };
   const meta = entry.metadata ?? {};
   if (meta.kind === "eat_out") return { ok: false, error: "eat_out" };
-  const allows = await restrictionsFor(ctx.userProfileId);
+  const allows = await restrictionsFor(ctx.userProfileId, localDateKey(ctx.now ?? new Date(), ctx.timezone));
   const r = applyEdit((meta.items as PlanItem[] | undefined) ?? [], input, allows, catalog(), allows.byName);
   if (!r.ok) return r;
   const { error: e2 } = await supabase

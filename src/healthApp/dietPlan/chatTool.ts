@@ -9,26 +9,35 @@ import { localDateKey } from "../../nutrition/localDate.js";
 import type { ActionContext } from "../actions.js";
 import { eatPlanned } from "./log.js";
 import { mealsOn, planMealCard, planViewOrNull, rebalanceToday, type PlanMealCard } from "./rhythm.js";
-import { markOption, rebuildPlan, swapPick } from "./store.js";
+import { addDays } from "../../util/time.js";
+import { PERIOD_DIETS } from "./dietPeriod.js";
+import { markOption, rebuildPlan, setDietPeriod, swapPick } from "./store.js";
 import { PLAN_SLOTS } from "./targets.js";
 
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const mealPlanInput = z.object({
-  action: z.enum(["view", "ate", "swap", "pin", "unpin", "like", "hide", "rebuild"]),
+  action: z.enum(["view", "ate", "swap", "pin", "unpin", "like", "hide", "rebuild", "diet_period"]),
   date: DATE.optional(),
   slot: z.enum(PLAN_SLOTS).optional(),
   optionId: z.string().max(64).optional(),
+  /** diet_period: the temporary diet, and for how long (days from today, or the last date). Omit diet to end it. */
+  diet: z.enum(PERIOD_DIETS).optional(),
+  days: z.coerce.number().int().min(1).max(120).optional(),
+  until: DATE.optional(),
 });
 
 export const MEAL_PLAN_TOOL = {
   name: "meal_plan",
   description:
-    "Their meal plan (Meals tab). view: a day's planned meals (default today), with swap options when slot is given. ate: they ate a planned meal as planned (date, slot); logs it, no card to confirm. swap: replace a planned meal with another option of that meal (optionId from view). pin / unpin / like / hide: an option (optionId); hide never offers it again. rebuild: fresh options for every meal. Ate something other than the plan: use draft_meal instead.",
+    "Their meal plan (Meals tab). view: a day's planned meals (default today), with swap options when slot is given. ate: they ate a planned meal as planned (date, slot); logs it, no card to confirm. swap: replace a planned meal with another option of that meal (optionId from view). pin / unpin / like / hide: an option (optionId); hide never offers it again. rebuild: fresh options for every meal. diet_period: a temporary stricter diet (like veg only for 20 days): diet (vegetarian = no egg, eggetarian, vegan, jain) and days or until; omit diet to end it. It re-plans every planned meal that breaks it and returns the plan as it is now: describe only that, and say which meals were replaced. Ate something other than the plan: use draft_meal instead.",
   input_schema: {
     type: "object" as const,
     properties: {
-      action: { type: "string", enum: ["view", "ate", "swap", "pin", "unpin", "like", "hide", "rebuild"] },
+      action: { type: "string", enum: ["view", "ate", "swap", "pin", "unpin", "like", "hide", "rebuild", "diet_period"] },
+      diet: { type: "string", enum: [...PERIOD_DIETS] },
+      days: { type: "integer", description: "diet_period: how many days from today, today included." },
+      until: { type: "string", description: "diet_period: last date YYYY-MM-DD, instead of days." },
       date: { type: "string", description: "YYYY-MM-DD; defaults to today." },
       slot: { type: "string", enum: [...PLAN_SLOTS] },
       optionId: { type: "string" },
@@ -89,6 +98,12 @@ export async function runMealPlanTool(ctx: ActionContext, input: z.infer<typeof 
       if (!input.optionId) return { result: { ok: false, error: "optionId_required" } };
       await markOption(ctx.userProfileId, input.optionId, input.action);
       return { result: { ok: true }, changed: true };
+    }
+    case "diet_period": {
+      const until = input.until ?? (input.days ? addDays(date, input.days - 1) : undefined);
+      if (input.diet && !until) return { result: { ok: false, error: "days_or_until_required" } };
+      const r = await setDietPeriod(ctx, { diet: input.diet ?? null, until }, now);
+      return { result: r, changed: r.ok };
     }
     case "rebuild": {
       const r = await rebuildPlan(ctx, "chat", now);

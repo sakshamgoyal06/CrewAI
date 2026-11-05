@@ -5,6 +5,7 @@
  */
 import { z } from "zod";
 
+import { PERIOD_DIETS } from "./dietPeriod.js";
 import { FREQUENCIES, PROTEIN_GROUPS } from "./familiarity.js";
 import { DEFAULT_SHARES, PLAN_SLOTS, type PlanSlot } from "./targets.js";
 
@@ -59,6 +60,11 @@ export const dietPrefsInput = z.object({
     .default({}),
   /** "Ingredients unavailable today": an option skipped on one date only. Never a lasting dislike. */
   unavailable: z.array(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), optionId: z.string().min(1).max(40) })).max(60).default([]),
+  /** A temporary stricter diet ("veg only for 20 days"): the plan follows it until `until`, then their own diet again. */
+  dietOverride: z
+    .object({ diet: z.enum(PERIOD_DIETS), from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })
+    .nullable()
+    .optional(),
 });
 
 export type DietPrefsInput = z.input<typeof dietPrefsInput>;
