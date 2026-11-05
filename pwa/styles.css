@@ -207,6 +207,16 @@ body.composing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 
 .day-div::before, .day-div::after, .new-div::before, .new-div::after { content: ""; flex: 1; height: 1px; background: var(--hair-strong); }
 .day-div span { padding: 4px 12px; border: 1px solid var(--hair-strong); border-radius: 999px; }
 .new-div { color: var(--accent); }
+/* Earlier days above today's thread. */
+.earlier, .thread-day { display: flex; flex-direction: column; gap: 10px; }
+.earlier-btn { align-self: center; font-size: 0.82rem; padding: 4px 10px; }
+.earlier-end { margin: 0; font-size: 0.8rem; }
+/* One-tap follow-ups under the evening recap. */
+.quick-replies { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 34px; }
+.quick-replies button {
+  padding: 8px 14px; border-radius: 999px; border: 1px solid var(--hair-strong); background: transparent;
+  color: var(--text); font-size: 0.88rem; }
+.msg.copied { opacity: 0.6; transition: opacity 0.2s; }
 .new-div::before, .new-div::after { background: color-mix(in srgb, var(--accent) 45%, transparent); }
 .empty { margin: auto 0; padding: 24px 4px; display: grid; gap: 10px; }
 .empty .display { font-size: 2rem; }
@@ -278,6 +288,16 @@ body.composing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 
 .send:disabled { opacity: 0.35; }
 .send svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .composer .icon-btn { color: var(--muted); }
+.send[hidden] { display: none !important; }
+.composer .send.stop:not([hidden]) { display: grid; }
+.send.stop svg { fill: currentColor; stroke: none; width: 14px; height: 14px; }
+/* "↓ 2 new": sits on the thread's bottom edge, just above the composer, never over it. */
+.jump-wrap { position: relative; height: 0; flex: none; }
+.jump {
+  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 2;
+  padding: 7px 14px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--hair-strong));
+  background: var(--surface); color: var(--accent); font-size: 0.82rem; font-weight: 700; box-shadow: var(--shadow); }
+.jump[hidden] { display: none; }
 
 /* Meal draft card (chat + sheet) */
 .draft { align-self: stretch; max-width: 100%; background: var(--surface); border: 1px solid var(--hair); border-radius: 20px; padding: 16px; animation: rise 0.25s ease both; }
@@ -418,6 +438,11 @@ body.composing .tabbar { display: none; }
 }
 .tab.active { color: var(--text); }
 .tab.active svg { background: var(--accent-soft); color: var(--accent); }
+/* A coach message arrived while you were on another tab. */
+.tab { position: relative; }
+.tab.has-new::after {
+  content: ""; position: absolute; top: 6px; left: calc(50% + 12px); width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--bg); }
 
 /* Sheet */
 .scrim { position: fixed; inset: 0; background: rgba(10, 6, 14, 0.6); z-index: 30; animation: fade 0.2s ease both; }

@@ -54,7 +54,11 @@ self.addEventListener("push", (event) => {
       tag: data.tag || "magnus",
       renotify: true,
       data: { url: data.url || "/app/" },
-    }),
+    }).then(() =>
+      // An open app refreshes its chat now instead of waiting for its next check.
+      self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+        for (const w of wins) w.postMessage({ type: "push" });
+      })),
   );
 });
 
@@ -65,7 +69,10 @@ self.addEventListener("notificationclick", (event) => {
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
       const open = wins.find((w) => w.url.startsWith(`${self.location.origin}/app/`));
       if (open) {
-        open.navigate(target).catch(() => {});
+        // Same page: switch tabs in place (no reload, no lost scroll); another page: go there.
+        const samePage = new URL(open.url).pathname === new URL(target).pathname;
+        if (samePage) open.postMessage({ type: "open", url: target });
+        else open.navigate(target).catch(() => {});
         return open.focus();
       }
       return self.clients.openWindow(target);

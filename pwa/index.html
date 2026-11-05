@@ -68,6 +68,7 @@
       <div class="plan-banner" data-plan-banner hidden></div>
 
       <div id="thread" class="thread" aria-live="polite"></div>
+      <div class="jump-wrap"><button class="jump" id="jump" type="button" hidden></button></div>
 
       <form id="composer" class="composer">
         <button class="icon-btn ghost" id="quick" type="button" aria-label="Log something">
@@ -83,6 +84,9 @@
         </button>
         <button class="send" id="send" type="submit" aria-label="Send">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+        </button>
+        <button class="send stop" id="stop" type="button" aria-label="Stop the answer" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
         </button>
       </form>
     </main>
@@ -269,7 +273,7 @@
     </main>
 
     <nav class="tabbar" aria-label="Sections">
-      <button class="tab active" data-view="coach" type="button">
+      <button class="tab active" id="tab-coach" data-view="coach" type="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Coach</span>
       </button>
       <button class="tab" data-view="today" type="button">
