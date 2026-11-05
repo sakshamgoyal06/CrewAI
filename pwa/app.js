@@ -639,7 +639,11 @@ async function loadDays() {
 }
 
 function todayKey() {
-  return state.history?.today || state.snapshot?.today?.date || null;
+  // The cached history or snapshot can be from yesterday (app opened from cache, or left open
+  // overnight): a date behind the device's own means the day has moved on.
+  const k = state.history?.today || state.snapshot?.today?.date || null;
+  const local = localToday();
+  return k && k >= local ? k : local;
 }
 
 function selectedDay() {
