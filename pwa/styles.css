@@ -1293,51 +1293,51 @@ body.screen-open { overflow: hidden; }
 
 /* Cards in the chat: compact. Smaller type, tighter rows and buttons, secondary detail folded,
    so one card rarely fills the screen. (Sheets and screens keep the roomier sizes above.) */
-.thread .draft { padding: 10px 12px; border-radius: 14px; font-size: 0.86rem; line-height: 1.35; }
-.thread .draft .eyebrow { font-size: 0.62rem; margin-bottom: 2px; }
+.thread .draft { padding: 12px 14px; border-radius: 16px; font-size: 0.9rem; line-height: 1.4; }
+.thread .draft .eyebrow { font-size: 0.64rem; margin-bottom: 4px; }
 .thread .draft p { margin-top: 0; }
-.thread .draft .btn { padding: 6px 10px; font-size: 0.78rem; line-height: 1.2; }
-.thread .draft .draft-actions { gap: 5px; }
-.thread .draft .draft-actions .btn { padding: 6px 8px; }
-.thread .draft .link { font-size: 0.8rem; }
-.thread .draft-kcal { font-size: 1.3rem; }
+.thread .draft .btn { padding: 8px 12px; font-size: 0.84rem; }
+.thread .draft .draft-actions { gap: 6px; }
+.thread .draft .draft-actions .btn { padding: 8px 10px; }
+.thread .draft .link { font-size: 0.84rem; }
+.thread .draft-kcal { font-size: 1.45rem; }
 .thread .draft-kcal small { font-size: 0.75rem; }
-.thread .macros { gap: 10px; font-size: 0.76rem; margin: 2px 0 6px; }
-.thread .items-ro { gap: 2px; font-size: 0.8rem; margin-bottom: 8px; }
-.thread .draft .seg { margin-bottom: 8px; }
-.thread .draft .seg button { padding: 4px 8px; font-size: 0.74rem; }
-.thread .draft .stepper button { width: 28px; height: 28px; font-size: 0.95rem; }
-.thread .draft .stepper .field { padding: 4px 8px; font-size: 0.86rem; }
+.thread .macros { gap: 10px; font-size: 0.8rem; margin: 4px 0 8px; }
+.thread .items-ro { gap: 3px; font-size: 0.84rem; margin-bottom: 10px; }
+.thread .draft .seg { margin-bottom: 10px; }
+.thread .draft .seg button { padding: 5px 8px; font-size: 0.78rem; }
+.thread .draft .stepper button { width: 32px; height: 32px; font-size: 1rem; }
+.thread .draft .stepper .field { padding: 6px 8px; font-size: 0.9rem; }
 .thread .draft .training-note { font-size: 0.8rem; margin: 6px 0 8px; }
-.thread .draft.done { padding: 8px 12px; }
+.thread .draft.done { padding: 10px 14px; }
 /* Day plan */
-.thread .dayplan { gap: 6px; }
-.thread .dp-plan { gap: 1px; font-size: 0.82rem; }
+.thread .dayplan { gap: 8px; }
+.thread .dp-plan { gap: 2px; font-size: 0.86rem; }
 .thread .dp-plan small { color: var(--muted); }
 .thread .dp-time { min-width: 60px; font-size: 0.8rem; }
-.thread .dp-targets { padding: 4px 0; gap: 6px; }
-.thread .dp-targets b { font-size: 0.95rem; }
+.thread .dp-targets { padding: 6px 0; gap: 6px; }
+.thread .dp-targets b { font-size: 1rem; }
 .thread .dp-targets small { font-size: 0.72rem; }
 .thread .dp-tip { font-size: 0.84rem; margin: 0; }
 /* Planned meal, plan updates */
 .thread .draft.planmeal .pm-items { margin: 2px 0; padding: 0; }
-.thread .draft.planmeal .pm-sub { font-size: 0.76rem; margin: 0 0 8px; }
-.thread .draft.planmeal .draft-actions .btn { font-size: 0.76rem; padding: 6px 6px; }
+.thread .draft.planmeal .pm-sub { font-size: 0.8rem; margin: 0 0 10px; }
+.thread .draft.planmeal .draft-actions .btn { font-size: 0.8rem; padding: 8px 6px; }
 .thread .draft.planadjust .pa-head { margin: 2px 0 4px; }
 .thread .draft.planadjust .pa-lines { font-size: 0.84rem; margin: 0 0 6px; }
 /* Checks (workout, routine) */
-.thread .draft.check .check-line { font-size: 0.86rem; margin: 0 0 8px; }
-.thread .draft.check .draft-actions + .draft-actions { margin-top: 5px; }
-.thread .draft.check .draft-actions .btn { font-size: 0.76rem; padding: 6px 6px; }
+.thread .draft.check .check-line { font-size: 0.9rem; margin: 0 0 10px; }
+.thread .draft.check .draft-actions + .draft-actions { margin-top: 6px; }
+.thread .draft.check .draft-actions .btn { font-size: 0.8rem; padding: 8px 6px; }
 /* Eating out, insights */
-.thread .eatout .eo-num b { font-size: 1.3rem; }
+.thread .eatout .eo-num b { font-size: 1.45rem; }
 .thread .eatout .eo-lines { margin-top: 4px; gap: 2px; }
-.thread .rca-hypothesis { font-size: 0.98rem; margin: 2px 0 6px; }
-.thread .intervention-option { padding: 6px 10px; border-radius: 10px; }
+.thread .rca-hypothesis { font-size: 1.05rem; margin: 2px 0 8px; }
+.thread .intervention-option { padding: 8px 12px; border-radius: 12px; }
 .thread .intervention-option .impact { font-size: 0.78rem; }
 /* One-line fold for secondary detail. */
 .card-fold { margin: 4px 0 6px; border-top: 1px solid var(--hair); }
-.card-fold > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0 0; cursor: pointer; color: var(--muted); font-size: 0.8rem; }
+.card-fold > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0 2px; cursor: pointer; color: var(--muted); font-size: 0.84rem; }
 .card-fold > summary::-webkit-details-marker { display: none; }
 .card-fold[open] > summary .chev { transform: rotate(-135deg) translate(-2px, -2px); }
 .card-fold > :not(summary) { margin-top: 6px; }
