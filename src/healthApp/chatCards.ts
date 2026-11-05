@@ -31,10 +31,12 @@ export type CardStates = {
   planMeals: Map<string, string>;
   /** Planned meals as they stand now (after an edit, swap or resize), by date|slot. */
   planMealNow: Map<string, { title: string; items: string[]; kcal: number; proteinG: number }>;
+  /** Every planned meal's current title (eating out included), by date|slot. */
+  planTitles: Map<string, string>;
 };
 
 export function emptyCardStates(): CardStates {
-  return { mealsLogged: new Map(), activitiesSaved: new Map(), workoutChecks: new Map(), routineChecks: new Map(), proposals: new Map(), reports: new Map(), interventions: new Map(), planMeals: new Map(), planMealNow: new Map() };
+  return { mealsLogged: new Map(), activitiesSaved: new Map(), workoutChecks: new Map(), routineChecks: new Map(), proposals: new Map(), reports: new Map(), interventions: new Map(), planMeals: new Map(), planMealNow: new Map(), planTitles: new Map() };
 }
 
 /** Loads the live state behind every card in `cards`, in as few queries as the mix needs. */
@@ -57,6 +59,7 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
     else if (c.type === "rca") reportIds.push(c.reportId);
     else if (c.type === "intervention") interventionIds.push(c.interventionId);
     else if (c.type === "plan_meal") planDates.push(c.date);
+    else if (c.type === "plan_adjust" && c.next) planDates.push(c.next.date);
   }
   const range = (dates: string[]) => {
     const s = [...dates].sort();
@@ -95,6 +98,7 @@ export async function loadCardStates(userProfileId: string, cards: ChatCard[]): 
   states.interventions = interventions;
   for (const r of (planMeals.data ?? []) as Array<{ local_date: string; meal_slot: string; status: string; title?: string; metadata?: Record<string, unknown> | null }>) {
     states.planMeals.set(`${r.local_date}|${r.meal_slot}`, r.status);
+    if (r.title) states.planTitles.set(`${r.local_date}|${r.meal_slot}`, r.title);
     const items = (r.metadata?.eaten_items ?? r.metadata?.items) as Array<{ text: string; kcal: number; proteinG: number }> | undefined;
     if (items?.length && r.metadata?.kind !== "eat_out") {
       states.planMealNow.set(`${r.local_date}|${r.meal_slot}`, {
@@ -145,6 +149,20 @@ export function hydrateCard(card: ChatCard, states: CardStates): ChatCard {
       // The card shows the meal as it is now, so an edit or swap made later shows up here too.
       const now = states.planMealNow.get(key);
       return { ...card, ...(now ?? {}), ...(status ? { status } : {}) };
+    }
+    case "plan_adjust": {
+      // Tomorrow's meals as they stand now: a plan rebuilt after the card was posted (a new food
+      // rule, a swap) must not keep showing the old dishes.
+      if (!card.next) return card;
+      const date = card.next.date;
+      const meals = card.next.meals.map((m) => {
+        const key = `${date}|${m.slot}`;
+        const now = states.planMealNow.get(key);
+        const title = states.planTitles.get(key);
+        const status = states.planMeals.get(key);
+        return { ...m, ...(title ? { title } : {}), ...(now ? { kcal: now.kcal } : {}), ...(status ? { status } : {}) };
+      });
+      return { ...card, next: { ...card.next, meals } };
     }
     default:
       return card;

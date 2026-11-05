@@ -342,6 +342,21 @@ describe("card history notes", () => {
     expect(hydrateCard(card, emptyCardStates())).toEqual(card);
   });
 
+  it("shows a day-close card's tomorrow as the plan is now, not as it was when posted", () => {
+    const card = {
+      type: "plan_adjust" as const, kind: "day_close" as const, date: "2026-11-04", headline: "No meals logged today.", lines: [],
+      next: { date: "2026-11-05", meals: [{ slot: "lunch" as const, time: "13:30", title: "Jeera rice, mutton curry, green salad", kcal: 718, status: "planned" }] },
+    };
+    const st = {
+      ...emptyCardStates(),
+      planMeals: new Map([["2026-11-05|lunch", "planned"]]),
+      planTitles: new Map([["2026-11-05|lunch", "Chicken fried rice, raita"]]),
+      planMealNow: new Map([["2026-11-05|lunch", { title: "Chicken fried rice, raita", items: ["Chicken fried rice", "Raita"], kcal: 640, proteinG: 34 }]]),
+    };
+    expect(hydrateCard(card, st)).toMatchObject({ next: { meals: [{ title: "Chicken fried rice, raita", kcal: 640, status: "planned" }] } });
+    expect(hydrateCard(card, emptyCardStates())).toEqual(card);
+  });
+
   it("folds the logged state into meal and activity cards for the app", () => {
     expect(hydrateCard(meal, states())).toEqual({ ...meal, saved: { calories: 760 } });
     expect(hydrateCard(meal, emptyCardStates())).toBe(meal);
