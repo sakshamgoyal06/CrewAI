@@ -4076,12 +4076,15 @@ function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
       el("span", {}, el("b", {}, fmt(t.cb, 1)), " g carbs"),
       el("span", {}, el("b", {}, fmt(t.f, 1)), " g fat"),
     );
-    confirm.disabled = !items.length || items.some((i) => !i.name.trim()) || t.c <= 0;
-    missing.hidden = t.c > 0;
+    // A line nothing was found for must get its numbers before the meal is logged (never a silent 0).
+    const blank = items.filter((i) => i.missing && !(+i.calories > 0));
+    confirm.disabled = !items.length || items.some((i) => !i.name.trim()) || t.c <= 0 || blank.length > 0;
+    missing.hidden = t.c > 0 && !blank.length;
+    if (blank.length && t.c > 0) missing.textContent = `No numbers for ${blank.map((i) => i.name).join(", ")} yet. Tap Edit to pick it from the food list, search for it, or type the numbers.`;
   }
 
   function renderItems() {
-    list.replaceChildren(...items.map((i) => el("li", {}, el("span", {}, i.name || "Unnamed"), el("span", {}, `${fmt(+i.calories || 0)} kcal · ${fmt(+i.protein_g || 0, 1)} g P`))));
+    list.replaceChildren(...items.map((i) => el("li", { class: i.missing && !(+i.calories > 0) ? "missing" : "" }, el("span", {}, i.name || "Unnamed"), el("span", {}, i.missing && !(+i.calories > 0) ? "needs numbers" : `${fmt(+i.calories || 0)} kcal · ${fmt(+i.protein_g || 0, 1)} g P`))));
   }
 
   /** The meal after "Make your meal": replaces every line on the card. */

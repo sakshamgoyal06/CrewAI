@@ -1008,6 +1008,8 @@ export function mealDraftReply(drafts: MealDraft[]): string {
     const slot = found.length === 1 && found[0]!.slot !== "unspecified" ? ` for ${found[0]!.slot}` : "";
     parts.push(`That comes to about ${kcal} kcal and ${protein} g protein${slot}. Check the card, fix anything that's off, then tap Confirm & log.`);
   }
+  const blanks = found.flatMap((d) => d.items.filter((i) => i.missing).map((i) => i.name));
+  if (blanks.length) parts.push(`I couldn't find numbers for ${blanks.join(", ")}, so fill ${blanks.length === 1 ? "that one" : "those"} in on the card. The rest is counted.`);
   if (missing.length) {
     parts.push(
       found.length

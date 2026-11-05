@@ -113,6 +113,29 @@ describe("estimateWithFoodDb", () => {
   it("returns null when the web breakdown fails", async () => {
     expect(await estimateWithFoodDb("poha", vi.fn().mockResolvedValue(null), { ...quiet, load: async () => tables([]) })).toBeNull();
   });
+  // 5 Nov: "veg whopper" wasn't found, and the whole meal (fries and Coke too) came back empty.
+  it("keeps what was found and leaves only the unknown item blank", async () => {
+    const web = vi.fn().mockResolvedValue({
+      items: new Map([[2, [{ food: "Peri peri fries", unit: "serving", quantity: 1, per_unit: { calories: 440, protein_g: 6, carbs_g: 60, fat_g: 20 }, grams_per_unit: null }]]]),
+      serving_assumption: null, citations: [], web_search_requests: 1,
+    });
+    const r = await estimateWithFoodDb("1 veg whopper, large peri peri fries, 1 diet coke", web, {
+      ...quiet,
+      load: async () => tables([food("diet coke", "piece", 1, 0)]),
+      saveFoods: vi.fn().mockResolvedValue(undefined),
+      saveRecipes: vi.fn().mockResolvedValue(undefined),
+    });
+    expect(r!.calories).toBe(441);
+    expect(r!.items.filter((i) => i.missing).map((i) => i.name)).toEqual(["1 veg whopper"]);
+    expect(r!.items.filter((i) => !i.missing)).toHaveLength(2);
+    expect(r!.serving_assumption).toContain("No numbers found for veg whopper");
+  });
+
+  it("keeps stored items when the web finds nothing at all", async () => {
+    const r = await estimateWithFoodDb("2 parathas and mystery dish", vi.fn().mockResolvedValue(null), { ...quiet, load: async () => tables([food("paratha", "piece", 260, 6, 80)]), saveFoods: vi.fn().mockResolvedValue(undefined), saveRecipes: vi.fn().mockResolvedValue(undefined) });
+    expect(r!.calories).toBe(520);
+    expect(r!.items.find((i) => i.missing)?.name).toBe("mystery dish");
+  });
 });
 
 describe("unit matching", () => {

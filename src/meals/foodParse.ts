@@ -153,9 +153,30 @@ export function parseFoodPhrase(phrase: string): FoodComponent | null {
   };
 }
 
+/** An amount in brackets: "(about 150 g)", "(2 pieces)", "(1 katori)". */
+const BRACKET_AMOUNT = /^(?:about|around|approx\.?|~)?\s*\d+(?:\.\d+)?\s*[a-z]*$/i;
+
+/**
+ * Words in brackets describe a food, they don't name one: "chai (milky tea with sugar)",
+ * "veg whopper (vegetable patty, no beef)". Left in, they hide a known food from the database
+ * and their commas split off fake items ("no beef"). An amount in brackets ("chicken fry (about
+ * 150 g)") moves to the front, where the parser reads amounts. Pure.
+ */
+export function stripFoodNotes(text: string): string {
+  let out = text;
+  for (let i = 0; i < 3 && /\([^()]*\)/.test(out); i++) {
+    out = out.replace(/([^,;\n+&]*?)\s*\(([^()]*)\)/g, (_m, before: string, inner: string) => {
+      const amount = inner.trim();
+      if (BRACKET_AMOUNT.test(amount) && !/^\s*\d/.test(before.trim())) return `${amount.replace(/^(about|around|approx\.?|~)\s*/i, "")} ${before.trim()}`;
+      return before;
+    });
+  }
+  return out.replace(/[()]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 /** Comma, semicolon, newline, "+", "&" and " and " all separate foods. */
 export function splitFoods(text: string): string[] {
-  return text
+  return stripFoodNotes(text)
     .split(/\s*(?:[,;\n+&]|\band\b)\s*/i)
     .map((s) => s.trim())
     .filter(Boolean);

@@ -294,6 +294,8 @@ export async function estimateWithFoodDb(
   const fromDbCount = comps.length - missing.length;
 
   const created = new Set<FoodRow>();
+  /** Items nothing was found for (indexes into comps). */
+  let unfound: number[] = [];
   let assumption: string | null = null;
   let providerRaw: Record<string, unknown> = {
     food_db_items: fromDbCount,
@@ -310,26 +312,35 @@ export async function estimateWithFoodDb(
       phrase: comps[i]!.assumedQuantity ? `${comps[i]!.phrase} (no amount given)` : comps[i]!.phrase,
     }));
     const res = await breakdown(text, asked, known);
-    if (!res || asked.some((a) => !res.items.get(a.index)?.length)) return null;
+    // Items the lookup found nothing for stay on the card as blanks to fill in, so one unknown
+    // item ("veg whopper") never wipes out the ones that were found (fries, Coke). With nothing
+    // found at all, the whole-meal fallbacks still run.
+    const found = missing.filter((_, n) => !!res?.items.get(n + 1)?.length);
+    if (!found.length && fromDbCount === 0) return null;
+    unfound = missing.filter((_, n) => !res?.items.get(n + 1)?.length);
 
     const trusted = contributor?.trusted === true;
     const source = trusted || !contributor ? CONFIRMED_SOURCE : PENDING_SOURCE;
     const detail = {
       meal_text: text.slice(0, 300),
-      serving_assumption: res.serving_assumption,
-      citations: res.citations,
+      serving_assumption: res?.serving_assumption ?? null,
+      citations: res?.citations ?? [],
       ...(contributor ? { contributor: contributor.id } : {}),
     };
     const newFoods: FoodRow[] = [];
     const recipes: RecipeRow[] = [];
     missing.forEach((ci, n) => {
-      const out = linesFromBreakdown(comps[ci]!, res.items.get(n + 1)!, tables, detail, source);
+      const got = res?.items.get(n + 1);
+      if (!res || !got?.length) return;
+      const out = linesFromBreakdown(comps[ci]!, got, tables, detail, source);
       resolved[ci] = out.lines;
       newFoods.push(...out.newFoods);
       out.newFoods.forEach((f) => created.add(f));
       if (out.recipe) recipes.push(out.recipe);
     });
-    if (resolved.some((r) => !r?.length)) return null;
+    // An item whose new numbers failed the sanity check is a blank too.
+    for (const ci of missing) if (!resolved[ci]?.length && !unfound.includes(ci)) unfound.push(ci);
+    if (unfound.length === comps.length) return null;
     // Someone else's pending rows for the same foods: confirmed when this lookup agrees (or is the owner's).
     const confirmFoodRows: FoodRow[] = [];
     for (const f of newFoods) {
@@ -353,26 +364,29 @@ export async function estimateWithFoodDb(
       .then(() => (confirmFoodRows.length ? (deps.confirmFoods ?? confirmFoods)(confirmFoodRows, by) : undefined))
       .then(() => (confirmRecipeRows.length ? (deps.confirmRecipes ?? confirmRecipes)(confirmRecipeRows, by) : undefined))
       .catch(() => undefined);
-    assumption = res.serving_assumption;
+    assumption = res?.serving_assumption ?? null;
     providerRaw = {
       ...providerRaw,
       search_provider: "anthropic_web_search",
-      web_search_requests: res.web_search_requests,
-      citations: res.citations,
+      web_search_requests: res?.web_search_requests ?? 0,
+      citations: res?.citations ?? [],
+      ...(unfound.length ? { not_found: unfound.map((i) => comps[i]!.phrase) } : {}),
       food_db_new_foods: newFoods.length,
       food_db_new_recipes: recipes.length,
     };
   }
 
   const lines = resolved.flatMap((r) => r ?? []);
+  const blanks: MealItemLine[] = unfound.map((i) => ({ name: comps[i]!.phrase, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, missing: true }));
   const stored = lines.filter((l) => !created.has(l.row) && l.row.source !== CATALOG_SOURCE);
   if (stored.length) void (deps.markUsed ?? markFoodsUsed)(stored.map((l) => l.row)).catch(() => undefined);
 
-  const items: MealItemLine[] = lines.map((l) => ({ name: lineLabel(l), ...lineMacros(l) }));
+  const items: MealItemLine[] = [...lines.map((l) => ({ name: lineLabel(l), ...lineMacros(l) })), ...blanks];
   const sum = (k: "calories" | "protein_g" | "carbs_g" | "fat_g"): number => r1(items.reduce((s, it) => s + (it[k] ?? 0), 0));
   const note = [
     `Built from ${lines.length} ingredient${lines.length === 1 ? "" : "s"}${fromDbCount ? `; ${fromDbCount} of ${comps.length} item${comps.length === 1 ? "" : "s"} from your food database` : ""}.`,
     assumption,
+    unfound.length ? `No numbers found for ${unfound.map((i) => comps[i]!.name).join(", ")}; fill ${unfound.length === 1 ? "it" : "them"} in.` : null,
   ]
     .filter(Boolean)
     .join(" ");
