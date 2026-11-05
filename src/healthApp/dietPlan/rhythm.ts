@@ -185,32 +185,113 @@ export function rebalanceCard(date: string, eatenKcal: number, targetKcal: numbe
 }
 
 /**
- * A meal was logged outside "Ate this" (chat, photo, the meal sheet). If its meal was planned, the
- * plan entry is marked eaten (off plan); then, for today, the meals still to come are resized.
+ * A meal was logged outside "Ate this" (chat, photo, the meal sheet). If its meal is still planned,
+ * the log takes that meal's place ("instead"); otherwise it's an extra. Then, for today, the meals
+ * still to come are resized. Returns where the log went, for the card that saved it.
  */
-export async function afterMealLogged(ctx: ActionContext, input: { date: string; slot: string; mealSessionId: string }, now = new Date()): Promise<void> {
-  const slot = (PLAN_SLOTS as readonly string[]).includes(input.slot) ? (input.slot as PlanSlot) : null;
-  if (slot) {
-    const { data } = await supabase
-      .from("meal_plan_entries")
-      .select("id, metadata")
-      .eq("user_profile_id", ctx.userProfileId)
-      .eq("local_date", input.date)
-      .eq("meal_slot", slot)
-      .eq("source", "plan")
-      .eq("status", "planned")
-      .limit(1);
-    const entry = (data ?? [])[0] as { id: string; metadata: Record<string, unknown> | null } | undefined;
-    if (entry) {
-      await supabase
-        .from("meal_plan_entries")
-        .update({ status: "logged", metadata: { ...(entry.metadata ?? {}), off_plan: true, logged_session_id: input.mealSessionId }, updated_at: new Date().toISOString() })
-        .eq("id", entry.id);
-      await supabase.from("meal_logs").update({ plan_entry_id: entry.id }).eq("user_profile_id", ctx.userProfileId).eq("meal_session_id", input.mealSessionId);
-    }
+export async function afterMealLogged(ctx: ActionContext, input: { date: string; slot: string; mealSessionId: string }, now = new Date()): Promise<MealPlanRole> {
+  const role = await linkToPlan(ctx.userProfileId, input.date, input.slot, input.mealSessionId);
+  if (input.date === localDateKey(now, ctx.timezone)) {
+    void rebalanceToday(ctx, now).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance after a meal failed"));
   }
-  if (input.date !== localDateKey(now, ctx.timezone)) return;
-  await rebalanceToday(ctx, now);
+  return role;
+}
+
+/** Where a logged meal sits in the day's plan: in place of a planned meal, or extra. */
+export type MealPlanRole = { role: "instead"; slot: PlanSlot; insteadOf: string } | { role: "extra" };
+
+const plannedText = (meta: Record<string, unknown> | null, title: string) => {
+  const items = (meta?.items as Array<{ text?: string }> | undefined) ?? [];
+  return meta?.kind === "eat_out" ? title : items.map((i) => i.text).filter(Boolean).join(", ") || title;
+};
+
+/** Links a logged meal to its slot's planned meal, if that meal hasn't been eaten yet. */
+async function linkToPlan(userProfileId: string, date: string, slotIn: string, mealSessionId: string): Promise<MealPlanRole> {
+  const slot = (PLAN_SLOTS as readonly string[]).includes(slotIn) ? (slotIn as PlanSlot) : null;
+  if (!slot) return { role: "extra" };
+  const { data } = await supabase
+    .from("meal_plan_entries")
+    .select("id, title, metadata")
+    .eq("user_profile_id", userProfileId)
+    .eq("local_date", date)
+    .eq("meal_slot", slot)
+    .eq("source", "plan")
+    .eq("status", "planned")
+    .limit(1);
+  const entry = (data ?? [])[0] as { id: string; title: string; metadata: Record<string, unknown> | null } | undefined;
+  if (!entry) return { role: "extra" };
+  // What they actually ate, so every screen and card shows it (not the planned food).
+  const { data: logRows } = await supabase
+    .from("meal_logs")
+    .select("description, raw_text, calories, protein_g, carbs_g, fat_g, component_index")
+    .eq("user_profile_id", userProfileId)
+    .eq("meal_session_id", mealSessionId)
+    .is("deleted_at", null);
+  const eaten = ((logRows ?? []) as Array<Record<string, unknown>>)
+    .sort((a, b) => (Number(a.component_index) || 0) - (Number(b.component_index) || 0))
+    .map((r) => ({
+      key: null,
+      text: String(r.description ?? r.raw_text ?? "Food").trim() || "Food",
+      qty: 1,
+      kcal: Number(r.calories) || 0,
+      proteinG: Number(r.protein_g) || 0,
+      carbsG: Number(r.carbs_g) || 0,
+      fatG: Number(r.fat_g) || 0,
+    }));
+  const { error } = await supabase
+    .from("meal_plan_entries")
+    .update({ status: "logged", metadata: { ...(entry.metadata ?? {}), off_plan: true, logged_session_id: mealSessionId, ...(eaten.length ? { eaten_items: eaten } : {}) }, updated_at: new Date().toISOString() })
+    .eq("id", entry.id)
+    .eq("status", "planned");
+  if (error) throw new Error(error.message);
+  await supabase.from("meal_logs").update({ plan_entry_id: entry.id }).eq("user_profile_id", userProfileId).eq("meal_session_id", mealSessionId);
+  return { role: "instead", slot, insteadOf: plannedText(entry.metadata, entry.title) };
+}
+
+/**
+ * "It was extra" / "Count it as my snack": moves a logged meal out of, or into, its slot's planned
+ * meal. Extra puts the planned meal back to eat; instead takes the planned meal's place (only while
+ * that meal is still planned). The rest of today is resized either way.
+ */
+export async function setMealPlanRole(ctx: ActionContext, mealSessionId: string, role: "extra" | "instead", now = new Date()): Promise<{ ok: true; result: MealPlanRole } | { ok: false; error: string }> {
+  const { data: logs, error: logErr } = await supabase
+    .from("meal_logs")
+    .select("local_date, meal_slot")
+    .eq("user_profile_id", ctx.userProfileId)
+    .eq("meal_session_id", mealSessionId)
+    .is("deleted_at", null)
+    .limit(1);
+  if (logErr) throw new Error(logErr.message);
+  const log = (logs ?? [])[0] as { local_date: string; meal_slot: string | null } | undefined;
+  if (!log) return { ok: false, error: "not_found" };
+  const { data } = await supabase
+    .from("meal_plan_entries")
+    .select("id, metadata")
+    .eq("user_profile_id", ctx.userProfileId)
+    .eq("source", "plan")
+    .eq("metadata->>logged_session_id", mealSessionId)
+    .limit(1);
+  const linked = (data ?? [])[0] as { id: string; metadata: Record<string, unknown> } | undefined;
+  let result: MealPlanRole;
+  if (role === "extra") {
+    if (linked) {
+      if (linked.metadata.off_plan !== true) return { ok: false, error: "ate_from_plan" };
+      const meta = { ...linked.metadata };
+      delete meta.logged_session_id;
+      delete meta.eaten_items;
+      delete meta.off_plan;
+      const { error } = await supabase.from("meal_plan_entries").update({ status: "planned", metadata: meta, updated_at: new Date().toISOString() }).eq("id", linked.id);
+      if (error) throw new Error(error.message);
+      await supabase.from("meal_logs").update({ plan_entry_id: null }).eq("user_profile_id", ctx.userProfileId).eq("meal_session_id", mealSessionId);
+    }
+    result = { role: "extra" };
+  } else {
+    if (linked) return { ok: false, error: "already_counted" };
+    result = await linkToPlan(ctx.userProfileId, log.local_date, log.meal_slot ?? "", mealSessionId);
+    if (result.role === "extra") return { ok: false, error: "meal_not_planned" };
+  }
+  if (log.local_date === localDateKey(now, ctx.timezone)) await rebalanceToday(ctx, now).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance failed"));
+  return { ok: true, result };
 }
 
 /** Resizes today's meals still to come against what's eaten so far; posts a card when anything moved. */

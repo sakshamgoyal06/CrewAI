@@ -16,6 +16,8 @@ import { getActiveGoal, getBodyCheckins } from "./bodyStore.js";
 import { computeGoalProgress, type BodyCheckin, type GoalProgress } from "./goalProgress.js";
 import { checkTime, DEFAULT_CHECK_DELAY_MIN } from "./gymSlot.js";
 import { listMealsForDate } from "./meals.js";
+import type { DayMeals } from "./dayMeals.js";
+import { loadDayMeals } from "./dayMealsStore.js";
 import { routineDayStatus, trainingDaysOf, type RoutineItem, type RoutineItemStatus } from "./routine.js";
 import { checksOn, getRoutineChecks, loadRoutine } from "./routineStore.js";
 import { getWorkoutChecks, type WorkoutCheck } from "./workoutCheckStore.js";
@@ -83,6 +85,8 @@ export type HealthSnapshot = {
     proteinG: number;
     loggedAt: string;
   }>;
+  /** Today's one meal list (dayMeals.ts): planned meals with their state, plus extras. */
+  mealList?: DayMeals;
 };
 
 const CHECKIN_HISTORY_DAYS = 180;
@@ -292,6 +296,7 @@ export async function buildHealthSnapshot(
     getActivities(userProfileId, from, to),
     routine?.length ? getRoutineChecks(userProfileId, from, to) : Promise.resolve(new Map()),
   ]);
+  const mealList = await loadDayMeals(userProfileId, to, to).catch(() => undefined);
   const kg = [...checkins].reverse().find((c) => c.weight_kg != null)?.weight_kg ?? FALLBACK_WEIGHT_KG;
   const typicalBurn = typicalTrainingBurn(hevy.workouts.map((w) => w.durationMin ?? 0), kg);
 
@@ -381,5 +386,6 @@ export async function buildHealthSnapshot(
       proteinG: Math.round(m.protein_g),
       loggedAt: m.loggedAt,
     })),
+    ...(mealList ? { mealList } : {}),
   };
 }

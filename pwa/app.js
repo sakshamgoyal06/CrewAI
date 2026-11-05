@@ -6,7 +6,7 @@ import { runOnboarding } from "./onboarding.js";
 import { scanView } from "./scan.js";
 import { foodPrefsEditor } from "./foodprefs.js";
 import { fromServer, routineEditor, toPayload } from "./routine.js";
-import { initMeals, loadPlan, mealScreen, mealsTitles, openPlannedMeal, planLineFor, renderMeals, setupScreen } from "./meals.js";
+import { dayMealList, initMeals, loadPlan, mealScreen, mealsTitles, openPlannedMeal, renderMeals, setupScreen } from "./meals.js";
 import { mealBuilder, fixedItem } from "./mealbuilder.js";
 import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
@@ -708,6 +708,7 @@ function snapshotDay() {
     onTrack: s.today.onTrack, score: s.today.score, checks: s.today.checks,
     calories: s.today.calories, proteinG: s.today.proteinG, carbsG: null, fatG: null,
     meals: (s.meals || []).map((m) => ({ ...m, proteinG: m.proteinG, carbsG: null, fatG: null, items: [] })).reverse(),
+    mealList: s.mealList || null,
     steps: s.today.steps, walkMinutes: s.today.walkMinutes, burn: null, workouts: [], activities: [], sportCounted: null, trainedUnlogged: false, routine: s.today.routine || [], partial: true,
   };
 }
@@ -739,8 +740,13 @@ function renderDay() {
 
 function renderFuel(d, t) {
   const target = t.calorieTarget;
+  const ml = d.mealList;
+  // Same words as the meal list: planned meals done, plus extras; without a plan, meals logged.
+  const count = ml?.planned
+    ? `${ml.done} of ${ml.planned} meals${ml.extras ? ` · ${ml.extras} extra` : ""}`
+    : d.meals.length ? `${d.meals.length} meal${d.meals.length === 1 ? "" : "s"}` : null;
   foldKey("fuel-meta", fmt(d.calories), target ? ` / ${fmt(target)} kcal` : " kcal",
-    d.meals.length ? `${d.meals.length} meal${d.meals.length === 1 ? "" : "s"} · ${fmt(d.proteinG)} g protein` : "Nothing logged");
+    count ? `${count} · ${fmt(d.proteinG)} g protein` : "Nothing logged");
   const over = target && d.calories > target;
   const top = el("div", { class: "fuel-top" },
     el("div", { class: "big" }, el("span", { class: "num" }, fmt(d.calories)), el("span", { class: "unit" }, "kcal")),
@@ -773,12 +779,15 @@ function renderFuel(d, t) {
   } else {
     macros = el("div", { class: "macro-legend" }, el("div", { class: "ml" }, el("span", { class: "k" }, el("i", { class: "sw p" }), "Protein"), el("span", { class: "v" }, `${fmt(d.proteinG)}`, el("small", {}, " g"))));
   }
-  $("fuel-body").replaceChildren(...[top, meter, macros, planLineFor(d.date, () => setView("meals"))].filter(Boolean));
+  // One list for the day's meals: planned ones with their state, then anything extra (dayMeals.ts).
+  $("fuel-body").replaceChildren(...[top, meter, macros, ml ? dayMealList(ml) : null].filter(Boolean));
 
   $("meals").replaceChildren(
-    ...(d.meals.length
-      ? d.meals.map((m) => mealRow(m, d))
-      : [el("li", { class: "none" }, d.date === todayKey() ? "Nothing logged yet today." : "No meals logged this day.")]),
+    ...(ml
+      ? []
+      : d.meals.length
+        ? d.meals.map((m) => mealRow(m, d))
+        : [el("li", { class: "none" }, d.date === todayKey() ? "Nothing logged yet today." : "No meals logged this day.")]),
   );
   renderWater(d);
 }

@@ -78,7 +78,7 @@ import { loadWeeklyReview } from "./weeklyReview.js";
 import { editInput, editPick, restrictionsFor, searchMealFoods } from "./dietPlan/edit.js";
 import { eatInput, eatPlanned, undoPlanned, unlinkDeletedMeal } from "./dietPlan/log.js";
 import { logSupplements, undoSupplements } from "./dietPlan/supplementLog.js";
-import { rebalanceToday } from "./dietPlan/rhythm.js";
+import { rebalanceToday, setMealPlanRole } from "./dietPlan/rhythm.js";
 import { FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
 import { replanForGoal } from "./replan.js";
 import { getActiveGoal } from "./bodyStore.js";
@@ -472,6 +472,16 @@ export function createHealthAppRouter(): express.Router {
       const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
       const r = await undoSupplements(ctx, date);
       return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  /** "It was extra" / "Count it as my snack": a logged meal leaves, or takes, its planned meal's place. */
+  router.post(
+    "/meals/:id/plan",
+    route("meal-plan-role", async (ctx, req) => {
+      const id = z.string().uuid().parse(req.params.id);
+      const { role } = z.object({ role: z.enum(["extra", "instead"]) }).parse(req.body ?? {});
+      const r = await setMealPlanRole(ctx, id, role);
+      return r.ok ? { body: r } : { status: r.error === "not_found" ? 404 : 409, body: r };
     }),
   );
   router.post(

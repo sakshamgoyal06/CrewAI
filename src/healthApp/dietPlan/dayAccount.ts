@@ -13,6 +13,11 @@
  * - unallocated = target − planned − allowances: calories nothing is planned for yet.
  * - logged: what was actually eaten from the plan (eaten items, not the planned ones).
  *
+ * With `list` (the day's one meal list, dayMeals.ts) the day is counted from it instead, so these
+ * numbers always match the list and the Today screen: eaten meals, replaced meals and extras count
+ * what was logged (supplements included), meals still to eat count as planned, and logged is
+ * everything logged that day. `planned` then reads "where the day lands": eaten + still to eat.
+ *
  * Calories and macros are reconciled with 4/4/9 (protein, carbs, fat). Catalog numbers come from
  * sources that count fibre and rounding differently, so a gap up to RECONCILE_TOLERANCE is
  * expected; a bigger one is reported, not forced away. Pure.
@@ -20,6 +25,7 @@
 import type { PlanItem, Totals } from "./compose.js";
 import type { SupplementLine } from "./supplements.js";
 import type { MacroTargets, PlanSlot } from "./targets.js";
+import type { DayMeals } from "../dayMeals.js";
 
 /** Share of calories that 4/4/9 may differ by before the day is flagged (fibre ≈ 2 kcal/g, rounding, label conventions). */
 export const RECONCILE_TOLERANCE = 0.08;
@@ -67,13 +73,25 @@ const isEaten = (m: AccountMeal) => m.status === "logged" || m.status === "parti
  * entry, food logged in chat), the same numbers the Today screen adds up. When given, "eaten"
  * uses it, so the two screens never disagree and supplements count once they're taken.
  */
-export function accountDay(input: { date: string; targets: MacroTargets; meals: AccountMeal[]; supplements: SupplementLine[]; loggedActual?: (Macros4 & { meals: number }) | null }): DayAccount {
+export function accountDay(input: { date: string; targets: MacroTargets; meals: AccountMeal[]; supplements: SupplementLine[]; loggedActual?: (Macros4 & { meals: number }) | null; list?: DayMeals | null }): DayAccount {
   const target = { kcal: input.targets.calories, proteinG: input.targets.proteinG, carbsG: input.targets.carbsG, fatG: input.targets.fatG };
   let meals = zero();
   const allowances: DayAccount["allowances"] = [];
   let logged = zero();
   let eatenCount = 0;
-  for (const m of input.meals) {
+  if (input.list) {
+    for (const r of input.list.rows) {
+      if (r.state === "missed") continue;
+      if (r.state === "todo" && r.eatOut) {
+        allowances.push({ slot: r.slot as PlanSlot, kcal: Math.round(r.totals.kcal) });
+        continue;
+      }
+      meals = add(meals, r.totals);
+    }
+    logged = { ...input.list.eaten };
+    eatenCount = input.list.rows.filter((r) => r.state !== "todo" && r.state !== "missed").length;
+  }
+  for (const m of input.list ? [] : input.meals) {
     if (m.kind === "eat_out" && !isEaten(m)) {
       allowances.push({ slot: m.slot, kcal: Math.round(m.totals.kcal) });
       continue;
@@ -102,7 +120,7 @@ export function accountDay(input: { date: string; targets: MacroTargets; meals: 
     allowanceKcal,
     unallocatedKcal: Math.round(target.kcal - planned.kcal - allowanceKcal),
     proteinShortG: Math.max(0, Math.round(target.proteinG - planned.proteinG)),
-    logged: input.loggedActual ? { ...tidy(input.loggedActual), meals: input.loggedActual.meals } : { ...tidy(logged), meals: eatenCount },
+    logged: input.list ? { ...tidy(logged), meals: eatenCount } : input.loggedActual ? { ...tidy(input.loggedActual), meals: input.loggedActual.meals } : { ...tidy(logged), meals: eatenCount },
     reconcile: { fromMacrosKcal: Math.round(fromMacros), diffPct: Math.round(diffPct * 1000) / 1000, ok: diffPct <= RECONCILE_TOLERANCE },
   };
 }

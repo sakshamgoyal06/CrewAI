@@ -3,6 +3,7 @@
  * tracker uses, and answers in a short coaching voice. Meals come back as an editable draft card;
  * nothing is logged as a meal until the user confirms it.
  */
+import { dayMealLines } from "./dayMeals.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 
@@ -688,7 +689,8 @@ export function statusForModel(s: HealthSnapshot): Record<string, unknown> {
     targets: s.targets,
     goal: s.goal,
     lastCheckins: s.checkins.slice(-6),
-    mealsToday: s.meals,
+    // Same rows and words as the app: from the plan, had instead, extra, still to eat.
+    mealsToday: s.mealList ? dayMealLines(s.mealList) : s.meals,
     recentWorkouts: s.workouts.slice(0, 5),
     hevyConnected: s.hevyConnected,
     gymSlot: s.gym,

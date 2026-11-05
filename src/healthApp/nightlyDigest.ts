@@ -7,6 +7,7 @@
  * one meal logged. When the call fails, a rule-based digest goes out instead. Off switch:
  * MAGNUS_DIGEST=off.
  */
+import { dayMealLines } from "./dayMeals.js";
 import type Anthropic from "@anthropic-ai/sdk";
 
 import { logger } from "../logger.js";
@@ -44,7 +45,7 @@ export function digestFacts(s: HealthSnapshot, weekday: number): Record<string, 
     calories: t.calorieTarget ? `${fmt(s.today.calories)} of ${fmt(t.calorieTarget)} kcal` : `${fmt(s.today.calories)} kcal (no target)`,
     protein: t.proteinTarget ? `${Math.round(s.today.proteinG)} of ${t.proteinTarget} g` : `${Math.round(s.today.proteinG)} g`,
     steps: `${fmt(s.today.steps)} of ${fmt(t.stepTarget)}`,
-    meals: s.meals.map((m) => `${m.slot}: ${m.text.slice(0, 80)} (${fmt(m.calories)} kcal, ${Math.round(m.proteinG)} g protein)`),
+    meals: s.mealList ? dayMealLines(s.mealList) : s.meals.map((m) => `${m.slot}: ${m.text.slice(0, 80)} (${fmt(m.calories)} kcal, ${Math.round(m.proteinG)} g protein)`),
     trainingDay: s.today.isTrainingDay,
     trainedToday: s.workouts.some((w) => w.localDate === s.today.date),
     checks: s.today.checks.map((c) => `${c.label}: ${c.met ? "done" : "missed"} (${c.detail})`),

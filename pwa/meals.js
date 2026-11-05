@@ -53,19 +53,6 @@ function clock(hhmm) {
 const itemsOf = (p) => p.eatenItems || p.items || [];
 const sum = (items, k) => items.reduce((a, i) => a + (i[k] || 0), 0);
 
-/** Calories and protein eaten from the plan, and planned, for one day. */
-function dayTotals(date) {
-  const picks = (ms.view?.days || []).filter((x) => x.date === date);
-  const eaten = picks.filter(isEaten);
-  return {
-    plannedKcal: picks.reduce((a, p) => a + (p.totals?.kcal || 0), 0),
-    eatenKcal: Math.round(eaten.reduce((a, p) => a + sum(itemsOf(p), "kcal"), 0)),
-    eatenProtein: Math.round(eaten.reduce((a, p) => a + sum(itemsOf(p), "proteinG"), 0)),
-    eatenCount: eaten.length,
-    count: picks.length,
-  };
-}
-
 // ---------- the tab ----------
 
 export async function renderMeals() {
@@ -124,14 +111,11 @@ function paint() {
   const isToday = ms.date === todayKey();
   const summary = daySummary(ms.date, t, isToday);
 
+  // The same list as Today: planned meals with their state, plus anything extra.
   const order = SLOT_ORDER.filter((s) => v.prefs.meals.some((m) => m.slot === s));
-  const list = el("ul", { class: "list meal-plan" }, ...order.map((slot) => mealCard(ms.date, slot)).filter(Boolean));
-  // What is still to eat today, by name ("Only dinner is left today").
-  const left = isToday ? order.filter((s) => { const p = pickOf(ms.date, s); return p && !isEaten(p); }) : [];
-  const leftLine = isToday && left.length && left.length < order.length
-    ? el("p", { class: "hint left-line" }, left.length === 1 ? `Only ${SLOT_NAME[left[0]].toLowerCase()} is left today.` : `Left today: ${left.map((s) => SLOT_NAME[s].toLowerCase()).join(", ")}.`)
-    : null;
-  host.replaceChildren(...[strip, summary, leftLine, list,
+  const list = dayMealList(listFor(ms.date), { title: isToday ? "Meals today" : `Meals · ${dayLabel(ms.date)}` })
+    || el("ul", { class: "list meal-plan" }, ...order.map((slot) => mealCard(ms.date, slot)).filter(Boolean));
+  host.replaceChildren(...[strip, summary, list,
     el("div", { class: "fresh-plan" },
       el("button", { class: "btn block", type: "button", onclick: rebuild }, "Make me a fresh plan"),
       el("p", { class: "hint" }, "New options from your current food settings. Meals you've already eaten stay."))].filter(Boolean));
@@ -165,9 +149,10 @@ function daySummary(date, t, isToday) {
   };
   const tags = [];
   if (Math.abs(a.unallocatedKcal) < 50) tags.push(["good", isToday ? "Plan on target" : "Calories on target"]);
-  if (a.unallocatedKcal <= -50) tags.push(["bad", `${fmt(-a.unallocatedKcal)} kcal over`]);
+  // On today "planned" is what's eaten plus what's still to eat: where the day lands.
+  if (a.unallocatedKcal <= -50) tags.push(["bad", isToday ? `Heading ${fmt(-a.unallocatedKcal)} kcal over` : `${fmt(-a.unallocatedKcal)} kcal over`]);
   if (a.proteinShortG >= 10) tags.push(["warn", `${fmt(a.proteinShortG)} g protein short`]);
-  if (a.unallocatedKcal >= 50) tags.push(["warn", `${fmt(a.unallocatedKcal)} kcal unplanned`]);
+  if (a.unallocatedKcal >= 50) tags.push(["warn", isToday ? `${fmt(a.unallocatedKcal)} kcal not planned yet` : `${fmt(a.unallocatedKcal)} kcal unplanned`]);
   const left = Math.round(tgt.kcal - a.logged.kcal);
   return el("div", { class: "day-glance" },
     el("div", { class: "glance-top" },
@@ -199,7 +184,7 @@ function dayDetails(a, isToday) {
   const row = (k, v, sub) => el("li", {}, el("span", { class: "k" }, k), el("span", { class: "v" }, v, sub ? el("small", {}, sub) : null));
   const rows = [
     row("Target", `${fmt(a.target.kcal)} kcal`, m(a.target)),
-    row("Planned", `${fmt(a.planned.kcal)} kcal`, m(a.planned)),
+    row(isToday ? "Eaten + still to eat" : "Planned", `${fmt(a.planned.kcal)} kcal`, m(a.planned)),
     a.allowanceKcal ? row("Eating out", `~${fmt(a.allowanceKcal)} kcal`, "food not known yet") : null,
     isToday ? row("Eaten", `${fmt(a.logged.kcal)} kcal`, m(a.logged)) : null,
   ].filter(Boolean);
@@ -777,38 +762,154 @@ export function setupScreen() {
   return wrap;
 }
 
-// ---------- Today ----------
+// ---------- the day's one meal list ----------
+//
+// The same rows on Today, the Meals tab and anywhere else a day's meals show (server: dayMeals.ts).
+// A planned meal shows the plan until it's eaten, then what was logged. Anything else logged is an
+// Extra under its meal. Tap an eaten row to see its items; tap a planned one to open it.
 
-/** One line for the Today food card: eaten against the plan, and the next planned meal. */
-export function planLineFor(date, openTab) {
+const STATE_ICON = { eaten: "✓", instead: "⇄", extra: "+", todo: "", missed: "–" };
+const openRows = new Set();
+
+/** Calories with the eating-out "~" for a planned meal whose food isn't known yet. */
+const kcalText = (r) => `${r.eatOut && r.state === "todo" ? "~" : ""}${d.fmt(r.totals.kcal)}`;
+
+export function dayMealList(list, { title = null } = {}) {
   const { el, fmt } = d;
-  if (!ms.view?.setup || !days().includes(date)) return null;
-  const picks = SLOT_ORDER.map((s) => pickOf(date, s)).filter(Boolean);
-  const left = picks.filter((p) => !isEaten(p));
-  const tot = dayTotals(date);
-  const isToday = date === todayKey();
-  const names = left.map((p) => SLOT_NAME[p.slot].toLowerCase());
-  const note = !left.length
-    ? `All of ${isToday ? "today's" : "this day's"} planned meals are done.`
-    : left.length === 1
-      ? `Only ${names[0]} is left ${isToday ? "today" : "this day"}.`
-      : `${left.length} meals left: ${names.slice(0, -1).join(", ")} and ${names.at(-1)}.`;
-  const head = el("button", { class: "plan-line", type: "button", onclick: openTab },
-    el("span", {}, `Plan: ${tot.eatenCount} of ${tot.count} meals eaten`),
-    el("small", {}, note),
-    el("i", { class: "chev-r" }));
-  // Every meal of the day, each one a tap away from its editor.
-  const rows = picks.map((p) => {
-    const eaten = isEaten(p);
-    const out = p.kind === "eat_out";
-    const what = out ? "Eating out" : itemsOf(p).map((i) => i.text).join(", ") || p.title;
-    return el("li", { class: eaten ? "done" : "" },
-      el("button", { class: "pl-row", type: "button", onclick: () => (eaten ? openTab() : openPlannedMeal(p.date, p.slot)) },
-        el("span", { class: "pl-slot" }, SLOT_NAME[p.slot]),
-        el("span", { class: "pl-what" }, what),
-        el("span", { class: "pl-kcal" }, eaten ? "✓ eaten" : el("b", {}, `${out ? "~" : ""}${fmt(p.totals.kcal)} kcal · ${out ? "Log" : "Edit"}`))));
+  if (!list) return null;
+  const isToday = list.date === todayKey();
+  const future = list.date > todayKey();
+  const head = el("div", { class: "dm-head" },
+    el("b", {}, title ?? (isToday ? "Meals today" : "Meals")),
+    el("span", { class: "dm-tags" },
+      list.planned ? el("span", { class: `tag ${list.done === list.planned ? "good" : ""}` }, `${list.done} of ${list.planned} done`) : null,
+      list.extras ? el("span", { class: "tag extra" }, `${list.extras} extra`) : null));
+  if (!list.rows.length) {
+    return el("div", { class: "day-meals" }, head, el("p", { class: "none" }, isToday ? "Nothing logged yet today." : future ? "Nothing planned." : "No meals logged this day."));
+  }
+  const planBySlot = new Map(list.rows.filter((r) => r.state !== "extra").map((r) => [r.slot, r]));
+  const rows = list.rows.map((r) => dayMealRow(list, r, planBySlot));
+  const foot = !future && list.eaten.kcal
+    ? el("div", { class: "dm-foot" },
+        el("span", {}, "Eaten"),
+        el("span", {}, el("b", {}, `${fmt(list.eaten.kcal)} kcal`), ` · P ${fmt(list.eaten.proteinG)} · C ${fmt(list.eaten.carbsG)} · F ${fmt(list.eaten.fatG)} g`))
+    : null;
+  return el("div", { class: "day-meals" }, head, el("ul", { class: "dm-list" }, ...rows), foot);
+}
+
+function dayMealRow(list, r, planBySlot) {
+  const { el, fmt } = d;
+  const date = list.date;
+  const planned = r.state === "todo" || r.state === "missed";
+  const label = r.state === "extra" ? null : `${SLOT_NAME[r.slot] || "Meal"}${r.time ? ` · ${clock(r.time)}` : ""}`;
+  const note = r.state === "instead" ? `instead of ${r.insteadOf}`
+    : r.state === "extra" ? `logged ${loggedClock(r.loggedAt)}`
+    : r.state === "missed" ? "Not logged"
+    : r.changed ? "portions changed"
+    : r.eatOut && planned ? "Eating out: log what you have"
+    : null;
+  const key = `${date}|${r.key}`;
+  const open = openRows.has(key);
+  const li = el("li", { class: `dm-row ${r.state}${open ? " open" : ""}` });
+  const main = el("button", { class: "dm-main", type: "button", "aria-expanded": planned ? null : String(open) },
+    el("span", { class: `dm-dot ${r.state}`, "aria-hidden": "true" }, STATE_ICON[r.state]),
+    el("span", { class: "dm-what" },
+      label ? el("span", { class: "dm-slot" }, label) : null,
+      el("span", { class: "dm-text" }, r.text, r.state === "extra" ? el("span", { class: "tag extra" }, "Extra") : null),
+      note ? el("span", { class: "dm-note" }, note) : null),
+    el("span", { class: "dm-kcal" }, kcalText(r), el("small", {}, planned ? " planned" : " kcal")));
+  const body = el("div", { class: "dm-body" });
+  const fill = () => body.replaceChildren(...(openRows.has(key) ? detail(list, r, planBySlot) : []));
+  main.addEventListener("click", () => {
+    if (planned) return openPlannedMeal(date, r.slot);
+    openRows.has(key) ? openRows.delete(key) : openRows.add(key);
+    li.classList.toggle("open", openRows.has(key));
+    main.setAttribute("aria-expanded", String(openRows.has(key)));
+    fill();
   });
-  return el("div", { class: "plan-line-wrap" }, head, el("ul", { class: "pl-list" }, ...rows));
+  fill();
+  li.append(main);
+  // A planned meal of today or a past day: one tap logs it as planned.
+  if (planned && date <= todayKey()) {
+    li.append(el("div", { class: "dm-acts" },
+      r.eatOut
+        ? el("button", { class: "btn small", type: "button", onclick: () => d.logOwn(r.slot, date) }, "Log what I had")
+        : el("button", { class: "btn small primary", type: "button", onclick: (ev) => ateThis(ev.currentTarget, date, r.slot) }, "Ate this"),
+      el("button", { class: "btn small", type: "button", onclick: () => openPlannedMeal(date, r.slot) }, r.eatOut ? "Plan it" : "Edit or swap")));
+  }
+  li.append(body);
+  return li;
+}
+
+function loggedClock(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function detail(list, r, planBySlot) {
+  const { el, fmt } = d;
+  const chips = el("div", { class: "chips-row" },
+    ...[["proteinG", "Protein", "p"], ["carbsG", "Carbs", "c"], ["fatG", "Fat", "f"]].map(([k, label, cls]) =>
+      el("span", { class: "mchip" }, el("i", { class: `sw ${cls}` }), `${label} `, el("b", {}, `${fmt(r.totals[k], 1)} g`))));
+  const items = r.items?.length > 1
+    ? el("ul", { class: "items-list" }, ...r.items.map((i) =>
+        el("li", {}, el("span", { class: "iname" }, i.name), el("span", { class: "ikcal" }, fmt(i.kcal)),
+          el("span", { class: "imac" }, `P ${fmt(i.proteinG)} · C ${fmt(i.carbsG)} · F ${fmt(i.fatG)}`))))
+    : null;
+  const acts = [];
+  if (r.state === "instead") {
+    acts.push(el("button", { class: "link", type: "button", onclick: (ev) => setRole(ev.currentTarget, r, "extra") }, "It was extra"));
+  }
+  if (r.state === "extra" && planBySlot.get(r.slot)?.state === "todo" && !planBySlot.get(r.slot)?.eatOut) {
+    acts.push(el("button", { class: "link", type: "button", onclick: (ev) => setRole(ev.currentTarget, r, "instead") }, `Count it as my ${SLOT_NAME[r.slot].toLowerCase()}`));
+  }
+  if (r.mealSessionId) acts.push(el("button", { class: "link danger", type: "button", onclick: (ev) => removeLogged(ev.currentTarget, r) }, "Remove"));
+  return [chips, items, acts.length ? el("div", { class: "row-actions" }, ...acts) : null].filter(Boolean);
+}
+
+async function afterChange(msg) {
+  if (msg) d.toast(msg);
+  await loadPlan(true).catch(() => {});
+  d.refresh();
+}
+
+async function ateThis(btn, date, slot) {
+  btn.disabled = true;
+  try {
+    await d.api(`/diet/days/${date}/${slot}/eat`, { method: "POST", body: "{}" });
+    await afterChange("Logged as planned.");
+  } catch (err) {
+    btn.disabled = false;
+    if (err.code === "already_logged") return afterChange();
+    d.toast(err.message);
+  }
+}
+
+async function setRole(btn, r, role) {
+  btn.disabled = true;
+  try {
+    await d.api(`/meals/${encodeURIComponent(r.mealSessionId)}/plan`, { method: "POST", body: JSON.stringify({ role }) });
+    await afterChange(role === "extra" ? `Moved to extras. ${SLOT_NAME[r.slot] || "The meal"} is back on your plan.` : `Counted as your ${SLOT_NAME[r.slot]?.toLowerCase() || "meal"}.`);
+  } catch (err) {
+    btn.disabled = false;
+    d.toast(err.message);
+  }
+}
+
+async function removeLogged(btn, r) {
+  btn.disabled = true;
+  try {
+    await d.api(`/meals/${encodeURIComponent(r.mealSessionId)}`, { method: "DELETE" });
+    await afterChange("Meal removed.");
+  } catch (err) {
+    btn.disabled = false;
+    d.toast(err.message);
+  }
+}
+
+/** The Meals tab's own list for a day (the plan view carries one per planned day). */
+export function listFor(date) {
+  return (ms.view?.lists || []).find((x) => x.date === date) || null;
 }
 
 export const mealsTitles = { dietSetup: "Your meals", dietMeal: "" };
