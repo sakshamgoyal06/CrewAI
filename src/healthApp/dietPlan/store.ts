@@ -435,6 +435,8 @@ export async function swapPick(ctx: ActionContext, date: string, slot: PlanSlot,
 
 export type PlanView = {
   ok: true;
+  /** Today in the profile's timezone. The tab labels days from this, not from a cached client date. */
+  today: string;
   setup: boolean;
   prefs: DietPrefs;
   marks: { pinned: string[]; liked: string[]; hidden: string[] };
@@ -461,7 +463,7 @@ export async function loadPlanView(ctx: ActionContext, now = new Date()): Promis
   const lines = supplementLines(prefs.prefs.supplements);
   // Supplements are items in meals now; the old separate "Took them" log is no longer offered.
   const takenToday = false;
-  const base = { prefs: prefs.prefs, marks: { pinned: prefs.pinned, liked: prefs.liked, hidden: prefs.hidden }, reviewOn: reviewEnabled(), needsTargets, supplements: { lines, takenToday, choices: supplementChoices() } };
+  const base = { today, prefs: prefs.prefs, marks: { pinned: prefs.pinned, liked: prefs.liked, hidden: prefs.hidden }, reviewOn: reviewEnabled(), needsTargets, supplements: { lines, takenToday, choices: supplementChoices() } };
   if (!prefs.saved || needsTargets) return { ok: true, setup: prefs.saved, plan: null, days: [], ...base };
   let plan = await loadActivePlan(ctx.userProfileId);
   // A plan built before supplements became meal items has none in its options: rebuild it once.

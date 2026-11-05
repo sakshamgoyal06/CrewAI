@@ -30,10 +30,12 @@ const pickOf = (date, slot) => ms.view?.days.find((x) => x.date === date && x.sl
 const budgetOf = (slot) => ms.view?.plan?.budgets.find((b) => b.slot === slot) || null;
 const optionsOf = (slot) => ms.view?.plan?.options?.[slot] || [];
 const timeOf = (slot) => ms.view?.prefs?.meals.find((m) => m.slot === slot)?.time || null;
+// The server's today (profile timezone) wins: the app's own date can be a cached one from yesterday.
+const todayKey = () => ms.view?.today || d.todayKey();
 const isEaten = (p) => p && (p.status === "logged" || p.status === "partial");
 
 function dayLabel(date) {
-  const t = d.todayKey();
+  const t = todayKey();
   if (date === t) return "Today";
   const n = Math.round((new Date(`${date}T12:00:00Z`) - new Date(`${t}T12:00:00Z`)) / 86400000);
   if (n === 1) return "Tomorrow";
@@ -113,13 +115,13 @@ function paint() {
     return;
   }
   const all = days();
-  if (!ms.date || !all.includes(ms.date)) ms.date = all.includes(d.todayKey()) ? d.todayKey() : all[0];
+  if (!ms.date || !all.includes(ms.date)) ms.date = all.includes(todayKey()) ? todayKey() : all[0];
   const strip = el("div", { class: "seg meal-days", role: "tablist" },
     ...all.map((date) => el("button", { type: "button", role: "tab", class: date === ms.date ? "on" : "", "aria-selected": String(date === ms.date),
       onclick: () => { ms.date = date; paint(); } }, dayLabel(date))));
 
   const t = v.plan.targets;
-  const isToday = ms.date === d.todayKey();
+  const isToday = ms.date === todayKey();
   const summary = daySummary(ms.date, t, isToday);
 
   const order = SLOT_ORDER.filter((s) => v.prefs.meals.some((m) => m.slot === s));
@@ -236,7 +238,7 @@ export async function openPlannedMeal(date, slot) {
   if (!pickOf(date, slot)) {
     // An old card: that day has left the plan.
     if (known) d.closeSheet();
-    d.toast(date < d.todayKey() ? "That meal's day has passed. Here's your plan now." : "That meal isn't in the plan any more.");
+    d.toast(date < todayKey() ? "That meal's day has passed. Here's your plan now." : "That meal isn't in the plan any more.");
     d.setView("meals");
     return;
   }
@@ -351,7 +353,7 @@ export function mealScreen() {
   const wrap = el("div", { class: "stack meal-screen" });
   document.getElementById("sheet-title").textContent = `${SLOT_NAME[slot]} · ${dayLabel(date)}`;
   if (!p) { wrap.append(el("p", { class: "none" }, "This meal isn't in the plan any more.")); return wrap; }
-  const canEat = date <= d.todayKey();
+  const canEat = date <= todayKey();
   const eaten = isEaten(p);
   const budget = budgetOf(slot);
 
@@ -598,7 +600,7 @@ function otherOptions(date, slot, currentId) {
       el("summary", {}, "Try something new"),
       el("p", { class: "hint" }, "Dishes you don't usually cook. Never planned unless you pick one."),
       el("ul", { class: "list option-list" }, ...novel.map(row))) : null,
-    date >= d.todayKey() && !isEaten(pickOf(date, slot) || {}) ? swapReasons(date, slot) : null);
+    date >= todayKey() && !isEaten(pickOf(date, slot) || {}) ? swapReasons(date, slot) : null);
 }
 
 // ---------- setup ----------
@@ -757,7 +759,7 @@ export function planLineFor(date, openTab) {
   const picks = SLOT_ORDER.map((s) => pickOf(date, s)).filter(Boolean);
   const left = picks.filter((p) => !isEaten(p));
   const tot = dayTotals(date);
-  const isToday = date === d.todayKey();
+  const isToday = date === todayKey();
   const names = left.map((p) => SLOT_NAME[p.slot].toLowerCase());
   const note = !left.length
     ? `All of ${isToday ? "today's" : "this day's"} planned meals are done.`
