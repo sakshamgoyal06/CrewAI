@@ -17,7 +17,9 @@ import { loggableError } from "../util/loggableError.js";
 import { stableTurnId } from "../util/stableId.js";
 import { localClock } from "../util/time.js";
 import { hasFeature } from "./billing.js";
-import { foodPrefsLine, loadFoodPrefs } from "./onboarding.js";
+import { nameRestrictionCheck } from "./dietPlan/compose.js";
+import { planRules } from "./dietPlan/rules.js";
+import { foodPrefsLine, loadFoodPrefs, planRulesLine, type FoodPrefs } from "./onboarding.js";
 import { getPrefs, isQuiet, sendNotification } from "./push.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
 
@@ -79,7 +81,7 @@ Write 2 or 3 short sentences, second person, plain words, no lists, no emoji, no
 1. How the day went, quoting the numbers that matter most (good or bad).
 2. ONE specific thing to do tomorrow (a food, a time, an amount), chosen to fix today's biggest gap or keep a good streak. Use what tomorrow is (training or rest day).
 Never invent numbers. Under 400 characters.
-If the facts include foodRules, they are hard rules: any food you name must obey them (never name a meat, fish or food they rule out).`;
+If the facts include foodRules, they are hard rules: any food you name must obey them (never name a meat, fish, egg or food they rule out). A TEMPORARY RULE overrides their usual diet: while it runs, foods the usual diet allows but the temporary rule rules out are out.`;
 
 type Create = (p: Record<string, unknown>) => Promise<Anthropic.Message>;
 
@@ -118,12 +120,47 @@ async function alreadyPosted(userProfileId: string, turnId: string): Promise<boo
 /** First sentence, for the push body. */
 const firstSentence = (text: string) => (/^.*?[.!?](\s|$)/.exec(text)?.[0] ?? text).trim().slice(0, 180);
 
-export type DigestDeps = { snapshot: typeof buildHealthSnapshot; write: typeof writeDigest };
+/** Their food rules for the digest, and a check that a written note keeps them. */
+export type DigestFoodRules = { line: string | null; allows: (text: string) => boolean };
+
+/**
+ * The rules the note's food tip must keep: a running temporary diet ("veg only till the 25th")
+ * first, since it overrides their usual diet, then their usual diet and avoid list. The tip is
+ * for tomorrow, so the check uses tomorrow's rules. Pure.
+ */
+export function digestFoodRules(food: FoodPrefs | null, prefs: unknown, today: string, tomorrow: string): DigestFoodRules {
+  const temp = planRulesLine(prefs, today);
+  const usual = food ? foodPrefsLine({ diet: food.diet, diet_note: food.dietNote, food_avoid: food.foodAvoid }) : null;
+  const line = [temp, usual ? `usual diet: ${usual}` : null].filter(Boolean).join(". ") || null;
+  const p = (prefs ?? {}) as { restrictions?: string[]; fastingDays?: number[]; dietOverride?: unknown };
+  const rules = planRules(
+    food ?? { diet: null, dietNote: null, foodAvoid: [] },
+    { restrictions: p.restrictions ?? [], fastingDays: p.fastingDays ?? [], dietOverride: (p.dietOverride ?? null) as never },
+    tomorrow,
+  );
+  const ok = nameRestrictionCheck({ diet: rules.diet, avoid: rules.avoid });
+  return { line, allows: (text) => ok(text) };
+}
+
+async function loadDigestFoodRules(userProfileId: string, today: string, tomorrow: string): Promise<DigestFoodRules> {
+  const [food, dp] = await Promise.all([
+    loadFoodPrefs(userProfileId).catch(() => null),
+    (async () => {
+      const { data } = await supabase.from("health_diet_preferences").select("prefs").eq("user_profile_id", userProfileId).maybeSingle();
+      return (data as { prefs?: unknown } | null)?.prefs ?? null;
+    })().catch(() => null),
+  ]);
+  return digestFoodRules(food, dp, today, tomorrow);
+}
+
+const nextDate = (date: string) => new Date(Date.parse(`${date}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+
+export type DigestDeps = { snapshot: typeof buildHealthSnapshot; write: typeof writeDigest; foodRules?: typeof loadDigestFoodRules };
 
 export async function runNightlyDigest(
   userProfileId: string,
   now = new Date(),
-  deps: DigestDeps = { snapshot: buildHealthSnapshot, write: writeDigest },
+  deps: DigestDeps = { snapshot: buildHealthSnapshot, write: writeDigest, foodRules: loadDigestFoodRules },
 ): Promise<"off" | "not_yet" | "exists" | "nothing_logged" | "not_included" | "posted"> {
   if (process.env.MAGNUS_DIGEST === "off") return "off";
   const s = await deps.snapshot(userProfileId, now);
@@ -136,9 +173,13 @@ export async function runNightlyDigest(
   // A Pro feature once billing is on: the free plan keeps the plain evening push.
   if (!(await hasFeature(userProfileId, "digest", now))) return "not_included";
 
-  const food = await loadFoodPrefs(userProfileId).catch(() => null);
-  const foodRules = food ? foodPrefsLine({ diet: food.diet, diet_note: food.dietNote, food_avoid: food.foodAvoid }) : null;
-  const { text, source } = await deps.write({ ...digestFacts(s, weekday), ...(foodRules ? { foodRules } : {}) }, fallbackDigest(s));
+  const rules = await (deps.foodRules ?? loadDigestFoodRules)(userProfileId, s.today.date, nextDate(s.today.date));
+  const fallback = fallbackDigest(s);
+  const written = await deps.write({ ...digestFacts(s, weekday), ...(rules.line ? { foodRules: rules.line } : {}) }, fallback);
+  // The model was told the rules; a note that still names a food they ruled out never goes out.
+  const broke = written.source === "model" && !rules.allows(written.text);
+  if (broke) logger.warn({ userProfileId }, "nightly digest named a food outside their rules; using the fallback");
+  const { text, source } = broke ? { text: fallback, source: "fallback" as const } : written;
   const { error } = await supabase
     .from("health_chat_messages")
     .insert({ user_profile_id: userProfileId, role: "assistant", content: text, cards: [], turn_id: turnId, status: "ok" });

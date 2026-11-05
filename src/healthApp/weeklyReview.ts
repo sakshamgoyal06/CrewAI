@@ -98,7 +98,7 @@ export function activityLine(stats: WeekStats, days: HistoryDay[], trainingDays:
 const FOCUS: Record<CheckId, string> = {
   meals_logged: "Log every meal, even the messy ones. A photo is enough. The plan only adjusts on what it can see.",
   calories: "Land near your calorie target. Plan the evening meal first, since that's where most days go over.",
-  protein: "Hit protein: add one protein-heavy item (paneer, eggs, dal, curd, chicken or a shake) to two meals a day.",
+  protein: "Hit protein: add one protein-heavy item that fits your diet (dal, paneer, curd, soya, or a shake) to two meals a day.",
   macros: "Keep carbs and fat near target: the meal plan's portions do it, so eat those and go easy on oil and fried sides.",
   steps: "Get the steps in: one 20 to 30 minute walk after lunch or dinner covers most of the gap.",
   workout: "Show up on your training days, even for a short session. Logging it in Hevy counts.",

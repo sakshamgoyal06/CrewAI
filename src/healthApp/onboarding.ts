@@ -269,7 +269,7 @@ export function planRulesLine(prefs: unknown, today: string): string | null {
   const o = p.dietOverride;
   if (o?.until && o.until >= today) {
     const what = [o.diet ? `${o.diet}${o.diet === "vegetarian" ? " (no egg)" : ""}` : null, o.avoid?.length ? `no ${o.avoid.join(", ")}` : null].filter(Boolean).join(", ");
-    if (what) out.push(`TEMPORARY RULE until ${o.until}: ${what}; never suggest anything that breaks it`);
+    if (what) out.push(`TEMPORARY RULE until ${o.until}, overriding their usual diet and any meat it allows: ${what}; never suggest anything that breaks it`);
   }
   if (p.restrictions?.length) out.push(`plan notes: ${p.restrictions.join("; ")}`);
   if (p.fastingDays?.length) out.push(`fasts on ${p.fastingDays.map((x) => WD[x]).join(", ")}`);
