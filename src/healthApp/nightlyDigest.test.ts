@@ -24,7 +24,7 @@ vi.mock("./push.js", async (orig) => ({
   },
 }));
 
-import { digestDue, digestFacts, fallbackDigest, runNightlyDigest, writeDigest } from "./nightlyDigest.js";
+import { digestDue, digestFacts, digestFoodRules, fallbackDigest, runNightlyDigest, writeDigest } from "./nightlyDigest.js";
 import type { HealthSnapshot } from "./snapshot.js";
 
 const ist = (hhmm: string) => {
@@ -104,5 +104,36 @@ describe("nightly digest", () => {
     process.env.MAGNUS_DIGEST = "off";
     expect(await runNightlyDigest("u1", ist("21:35"), { snapshot: async () => snap(), write })).toBe("off");
     expect(write).not.toHaveBeenCalled();
+  });
+
+  // Saksham, 5 Nov: veg only till the 25th, yet the note said "150 g chicken" tomorrow.
+  const saksham = { diet: "custom" as const, dietNote: "Vegetarian + chicken + eggs. No other meat than chicken", foodAvoid: ["Beef", "Pork"] };
+  const vegTill25 = { restrictions: [], fastingDays: [], dietOverride: { diet: "vegetarian", from: "2026-11-05", until: "2026-11-25" } };
+
+  it("puts a running temporary diet first in the note's food rules", () => {
+    const r = digestFoodRules(saksham, vegTill25, "2026-11-05", "2026-11-06");
+    expect(r.line).toMatch(/^TEMPORARY RULE until 2026-11-25, overriding their usual diet.*vegetarian \(no egg\)/);
+    expect(r.line).toContain("usual diet:");
+    expect(r.allows("Tomorrow, aim for a protein-first lunch of 150 g chicken with a green salad.")).toBe(false);
+    expect(r.allows("Tomorrow, have two boiled eggs at breakfast.")).toBe(false);
+    expect(r.allows("Tomorrow, have 150 g paneer with a green salad at lunch.")).toBe(true);
+  });
+
+  it("goes back to the usual diet once the period is over", () => {
+    const r = digestFoodRules(saksham, vegTill25, "2026-11-26", "2026-11-27");
+    expect(r.line).not.toContain("TEMPORARY");
+    expect(r.allows("Tomorrow, 150 g chicken at lunch.")).toBe(true);
+    expect(r.allows("Tomorrow, mutton curry at lunch.")).toBe(true); // the meat list is the model's job; only the diet and avoid list are checked here
+    expect(digestFoodRules(saksham, null, "2026-11-26", "2026-11-27").allows("Tomorrow, pork ribs.")).toBe(false);
+  });
+
+  it("gives the model the temporary rule, and never posts a note that breaks it", async () => {
+    db.existing = false;
+    const rules = async () => digestFoodRules(saksham, vegTill25, "2026-11-02", "2026-11-03");
+    const write = vi.fn(async () => ({ text: "Protein short at 60 g. Tomorrow, a protein-first lunch of 150 g chicken.", source: "model" as const }));
+    expect(await runNightlyDigest("u1", ist("21:35"), { snapshot: async () => snap(), write, foodRules: rules })).toBe("posted");
+    expect((write.mock.calls[0] as unknown[])[0]).toMatchObject({ foodRules: expect.stringMatching(/^TEMPORARY RULE/) });
+    expect(db.inserted[0]!.content).toBe(fallbackDigest(snap()));
+    expect(db.inserted[0]!.content).not.toMatch(/chicken/i);
   });
 });

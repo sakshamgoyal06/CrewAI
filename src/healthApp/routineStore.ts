@@ -5,7 +5,7 @@
  */
 import { logger } from "../logger.js";
 import { supabase } from "../tools/clients.js";
-import { gymTimeOf, normalizeRoutine, trainingDaysOf, type RoutineCheck, type RoutineCheckStatus, type RoutineItem } from "./routine.js";
+import { gymTimeOf, normalizeRoutine, trainingDaysOf, type RoutineCheck, type RoutineCheckStatus, type RoutineItem, type RoutineSwap } from "./routine.js";
 
 type ItemRow = {
   id: string;
@@ -17,6 +17,7 @@ type ItemRow = {
   remind_before_min: number | null;
   check_after_min: number;
   position: number;
+  swap?: RoutineSwap | null;
 };
 
 export function rowToItem(r: ItemRow): RoutineItem {
@@ -30,6 +31,7 @@ export function rowToItem(r: ItemRow): RoutineItem {
     remindBeforeMin: r.remind_before_min == null ? null : Number(r.remind_before_min),
     checkAfterMin: Number(r.check_after_min),
     position: Number(r.position) || 0,
+    swap: r.swap && typeof r.swap === "object" && r.swap.until ? r.swap : null,
   };
 }
 
@@ -37,7 +39,8 @@ export function rowToItem(r: ItemRow): RoutineItem {
 export async function loadRoutine(userProfileId: string): Promise<RoutineItem[] | null> {
   const { data, error } = await supabase
     .from("health_routine_items")
-    .select("id, activity_key, label, days, start_time, duration_min, remind_before_min, check_after_min, position")
+    // `*`: the swap column arrives with a later migration; a missing one must not break reads.
+    .select("*")
     .eq("user_profile_id", userProfileId)
     .order("position", { ascending: true });
   if (error) {
@@ -167,5 +170,14 @@ export async function saveRoutineCheckAnswer(userProfileId: string, c: RoutineCh
     },
     { onConflict: "user_profile_id,item_id,local_date" },
   );
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+/**
+ * Puts a temporary stand-in on one routine item ("no gym till the 25th: an evening walk
+ * instead"), or takes it off (null). It ends on its own after `until`.
+ */
+export async function setRoutineSwap(userProfileId: string, itemId: string, swap: RoutineSwap | null): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error } = await supabase.from("health_routine_items").update({ swap, updated_at: new Date().toISOString() }).eq("user_profile_id", userProfileId).eq("id", itemId);
   return error ? { ok: false, error: error.message } : { ok: true };
 }

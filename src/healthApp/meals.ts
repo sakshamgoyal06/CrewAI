@@ -38,9 +38,11 @@ export type MealItem = {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  /** Nothing found for this item; the card asks for its numbers. */
+  missing?: boolean;
 };
 
-export type MealTotals = Omit<MealItem, "name">;
+export type MealTotals = Omit<MealItem, "name" | "missing">;
 
 export type MealDraft = {
   draftId: string;
@@ -86,6 +88,7 @@ export function estimateToItems(estimate: MealNutritionEstimate, text: string): 
       protein_g: r1(nonNeg(l.protein_g) ?? 0),
       carbs_g: r1(nonNeg(l.carbs_g) ?? 0),
       fat_g: r1(nonNeg(l.fat_g) ?? 0),
+      ...(l.missing ? { missing: true } : {}),
     }));
   }
   const kcal = nonNeg(estimate.calories);
@@ -135,7 +138,8 @@ export async function draftMeal(input: {
     source: estimate.source,
     items,
     totals: sumItems(items),
-    estimated: items.length > 0,
+    // Some items found and some blank still counts as estimated: the card asks only for the blanks.
+    estimated: items.some((i) => !i.missing),
     servingAssumption: estimate.serving_assumption ?? null,
   };
 }

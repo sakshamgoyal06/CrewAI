@@ -480,7 +480,7 @@ export function createHealthAppRouter(): express.Router {
     "/meals/:id/plan",
     route("meal-plan-role", async (ctx, req) => {
       const id = z.string().uuid().parse(req.params.id);
-      const { role } = z.object({ role: z.enum(["extra", "instead"]) }).parse(req.body ?? {});
+      const { role } = z.object({ role: z.enum(["extra", "instead", "replace"]) }).parse(req.body ?? {});
       const r = await setMealPlanRole(ctx, id, role);
       return r.ok ? { body: r } : { status: r.error === "not_found" ? 404 : 409, body: r };
     }),

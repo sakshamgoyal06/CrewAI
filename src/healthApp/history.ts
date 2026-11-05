@@ -248,6 +248,8 @@ export async function buildHealthHistory(
           activities: dayActs,
           walkMinutes: nOrNull(a?.walk_minutes),
           checks: checksOn(routineChecks, date),
+          date,
+          timezone,
         })
       : [];
     const burn: Burn | null = burnForDay({

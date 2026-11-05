@@ -15,6 +15,7 @@ import type { ActionContext } from "../actions.js";
 import { getPrefs, isQuiet, sendNotification } from "../push.js";
 import { closeDay, rebalanceDay } from "./adjust.js";
 import { saveCarry } from "./carry.js";
+import { undoPlanned } from "./log.js";
 import { sumTotals, type MealOption, type PlanItem, type Totals } from "./compose.js";
 import { loadPlanView, type PlannedMeal, type PlanView } from "./store.js";
 import { PLAN_SLOTS, type PlanSlot } from "./targets.js";
@@ -202,7 +203,10 @@ export async function afterMealLogged(ctx: ActionContext, input: { date: string;
 }
 
 /** Where a logged meal sits in the day's plan: in place of a planned meal, or extra. */
-export type MealPlanRole = { role: "instead"; slot: PlanSlot; insteadOf: string } | { role: "extra"; slot?: string };
+export type MealPlanRole =
+  | { role: "instead"; slot: PlanSlot; insteadOf: string }
+  /** alreadyEaten: the slot's planned meal was already ticked as eaten (5 Nov: a 6 pm tick plus the Whopper counted two dinners). */
+  | { role: "extra"; slot?: string; alreadyEaten?: string };
 
 const plannedText = (meta: Record<string, unknown> | null, title: string) => {
   const items = (meta?.items as Array<{ text?: string }> | undefined) ?? [];
@@ -213,6 +217,22 @@ const plannedText = (meta: Record<string, unknown> | null, title: string) => {
 async function hasPlanOn(userProfileId: string, date: string): Promise<boolean> {
   const { data } = await supabase.from("meal_plan_entries").select("id").eq("user_profile_id", userProfileId).eq("local_date", date).eq("source", "plan").limit(1);
   return !!data?.length;
+}
+
+/** The slot's planned meal when it was ticked as eaten from the plan (not replaced by another log). */
+async function tickedAsPlanned(userProfileId: string, date: string, slot: PlanSlot, notSession: string): Promise<{ text: string } | null> {
+  const { data } = await supabase
+    .from("meal_plan_entries")
+    .select("title, metadata")
+    .eq("user_profile_id", userProfileId)
+    .eq("local_date", date)
+    .eq("meal_slot", slot)
+    .eq("source", "plan")
+    .in("status", ["logged", "partial"])
+    .limit(1);
+  const e = (data ?? [])[0] as { title: string; metadata: Record<string, unknown> | null } | undefined;
+  if (!e || e.metadata?.off_plan === true || e.metadata?.logged_session_id === notSession) return null;
+  return { text: plannedText(e.metadata, e.title) };
 }
 
 /** null: that day has no meal plan, so the log is simply a meal. */
@@ -229,7 +249,11 @@ async function linkToPlan(userProfileId: string, date: string, slotIn: string, m
     .eq("status", "planned")
     .limit(1);
   const entry = (data ?? [])[0] as { id: string; title: string; metadata: Record<string, unknown> | null } | undefined;
-  if (!entry) return (await hasPlanOn(userProfileId, date)) ? { role: "extra" } : null;
+  if (!entry) {
+    const ticked = await tickedAsPlanned(userProfileId, date, slot, mealSessionId);
+    if (ticked) return { role: "extra", slot, alreadyEaten: ticked.text };
+    return (await hasPlanOn(userProfileId, date)) ? { role: "extra" } : null;
+  }
   // What they actually ate, so every screen and card shows it (not the planned food).
   const { data: logRows } = await supabase
     .from("meal_logs")
@@ -263,7 +287,7 @@ async function linkToPlan(userProfileId: string, date: string, slotIn: string, m
  * meal. Extra puts the planned meal back to eat; instead takes the planned meal's place (only while
  * that meal is still planned). The rest of today is resized either way.
  */
-export async function setMealPlanRole(ctx: ActionContext, mealSessionId: string, role: "extra" | "instead", now = new Date()): Promise<{ ok: true; result: MealPlanRole } | { ok: false; error: string }> {
+export async function setMealPlanRole(ctx: ActionContext, mealSessionId: string, role: "extra" | "instead" | "replace", now = new Date()): Promise<{ ok: true; result: MealPlanRole } | { ok: false; error: string }> {
   const { data: logs, error: logErr } = await supabase
     .from("meal_logs")
     .select("local_date, meal_slot")
@@ -295,6 +319,16 @@ export async function setMealPlanRole(ctx: ActionContext, mealSessionId: string,
       await supabase.from("meal_logs").update({ plan_entry_id: null }).eq("user_profile_id", ctx.userProfileId).eq("meal_session_id", mealSessionId);
     }
     result = { role: "extra", slot: log.meal_slot ?? "snack" };
+  } else if (role === "replace") {
+    // "I didn't eat that": the planned meal ticked as eaten comes off the log, and this meal takes its place.
+    const slot = (PLAN_SLOTS as readonly string[]).includes(log.meal_slot ?? "") ? (log.meal_slot as PlanSlot) : null;
+    if (!slot || linked) return { ok: false, error: "nothing_to_replace" };
+    if (!(await tickedAsPlanned(ctx.userProfileId, log.local_date, slot, mealSessionId))) return { ok: false, error: "nothing_to_replace" };
+    const undone = await undoPlanned(ctx, log.local_date, slot);
+    if (!undone.ok) return undone;
+    const linkedNow = await linkToPlan(ctx.userProfileId, log.local_date, slot, mealSessionId);
+    if (!linkedNow || linkedNow.role === "extra") return { ok: false, error: "meal_not_planned" };
+    result = linkedNow;
   } else {
     if (linked) return { ok: false, error: "already_counted" };
     const linkedNow = await linkToPlan(ctx.userProfileId, log.local_date, log.meal_slot ?? "", mealSessionId);

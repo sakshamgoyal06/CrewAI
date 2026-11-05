@@ -86,7 +86,14 @@ async function api(path, options = {}) {
   let res;
   const started = performance.now();
   try {
-    res = await request(path, options);
+    try {
+      res = await request(path, options);
+    } catch (err) {
+      // A read right after the phone wakes often fails once while the network comes back: retry it quietly.
+      if ((options.method || "GET") !== "GET") throw err;
+      await new Promise((r) => setTimeout(r, 1200));
+      res = await request(path, options);
+    }
     // A Google session can expire between the check and the request: refresh once and retry.
     if (res.status === 401) res = await request(path, options, true);
   } catch (err) {
@@ -4076,12 +4083,15 @@ function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
       el("span", {}, el("b", {}, fmt(t.cb, 1)), " g carbs"),
       el("span", {}, el("b", {}, fmt(t.f, 1)), " g fat"),
     );
-    confirm.disabled = !items.length || items.some((i) => !i.name.trim()) || t.c <= 0;
-    missing.hidden = t.c > 0;
+    // A line nothing was found for must get its numbers before the meal is logged (never a silent 0).
+    const blank = items.filter((i) => i.missing && !(+i.calories > 0));
+    confirm.disabled = !items.length || items.some((i) => !i.name.trim()) || t.c <= 0 || blank.length > 0;
+    missing.hidden = t.c > 0 && !blank.length;
+    if (blank.length && t.c > 0) missing.textContent = `No numbers for ${blank.map((i) => i.name).join(", ")} yet. Tap Edit to pick it from the food list, search for it, or type the numbers.`;
   }
 
   function renderItems() {
-    list.replaceChildren(...items.map((i) => el("li", {}, el("span", {}, i.name || "Unnamed"), el("span", {}, `${fmt(+i.calories || 0)} kcal · ${fmt(+i.protein_g || 0, 1)} g P`))));
+    list.replaceChildren(...items.map((i) => el("li", { class: i.missing && !(+i.calories > 0) ? "missing" : "" }, el("span", {}, i.name || "Unnamed"), el("span", {}, i.missing && !(+i.calories > 0) ? "needs numbers" : `${fmt(+i.calories || 0)} kcal · ${fmt(+i.protein_g || 0, 1)} g P`))));
   }
 
   /** The meal after "Make your meal": replaces every line on the card. */
@@ -4169,6 +4179,17 @@ function planRoleLine(draft, status, onChange) {
     refresh();
     loadPlan(true).catch(() => {});
   });
+  // The planned meal was already ticked as eaten: ask, so two dinners never count by mistake.
+  const replace = () => actLink(`I didn't eat the ${p.alreadyEaten}`, async () => {
+    const r = await api(`/meals/${encodeURIComponent(draft.draftId)}/plan`, { method: "POST", body: JSON.stringify({ role: "replace" }) });
+    onChange({ ...status, plan: r.result || { role: "instead", slot: p.slot, insteadOf: p.alreadyEaten } });
+    toast(`Took the ${p.alreadyEaten} off. This is your ${name}.`);
+    refresh();
+    loadPlan(true).catch(() => {});
+  });
+  if (p.role === "extra" && p.alreadyEaten) {
+    return el("div", { class: "plan-role extra" }, el("span", {}, `+ Extra: your ${name} (${p.alreadyEaten}) is already marked eaten`), replace());
+  }
   return p.role === "instead"
     ? el("div", { class: "plan-role instead" }, el("span", {}, `⇄ Your ${name}, instead of ${p.insteadOf}`), set("extra"))
     : el("div", { class: "plan-role extra" }, el("span", {}, "+ Extra, on top of your plan"), p.canCount ? set("instead") : null);

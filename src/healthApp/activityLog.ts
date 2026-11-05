@@ -55,6 +55,7 @@ export function rowToActivity(r: Row): Activity {
     kcalSource: (r.kcal_source as KcalSource) ?? "estimate",
     source: (r.source as ActivitySource) ?? "quick_add",
     duplicateOf: r.duplicate_of ? String(r.duplicate_of) : null,
+    loggedAt: r.created_at ? new Date(String(r.created_at)).toISOString() : null,
   };
 }
 

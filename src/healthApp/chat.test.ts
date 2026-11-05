@@ -223,6 +223,13 @@ describe("runHealthChat", () => {
     );
   });
 
+  it("names only the item it couldn't find and counts the rest", () => {
+    const partial = { ...draft, items: [{ name: "fries", calories: 440, protein_g: 6, carbs_g: 60, fat_g: 20 }, { name: "1 veg whopper", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, missing: true }], totals: { calories: 440, protein_g: 6, carbs_g: 60, fat_g: 20 } };
+    const text = mealDraftReply([partial]);
+    expect(text).toMatch(/couldn't find numbers for 1 veg whopper/);
+    expect(text).not.toMatch(/reliable numbers for that/);
+  });
+
   it("logs steps directly and marks the turn as changed", async () => {
     const create = vi
       .fn()

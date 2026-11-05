@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 
 import type { RoutineItem, RoutineItemStatus } from "./routine.js";
-import { answerRoutineCheck, runRoutineTick } from "./routineCheck.js";
+import { answerRoutineCheck, buildSwap, findRoutineItem, runRoutineTick } from "./routineCheck.js";
 import { gymPlans } from "./workoutCheck.js";
 
 const TZ = "Asia/Kolkata";
@@ -140,11 +140,27 @@ describe("gymPlans", () => {
   it("uses each gym item's days and time, and checks untimed ones in the evening", () => {
     const morning = { ...gym, id: "m", days: [6], startTime: null };
     expect(gymPlans({ targets, gym: { time: null, checkDelayMin: 180 }, routine: [walk, gym, morning] })).toEqual([
-      { trainingDays: [1, 3, 5], slot: { time: "18:30", checkDelayMin: 180 } },
-      { trainingDays: [6], slot: { time: "21:00", checkDelayMin: 0 } },
+      { item: gym, trainingDays: [1, 3, 5], slot: { time: "18:30", checkDelayMin: 180 } },
+      { item: morning, trainingDays: [6], slot: { time: "21:00", checkDelayMin: 0 } },
     ]);
   });
   it("has no gym checks when the routine has no gym", () => {
     expect(gymPlans({ targets, gym: { time: "18:30", checkDelayMin: 180 }, routine: [walk] })).toEqual([]);
+  });
+});
+
+describe("swap a routine item for a while", () => {
+  const evGym = { id: "g", activityKey: "gym", label: "Evening gym", days: [0, 1, 3, 4, 6], startTime: "18:30", durationMin: 90, remindBeforeMin: 15, checkAfterMin: 180, position: 0 };
+  it("finds the item by 'gym', its label or id", () => {
+    expect(findRoutineItem([evGym], "gym")?.id).toBe("g");
+    expect(findRoutineItem([evGym], "Evening gym")?.id).toBe("g");
+    expect(findRoutineItem([evGym], "g")?.id).toBe("g");
+    expect(findRoutineItem([evGym], "swim")).toBeNull();
+  });
+  it("builds the stand-in from today to the last date", () => {
+    expect(buildSwap(evGym, { item: "gym", activity: "walk", until: "2026-11-25", reason: "No gym access" }, "2026-11-05")).toEqual({
+      activityKey: "walking", label: "Evening walk (for evening gym)", durationMin: 30, startTime: "18:30", from: "2026-11-05", until: "2026-11-25", reason: "No gym access",
+    });
+    expect(buildSwap(evGym, { item: "gym", activity: "walk" }, "2026-11-05")).toEqual({ error: "until_required" });
   });
 });

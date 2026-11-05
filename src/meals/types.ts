@@ -10,6 +10,8 @@ export type MealItemLine = {
   component_index?: number;
   /** Estimated weight of the amount eaten, in grams. */
   grams?: number;
+  /** No numbers found for this item: the person fills it in (the rest of the meal still counts). */
+  missing?: boolean;
 };
 
 export type MealNutritionEstimate = {

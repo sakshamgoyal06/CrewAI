@@ -34,6 +34,7 @@ export function fixtureSnapshot(overrides: Partial<HealthSnapshot> = {}): Health
       calories: 610,
       proteinG: 28,
       steps: 4200,
+      stepsFromPhone: true,
       walkMinutes: null,
       sleepMinutes: 412,
       restingHr: 58,
