@@ -4172,6 +4172,17 @@ function planRoleLine(draft, status, onChange) {
     refresh();
     loadPlan(true).catch(() => {});
   });
+  // The planned meal was already ticked as eaten: ask, so two dinners never count by mistake.
+  const replace = () => actLink(`I didn't eat the ${p.alreadyEaten}`, async () => {
+    const r = await api(`/meals/${encodeURIComponent(draft.draftId)}/plan`, { method: "POST", body: JSON.stringify({ role: "replace" }) });
+    onChange({ ...status, plan: r.result || { role: "instead", slot: p.slot, insteadOf: p.alreadyEaten } });
+    toast(`Took the ${p.alreadyEaten} off. This is your ${name}.`);
+    refresh();
+    loadPlan(true).catch(() => {});
+  });
+  if (p.role === "extra" && p.alreadyEaten) {
+    return el("div", { class: "plan-role extra" }, el("span", {}, `+ Extra: your ${name} (${p.alreadyEaten}) is already marked eaten`), replace());
+  }
   return p.role === "instead"
     ? el("div", { class: "plan-role instead" }, el("span", {}, `⇄ Your ${name}, instead of ${p.insteadOf}`), set("extra"))
     : el("div", { class: "plan-role extra" }, el("span", {}, "+ Extra, on top of your plan"), p.canCount ? set("instead") : null);
