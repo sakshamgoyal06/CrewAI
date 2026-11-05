@@ -14,6 +14,7 @@ const get = (r: Row, path: string) => {
 const cmpStr = (v: unknown) => (v === null ? null : String(v));
 
 vi.mock("../../tools/clients.js", () => {
+  const tick = () => new Promise<void>((r) => setImmediate(r));
   const build = (table: string, op: string, payload?: any, upsertKey?: string) => {
     const f: Array<(r: Row) => boolean> = [];
     let lim = Infinity;
@@ -56,9 +57,12 @@ vi.mock("../../tools/clients.js", () => {
       order: () => q,
       limit: (n: number) => ((lim = n), q),
       select: () => ((wantRows = true), q),
-      single: async () => ({ data: run()[0] ?? null, error: null }),
-      maybeSingle: async () => ({ data: run()[0] ?? null, error: null }),
-      then: (resolve: (v: unknown) => void) => resolve({ data: op === "select" || wantRows ? run() : (run(), null), error: null }),
+      // Each answer waits a macrotask, like a real network call: the plan builds are long and
+      // synchronous, and without a turn of the event loop vitest's worker can't report progress.
+      single: () => tick().then(() => ({ data: run()[0] ?? null, error: null })),
+      maybeSingle: () => tick().then(() => ({ data: run()[0] ?? null, error: null })),
+      then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
+        tick().then(() => resolve({ data: op === "select" || wantRows ? run() : (run(), null), error: null }), reject),
     };
     return q;
   };
