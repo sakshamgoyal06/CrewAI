@@ -22,4 +22,4 @@ export const digestModel = (env: Env = process.env) => pick(env.MAGNUS_DIGEST_MO
 export const photoMealModel = (env: Env = process.env) => pick(env.MAGNUS_MEAL_PHOTO_MODEL, "claude-sonnet-5-5");
 
 /** Meal nutrition lookups (text estimate, web research, ingredient breakdown). */
-export const mealLookupModel = (env: Env = process.env) => pick(env.MAGNUS_MEAL_LOOKUP_MODEL, "claude-sonnet-4-6");
+export const mealLookupModel = (env: Env = process.env) => pick(env.MAGNUS_MEAL_LOOKUP_MODEL, "claude-sonnet-5-5");
