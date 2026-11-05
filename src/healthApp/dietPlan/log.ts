@@ -98,6 +98,7 @@ export async function undoPlanned(ctx: ActionContext, date: string, slot: PlanSl
   }
   delete meta.logged_session_id;
   delete meta.eaten_items;
+  delete meta.off_plan;
   const { error } = await supabase
     .from("meal_plan_entries")
     .update({ status: "planned", metadata: meta, updated_at: new Date().toISOString() })
@@ -120,5 +121,6 @@ export async function unlinkDeletedMeal(userProfileId: string, mealSessionId: st
   const meta = { ...row.metadata };
   delete meta.logged_session_id;
   delete meta.eaten_items;
+  delete meta.off_plan;
   await supabase.from("meal_plan_entries").update({ status: "planned", metadata: meta, updated_at: new Date().toISOString() }).eq("id", row.id);
 }

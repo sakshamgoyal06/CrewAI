@@ -17,6 +17,9 @@ import { getWorkoutChecks } from "./workoutCheckStore.js";
 import { routineDayStatus, type RoutineItemStatus } from "./routine.js";
 import { checksOn, getRoutineChecks } from "./routineStore.js";
 import { DAY_MS } from "../util/time.js";
+import { buildDayMeals, groupMeals, type DayMeals, type MealRow } from "./dayMeals.js";
+export { groupMeals } from "./dayMeals.js";
+import { loadPlanEntries } from "./dayMealsStore.js";
 
 export const DEFAULT_HISTORY_DAYS = 30;
 /** 12 weeks, for the Progress charts' weekly view. */
@@ -87,6 +90,8 @@ export type HistoryDay = {
   routine: RoutineItemStatus[];
   /** Water logged that day, in ml. */
   waterMl: number;
+  /** The day's one meal list: planned meals with their state, plus extras (dayMeals.ts). */
+  mealList: DayMeals;
 };
 
 export type HealthHistory = {
@@ -106,62 +111,6 @@ const n = (v: unknown): number => {
 };
 const nOrNull = (v: unknown): number | null => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
 const r1 = (x: number) => Math.round(x * 10) / 10;
-
-type MealRow = {
-  meal_session_id: string | null;
-  local_date: string | null;
-  meal_slot: string | null;
-  raw_text: string | null;
-  description: string | null;
-  calories: unknown;
-  protein_g: unknown;
-  carbs_g: unknown;
-  fat_g: unknown;
-  logged_at: string | null;
-  created_at: string | null;
-  component_index: number | null;
-};
-
-/** Groups meal_logs rows (one per item) into meals per day, newest meal first. */
-export function groupMeals(rows: MealRow[]): Map<string, HistoryMeal[]> {
-  const sessions = new Map<string, { date: string; rows: MealRow[] }>();
-  for (const r of rows) {
-    if (!r.meal_session_id || !r.local_date) continue;
-    const s = sessions.get(r.meal_session_id) ?? { date: String(r.local_date), rows: [] };
-    s.rows.push(r);
-    sessions.set(r.meal_session_id, s);
-  }
-  const out = new Map<string, HistoryMeal[]>();
-  for (const [id, s] of sessions) {
-    s.rows.sort((a, b) => (a.component_index ?? 0) - (b.component_index ?? 0));
-    const first = s.rows[0]!;
-    const items = s.rows.map((r) => ({
-      name: (r.description ?? "").trim() || (r.raw_text ?? "").trim() || "Item",
-      calories: Math.round(n(r.calories)),
-      proteinG: r1(n(r.protein_g)),
-      carbsG: r1(n(r.carbs_g)),
-      fatG: r1(n(r.fat_g)),
-    }));
-    const meal: HistoryMeal = {
-      mealSessionId: id,
-      slot: first.meal_slot ?? "unspecified",
-      text: (first.raw_text ?? "").trim() || items[0]!.name,
-      loggedAt: first.logged_at ?? first.created_at ?? `${s.date}T12:00:00Z`,
-      name: "",
-      calories: items.reduce((t, i) => t + i.calories, 0),
-      proteinG: r1(items.reduce((t, i) => t + i.proteinG, 0)),
-      carbsG: r1(items.reduce((t, i) => t + i.carbsG, 0)),
-      fatG: r1(items.reduce((t, i) => t + i.fatG, 0)),
-      items,
-    };
-    meal.name = meal.text;
-    const list = out.get(s.date) ?? [];
-    list.push(meal);
-    out.set(s.date, list);
-  }
-  for (const list of out.values()) list.sort((a, b) => a.loggedAt.localeCompare(b.loggedAt));
-  return out;
-}
 
 /** A Hevy workout with every exercise and set, plus total volume (kg × reps over working sets). */
 export function detailWorkout(w: HevyWorkout): HistoryWorkout | null {
@@ -243,6 +192,7 @@ export async function buildHealthHistory(
     routine?.length ? getRoutineChecks(userProfileId, from, to) : Promise.resolve(new Map()),
     getWaterByDate(userProfileId, from, to).catch(() => new Map<string, number>()),
   ]);
+  const planned = await loadPlanEntries(userProfileId, from, to).catch(() => null);
   const actsByDate = new Map<string, Activity[]>();
   for (const a of activities) actsByDate.set(a.localDate, [...(actsByDate.get(a.localDate) ?? []), a]);
   const bucketsByDate = new Map<string, StepBucket[]>();
@@ -351,6 +301,7 @@ export async function buildHealthHistory(
       trainedUnlogged,
       routine: dayRoutine,
       waterMl: water.get(date) ?? 0,
+      mealList: buildDayMeals({ date, today: to, plan: planned ? planned.byDate.get(date) ?? [] : null, logs: dayMeals, times: planned?.times }),
     };
   });
 
@@ -364,3 +315,4 @@ export async function buildHealthHistory(
     days,
   };
 }
+

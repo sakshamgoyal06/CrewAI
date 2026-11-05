@@ -21,6 +21,7 @@ import { defaultPrefs, dietPrefsInput, type DietPrefs, type DietPrefsInput } fro
 import { reviewEnabled, reviewPlan } from "./review.js";
 import { supplementChoices, supplementLines, type SupplementLine } from "./supplements.js";
 import { accountDay, type DayAccount } from "./dayAccount.js";
+import { buildDayMeals, groupMeals, type DayMeals, type LoggedMeal, type MealRow, type PlanEntryLite } from "../dayMeals.js";
 import { PLAN_SLOTS, type MacroTargets, type MealBudget, type PlanSlot } from "./targets.js";
 
 export type PrefsRow = { prefs: DietPrefs; saved: boolean; pinned: string[]; liked: string[]; hidden: string[] };
@@ -70,17 +71,30 @@ export async function supplementSessionOn(userProfileId: string, date: string): 
 }
 
 /** Everything logged on a day (meals, supplements, chat logs), as the Today screen counts it. */
-async function loggedOn(userProfileId: string, date: string): Promise<{ kcal: number; proteinG: number; carbsG: number; fatG: number; meals: number }> {
+/** Every meal logged on a date, grouped into meals (supplements and chat logs included). */
+async function loggedMealsOn(userProfileId: string, date: string): Promise<LoggedMeal[]> {
   const { data, error } = await supabase
     .from("meal_logs")
-    .select("meal_session_id, calories, protein_g, carbs_g, fat_g")
+    .select("meal_session_id, local_date, meal_slot, raw_text, description, calories, protein_g, carbs_g, fat_g, logged_at, created_at, component_index")
     .eq("user_profile_id", userProfileId)
     .eq("local_date", date)
     .is("deleted_at", null);
   if (error) throw new Error(error.message);
-  const rows = data ?? [];
-  const n = (k: string) => rows.reduce((a, r) => a + (Number((r as Record<string, unknown>)[k]) || 0), 0);
-  return { kcal: n("calories"), proteinG: n("protein_g"), carbsG: n("carbs_g"), fatG: n("fat_g"), meals: new Set(rows.map((r) => r.meal_session_id).filter(Boolean)).size };
+  return groupMeals((data ?? []) as MealRow[]).get(date) ?? [];
+}
+
+/** A planned meal as the day list needs it. */
+function plannedLite(p: PlannedMeal): PlanEntryLite {
+  return {
+    slot: p.slot,
+    kind: p.kind === "eat_out" ? "eat_out" : "option",
+    status: p.status,
+    title: p.title,
+    items: p.items,
+    totals: p.totals,
+    loggedSessionId: p.loggedSessionId ?? null,
+    offPlan: p.offPlan === true,
+  };
 }
 
 export const OPTION_ACTIONS = ["pin", "unpin", "like", "unlike", "hide", "unhide"] as const;
@@ -347,6 +361,8 @@ export type PlannedMeal = DayPick & {
   /** When eaten with changed portions: what they ate. */
   eatenItems?: MealOption["items"];
   loggedSessionId?: string;
+  /** Eaten by logging their own food for it (chat, photo, the meal sheet), not "Ate this". */
+  offPlan?: boolean;
   /** Items were added or removed in the meal editor. */
   edited?: boolean;
 };
@@ -402,7 +418,7 @@ export async function ensureDays(ctx: ActionContext, plan: ActivePlan, prefs: Pr
     const totals = (r?.metadata?.totals as DayPick["totals"] | undefined) ?? p.totals;
     // An edited meal (items added or removed) goes by its own title.
     const edited = r?.metadata?.edited ? { title: r.title, edited: true } : {};
-    return { ...p, totals, ...saved, ...edited, entryId: r?.id ?? null, status: r?.status ?? "planned", items, ...(eatenItems ? { eatenItems } : {}), ...(loggedSessionId ? { loggedSessionId } : {}) };
+    return { ...p, totals, ...saved, ...edited, entryId: r?.id ?? null, status: r?.status ?? "planned", items, ...(eatenItems ? { eatenItems } : {}), ...(loggedSessionId ? { loggedSessionId } : {}), ...(r?.metadata?.off_plan === true ? { offPlan: true } : {}) };
   });
 }
 
@@ -449,6 +465,8 @@ export type PlanView = {
   needsTargets: boolean;
   /** Each planned day's numbers: targets, planned, supplements, eat-out allowances, logged (dayAccount.ts). */
   accounts?: DayAccount[];
+  /** Each planned day's one meal list (dayMeals.ts): the same rows the Today tab shows. */
+  lists?: DayMeals[];
 };
 
 /**
@@ -481,9 +499,12 @@ export async function loadPlanView(ctx: ActionContext, now = new Date()): Promis
   const days = await ensureDays(ctx, plan, prefs, today);
   const { review: _r, ...rest } = plan;
   const dates = [...new Set(days.map((x) => x.date))];
-  const loggedToday = await loggedOn(ctx.userProfileId, today);
-  const accounts = dates.map((date) => accountDay({ date, targets: plan!.targets, meals: days.filter((x) => x.date === date), supplements: [], loggedActual: date === today ? loggedToday : null }));
-  return { ok: true, setup: true, plan: rest, days, accounts, ...base };
+  const logs = await loggedMealsOn(ctx.userProfileId, today);
+  const times: Partial<Record<PlanSlot, string>> = {};
+  for (const m of prefs.prefs.meals) if (m.time) times[m.slot as PlanSlot] = m.time;
+  const lists = dates.map((date) => buildDayMeals({ date, today, plan: days.filter((x) => x.date === date).map(plannedLite), logs: date === today ? logs : [], times }));
+  const accounts = dates.map((date, k) => accountDay({ date, targets: plan!.targets, meals: days.filter((x) => x.date === date), supplements: [], list: lists[k] }));
+  return { ok: true, setup: true, plan: rest, days, accounts, lists, ...base };
 }
 
 // ---------- swap feedback ----------

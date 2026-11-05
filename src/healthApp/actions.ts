@@ -228,11 +228,14 @@ export async function confirmMeal(
     },
     ctx.now,
   );
-  // The meal plan follows: marks a planned meal eaten and resizes the rest of today. Never blocks the log.
+  // The meal plan follows: the log takes a still-planned meal's place, or is an extra; the rest of
+  // today is resized in the background. A failure here never fails the log.
   if (saved.ok && !saved.alreadySaved) {
-    void afterMealLogged(ctx, { date, slot: input.slot, mealSessionId: saved.mealSessionId }, ctx.now).catch((err) =>
-      logger.warn({ err: loggableError(err) }, "meal plan follow-up failed"),
-    );
+    const plan = await afterMealLogged(ctx, { date, slot: input.slot, mealSessionId: saved.mealSessionId }, ctx.now).catch((err) => {
+      logger.warn({ err: loggableError(err) }, "meal plan follow-up failed");
+      return null;
+    });
+    return plan ? { ...saved, plan } : saved;
   }
   return saved;
 }
