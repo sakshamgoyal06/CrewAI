@@ -77,6 +77,7 @@ import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
 import { loadWeeklyReview } from "./weeklyReview.js";
 import { editInput, editPick, restrictionsFor, searchMealFoods } from "./dietPlan/edit.js";
 import { eatInput, eatPlanned, undoPlanned, unlinkDeletedMeal } from "./dietPlan/log.js";
+import { editReceipt, getLoggedMeal, mealReplaceInput, receiptEditInput, replaceLoggedMeal, undoReceipt } from "./logEdits.js";
 import { logSupplements, undoSupplements } from "./dietPlan/supplementLog.js";
 import { rebalanceToday } from "./dietPlan/rhythm.js";
 import { FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
@@ -849,6 +850,40 @@ export function createHealthAppRouter(): express.Router {
       const r = await removeMeal(ctx, id);
       if (r.ok) await unlinkDeletedMeal(ctx.userProfileId, id);
       return fromResult(r);
+    }),
+  );
+
+  /** A logged meal's items, for editing it from its chat card. */
+  router.get(
+    "/meals/:id/items",
+    route("meal-items", async (ctx, req) => {
+      const r = await getLoggedMeal(ctx.userProfileId, String(req.params.id));
+      return r.ok ? { body: r } : { status: r.error === "meal_not_found" ? 404 : 400, body: r };
+    }),
+  );
+
+  /** Edit of a logged meal: the same log now holds these items. */
+  router.put(
+    "/meals/:id",
+    route("meal-replace", async (ctx, req) => {
+      const r = await replaceLoggedMeal(ctx, String(req.params.id), mealReplaceInput.parse(req.body));
+      return r.ok ? { body: r } : { status: r.error === "meal_not_found" ? 404 : 400, body: r };
+    }),
+  );
+
+  /** Undo / edit of something the coach logged straight from chat (weigh-in, steps, water, a removal). */
+  router.post(
+    "/chat/receipts/:id/undo",
+    route("receipt-undo", async (ctx, req) => {
+      const r = await undoReceipt(ctx, String(req.params.id));
+      return r.ok ? { body: r } : { status: r.error === "not_found" ? 404 : 400, body: r };
+    }),
+  );
+  router.post(
+    "/chat/receipts/:id/edit",
+    route("receipt-edit", async (ctx, req) => {
+      const r = await editReceipt(ctx, String(req.params.id), receiptEditInput.parse(req.body ?? {}));
+      return r.ok ? { body: r } : { status: r.error === "not_found" ? 404 : 400, body: r };
     }),
   );
 

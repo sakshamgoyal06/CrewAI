@@ -64,6 +64,15 @@ import { addSpend, turnCostUsd } from "./spend.js";
 import { randomUUID } from "node:crypto";
 import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
 import { logWater, waterInput } from "./water.js";
+import { bodyBefore, getLoggedMeal, receipt, stepsBefore, type LogReceiptCard } from "./logEdits.js";
+import { unlinkDeletedMeal } from "./dietPlan/log.js";
+import { loadHealthProfile } from "./snapshot.js";
+
+/** The meal before it's removed, for the receipt; null when it can't be read. */
+async function getLoggedMealSafe(userProfileId: string, sessionId: string) {
+  const r = await getLoggedMeal(userProfileId, sessionId).catch(() => null);
+  return r?.ok ? r : null;
+}
 import { eatingOutInput, planEatingOut, type EatingOutCard } from "./eatingOut.js";
 import { checkNewGoal, openInterventions, recordManualPlan, respond as respondToIntervention } from "./interventions/engine.js";
 import type { InterventionCard } from "./interventions/types.js";
@@ -224,7 +233,7 @@ export const CHAT_CALORIE_FLOOR = 1200;
 
 export type CalorieReviewCard = { type: "calorie_review"; review: Extract<CalorieReview, { status: "ok" }> };
 
-export type ActivityDraftCard = { type: "activity_draft"; draft: ActivityDraft; saved?: { durationMin: number; kcal: number } };
+export type ActivityDraftCard = { type: "activity_draft"; draft: ActivityDraft; saved?: { id?: string; durationMin: number; kcal: number } };
 
 export type MealDraftCard = { type: "meal_draft"; draft: MealDraft; saved?: { calories: number } };
 
@@ -240,7 +249,8 @@ export type ChatCard =
   | DayPlanCard
   | EatingOutCard
   | PlanMealCard
-  | PlanAdjustCard;
+  | PlanAdjustCard
+  | LogReceiptCard;
 
 export type ChatReply = {
   text: string;
@@ -571,7 +581,7 @@ const toolDefinitions: Anthropic.Tool[] = [
       properties: {
         itemId: { type: "string" },
         date: { type: "string", description: "YYYY-MM-DD; defaults to today." },
-        answer: { type: "string", enum: ["done", "skipped", "recheck"] },
+        answer: { type: "string", enum: ["done", "skipped", "recheck", "undo"], description: "undo: clear an answer given by mistake (removes the activity a done logged)." },
         durationMin: { type: "integer" },
         reason: { type: "string" },
       },
@@ -607,7 +617,7 @@ const toolDefinitions: Anthropic.Tool[] = [
       type: "object",
       properties: {
         date: { type: "string", description: "YYYY-MM-DD; defaults to today." },
-        answer: { type: "string", enum: ["recheck", "skipped", "trained_unlogged"] },
+        answer: { type: "string", enum: ["recheck", "skipped", "trained_unlogged", "undo"], description: "undo: clear an answer given by mistake." },
         reason: { type: "string", description: "Why they skipped, in their words." },
       },
       required: ["answer"],
@@ -800,25 +810,43 @@ export async function runTool(
     }
     case "delete_activity": {
       const id = (input as { id?: unknown })?.id;
-      const r = await deleteActivity(ctx, typeof id === "string" ? id : "");
-      return { result: r, changed: r.ok };
+      const aid = typeof id === "string" ? id : "";
+      const { data: row } = z.string().uuid().safeParse(aid).success
+        ? await supabase.from("health_activities").select("local_date, label, duration_min").eq("user_profile_id", ctx.userProfileId).eq("id", aid).maybeSingle()
+        : { data: null };
+      const r = await deleteActivity(ctx, aid);
+      // A receipt with Undo: a removal said in passing shouldn't be one-way.
+      const card = r.ok && row ? receipt({ type: "log_receipt", kind: "activity_removed", date: String(row.local_date), value: { activityId: aid, label: String(row.label), durationMin: Number(row.duration_min) || 0 } }) : undefined;
+      return { result: r, changed: r.ok, card };
     }
     case "delete_meal": {
       const id = (input as { mealSessionId?: unknown })?.mealSessionId;
-      const r = await removeMeal(ctx, typeof id === "string" ? id : "");
-      return { result: r, changed: r.ok };
+      const sid = typeof id === "string" ? id : "";
+      const before = z.string().uuid().safeParse(sid).success ? await getLoggedMealSafe(ctx.userProfileId, sid) : null;
+      const r = await removeMeal(ctx, sid);
+      if (r.ok) await unlinkDeletedMeal(ctx.userProfileId, sid).catch(() => {});
+      const card = r.ok && before ? receipt({ type: "log_receipt", kind: "meal_removed", date: r.date, value: { mealSessionId: sid, text: before.items.map((i) => i.name).join(", ").slice(0, 120), calories: before.items.reduce((a, i) => a + i.calories, 0) } }) : undefined;
+      return { result: r, changed: r.ok, card };
     }
     case "log_steps": {
       const p = stepsInput.safeParse({ ...(input as object), source: "manual" });
       if (!p.success) return invalid(p.error);
+      const day = p.data.date ?? localDateKey(ctx.now ?? new Date(), ctx.timezone);
+      const before = await stepsBefore(ctx.userProfileId, day).catch(() => null);
       const r = await logSteps(ctx, p.data);
-      return { result: r, changed: r.ok };
+      const card = r.ok ? receipt({ type: "log_receipt", kind: "steps", date: r.date, value: { steps: r.steps }, before }) : undefined;
+      return { result: r, changed: r.ok, card };
     }
     case "log_body_checkin": {
       const p = checkinInput.safeParse(input);
       if (!p.success) return invalid(p.error);
+      const day = p.data.date ?? localDateKey(ctx.now ?? new Date(), ctx.timezone);
+      const before = await bodyBefore(ctx.userProfileId, day).catch(() => null);
       const r = await logCheckin(ctx, p.data);
-      return { result: r, changed: r.ok };
+      const card = r.ok
+        ? receipt({ type: "log_receipt", kind: "weigh_in", date: r.date, value: { weightKg: p.data.weightKg ?? null, bodyFatPct: p.data.bodyFatPct ?? null, muscleMassKg: p.data.muscleMassKg ?? null }, before })
+        : undefined;
+      return { result: r, changed: r.ok, card };
     }
     case "set_goal": {
       const p = goalInput.safeParse(input);
@@ -913,7 +941,13 @@ export async function runTool(
       const p = routineCheckAnswerInput.safeParse(input);
       if (!p.success) return invalid(p.error);
       const r = await answerRoutineCheck(ctx, p.data);
-      return { result: r, changed: r.ok };
+      // The answer shows as the routine card, so it can be changed or undone from the chat.
+      let card: RoutineCheckCard | undefined;
+      if (r.ok && r.status !== "missing") {
+        const item = ((await loadHealthProfile(ctx.userProfileId)).routine ?? []).find((i) => i.id === p.data.itemId);
+        if (item) card = { type: "routine_check", itemId: item.id, date: p.data.date ?? localDateKey(ctx.now ?? new Date(), ctx.timezone), label: item.label, activityKey: item.activityKey, startTime: item.startTime, durationMin: p.data.durationMin ?? item.durationMin, status: r.status, reason: p.data.reason ?? null };
+      }
+      return { result: r, changed: r.ok, card };
     }
     case "plan_eating_out": {
       const p = eatingOutInput.safeParse(input);
@@ -930,13 +964,19 @@ export async function runTool(
       const p = waterInput.safeParse(input);
       if (!p.success) return invalid(p.error);
       const r = await logWater(ctx, p.data, "chat");
-      return { result: r, changed: r.ok };
+      const card = r.ok && !p.data.undo && p.data.ml ? receipt({ type: "log_receipt", kind: "water", date: r.date, value: { ml: p.data.ml } }) : undefined;
+      return { result: r, changed: r.ok, card };
     }
     case "answer_workout_check": {
       const p = workoutCheckAnswerInput.safeParse(input);
       if (!p.success) return invalid(p.error);
       const r = await answerWorkoutCheck(ctx, p.data);
-      return { result: r, changed: r.ok };
+      let card: WorkoutCheckCard | undefined;
+      if (r.ok && r.status && r.status !== "missing") {
+        const { gym } = await loadHealthProfile(ctx.userProfileId);
+        card = { type: "workout_check", date: p.data.date ?? localDateKey(ctx.now ?? new Date(), ctx.timezone), gymTime: gym.time ?? "00:00", status: r.status, reason: p.data.answer === "skipped" ? p.data.reason ?? null : null, hevy: Boolean(await hevyKey(ctx.userProfileId)) };
+      }
+      return { result: r, changed: r.ok, card };
     }
     default:
       return { result: { ok: false, error: `unknown tool ${name}` } };
@@ -1084,9 +1124,11 @@ export function toolFailureResult(name: string, err: unknown): Record<string, un
 /** The coach's line when the turn ran out of time: what got done, and what to do next. */
 export function budgetReply(stats: Pick<TurnStats, "cards" | "changed" | "tools">): string {
   const did = stats.tools.filter((t) => t.ok).map((t) => t.name);
-  const done = stats.changed || stats.cards.length > 0;
+  // A log receipt is a record of a write, not a card to act on: name the write instead.
+  const cards = stats.cards.filter((c) => c !== "log_receipt");
+  const done = stats.changed || cards.length > 0;
   if (done) {
-    const what = stats.cards.length ? "the card above" : did.includes("log_steps") ? "your steps" : did.includes("log_body_checkin") ? "your weigh-in" : "part of it";
+    const what = cards.length ? "the card above" : did.includes("log_steps") ? "your steps" : did.includes("log_body_checkin") ? "your weigh-in" : "part of it";
     return `I got ${what} done but ran out of time before finishing the rest. Ask me again for what's left.`;
   }
   return "That took too long and I couldn't finish it. Try again in a moment, or ask it in a smaller piece.";

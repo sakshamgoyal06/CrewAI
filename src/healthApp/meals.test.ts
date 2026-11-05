@@ -10,6 +10,7 @@ vi.mock("../tools/clients.js", () => {
   const select = () => {
     const chain = {
       eq: () => chain,
+      is: () => chain,
       limit: async () => ({ data: db.existing, error: null }),
     };
     return chain;

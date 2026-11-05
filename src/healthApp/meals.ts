@@ -171,6 +171,8 @@ export async function saveConfirmedMeal(
     .select("id")
     .eq("user_profile_id", userProfileId)
     .eq("meal_session_id", input.draftId)
+    // An undone log doesn't count: confirming the card again logs it again.
+    .is("deleted_at", null)
     .limit(1);
   if (existing.error) {
     return { ok: false, error: existing.error.message };

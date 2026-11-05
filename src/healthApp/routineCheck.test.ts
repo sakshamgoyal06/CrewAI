@@ -1,3 +1,4 @@
+import type { RoutineCheck } from "./routine.js";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
@@ -76,6 +77,8 @@ describe("answerRoutineCheck", () => {
     status: statusOf("pending") as never,
     save: vi.fn(async () => ({ ok: true })),
     logActivity: vi.fn(async () => ({ ok: true as const, activity: { id: "act-1" } as never, alreadySaved: false, training: { countsAsTraining: false, neededKcal: null, note: null, short: false } })),
+    current: vi.fn(async (): Promise<RoutineCheck | undefined> => undefined),
+    removeActivity: vi.fn(async () => ({ ok: true })),
   });
 
   it("done logs the walk at its planned time and length, idempotently", async () => {
@@ -98,6 +101,28 @@ describe("answerRoutineCheck", () => {
     await answerRoutineCheck(ctx, { itemId: walk.id, answer: "skipped", reason: "Rain" }, d);
     expect(d.save).toHaveBeenCalledWith("u", expect.objectContaining({ status: "skipped", reason: "Rain" }));
     expect(await answerRoutineCheck(ctx, { itemId: walk.id, answer: "recheck" }, d)).toEqual({ ok: true, status: "missing", label: "Morning walk" });
+  });
+
+  it("undo clears the answer and removes the activity a done logged", async () => {
+    const d = base();
+    d.current.mockResolvedValue({ itemId: walk.id, localDate: "2026-11-03", label: "Morning walk", status: "done", reason: null, activityId: "act-1" });
+    expect(await answerRoutineCheck(ctx, { itemId: walk.id, answer: "undo" }, d)).toEqual({ ok: true, status: "missing", label: "Morning walk" });
+    expect(d.removeActivity).toHaveBeenCalledWith(ctx, "act-1");
+    expect(d.save).toHaveBeenCalledWith("u", expect.objectContaining({ status: "missing", activityId: null }));
+  });
+
+  it("changing a done to skipped takes its activity out too", async () => {
+    const d = base();
+    d.current.mockResolvedValue({ itemId: walk.id, localDate: "2026-11-03", label: "Morning walk", status: "done", reason: null, activityId: "act-1" });
+    await answerRoutineCheck(ctx, { itemId: walk.id, answer: "skipped", reason: "Rain" }, d);
+    expect(d.removeActivity).toHaveBeenCalledWith(ctx, "act-1");
+    expect(d.save).toHaveBeenCalledWith("u", expect.objectContaining({ status: "skipped", activityId: null }));
+  });
+
+  it("a different length on a changed answer rewrites the activity", async () => {
+    const d = base();
+    await answerRoutineCheck(ctx, { itemId: walk.id, answer: "done", durationMin: 15 }, d);
+    expect(d.logActivity).toHaveBeenCalledWith(ctx, expect.objectContaining({ durationMin: 15, replace: true }));
   });
 
   it("refuses the gym, unknown items and future dates", async () => {

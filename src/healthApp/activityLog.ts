@@ -261,6 +261,8 @@ export const activitySaveInput = z.object({
   kcalSource: z.enum(["user", "estimate"]).default("estimate"),
   source: z.enum(["chat", "quick_add"]).default("quick_add"),
   separateSession: z.boolean().optional(),
+  /** Edit of a saved activity: the card's row takes these values instead of "already saved". */
+  replace: z.boolean().optional(),
 });
 export type ActivitySaveInput = z.infer<typeof activitySaveInput>;
 
@@ -278,7 +280,10 @@ export async function saveActivity(ctx: ActionContext, input: ActivitySaveInput)
     .eq("user_profile_id", ctx.userProfileId)
     .eq("draft_id", input.draftId)
     .maybeSingle();
-  if (existing) return { ok: true, activity: rowToActivity(existing as Row), alreadySaved: true, training: { countsAsTraining: false, neededKcal: null, note: null, short: false } };
+  // Saved and still there: a second tap is a no-op. An undone (deleted) row, or an edit, is
+  // written over below, since the draft id is unique per person.
+  const live = existing && !(existing as Row).deleted_at;
+  if (live && !input.replace) return { ok: true, activity: rowToActivity(existing as Row), alreadySaved: true, training: { countsAsTraining: false, neededKcal: null, note: null, short: false } };
 
   const key = catalogEntry(input.key).key;
   const weightKg = (await latestWeightKg(ctx.userProfileId)) ?? FALLBACK_WEIGHT_KG;
@@ -287,12 +292,10 @@ export async function saveActivity(ctx: ActionContext, input: ActivitySaveInput)
   const kcal = userKcal ? input.kcal! : est.kcal;
   const startTime = input.startTime ? new Date(input.startTime).toISOString() : null;
 
-  const sameDay = await getActivities(ctx.userProfileId, input.date, input.date);
+  const sameDay = (await getActivities(ctx.userProfileId, input.date, input.date)).filter((a) => !existing || a.id !== String((existing as Row).id));
   const match = input.separateSession ? null : findHealthConnectMatch({ localDate: input.date, key, startTime, durationMin: input.durationMin }, sameDay);
 
-  const { data, error } = await supabase
-    .from("health_activities")
-    .insert({
+  const values = {
       user_profile_id: ctx.userProfileId,
       local_date: input.date,
       start_time: startTime,
@@ -308,9 +311,16 @@ export async function saveActivity(ctx: ActionContext, input: ActivitySaveInput)
       draft_id: input.draftId,
       separate_session: Boolean(input.separateSession),
       duplicate_of: match?.id ?? null,
-    })
-    .select("*")
-    .single();
+  };
+  const { data, error } = existing
+    ? await supabase
+        .from("health_activities")
+        .update({ ...values, deleted_at: null, updated_at: new Date().toISOString() })
+        .eq("user_profile_id", ctx.userProfileId)
+        .eq("id", String((existing as Row).id))
+        .select("*")
+        .single()
+    : await supabase.from("health_activities").insert(values).select("*").single();
   if (error || !data) return { ok: false, error: error?.message ?? "save_failed" };
   const activity = rowToActivity(data as Row);
 
