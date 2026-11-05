@@ -21,3 +21,12 @@ describe("my foods", () => {
     expect(cleanOwnFood({ name: "Ghee rice", calories: 99999, protein_g: 0, carbs_g: 0, fat_g: 0 })?.calories).toBe(3000);
   });
 });
+
+describe("who sees a saved food", () => {
+  it("keeps one row per name, the person's own first, else the newest web food", async () => {
+    const { pickPerName } = await import("./myFoods.js");
+    const r = (id: string, user: string, key: string, source: "web" | "own") => ({ id, user_profile_id: user, name: key, food_key: key, calories: 1, protein_g: 0, carbs_g: 0, fat_g: 0, source });
+    const out = pickPerName([r("1", "other", "boondi raita", "web"), r("2", "me", "boondi raita", "own"), r("3", "other", "fali sabzi", "web"), r("4", "other2", "fali sabzi", "web")], "me");
+    expect(out.map((x) => [x.id, x.mine])).toEqual([["2", true], ["3", false]]);
+  });
+});

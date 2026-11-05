@@ -1,6 +1,6 @@
 -- Foods a person found with "Can't find it? Search" (web lookup) or typed in from a label, saved
--- once they approve them so the food searches offer them next time. Private to that person: the
--- shared food tables only take web rows through the foodStore.ts poisoning guard.
+-- once they approve them so the food searches offer them next time. A typed-in food ('own') is
+-- private to that person; an approved web food ('web') is offered to everyone.
 -- A lookup's results are stored unapproved first (approved = false) so the approve call can only
 -- save what the lookup itself returned; unapproved rows older than a day are deleted.
 CREATE TABLE IF NOT EXISTS public.health_my_foods (
@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS public.health_my_foods (
 
 CREATE INDEX IF NOT EXISTS idx_health_my_foods_user
   ON public.health_my_foods (user_profile_id, approved, approved_at DESC);
+CREATE INDEX IF NOT EXISTS idx_health_my_foods_shared
+  ON public.health_my_foods (approved, source, approved_at DESC);
 CREATE INDEX IF NOT EXISTS idx_health_my_foods_lookup
   ON public.health_my_foods (user_profile_id, lookup_id);
 
@@ -32,4 +34,4 @@ CREATE POLICY service_role_only ON public.health_my_foods
   WITH CHECK (auth.role() = 'service_role');
 REVOKE ALL ON public.health_my_foods FROM anon, authenticated;
 
-COMMENT ON TABLE public.health_my_foods IS 'Foods a person approved from web search or typed in; private to them, offered in their food searches.';
+COMMENT ON TABLE public.health_my_foods IS 'Foods approved from web search (offered to everyone) or typed in (private to that person); shown in the food searches.';

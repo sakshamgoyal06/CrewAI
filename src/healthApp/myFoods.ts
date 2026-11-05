@@ -6,7 +6,9 @@
  * paid for, and its results were cleaned (cleanLookupItems). Those results are stored unapproved
  * under a lookup id; approving can only flip rows that lookup returned, so the client can't save
  * arbitrary names or numbers as "web". Typed-in foods go through the same name check and limits.
- * Rows are private to the person: nothing here reaches the shared food tables.
+ * Who sees what: a food typed in by hand is private to the person who typed it. A food the web
+ * lookup returned and someone approved is offered to everyone (its numbers came from our own
+ * lookup, not from the person). Nothing here reaches the shared ingredient tables (foodStore.ts).
  */
 import { foodKeyFor } from "../meals/foodParse.js";
 import { logger } from "../logger.js";
@@ -18,9 +20,23 @@ const TABLE = "health_my_foods";
 const PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_SAVED = 300;
 
-export type MyFood = { id: string; name: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "web" | "own" };
+export type MyFood = { id: string; name: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "web" | "own"; mine: boolean };
 
-type Row = MyFood & { food_key: string };
+type Row = Omit<MyFood, "mine"> & { food_key: string; user_profile_id: string };
+
+/**
+ * One row per food name: the person's own save wins, otherwise the newest approved web food.
+ * Rows come newest first. Pure.
+ */
+export function pickPerName(rows: Row[], userProfileId: string): Array<Row & { mine: boolean }> {
+  const best = new Map<string, Row & { mine: boolean }>();
+  for (const r of rows) {
+    const mine = r.user_profile_id === userProfileId;
+    const had = best.get(r.food_key);
+    if (!had || (mine && !had.mine)) best.set(r.food_key, { ...r, mine });
+  }
+  return [...best.values()];
+}
 
 /** A clean, food-only line, or null. Pure. */
 export function cleanOwnFood(item: Partial<MealItem>): MealItem | null {
@@ -32,7 +48,7 @@ export function cleanOwnFood(item: Partial<MealItem>): MealItem | null {
 }
 
 /** Saved foods that match a search box: every typed word in the name; the newest first for an empty box. Pure. */
-export function matchMyFoods(rows: Row[], query: string, limit: number): Row[] {
+export function matchMyFoods<R extends { food_key: string }>(rows: R[], query: string, limit: number): R[] {
   const words = foodKeyFor(query).split(" ").filter(Boolean);
   if (!words.length) return rows.slice(0, Math.min(limit, 5));
   return rows.filter((r) => words.every((w) => r.food_key.includes(w))).slice(0, limit);
@@ -82,19 +98,22 @@ export async function saveOwnFood(userProfileId: string, item: Partial<MealItem>
   return clean;
 }
 
-/** The person's saved foods matching a search. Soft: [] on failure (the catalog still answers). */
+/**
+ * Saved foods matching a search: the person's own (typed or web) and everyone's approved web
+ * foods. Soft: [] on failure (the catalog still answers).
+ */
 export async function searchMyFoods(userProfileId: string, query: string, limit = 5): Promise<MyFood[]> {
   try {
     const { data, error } = await supabase
       .from(TABLE)
-      .select("id, name, food_key, calories, protein_g, carbs_g, fat_g, source")
-      .eq("user_profile_id", userProfileId)
+      .select("id, user_profile_id, name, food_key, calories, protein_g, carbs_g, fat_g, source")
       .eq("approved", true)
+      .or(`user_profile_id.eq.${userProfileId},source.eq.web`)
       .order("approved_at", { ascending: false })
-      .limit(MAX_SAVED);
+      .limit(2000);
     if (error) throw new Error(error.message);
     const rows = ((data ?? []) as Row[]).map((r) => ({ ...r, calories: Number(r.calories), protein_g: Number(r.protein_g), carbs_g: Number(r.carbs_g), fat_g: Number(r.fat_g) }));
-    return matchMyFoods(rows, query, limit).map(({ food_key: _k, ...f }) => f);
+    return matchMyFoods(pickPerName(rows, userProfileId), query, limit).map(({ food_key: _k, user_profile_id: _u, ...f }) => f);
   } catch (err) {
     logger.warn({ err: String(err) }, "my foods: search failed");
     return [];

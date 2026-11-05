@@ -438,7 +438,7 @@ export function createHealthAppRouter(): express.Router {
       const q = z.string().max(60).default("").parse(req.query.q ?? "");
       const slot = z.enum(PLAN_SLOTS).parse(req.query.slot);
       const [allows, mine] = await Promise.all([restrictionsFor(ctx.userProfileId), searchMyFoods(ctx.userProfileId, q)]);
-      // Their own saved foods first (checked against the diet by name), then the catalog.
+      // Saved foods first (their own and approved web foods, checked against the diet by name), then the catalog.
       const own = mine.filter((f) => allows.byName(f.name)).map(myFoodHit);
       const foods = [...own, ...searchMealFoods(q, slot, allows)].slice(0, 14);
       return { body: { ok: true, foods } };
@@ -1179,12 +1179,12 @@ export function createHealthAppRouter(): express.Router {
 }
 
 /** A saved food as a "Make your meal" pick: one serving with its own numbers. */
-function myFoodPick(f: MyFood): FoodPick & { mine: true } {
+function myFoodPick(f: MyFood): FoodPick & { mine: boolean } {
   return {
     key: `mine:${f.id}`,
     name: f.name,
     diet: "",
-    mine: true,
+    mine: f.mine,
     servings: [{ id: `mine:${f.id}`, label: "1 serving", grams: 0, default: true, kcal: f.calories, proteinG: f.protein_g, carbsG: f.carbs_g, fatG: f.fat_g, fiberG: 0 }],
   };
 }
@@ -1195,7 +1195,7 @@ function myFoodHit(f: MyFood) {
   return {
     key: `mine:${f.id}`,
     name: f.name,
-    mine: true,
+    mine: f.mine,
     servings: [{
       id: `mine:${f.id}`,
       label: "1 serving",
