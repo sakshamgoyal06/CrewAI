@@ -15,6 +15,9 @@ A thin native shell around the PWA:
   last 3 days each run is safe: the server upserts samples by start time.
 - **Background sync** needs *Access data in the background* (Android 14+). It's requested with the
   rest; if it isn't granted the app says so and syncs on every open instead.
+- **Notifications** from the PWA's web push are delegated to the app (`DelegationService`), so
+  they show as Magnus with its own icon instead of "Chrome · site". Android 13+ asks for the
+  notification permission the first time the PWA turns notifications on.
 - **Download:** every build on `main` refreshes the `android-latest` release with the
   release-signed `magnus.apk` (`releases/download/android-latest/magnus.apk`), linked from the
   PWA's settings outside the app. Without the signing secrets nothing is published.

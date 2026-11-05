@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar icon for notifications: the "M" mark, white on transparent (Android tints it). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M24,82 L24,26 L36,26 L54,54 L72,26 L84,26 L84,82 L72,82 L72,46 L54,73 L36,46 L36,82 Z" />
+</vector>
