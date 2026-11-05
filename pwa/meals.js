@@ -459,7 +459,7 @@ export function mealScreen() {
     const q = e.q.trim();
     return el("li", { class: "find-more" },
       none ? el("p", { class: "hint" }, `“${q}” isn't in the food list for your diet.`) : null,
-      el("button", { class: "btn block", type: "button", onclick: findOnWeb }, none ? `Search the web for “${q}”` : `Not here? Search for “${q}”`));
+      el("button", { class: "btn block", type: "button", title: `Search the web for “${q}”`, onclick: findOnWeb }, none ? `Search the web for “${q}”` : `Not here? Search for “${q}”`));
   };
   const paintHits = () => {
     if (!e.hits) { hitsBox.replaceChildren(el("li", { class: "hint" }, "Loading…")); return; }

@@ -179,7 +179,7 @@ export function mealBuilder({ api, el, fmt, openMini }, build, { applyLabel, onA
         el("span", { class: "n" }, food.name), el("small", {}, `${s.label} · ${fmt(s.kcal)} kcal`));
     });
     const tail = q
-      ? el("li", { class: "mb-opt more", onpointerdown: (e) => e.preventDefault(), onclick: findMore },
+      ? el("li", { class: "mb-opt more", title: `Search the web for “${q}”`, onpointerdown: (e) => e.preventDefault(), onclick: findMore },
           el("span", { class: "n" }, rows.length ? `Not here? Search for “${q}”` : `No “${q}” in the food list. Search for it`), el("small", {}, "Looks it up on the web"))
       : null;
     drop.replaceChildren(...rows, ...(tail ? [tail] : []));

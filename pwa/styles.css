@@ -1146,7 +1146,9 @@ body.screen-open { overflow: hidden; }
 .food-hits .fname { font-size: 0.95rem; }
 .food-hits .chips.wrap { padding-bottom: 0; }
 .food-hits .chip { font-size: 0.8rem; padding: 6px 11px; }
-.food-hits .find-more p { margin: 0; }
+.food-hits .find-more p { margin: 0; overflow-wrap: anywhere; }
+/* The label carries the typed food, so a long one is cut with "…" inside the button. */
+.food-hits .find-more .btn { display: block; width: 100%; max-width: 100%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .supp-note { margin: 0; }
 .meal-actions { margin-top: 4px; }
 .plan-line-wrap { display: grid; gap: 8px; }
@@ -1178,12 +1180,12 @@ body.screen-open { overflow: hidden; }
   background: var(--raised); border: 1px solid var(--hair-strong); border-radius: 16px; box-shadow: var(--shadow);
   max-height: min(56vh, 420px); overflow-y: auto;
 }
-.mb-opt { display: grid; gap: 2px; padding: 11px 14px; cursor: pointer; border-top: 1px solid var(--hair); }
+.mb-opt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 11px 14px; cursor: pointer; border-top: 1px solid var(--hair); }
 .mb-opt:first-child { border-top: 0; }
 .mb-opt:active, .mb-opt:hover { background: var(--accent-soft); }
 .mb-opt .n { font-size: 0.95rem; }
 .mb-opt small { color: var(--muted); font-size: 0.8rem; }
-.mb-opt.more .n { color: var(--accent); font-weight: 600; }
+.mb-opt.more .n { color: var(--accent); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mb-opt.none { color: var(--muted); cursor: default; }
 .mb-list .section-label { margin-top: 4px; }
 .mb-items { list-style: none; margin: 0; padding: 0; }
