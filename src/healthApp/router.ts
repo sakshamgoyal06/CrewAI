@@ -791,7 +791,7 @@ export function createHealthAppRouter(): express.Router {
       const q = checkFoodQuery(raw);
       if (!q.ok) return { status: 400, body: { ok: false, error: q.error } };
       if ((await allowUse(ctx, "draft")) !== true) return { status: 429, body: { ok: false, error: "draft_limit" } };
-      const draft = await startMealDraft(ctx, { text: q.text });
+      const draft = await startMealDraft(ctx, { text: q.text }, { webFirst: true });
       const items = cleanLookupItems(draft.items);
       return {
         body: {

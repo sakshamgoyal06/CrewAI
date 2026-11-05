@@ -66,3 +66,28 @@ describe("web lookup cap and per-person cache", () => {
     expect(web.estimateViaWebResearch).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("web-first lookup (Can't find it? Search)", () => {
+  it("goes to the web instead of rebuilding the dish from the food table", async () => {
+    const { estimateWithFoodDb } = await import("./foodDbEstimate.js");
+    const db = vi.mocked(estimateWithFoodDb);
+    db.mockClear();
+    db.mockResolvedValue({ ...found, calories: 50, source: "food_db" as never });
+    // Logging "boondi raita" normally comes back as the table's plain raita…
+    expect((await estimateMealNutrition("boondi raita")).calories).toBe(50);
+    // …but the search screen asks the web, and doesn't reuse that cached answer.
+    web.estimateViaWebResearch.mockResolvedValue({ ...found, calories: 160 });
+    const onWebLookup = vi.fn();
+    const r = await estimateMealNutrition("boondi raita", { webFirst: true, onWebLookup });
+    expect(r.calories).toBe(160);
+    expect(onWebLookup).toHaveBeenCalledTimes(1);
+    expect(db).toHaveBeenCalledTimes(1);
+    db.mockResolvedValue(null);
+  });
+
+  it("uses the usual order when the person's web lookups are used up", async () => {
+    const r = await estimateMealNutrition("boondi raita", { webFirst: true, webAllowed: false });
+    expect(web.estimateViaWebResearch).not.toHaveBeenCalled();
+    expect(r.source).toBe("unavailable");
+  });
+});

@@ -186,6 +186,8 @@ export async function setTargets(
 export async function startMealDraft(
   ctx: ActionContext,
   input: z.infer<typeof mealDraftInput>,
+  /** webFirst: "Can't find it? Search", after the food list didn't have it (estimateMealNutrition.ts). */
+  how: { webFirst?: boolean } = {},
 ): Promise<MealDraft> {
   const [gate, trusted] = await Promise.all([
     webGateFor(ctx.userProfileId, ctx.timezone, ctx.now),
@@ -198,7 +200,7 @@ export async function startMealDraft(
     slot: input.slot ?? typed.slot,
     timezone: ctx.timezone,
     now: ctx.now,
-    options: { webAllowed: gate.allowed, onWebLookup: gate.onLookup, contributor: { id: ctx.userProfileId, trusted } },
+    options: { webAllowed: gate.allowed, onWebLookup: gate.onLookup, contributor: { id: ctx.userProfileId, trusted }, webFirst: how.webFirst },
   });
   if (!gate.allowed && draft.source !== "food_db") {
     const note = "This month's web lookups are used up, so this is a rougher estimate. Check the numbers.";
