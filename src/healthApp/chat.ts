@@ -28,7 +28,7 @@ import {
 import type { MealDraft } from "./meals.js";
 import { activityDraftInput, buildActivityDraft, deleteActivity, type ActivityDraft } from "./activityLog.js";
 import { routineInput } from "./routine.js";
-import { answerRoutineCheck, routineCheckAnswerInput, setRoutine, type RoutineCheckCard } from "./routineCheck.js";
+import { answerRoutineCheck, routineCheckAnswerInput, routineSwapInput, setRoutine, swapRoutineItem, type RoutineCheckCard } from "./routineCheck.js";
 import type { DayPlanCard } from "./dailyChat.js";
 import type { PlanAdjustCard, PlanMealCard } from "./dietPlan/rhythm.js";
 import { MEAL_PLAN_TOOL, mealPlanInput, runMealPlanTool } from "./dietPlan/chatTool.js";
@@ -575,6 +575,23 @@ const toolDefinitions: Anthropic.Tool[] = [
     },
   },
   {
+    name: "swap_routine_item",
+    description:
+      "A routine item they can't do for a while (no gym access till the 25th, a knee resting this week): from today until the last date, that item becomes what they'll do instead (walking, a home workout), with its own reminder and check, then comes back by itself. Use this, not remember or set_daily_routine, for a temporary change. item: its label, id or 'gym'. Leave out activity and until to end a swap early.",
+    input_schema: {
+      type: "object",
+      properties: {
+        item: { type: "string" },
+        activity: { type: "string", description: "What they do instead: walking, running, yoga, home workout..." },
+        durationMin: { type: "integer" },
+        startTime: { type: ["string", "null"], description: "Local HH:MM; defaults to the item's time." },
+        until: { type: "string", description: "Last date YYYY-MM-DD." },
+        reason: { type: "string" },
+      },
+      required: ["item"],
+    },
+  },
+  {
     name: "answer_routine_check",
     description:
       "Record the answer for a non-gym routine item on a day: done (logs the activity at its planned time; pass durationMin if they did a different length), skipped (with their reason), or recheck (look at the logs again).",
@@ -940,6 +957,12 @@ export async function runTool(
         changed: r.ok,
       };
     }
+    case "swap_routine_item": {
+      const p = routineSwapInput.safeParse(input);
+      if (!p.success) return invalid(p.error);
+      const r = await swapRoutineItem(ctx, p.data);
+      return { result: r, changed: r.ok };
+    }
     case "answer_routine_check": {
       const p = routineCheckAnswerInput.safeParse(input);
       if (!p.success) return invalid(p.error);
@@ -1061,6 +1084,7 @@ const TOOL_PROGRESS: Record<string, string> = {
   set_goal: "Setting your goal",
   set_daily_targets: "Updating your targets",
   set_daily_routine: "Updating your routine",
+  swap_routine_item: "Updating your routine",
   answer_routine_check: "Noting that",
   answer_workout_check: "Noting that",
   log_water: "Logging water",

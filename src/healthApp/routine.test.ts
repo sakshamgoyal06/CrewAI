@@ -9,6 +9,7 @@ import {
   gymTimeOf,
   liftingGap,
   normalizeRoutine,
+  onDate,
   reminderText,
   resolveActivityKey,
   routineDayStatus,
@@ -130,8 +131,10 @@ describe("routineDayStatus", () => {
   it("follows the person's answer", () => {
     const checks = new Map([["w", { itemId: "w", localDate: "2026-11-03", label: "Morning walk", status: "skipped" as const, reason: "Rain", activityId: null }]]);
     expect(routineDayStatus([walk], 2, ev({ checks }))[0]).toMatchObject({ state: "skipped", detail: "Skipped · Rain" });
-    // Logged after all: done wins over an earlier skip.
-    expect(routineDayStatus([walk], 2, ev({ checks, walkMinutes: 30 }))[0]!.state).toBe("done");
+    // Logged after all: a walk logged in its window wins over an earlier skip.
+    expect(routineDayStatus([walk], 2, ev({ checks, activities: [act({ id: "late", key: "walking", loggedAt: "2026-11-03T03:00:00Z" })], date: "2026-11-03", timezone: TZ }))[0]!.state).toBe("done");
+    // The phone's walk minutes for the whole day can't say which walk it was, so they don't overrule the skip.
+    expect(routineDayStatus([walk], 2, ev({ checks, walkMinutes: 30 }))[0]!.state).toBe("skipped");
   });
 });
 
@@ -191,5 +194,43 @@ describe("texts", () => {
     expect(followUpText(walk, "2026-11-03", "2026-11-03")).toBe("No sign of your morning walk (7:00 am). Did you get it in?");
     expect(followUpText(walk, "2026-11-02", "2026-11-03")).toBe("No sign of your morning walk (yesterday 7:00 am). Did you get it in?");
     expect(routineLine([walk, gym])).toBe("Morning walk 7:00 am · Evening gym 6:30 pm");
+  });
+});
+
+// 5 Nov: morning walk skipped ("Tired"), a 30 min walk logged from chat at 8:06 pm ticked it off,
+// and "no gym till the 25th" left the gym "skipped" every day instead of swapped for a walk.
+describe("time of day, skips and swaps", () => {
+  const morning = item({ id: "m", activityKey: "walking", label: "Morning walk", startTime: "07:00", durationMin: 60 });
+  const evening = act({ id: "a1", key: "walking", loggedAt: "2026-11-05T14:36:21Z" }); // 8:06 pm IST
+  const skipped = new Map([["m", { itemId: "m", localDate: "2026-11-05", label: "Morning walk", status: "skipped" as const, reason: "Tired", activityId: null }]]);
+
+  it("an evening walk never ticks off the morning walk", () => {
+    const [st] = routineDayStatus([morning], 4, ev({ activities: [evening], checks: skipped, date: "2026-11-05", timezone: TZ }));
+    expect(st).toMatchObject({ state: "skipped", detail: "Skipped · Tired" });
+  });
+
+  it("a morning walk still counts, and the phone's walk minutes don't overrule a skip", () => {
+    const early = act({ id: "a2", key: "walking", loggedAt: "2026-11-05T02:30:00Z" }); // 8:00 am IST
+    expect(routineDayStatus([morning], 4, ev({ activities: [early], date: "2026-11-05", timezone: TZ }))[0]!.state).toBe("done");
+    expect(routineDayStatus([morning], 4, ev({ walkMinutes: 80, checks: skipped, date: "2026-11-05", timezone: TZ }))[0]!.state).toBe("skipped");
+  });
+
+  const gymSwapped = { ...gym, days: EVERY, swap: { activityKey: "walking", label: "Evening walk (for evening gym)", durationMin: 30, startTime: "18:30", from: "2026-11-05", until: "2026-11-25", reason: "No gym access" } };
+
+  it("a swapped gym day is the walk, done by the evening walk", () => {
+    const [st] = routineDayStatus([gymSwapped], 4, ev({ activities: [evening], date: "2026-11-05", timezone: TZ }));
+    expect(st).toMatchObject({ label: "Evening walk (for evening gym)", gym: false, state: "done" });
+  });
+
+  it("the swap ends on its own after the last date", () => {
+    expect(onDate(gymSwapped, "2026-11-25").activityKey).toBe("walking");
+    expect(onDate(gymSwapped, "2026-11-26").activityKey).toBe("gym");
+    expect(onDate(gymSwapped, "2026-11-04").activityKey).toBe("gym");
+  });
+
+  it("reminds and follows up the walk, not the gym, while it runs", () => {
+    const at = new Date("2026-11-05T14:20:00Z"); // 7:50 pm IST, an hour+ after 6:30 pm + 30 min... follow-up window
+    const { followUps } = dueRoutineEvents({ items: [{ ...gymSwapped, checkAfterMin: 60 }], now: at, timezone: TZ });
+    expect(followUps.map((f) => f.item.label)).toEqual(["Evening walk (for evening gym)"]);
   });
 });

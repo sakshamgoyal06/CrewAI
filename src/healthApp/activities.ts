@@ -175,6 +175,8 @@ export type Activity = {
   source: ActivitySource;
   /** Set when a Health Connect session already covers this one. */
   duplicateOf: string | null;
+  /** When it was logged (ISO): stands in for the time of day when startTime is unknown. */
+  loggedAt?: string | null;
 };
 
 export type StepBucket = { startTime: string; endTime: string; count: number };

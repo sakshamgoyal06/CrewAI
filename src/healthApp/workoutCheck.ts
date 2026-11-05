@@ -10,7 +10,7 @@ import type { ActionContext } from "./actions.js";
 import { trainingActivity } from "./activities.js";
 import { FALLBACK_WEIGHT_KG, getActivities, latestWeightKg, loadTrainingContext } from "./activityLog.js";
 import { formatTime, zonedInstant, type GymSlot } from "./gymSlot.js";
-import { isGym, UNTIMED_CHECK_AT, type RoutineItem } from "./routine.js";
+import { isGym, onDate, UNTIMED_CHECK_AT, type RoutineItem } from "./routine.js";
 import { loadHealthProfile, loadRecentWorkouts, weekdayOfDate, type WorkoutSummary } from "./snapshot.js";
 import { analyzeTraining, hevyKey, loadWorkoutHistory, workoutReview } from "./training.js";
 import { postCheck } from "./coachInbox.js";
@@ -76,9 +76,10 @@ export function gymPlans(profile: {
   targets: { trainingDays: number[] };
   gym: GymSlot;
   routine?: RoutineItem[] | null;
-}): Array<{ trainingDays: number[]; slot: GymSlot }> {
+}): Array<{ trainingDays: number[]; slot: GymSlot; item?: RoutineItem }> {
   if (!profile.routine?.length) return [{ trainingDays: profile.targets.trainingDays, slot: profile.gym }];
   return profile.routine.filter(isGym).map((i) => ({
+    item: i,
     trainingDays: i.days,
     slot: i.startTime ? { time: i.startTime, checkDelayMin: i.checkAfterMin } : { time: UNTIMED_CHECK_AT, checkDelayMin: 0 },
   }));
@@ -162,6 +163,8 @@ export async function runWorkoutChecks(
   const byDate = new Map<string, { date: string; dueAt: Date; slot: GymSlot }>();
   for (const plan of gymPlans(profile)) {
     for (const d of dueWorkoutChecks({ now, timezone, trainingDays: plan.trainingDays, slot: plan.slot })) {
+      // A gym day swapped for something else ("no gym till the 25th") gets that item's own check, not the Hevy one.
+      if (plan.item && !isGym(onDate(plan.item, d.date))) continue;
       if (!byDate.has(d.date)) byDate.set(d.date, { ...d, slot: plan.slot });
     }
   }

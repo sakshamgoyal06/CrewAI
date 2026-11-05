@@ -329,6 +329,8 @@ export async function buildHealthSnapshot(
           activities: dayActs,
           walkMinutes: a?.walkMinutes ?? null,
           checks: checksOn(routineChecks, date),
+          date,
+          timezone,
         })
       : [];
     routineByDate.set(date, dayRoutine);

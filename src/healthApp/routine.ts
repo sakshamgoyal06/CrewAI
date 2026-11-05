@@ -44,7 +44,21 @@ export type RoutineItem = {
   /** Minutes after the start to check it was done. */
   checkAfterMin: number;
   position: number;
+  /** A temporary stand-in ("no gym till the 25th: an evening walk instead"), stored on the item. */
+  swap?: RoutineSwap | null;
+  /** Set on the item as planned for a date while a swap runs: the label it stands in for. */
+  swappedFrom?: string;
 };
+
+/** What a routine item becomes from `from` to `until` (local dates, both included). */
+export type RoutineSwap = { activityKey: string; label: string; durationMin: number; startTime: string | null; from: string; until: string; reason: string | null };
+
+/** The item as planned on `date`: while a swap runs, the stand-in takes its place (and its gym check). */
+export function onDate(i: RoutineItem, date: string): RoutineItem {
+  const s = i.swap;
+  if (!s || date < s.from || date > s.until) return i;
+  return { ...i, activityKey: s.activityKey, label: s.label, durationMin: s.durationMin, startTime: s.startTime ?? i.startTime, swappedFrom: i.label };
+}
 
 const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "expected HH:MM");
 
@@ -175,7 +189,31 @@ export type DayEvidence = {
   walkMinutes: number | null;
   /** Follow-up answers for that day, by item id. */
   checks: Map<string, RoutineCheck>;
+  /** The local date, so a running swap applies; and the timezone, to read when activities happened. */
+  date?: string;
+  timezone?: string;
 };
+
+/** Minutes after local midnight when an activity happened (its start, else when it was logged); null when unknown. */
+function activityMinutes(a: Activity, timezone: string | undefined): number | null {
+  const iso = a.startTime ?? a.loggedAt ?? null;
+  if (!iso || !timezone) return null;
+  const hhmm = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
+  const [h, m] = hhmm.split(":").map(Number) as [number, number];
+  return h * 60 + m;
+}
+
+/**
+ * Whether an activity can be this item's session: a timed item only takes sessions from 2 hours
+ * before it until 6 hours after it should end, so an evening walk never ticks off the morning walk.
+ */
+function inWindow(i: RoutineItem, a: Activity, timezone: string | undefined): boolean {
+  if (!i.startTime) return true;
+  const at = activityMinutes(a, timezone);
+  if (at === null) return true;
+  const start = Number(i.startTime.slice(0, 2)) * 60 + Number(i.startTime.slice(3, 5));
+  return at >= start - 120 && at <= start + i.durationMin + 360;
+}
 
 const family = (k: string): string => (k === "indoor_cycling" ? "cycling" : k === "hiking" ? "walking" : k);
 
@@ -189,7 +227,7 @@ function clock(hhmm: string): string {
  * most one item, so a single walk can't tick both the morning and the evening walk.
  */
 export function routineDayStatus(items: RoutineItem[], weekday: number, ev: DayEvidence): RoutineItemStatus[] {
-  const planned = itemsOn(items, weekday);
+  const planned = itemsOn(ev.date ? items.map((i) => onDate(i, ev.date!)) : items, weekday);
   const used = new Set<string>();
   for (const c of ev.checks.values()) if (c.activityId) used.add(c.activityId);
   let walkPool = ev.walkMinutes ?? 0;
@@ -213,14 +251,15 @@ export function routineDayStatus(items: RoutineItem[], weekday: number, ev: DayE
     }
     const need = i.durationMin * DONE_SHARE;
     const match = ev.activities.find(
-      (a) => !used.has(a.id) && !a.duplicateOf && family(a.key) === family(i.activityKey) && a.durationMin >= need,
+      (a) => !used.has(a.id) && !a.duplicateOf && family(a.key) === family(i.activityKey) && a.durationMin >= need && inWindow(i, a, ev.timezone),
     );
     if (match) {
       used.add(match.id);
       out.set(i.id, { ...base(i), state: "done", detail: `${match.label} · ${match.durationMin} min` });
       continue;
     }
-    if (i.activityKey === "walking" && walkPool >= need) {
+    // The phone's walk minutes have no time of day: they never overrule "skipped".
+    if (i.activityKey === "walking" && check?.status !== "skipped" && walkPool >= need) {
       const mins = Math.min(walkPool, i.durationMin);
       walkPool -= i.durationMin;
       out.set(i.id, { ...base(i), state: "done", detail: `${Math.round(mins)} min walked` });
@@ -272,14 +311,16 @@ export function dueRoutineEvents(input: { items: RoutineItem[]; now: Date; timez
   const t = now.getTime();
   const reminders: DueReminder[] = [];
   const followUps: DueFollowUp[] = [];
-  for (const item of items) {
+  for (const base of items) {
+    const item = onDate(base, today);
     if (item.startTime && item.remindBeforeMin !== null && item.days.includes(weekdayOf(today))) {
       const startsAt = zonedInstant(today, item.startTime, timezone);
       const from = startsAt.getTime() - item.remindBeforeMin * 60_000;
       if (t >= from && t < startsAt.getTime() + REMINDER_GRACE_MS) reminders.push({ item, date: today, startsAt });
     }
-    if (isGym(item)) continue;
     for (const date of new Set([yesterday, today])) {
+      const item = onDate(base, date);
+      if (isGym(item)) continue;
       if (!item.days.includes(weekdayOf(date))) continue;
       const dueAt = item.startTime
         ? new Date(zonedInstant(date, item.startTime, timezone).getTime() + item.checkAfterMin * 60_000)

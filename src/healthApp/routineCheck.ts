@@ -16,21 +16,25 @@ import { zonedInstant } from "./gymSlot.js";
 import { getPrefs, sendNotification } from "./push.js";
 import {
   catalogLabel,
+  defaultLabel,
   dueRoutineEvents,
   followUpText,
   isGym,
   liftingGap,
   normalizeRoutine,
+  onDate,
   reminderText,
+  resolveActivityKey,
   routineInput,
   routineDayStatus,
   type DayEvidence,
   type RoutineCheck,
   type RoutineItem,
   type RoutineItemStatus,
+  type RoutineSwap,
 } from "./routine.js";
 import { postCheck } from "./coachInbox.js";
-import { checkKey, checksOn, getRoutineChecks, insertRoutineCheck, saveRoutine, saveRoutineCheckAnswer } from "./routineStore.js";
+import { checkKey, checksOn, getRoutineChecks, insertRoutineCheck, saveRoutine, saveRoutineCheckAnswer, setRoutineSwap } from "./routineStore.js";
 import { loadHealthProfile, loadRecentWorkouts, weekdayOfDate } from "./snapshot.js";
 import { getWorkoutChecks, postCoachMessage } from "./workoutCheckStore.js";
 
@@ -91,6 +95,8 @@ export async function routineStatusFor(
       activities: dayActs,
       walkMinutes: daily.get(date)?.walkMinutes ?? null,
       checks: checksOn(checks, date),
+      date,
+      timezone,
     };
     out.set(date, routineDayStatus(routine, weekdayOfDate(date), ev));
   }
@@ -218,8 +224,10 @@ export async function answerRoutineCheck(
   const date = input.date ?? today;
   if (date > today) return { ok: false, error: "future_date" };
   const { routine } = await deps.loadProfile(ctx.userProfileId);
-  const item = (routine ?? []).find((i) => i.id === input.itemId);
-  if (!item) return { ok: false, error: "routine_item_not_found" };
+  const found = (routine ?? []).find((i) => i.id === input.itemId);
+  if (!found) return { ok: false, error: "routine_item_not_found" };
+  // A swapped gym day ("an evening walk instead") is answered like the walk it became.
+  const item = onDate(found, date);
   if (isGym(item)) return { ok: false, error: "gym_uses_workout_check" };
   const base = { itemId: item.id, localDate: date, label: item.label };
 
@@ -276,4 +284,64 @@ export async function setRoutine(
   const saved = await saveRoutine(ctx.userProfileId, normalizeRoutine(input.items));
   if (!saved.ok) return saved;
   return { ...saved, lifting: liftingGap(saved.items) };
+}
+
+const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+export const routineSwapInput = z.object({
+  /** The item's id, its label ("Evening gym") or "gym". */
+  item: z.string().trim().min(1).max(60),
+  /** What they do instead ("walking", "home workout"); leave out to end a running swap. */
+  activity: z.string().trim().min(1).max(60).optional(),
+  durationMin: z.coerce.number().int().min(5).max(600).optional(),
+  startTime: HHMM.nullable().optional(),
+  /** Last local date of the swap. */
+  until: DATE.optional(),
+  reason: z.string().trim().max(80).optional(),
+});
+
+/** The routine item a person means: its id, its label, or "gym" for the (first) gym item. */
+export function findRoutineItem(items: RoutineItem[], ref: string): RoutineItem | null {
+  const r = ref.trim().toLowerCase();
+  return (
+    items.find((i) => i.id === ref) ??
+    items.find((i) => i.label.toLowerCase() === r) ??
+    (/\b(gym|lift|weights?|strength|workout)\b/.test(r) ? items.find(isGym) : undefined) ??
+    items.find((i) => i.label.toLowerCase().includes(r) || i.activityKey === r) ??
+    null
+  );
+}
+
+/** The stand-in for an item from today to `until`. Pure. */
+export function buildSwap(item: RoutineItem, input: z.infer<typeof routineSwapInput>, today: string): RoutineSwap | { error: string } {
+  if (!input.activity) return { error: "activity_required" };
+  if (!input.until || input.until < today) return { error: "until_required" };
+  const activityKey = resolveActivityKey(input.activity);
+  const startTime = input.startTime === undefined ? item.startTime : input.startTime;
+  const durationMin = input.durationMin ?? (activityKey === "walking" ? 30 : Math.min(item.durationMin, 60));
+  const label = `${defaultLabel(activityKey, startTime, input.activity)} (for ${item.label.toLowerCase()})`;
+  return { activityKey, label, durationMin, startTime, from: today, until: input.until, reason: input.reason ?? null };
+}
+
+/**
+ * "No gym till the 25th, I'll walk instead": that item becomes the stand-in until the date, with
+ * its own reminder and check, and comes back on its own after. Without an activity, ends the swap.
+ */
+export async function swapRoutineItem(
+  ctx: ActionContext,
+  input: z.infer<typeof routineSwapInput>,
+  deps: { loadProfile: typeof loadHealthProfile; save: typeof setRoutineSwap } = { loadProfile: (id) => loadHealthProfile(id), save: setRoutineSwap },
+): Promise<{ ok: true; item: string; swap: RoutineSwap | null } | { ok: false; error: string; items?: string[] }> {
+  const today = localDateKey(ctx.now ?? new Date(), ctx.timezone);
+  const { routine } = await deps.loadProfile(ctx.userProfileId);
+  const item = findRoutineItem(routine ?? [], input.item);
+  if (!item) return { ok: false, error: "routine_item_not_found", items: (routine ?? []).map((i) => i.label) };
+  if (!input.activity && !input.until) {
+    const r = await deps.save(ctx.userProfileId, item.id, null);
+    return r.ok ? { ok: true, item: item.label, swap: null } : r;
+  }
+  const swap = buildSwap(item, input, today);
+  if ("error" in swap) return { ok: false, error: swap.error };
+  const r = await deps.save(ctx.userProfileId, item.id, swap);
+  return r.ok ? { ok: true, item: item.label, swap } : r;
 }
