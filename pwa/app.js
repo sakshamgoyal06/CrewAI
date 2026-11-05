@@ -2206,7 +2206,7 @@ function planMealCard(c) {
     const head = el("p", { class: "eyebrow" }, `${SLOT_LABEL[cur.slot]}${cur.time ? ` · ${clock(cur.time)}` : ""} · on your plan`);
     const body = [
       head,
-      el("ul", { class: "pm-items" }, ...cur.items.map((t) => el("li", {}, t))),
+      el("p", { class: "pm-items" }, cur.items.join(" · ")),
       el("p", { class: "pm-sub" }, `${fmt(cur.kcal)} kcal · ${cur.proteinG} g protein`),
     ];
     if (eaten(cur.status)) {
@@ -2245,10 +2245,13 @@ function planAdjustCard(c) {
     el("p", { class: "eyebrow" }, close ? "Day close" : "Rest of today"),
     el("p", { class: "pa-head" }, c.headline),
     c.lines?.length ? el("ul", { class: "pa-lines" }, ...c.lines.map((l) => el("li", {}, l))) : null,
-    close && meals.length ? el("div", { class: "dp-sec" },
-      el("p", { class: "eyebrow" }, "Tomorrow"),
-      el("ul", { class: "dp-plan" }, ...meals.map((m) => el("li", {}, el("span", { class: "dp-time" }, m.time ? clock(m.time) : SLOT_LABEL[m.slot]), el("span", {}, `${m.title} · ${fmt(m.kcal)} kcal`))))) : null,
-    el("button", { class: "link", type: "button", onclick: () => setView("meals") }, close ? "See tomorrow's meals" : "See today's meals"),
+    // Tomorrow's meals fold away: the one-line total says enough until they're wanted.
+    close && meals.length ? fold(`Tomorrow · ${meals.length} meals · ${fmt(meals.reduce((a, m) => a + (m.kcal || 0), 0))} kcal`,
+      el("ul", { class: "dp-plan" }, ...meals.map((m) => el("li", {},
+        el("span", { class: "dp-time" }, m.time ? clock(m.time) : SLOT_LABEL[m.slot]),
+        el("span", {}, m.title, el("small", {}, ` · ${fmt(m.kcal)} kcal`))))),
+      el("button", { class: "link", type: "button", onclick: () => setView("meals") }, "See tomorrow's meals")) : null,
+    close && meals.length ? null : el("button", { class: "link", type: "button", onclick: () => setView("meals") }, close ? "See tomorrow's meals" : "See today's meals"),
   );
 }
 
@@ -2259,9 +2262,13 @@ function eatingOutCard(c) {
     el("p", { class: "eyebrow" }, `Eating out · ${c.meal}`),
     keep ? el("div", { class: "eo-num" }, el("b", {}, fmt(c.reserveKcal)), el("small", {}, `kcal for ${c.meal}`)) : null,
     el("div", { class: "eo-lines" }, ...c.lines.slice(keep ? 1 : 0).map((l) => el("p", {}, l))),
-    el("p", { class: "eyebrow eo-head" }, "Ordering"),
-    el("ul", { class: "eo-tips" }, ...c.tips.map((t) => el("li", {}, t))),
+    c.tips?.length ? fold(`How to order · ${c.tips.length} tips`, el("ul", { class: "eo-tips" }, ...c.tips.map((t) => el("li", {}, t)))) : null,
   );
+}
+
+/** A card's secondary detail behind one line: closed by default, so cards stay short in chat. */
+function fold(summary, ...body) {
+  return el("details", { class: "card-fold" }, el("summary", {}, el("span", {}, summary), el("i", { class: "chev" })), ...body);
 }
 
 // ---------- past days ----------
