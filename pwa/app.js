@@ -1,7 +1,7 @@
 // Magnus health app. Four tabs: Coach chat (home), Today, Progress and You (settings). All write through
 // the same /api/health endpoints, so anything logged in one shows up in the other.
 
-import { SESSION_ID, trackApi } from "./telemetry.js";
+import { SESSION_ID, track, trackApi } from "./telemetry.js";
 import { runOnboarding } from "./onboarding.js";
 import { scanView } from "./scan.js";
 import { foodPrefsEditor } from "./foodprefs.js";
@@ -160,6 +160,8 @@ function friendlyError(code) {
     not_a_food: "That doesn't look like a food. Type a food or drink and an amount, like \"1 plate chicken biryani\".",
     not_food: "I don't see a meal in that photo. Try a clearer shot of the plate, or type what you ate.",
     unreadable: "I couldn't read that photo. Try again, or type what you ate.",
+    photo_format: "I couldn't open that photo's format. Try taking it again with the camera button, or pick a JPEG.",
+    photo_too_large: "That photo is too large to send. Try taking it again with the camera button.",
     owner_account: "The owner account can't be deleted from the app.",
     barcode_not_found: "That barcode isn't in the food database yet. Type what it was instead, or snap a photo of the label.",
     barcode_lookup_failed: "Couldn't reach the food database just now. Try again in a minute, or type what you had.",
@@ -2145,26 +2147,65 @@ function failedTurn(message, retry) {
 // ---------- meal photos ----------
 
 const PHOTO_MAX_PX = 1280;
+/** Originals the browser can't open (HEIC, huge camera JPEGs) go to the server to convert, up to this size. */
+const PHOTO_RAW_MAX_BYTES = 11 * 1024 * 1024;
 
-/** Shrinks a camera photo to ~1280 px JPEG (a few hundred KB) before upload; returns base64. */
-async function photoToJpeg(file) {
-  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(() => null);
-  if (!bmp) throw new Error("Couldn't open that image. Try a JPEG or PNG photo.");
-  const scale = Math.min(1, PHOTO_MAX_PX / Math.max(bmp.width, bmp.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bmp.width * scale);
-  canvas.height = Math.round(bmp.height * scale);
-  canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
-  bmp.close?.();
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
-  if (!blob) throw new Error("Couldn't prepare that photo.");
-  const dataUrl = await new Promise((resolve, reject) => {
+/** Opens a photo file as something drawable, trying each way phones' browsers support. */
+async function decodePhoto(file) {
+  const tries = [
+    () => createImageBitmap(file, { imageOrientation: "from-image" }),
+    // A very large camera photo can fail at full size; asking for it already shrunk often works.
+    () => createImageBitmap(file, { imageOrientation: "from-image", resizeWidth: PHOTO_MAX_PX, resizeQuality: "high" }),
+    () => new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("img"));
+      img.src = url;
+    }),
+  ];
+  for (const t of tries) {
+    try {
+      const img = await t();
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      if (w && h) return { img, w, h };
+    } catch { /* next way */ }
+  }
+  return null;
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
     const r = new FileReader();
-    r.onload = () => resolve(r.result);
+    r.onload = () => resolve(String(r.result).split(",")[1]);
     r.onerror = () => reject(new Error("Couldn't read that photo."));
     r.readAsDataURL(blob);
   });
-  return String(dataUrl).split(",")[1];
+}
+
+/**
+ * Shrinks a camera photo to a ~1280 px JPEG (a few hundred KB) before upload. When this phone's
+ * browser can't open it (HEIC/HEIF "high efficiency" photos, some huge JPEGs), the original goes
+ * up instead and the server converts it. Returns { image, mediaType }.
+ */
+async function preparePhoto(file) {
+  const decoded = await decodePhoto(file);
+  if (decoded) {
+    const { img, w, h } = decoded;
+    const scale = Math.min(1, PHOTO_MAX_PX / Math.max(w, h));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
+    canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+    img.close?.();
+    if (img.src) URL.revokeObjectURL(img.src);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    if (blob) return { image: await blobToBase64(blob), mediaType: "image/jpeg" };
+  }
+  track("error", "photo_decode_failed", { type: file.type || "unknown", sizeKb: Math.round(file.size / 1024), name: (file.name || "").split(".").pop()?.slice(0, 8) });
+  if (file.size > PHOTO_RAW_MAX_BYTES) throw new Error("That photo is too large to send. Try the camera button, or pick a smaller photo.");
+  return { image: await blobToBase64(file), mediaType: file.type || undefined };
 }
 
 /** Photo of the plate → draft card in the thread. Text in the composer goes along as a note. */
@@ -2184,8 +2225,8 @@ async function sendPhoto(file) {
       scrollThread();
     },
     async () => {
-      const image = await photoToJpeg(file);
-      return api("/meals/photo", { method: "POST", body: JSON.stringify({ image, mediaType: "image/jpeg", note: note || undefined }) });
+      const { image, mediaType } = await preparePhoto(file);
+      return api("/meals/photo", { method: "POST", body: JSON.stringify({ image, mediaType, note: note || undefined }) });
     },
   );
 }
@@ -4485,7 +4526,8 @@ const SHEETS = {
     return el("div", { class: "stack" },
       el("div", { class: "log-grid" },
         tile("Meal", '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M16 3c-1.7 1-2.5 3-2.5 6s1 4 2.5 4v8"/>', () => { state.mealSlot = null; state.mealDate = null; openSheet("meal"); }),
-        tile("Photo", '<path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', () => { closeSheet(); $("photo-input").click(); }),
+        tile("Camera", '<path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', () => { closeSheet(); $("photo-camera").click(); }),
+        tile("Gallery", '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M4 17l5-5 4 4 2.5-2.5L20 17"/>', () => { closeSheet(); $("photo-input").click(); }),
         tile("Barcode", '<path d="M4 6v12M7 6v12M11 6v12M14 6v12M17 6v12M20 6v12"/>', () => openSheet("scan")),
         tile("Steps", '<path d="M8 4c1.5 0 2.5 2 2.5 4.5S9.5 13 8 13s-2.5-2-2.5-4.5S6.5 4 8 4zM6 16h4v2a2 2 0 0 1-4 0zM16 8c1.5 0 2.5 2 2.5 4.5S17.5 17 16 17s-2.5-2-2.5-4.5S14.5 8 16 8z"/>', () => openSheet("steps")),
         tile("Activity", '<path d="M3 12h4l3-7 4 14 3-7h4"/>', () => openSheet("activity")),
@@ -4564,7 +4606,8 @@ const SHEETS = {
         usual,
         builder,
         el("div", { class: "mb-alt" },
-          el("button", { class: "link", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, "Snap a photo of the plate"),
+          el("button", { class: "link", type: "button", onclick: () => { closeSheet(); $("photo-camera").click(); } }, "Snap a photo of the plate"),
+          el("button", { class: "link", type: "button", onclick: () => { closeSheet(); $("photo-input").click(); } }, "Pick one from your gallery"),
           el("button", { class: "link", type: "button", onclick: () => openSheet("scan") }, "Scan a packet's barcode")),
       ].filter(Boolean));
     }
@@ -4853,8 +4896,8 @@ for (const b of document.querySelectorAll("#theme-seg button")) b.addEventListen
 applyTheme(store.get(THEME_KEY, null) || "system");
 $("review-btn").addEventListener("click", () => openSheet("review"));
 $("quick").addEventListener("click", () => openSheet("quick"));
-$("photo").addEventListener("click", () => $("photo-input").click());
-$("photo-input").addEventListener("change", (e) => {
+$("photo").addEventListener("click", () => $("photo-camera").click());
+for (const id of ["photo-camera", "photo-input"]) $(id).addEventListener("change", (e) => {
   const file = e.target.files?.[0];
   e.target.value = "";
   if ($("view-coach").hidden) setView("coach");

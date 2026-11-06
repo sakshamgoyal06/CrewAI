@@ -45,8 +45,9 @@ describe("foodsToText", () => {
 describe("photoMealInput", () => {
   it("rejects non-base64 and oversize images", () => {
     expect(photoMealInput.safeParse({ image: "not base64 !!".repeat(20) }).success).toBe(false);
-    expect(photoMealInput.safeParse({ image: "A".repeat(6_000_001) }).success).toBe(false);
-    expect(photoMealInput.parse({ image: IMG }).mediaType).toBe("image/jpeg");
+    expect(photoMealInput.safeParse({ image: "A".repeat(15_000_001) }).success).toBe(false);
+    // The browser's type is only a hint (it's often "" for HEIC); the server sniffs the bytes.
+    expect(photoMealInput.parse({ image: IMG, mediaType: "" }).image).toBe(IMG);
   });
 });
 

@@ -498,13 +498,12 @@ body.composing .tabbar { display: none; }
 .hint a { color: var(--muted); }
 
 /* Log sheet */
-.log-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.log-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .log-tile {
   display: grid; justify-items: center; gap: 6px; padding: 12px 6px 10px; border-radius: 16px;
   background: var(--surface); border: 1px solid var(--hair); color: var(--text); font-size: 0.86rem; font-weight: 500;
 }
 .log-tile span { white-space: nowrap; }
-@media (max-width: 340px) { .log-grid { grid-template-columns: repeat(3, 1fr); } }
 .log-tile svg { width: 24px; height: 24px; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 @media (prefers-reduced-motion: reduce) {

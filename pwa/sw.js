@@ -2,7 +2,7 @@
 // next open). API calls always go to the network so numbers are never stale.
 // The server swaps this name for a hash of the shell files on every deploy (src/swVersion.ts),
 // so there's no need to bump it by hand; the literal only applies when served as a plain file.
-const CACHE = "magnus-health-v54";
+const CACHE = "magnus-health-v55";
 const SHELL = ["/app/", "/app/index.html", "/app/styles.css", "/app/app.js", "/app/telemetry.js", "/app/session.js", "/app/onboarding.js", "/app/scan.js", "/app/foodprefs.js", "/app/routine.js", "/app/meals.js", "/app/mealbuilder.js", "/app/dayTone.js", "/app/manifest.webmanifest", "/app/icon.svg", "/app/privacy.html", "/app/fonts/lato-latin-300-normal.woff2", "/app/fonts/lato-latin-400-normal.woff2", "/app/fonts/lato-latin-700-normal.woff2", "/app/fonts/lato-latin-900-normal.woff2"];
 
 self.addEventListener("install", (event) => {
