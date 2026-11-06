@@ -152,6 +152,20 @@ export function stepsBurn(steps: number, weightKg: number): number {
   return Math.round(steps * weightKg * 0.0005);
 }
 
+/**
+ * How long a routine walk really was, from the phone's numbers for the day: its own walk minutes,
+ * else steps at the usual walking pace. Never more than the planned length (the day's steps also
+ * hold other walking), and the plan stands when the phone has barely seen any steps yet.
+ */
+export function walkMinutesFromDay(plannedMin: number, day: { steps: number; walkMinutes: number | null } | undefined): number {
+  if (!day || day.steps < MIN_STEPS_TO_TRUST) return plannedMin;
+  const rate = catalogEntry("walking").stepsPerMin ?? 110;
+  const seen = day.walkMinutes && day.walkMinutes > 0 ? day.walkMinutes : Math.round(day.steps / rate);
+  return Math.max(5, Math.min(plannedMin, seen));
+}
+/** Below this many steps the phone probably hasn't synced the walk yet. */
+export const MIN_STEPS_TO_TRUST = 500;
+
 /** Resistance training at ~5 METs: kcal/min = MET × 3.5 × kg / 200. */
 export function workoutBurn(minutes: number, weightKg: number): number {
   return Math.round((minutes * 5 * 3.5 * weightKg) / 200);

@@ -21,6 +21,7 @@ import {
   matchActivity,
   trainingActivity,
   typicalTrainingBurn,
+  walkMinutesFromDay,
   type Activity,
   type ActivitySource,
   type Intensity,
@@ -491,4 +492,44 @@ export async function loadActivityCatalog(ctx: ActionContext): Promise<ActivityC
     activities: ACTIVITY_CATALOG.filter((c) => c.key !== "walking").map((c) => ({ key: c.key, label: c.label, met: c.met })),
     recent,
   };
+}
+
+/**
+ * After a Health Connect sync: a routine walk that was logged from the plan (before the steps
+ * arrived) and never edited is resized to what the phone saw. An edited one (updated_at moved)
+ * is the person's number and stays.
+ */
+export async function refreshRoutineWalks(
+  ctx: ActionContext,
+  days: Array<{ date: string; steps: number; walkMinutes: number | null }>,
+): Promise<number> {
+  let changed = 0;
+  for (const day of days) {
+    const { data } = await supabase
+      .from("health_activities")
+      .select("*")
+      .eq("user_profile_id", ctx.userProfileId)
+      .eq("local_date", day.date)
+      .eq("activity_key", "walking")
+      .eq("source", "quick_add")
+      .eq("kcal_source", "estimate")
+      .like("draft_id", "routine:%")
+      .is("deleted_at", null);
+    for (const r of (data ?? []) as Row[]) {
+      if (String(r.updated_at) !== String(r.created_at)) continue;
+      const planned = Number(r.duration_min) || 0;
+      const minutes = walkMinutesFromDay(planned, day);
+      if (!planned || minutes >= planned) continue;
+      const weightKg = (await latestWeightKg(ctx.userProfileId)) ?? FALLBACK_WEIGHT_KG;
+      const est = estimateActivityKcal({ key: "walking", intensity: (r.intensity as Intensity) ?? "moderate", minutes, weightKg, distanceM: r.distance_m == null ? null : Number(r.distance_m) });
+      // updated_at stays at created_at: this is still the app's estimate, not an edit.
+      const { error } = await supabase
+        .from("health_activities")
+        .update({ duration_min: minutes, kcal: est.kcal, met: est.met, updated_at: r.created_at })
+        .eq("user_profile_id", ctx.userProfileId)
+        .eq("id", String(r.id));
+      if (!error) changed += 1;
+    }
+  }
+  return changed;
 }
