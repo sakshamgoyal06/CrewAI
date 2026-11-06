@@ -139,23 +139,28 @@
         </div>
       </section>
 
-      <section class="block fold move" id="move" data-fold="move" aria-label="Movement">
+      <section class="block routine-block" id="routine-block" aria-label="Routine">
+        <div class="block-head"><h2>Routine</h2><span class="meta" id="routine-meta"></span></div>
+        <ul class="routine-today" id="routine-today"></ul>
+        <ul class="list rows" id="activities"></ul>
+        <div class="block-links">
+          <button class="link" data-sheet="activity" type="button">Add swim, run or sport</button>
+          <button class="link quiet" id="routine-edit" data-sheet="routine" type="button">Set your routine</button>
+        </div>
+      </section>
+
+      <section class="block fold move" id="move" data-fold="move" aria-label="Day totals">
         <button class="fold-head" type="button" aria-expanded="false" aria-controls="move-fold">
-          <h2>Movement</h2>
+          <h2>Day totals</h2>
           <span class="key" id="move-meta"></span>
           <span class="chev" aria-hidden="true"></span>
         </button>
         <div class="fold-body" id="move-fold">
-          <ul class="routine-today" id="routine-today" hidden></ul>
+          <p class="hint totals-note">Everything today, from your phone and what you logged. Not just one walk.</p>
           <div class="stats" id="move-tiles"></div>
           <div class="stats recovery" id="recovery" hidden></div>
           <p class="burn-breakdown" id="burn-breakdown" hidden></p>
           <ul class="list rows" id="workouts"></ul>
-          <ul class="list rows" id="activities"></ul>
-          <div class="block-links">
-            <button class="link" data-sheet="activity" type="button">Add swim, run or sport</button>
-            <button class="link quiet" id="routine-edit" data-sheet="routine" type="button">Set your routine</button>
-          </div>
         </div>
       </section>
 
