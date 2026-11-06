@@ -223,6 +223,12 @@ describe("runHealthChat", () => {
     );
   });
 
+  it("says an add-on is an extra on top of the meal, and when a log replaces the planned one", () => {
+    const one = { ...draft, slot: "breakfast" as const };
+    expect(mealDraftReply([{ ...one, extra: true, plan: { role: "extra", slot: "breakfast", alreadyEaten: "whey, onion paratha" } }])).toMatch(/as an extra on top of your breakfast/);
+    expect(mealDraftReply([{ ...one, plan: { role: "instead", slot: "breakfast", insteadOf: "poha" } }])).toMatch(/for breakfast, in place of the planned poha/);
+  });
+
   it("names only the item it couldn't find and counts the rest", () => {
     const partial = { ...draft, items: [{ name: "fries", calories: 440, protein_g: 6, carbs_g: 60, fat_g: 20 }, { name: "1 veg whopper", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, missing: true }], totals: { calories: 440, protein_g: 6, carbs_g: 60, fat_g: 20 } };
     const text = mealDraftReply([partial]);

@@ -5,6 +5,7 @@
  * the day's totals always match what the user saw. The draft id doubles as `meal_session_id`, so
  * re-sending a confirm (double tap, retry after a timeout) never logs the meal twice.
  */
+import type { MealPlanRole } from "./dietPlan/rhythm.js";
 import { randomUUID } from "node:crypto";
 
 import { getLocalTimeParts } from "../nutrition/localDate.js";
@@ -54,6 +55,10 @@ export type MealDraft = {
   /** False when no provider returned calories; the user must fill items in before saving. */
   estimated: boolean;
   servingAssumption: string | null;
+  /** Asked for on top of the meal ("add a tea to breakfast"): logs as an extra, never in its place. */
+  extra?: boolean;
+  /** Where it will go in the day's plan once logged (dietPlan/rhythm.ts previewPlanRole). */
+  plan?: MealPlanRole;
 };
 
 const r1 = (n: number): number => Math.round(n * 10) / 10;

@@ -194,8 +194,11 @@ export function rebalanceCard(date: string, eatenKcal: number, targetKcal: numbe
  * the log takes that meal's place ("instead"); otherwise it's an extra. Then, for today, the meals
  * still to come are resized. Returns where the log went, for the card that saved it.
  */
-export async function afterMealLogged(ctx: ActionContext, input: { date: string; slot: string; mealSessionId: string }, now = new Date()): Promise<MealPlanRole | null> {
-  const role = await linkToPlan(ctx.userProfileId, input.date, input.slot, input.mealSessionId);
+export async function afterMealLogged(ctx: ActionContext, input: { date: string; slot: string; mealSessionId: string; extra?: boolean }, now = new Date()): Promise<MealPlanRole | null> {
+  // "Add a tea to breakfast": on top of the planned meal, never in its place.
+  const role = input.extra
+    ? await extraRole(ctx.userProfileId, input.date, input.slot, input.mealSessionId)
+    : await linkToPlan(ctx.userProfileId, input.date, input.slot, input.mealSessionId);
   if (input.date === localDateKey(now, ctx.timezone)) {
     void rebalanceToday(ctx, now).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance after a meal failed"));
   }
@@ -233,6 +236,36 @@ async function tickedAsPlanned(userProfileId: string, date: string, slot: PlanSl
   const e = (data ?? [])[0] as { title: string; metadata: Record<string, unknown> | null } | undefined;
   if (!e || e.metadata?.off_plan === true || e.metadata?.logged_session_id === notSession) return null;
   return { text: plannedText(e.metadata, e.title) };
+}
+
+/** An extra on the slot (whether or not its planned meal is eaten yet); null without a plan. */
+async function extraRole(userProfileId: string, date: string, slotIn: string, mealSessionId: string): Promise<MealPlanRole | null> {
+  const slot = (PLAN_SLOTS as readonly string[]).includes(slotIn) ? (slotIn as PlanSlot) : null;
+  if (!(await hasPlanOn(userProfileId, date))) return null;
+  if (!slot) return { role: "extra" };
+  const ticked = await tickedAsPlanned(userProfileId, date, slot, mealSessionId);
+  return ticked ? { role: "extra", slot, alreadyEaten: ticked.text } : { role: "extra", slot };
+}
+
+/**
+ * Where a meal draft will go once confirmed, for the card before it's logged (read-only twin of
+ * linkToPlan): in place of the slot's still-planned meal, or an extra. null without a plan.
+ */
+export async function previewPlanRole(userProfileId: string, date: string, slotIn: string, opts: { extra?: boolean } = {}): Promise<MealPlanRole | null> {
+  const slot = (PLAN_SLOTS as readonly string[]).includes(slotIn) ? (slotIn as PlanSlot) : null;
+  if (opts.extra || !slot) return extraRole(userProfileId, date, slotIn, "");
+  const { data } = await supabase
+    .from("meal_plan_entries")
+    .select("title, metadata")
+    .eq("user_profile_id", userProfileId)
+    .eq("local_date", date)
+    .eq("meal_slot", slot)
+    .eq("source", "plan")
+    .eq("status", "planned")
+    .limit(1);
+  const entry = (data ?? [])[0] as { title: string; metadata: Record<string, unknown> | null } | undefined;
+  if (entry) return { role: "instead", slot, insteadOf: plannedText(entry.metadata, entry.title) };
+  return extraRole(userProfileId, date, slot, "");
 }
 
 /** null: that day has no meal plan, so the log is simply a meal. */

@@ -4071,7 +4071,21 @@ function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
   const macros = el("div", { class: "macros" });
   const list = el("ul", { class: "items-ro" });
   // The meal slot as one small picker next to the title, instead of a four-way switch.
-  const seg = el("select", { class: "slot-pick", "aria-label": "Meal", onchange: (e) => { slot = e.target.value; } });
+  // Before it's logged: does it sit on top of the planned meal, or take its place? Only for the
+  // slot it was worked out for; picking another meal hides it (the server decides on confirm).
+  const planNote = el("div", { class: "plan-role" });
+  function renderPlanNote() {
+    const p = draft.plan;
+    const name = SLOT_LABEL[slot]?.toLowerCase() || "meal";
+    const extra = draft.extra || p?.role === "extra";
+    planNote.hidden = slot !== draft.slot || !(p || draft.extra);
+    if (planNote.hidden) return;
+    planNote.className = `plan-role ${extra ? "extra" : "instead"}`;
+    planNote.replaceChildren(el("span", {}, extra
+      ? `+ Extra, on top of your ${name}${p?.alreadyEaten ? ` (${p.alreadyEaten})` : ""}`
+      : `⇄ Replaces your planned ${name} (${p.insteadOf})`));
+  }
+  const seg = el("select", { class: "slot-pick", "aria-label": "Meal", onchange: (e) => { slot = e.target.value; renderPlanNote(); } });
   const confirm = el("button", { class: "btn primary", type: "button" }, "Confirm & log");
   const missing = el("p", { class: "draft-note" }, "No numbers for this yet. Tap Edit to pick it from the food list, search for it, or type the numbers.");
 
@@ -4124,6 +4138,8 @@ function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
         edited: changed || JSON.stringify(items) !== original || slot !== draft.slot,
         // Logged for a planned meal on another day (yesterday's dinner): that day, not today.
         ...(draft.date ? { date: draft.date } : {}),
+        // "Add a tea to breakfast": stays an extra even while breakfast is still planned.
+        ...(draft.extra && slot === draft.slot ? { extra: true } : {}),
       };
       const r = await api("/meals/confirm", { method: "POST", body: JSON.stringify(body) });
       const done = { state: "logged", calories: r.totals.calories, ...(r.plan ? { plan: { slot, canCount: false, ...r.plan } } : {}) };
@@ -4147,8 +4163,10 @@ function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
     missing,
     draft.servingAssumption ? assumptionNote(draft.servingAssumption) : null,
     list,
+    planNote,
     el("div", { class: "draft-actions split" }, discard, confirm),
   ].filter(Boolean));
+  renderPlanNote();
   renderSeg();
   renderItems();
   totals();

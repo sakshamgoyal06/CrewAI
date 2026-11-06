@@ -31,6 +31,8 @@ export type CatalogEntry = {
   cuisine: Cuisine;
   /** Normalized aliases that point at this entry (search matches them). */
   aliases: string[];
+  /** A dish's ingredient keys ("chai" → toned milk, sugar); empty for a plain food. */
+  contains: string[];
 };
 
 const popularityOf = (name: string, meals: MealType[]): CatalogEntry["popularity"] => POPULARITY[name] ?? (meals.length ? 2 : 1);
@@ -119,7 +121,7 @@ export function buildCatalog(foods: CatalogFood[] = FOODS, dishes: CatalogDish[]
       key: foodKeyFor(f.name), name: f.name, kind: "food", basis: f.basis ?? "100g", per100: f.per100,
       servings: f.servings, diet: f.diet, category: f.category, meals: f.meals ?? MEALS_BY_CATEGORY[f.category], prepMinutes: foodPrep(f), ordered: f.ordered ?? false,
       jain: f.diet !== "egg" && f.diet !== "nonveg" && !NOT_JAIN.includes(f.name),
-      popularity: popularityOf(f.name, f.meals ?? MEALS_BY_CATEGORY[f.category]), cuisine: cuisineOf(f.name), aliases: [],
+      popularity: popularityOf(f.name, f.meals ?? MEALS_BY_CATEGORY[f.category]), cuisine: cuisineOf(f.name), aliases: [], contains: [],
     };
     ingredients.set(e.key, e);
     add(e, f.aliases);
@@ -131,6 +133,7 @@ export function buildCatalog(foods: CatalogFood[] = FOODS, dishes: CatalogDish[]
       servings: d.servings, diet: d.diet, category: d.category, meals: d.meals ?? MEALS_BY_CATEGORY[d.category], prepMinutes: d.prepMinutes ?? null, ordered: d.ordered ?? false,
       jain: d.diet !== "egg" && d.diet !== "nonveg" && d.recipe.every(([n]) => ingredients.get(foodKeyFor(n))?.jain === true),
       popularity: popularityOf(d.name, d.meals ?? MEALS_BY_CATEGORY[d.category]), cuisine: cuisineOf(d.name), aliases: [],
+      contains: [...new Set(d.recipe.flatMap(([n]) => { const k = foodKeyFor(n); return [k, ...(ingredients.get(k)?.contains ?? [])]; }))],
     };
     ingredients.set(e.key, e);
     add(e, d.aliases);

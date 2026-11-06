@@ -50,21 +50,25 @@ const SLOT_WORDS: Record<string, "breakfast" | "lunch" | "dinner" | "snack"> = {
  * breakfast; "dal rice at lunch today" → "dal rice", slot lunch. The food parser only knows food
  * names, so without this "poha for breakfast" finds nothing.
  */
-export function mealContext(raw: string): { text: string; slot?: "breakfast" | "lunch" | "dinner" | "snack" } {
+export function mealContext(raw: string): { text: string; slot?: "breakfast" | "lunch" | "dinner" | "snack"; extra?: true } {
   let t = raw.trim();
   let slot: "breakfast" | "lunch" | "dinner" | "snack" | undefined;
-  const slotRe = /\b(?:for|at|in|during|as)\s+(?:my\s+|a\s+)?(breakfast|nashta|lunch|dinner|supper|snacks?)\b/i;
+  // "Add a tea in today's breakfast", "also had a banana", "an extra roti": on top of the meal.
+  const extra = /^\s*(?:please\s+)?(?:add|also|plus)\b|\b(?:extra|on\s+top|as\s+well|also\s+had)\b/i.test(t);
+  const slotRe = /\b(?:for|at|in|during|as|to|with)\s+(?:my\s+|a\s+|the\s+|today'?s\s+|tonight'?s\s+|this\s+morning'?s\s+)?(breakfast|nashta|lunch|dinner|supper|snacks?)\b/i;
   const m = slotRe.exec(t);
   if (m) {
     slot = SLOT_WORDS[m[1]!.toLowerCase()];
     t = t.replace(slotRe, " ");
   }
   t = t
-    .replace(/^\s*(?:log\s+)?(?:i\s+)?(?:just\s+)?(?:have\s+|had\s+|ate\s+|eaten\s+|drank\s+|have\s+had\s+|had\s+eaten\s+)+/i, "")
-    .replace(/\b(?:today|tonight|this\s+(?:morning|afternoon|evening)|in\s+the\s+(?:morning|afternoon|evening)|yesterday|just\s+now)\b/gi, " ")
+    .replace(/^\s*(?:please\s+)?(?:add|also|plus)\s+/i, "")
+    .replace(/^\s*(?:log\s+)?(?:i\s+)?(?:also\s+)?(?:just\s+)?(?:have\s+|had\s+|ate\s+|eaten\s+|drank\s+|have\s+had\s+|had\s+eaten\s+)+/i, "")
+    .replace(/\b(?:today|tonight|this\s+(?:morning|afternoon|evening)|in\s+the\s+(?:morning|afternoon|evening)|yesterday|just\s+now|as\s+well|on\s+top)\b/gi, " ")
     .replace(/\s+([,.;!])/g, "$1")
     .replace(/[\s.!]+$/, "")
     .replace(/\s+/g, " ")
     .trim();
-  return t.length >= 2 ? { text: t, ...(slot ? { slot } : {}) } : { text: raw.trim(), ...(slot ? { slot } : {}) };
+  const tail = { ...(slot ? { slot } : {}), ...(extra ? { extra: true as const } : {}) };
+  return t.length >= 2 ? { text: t, ...tail } : { text: raw.trim(), ...tail };
 }

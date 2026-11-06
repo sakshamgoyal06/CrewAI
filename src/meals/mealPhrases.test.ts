@@ -37,3 +37,16 @@ describe("mealContext", () => {
     expect(mealContext("for lunch")).toEqual({ text: "for lunch", slot: "lunch" });
   });
 });
+
+describe("mealContext add-ons", () => {
+  // 6 Nov: "Add a tea in today's breakfast" is chai on top of breakfast, not breakfast itself.
+  it("marks an add-on as extra and finds the slot after today's", () => {
+    expect(mealContext("Add a tea in today's breakfast")).toEqual({ text: "a tea", slot: "breakfast", extra: true });
+    expect(mealContext("also had a banana")).toEqual({ text: "a banana", extra: true });
+    expect(mealContext("add chai to my breakfast")).toEqual({ text: "chai", slot: "breakfast", extra: true });
+  });
+
+  it("leaves a plain meal alone", () => {
+    expect(mealContext("had poha for breakfast")).toEqual({ text: "poha", slot: "breakfast" });
+  });
+});
