@@ -409,7 +409,7 @@ export function detectOverAmbitious(input: DetectInput): Finding | null {
   const deficitShare = review && input.targets.calorieTarget ? (review.maintenanceKcal - input.targets.calorieTarget) / review.maintenanceKcal : 0;
   if (share <= T.ambitiousPace && deficitShare <= T.ambitiousDeficit) return null;
   const evidence = share > T.ambitiousPace
-    ? [`Reaching ${m.target} kg by ${input.goal!.goal.deadline} needs ${(-m.requiredPerWeek).toFixed(2)} kg a week, ${(share * 100).toFixed(1)}% of your weight. Plans that fast are rarely kept.`]
+    ? [`Reaching ${m.target} kg by ${input.goal!.goal.deadline} needs ${(-m.requiredPerWeek).toFixed(2)} kg a week, ${(share * 100).toFixed(1)}% of your weight. I suggest no more than ${(T.ambitiousPace * 100).toFixed(2).replace(/0$/, "")}% a week; faster plans are rarely kept.`]
     : [`Your target is ${Math.round(deficitShare * 100)}% under your maintenance of about ${kcal(review!.maintenanceKcal)}. Deficits that deep are hard to keep up.`];
   return { pattern: "over_ambitious", cause: "pace", area: "goal", itemId: null, itemLabel: null, weight: 5, evidence, facts: { neededPerWeek: m.requiredPerWeek, latest: m.latest, target: m.target } };
 }
@@ -443,7 +443,7 @@ export function detectTooFast(input: DetectInput): Finding | null {
     itemId: null,
     itemLabel: null,
     weight: 100,
-    evidence: [`You're losing about ${(-review.actualKgPerWeek).toFixed(2)} kg a week, more than 1% of your weight. That pace costs muscle and is hard on the body.`],
+    evidence: [`You're losing about ${(-review.actualKgPerWeek).toFixed(2)} kg a week, more than 1% of your weight, the most I suggest. That pace costs muscle and is hard on the body.`],
     facts: { actualPerWeek: review.actualKgPerWeek, maintenance: review.maintenanceKcal },
   };
 }
