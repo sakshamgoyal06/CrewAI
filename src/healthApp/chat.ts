@@ -331,10 +331,25 @@ const toolDefinitions: Anthropic.Tool[] = [
       type: "object",
       properties: {
         text: { type: "string", description: "Only the foods they named, in their words, with portions if given. Never add a food, ingredient or portion they didn't say: 'a tea' is 'a tea', not 'tea with milk'." },
+        items: {
+          type: "array",
+          description: "Each food they named, read from their message. One entry per food they said; never split a dish into ingredients or add one ('a tea' → [{food:'tea'}]; '2 roti and dal' → [{food:'roti',quantity:2},{food:'dal'}]).",
+          items: {
+            type: "object",
+            properties: {
+              food: { type: "string", description: "The food in their words, no amount ('tea', 'aloo paratha', 'veg whopper')." },
+              quantity: { type: "number", description: "Only if they gave one." },
+              unit: { type: "string", enum: ["piece", "katori", "bowl", "plate", "cup", "glass", "slice", "tbsp", "tsp", "scoop", "serving", "g", "ml"], description: "Only if they gave one." },
+              size: { type: "string", enum: ["small", "medium", "large"] },
+              notes: { type: "string", description: "A detail they gave ('no sugar', 'with ghee'). Never invented." },
+            },
+            required: ["food"],
+          },
+        },
         slot: { type: "string", enum: ["breakfast", "lunch", "dinner", "snack"] },
         extra: { type: "boolean", description: "true when they add it on top of a meal ('add a tea to breakfast', 'also had a banana'), so it doesn't replace that meal's plan." },
       },
-      required: ["text"],
+      required: ["text", "items"],
     },
   },
   {

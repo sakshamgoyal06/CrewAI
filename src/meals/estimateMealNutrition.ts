@@ -4,7 +4,7 @@ import { estimateViaCalorieNinjas } from "./providers/calorieNinjas.js";
 import { estimateViaLlm } from "./providers/llmEstimate.js";
 import { estimateViaUsdaFdc } from "./providers/usdaFdc.js";
 import { estimateViaWebResearch } from "./providers/webResearchEstimate.js";
-import { estimateWithFoodDb } from "./foodDbEstimate.js";
+import { estimateFromItems, estimateWithFoodDb, type ParsedFoodItem } from "./foodDbEstimate.js";
 import { breakdownViaWebResearch } from "./providers/webBreakdown.js";
 import type { FoodContributor } from "./foodStore.js";
 
@@ -21,6 +21,11 @@ export type EstimateOptions = {
    * "boondi raita" back into plain raita). Falls back to the usual order only when the web is off.
    */
   webFirst?: boolean;
+  /**
+   * The foods already read from the message by the coach (food, amount, detail). Each is looked up
+   * as given, catalog then food table then web, with no splitting of the text.
+   */
+  items?: ParsedFoodItem[];
 };
 
 /**
@@ -37,7 +42,8 @@ export async function estimateMealNutrition(
   }
   // Web results are cached per person: one person's lookup is never served to another.
   // A web-first lookup never reuses a food-table answer for the same words.
-  const shared = `${opts.webFirst ? "web|" : ""}${estimateCacheKey(q)}`;
+  const parsed = opts.items?.length ? `items|${estimateCacheKey(JSON.stringify(opts.items))}|` : "";
+  const shared = `${opts.webFirst ? "web|" : ""}${parsed}${estimateCacheKey(q)}`;
   const own = `${opts.contributor?.id ?? "-"}|${shared}`;
   for (const k of [shared, own]) {
     const hit = estimateCache.get(k);
@@ -85,16 +91,16 @@ async function estimateUncached(q: string, opts: EstimateOptions): Promise<MealN
   }
   // Built from ingredients in our food table; only unseen items go to the web (and get saved).
   let webTried = false;
-  const fromDb = await estimateWithFoodDb(
-    q,
-    webEnabled
-      ? (text, items, known) => {
-          webTried = true;
-          opts.onWebLookup?.();
-          return breakdownViaWebResearch(text, items, known);
-        }
-      : null,
-    { contributor: opts.contributor },
+  const breakdown = webEnabled
+    ? (text: string, items: Parameters<typeof breakdownViaWebResearch>[1], known: string[]) => {
+        webTried = true;
+        opts.onWebLookup?.();
+        return breakdownViaWebResearch(text, items, known);
+      }
+    : null;
+  const fromDb = await (opts.items?.length
+    ? estimateFromItems(q, opts.items, breakdown, { contributor: opts.contributor })
+    : estimateWithFoodDb(q, breakdown, { contributor: opts.contributor })
   ).catch(() => null);
   if (fromDb && fromDb.calories !== null) {
     return fromDb;

@@ -88,6 +88,20 @@ export const mealDraftInput = z.object({
   slot: z.enum(MEAL_SLOTS).optional(),
   /** Added on top of the meal ("add a tea to breakfast"), never in place of the planned one. */
   extra: z.boolean().optional(),
+  /** The foods as the coach read them (foodDbEstimate.ts ParsedFoodItem); looked up one by one. */
+  items: z
+    .array(
+      z.object({
+        food: z.string().trim().min(1).max(120),
+        quantity: z.coerce.number().positive().max(5000).optional(),
+        unit: z.string().trim().max(20).optional(),
+        size: z.enum(["small", "medium", "large"]).optional(),
+        notes: z.string().trim().max(120).optional(),
+      }),
+    )
+    .min(1)
+    .max(12)
+    .optional(),
 });
 
 const mealItem = z.object({
@@ -204,7 +218,7 @@ export async function startMealDraft(
     slot: input.slot ?? typed.slot,
     timezone: ctx.timezone,
     now: ctx.now,
-    options: { webAllowed: gate.allowed, onWebLookup: gate.onLookup, contributor: { id: ctx.userProfileId, trusted }, webFirst: how.webFirst },
+    options: { webAllowed: gate.allowed, onWebLookup: gate.onLookup, contributor: { id: ctx.userProfileId, trusted }, webFirst: how.webFirst, items: input.items },
   });
   if (!gate.allowed && draft.source !== "food_db") {
     const note = "This month's web lookups are used up, so this is a rougher estimate. Check the numbers.";

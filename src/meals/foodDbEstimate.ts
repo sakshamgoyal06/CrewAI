@@ -26,6 +26,7 @@ import type { Breakdown, BreakdownIngredient, BreakdownRequestItem } from "./pro
 import { logger } from "../logger.js";
 import { CONFIRMED_SOURCE, PENDING_SOURCE, splitPending, type FoodContributor } from "./foodTrust.js";
 import { catalog as defaultCatalog, resolveCatalogItem, type Catalog, type CatalogMatch } from "./catalog/index.js";
+import { popularityScore, searchCatalog } from "./catalog/search.js";
 import { recordFoodGaps } from "./foodGaps.js";
 import type { MealItemLine, MealNutritionEstimate } from "./types.js";
 
@@ -284,11 +285,89 @@ export async function estimateWithFoodDb(
   deps: FoodDbDeps = {},
 ): Promise<MealNutritionEstimate | null> {
   const cat = deps.catalog ?? defaultCatalog();
-  const comps = splitWithParts(parseMealComponents(text), cat);
+  return estimateFromComponents(text, splitWithParts(parseMealComponents(text), cat), breakdown, deps, { search: false });
+}
+
+/**
+ * One food as the coach read it from the message: the food in the person's words, the amount
+ * they gave (none means one usual serving) and any detail ("no sugar", "with ghee"). The coach
+ * fills these in as part of its own turn, so no text splitting and no extra model call.
+ */
+export type ParsedFoodItem = { food: string; quantity?: number; unit?: string; size?: "small" | "medium" | "large"; notes?: string };
+
+const ITEM_UNITS: Record<string, FoodUnit> = {
+  g: "per_100g", gram: "per_100g", grams: "per_100g", ml: "per_100ml", katori: "bowl",
+  piece: "piece", bowl: "bowl", plate: "plate", cup: "cup", glass: "glass", slice: "slice", tbsp: "tbsp", tsp: "tsp",
+  scoop: "scoop", ladle: "ladle", handful: "handful", serving: "serving",
+};
+
+export function componentFromItem(item: ParsedFoodItem): FoodComponent | null {
+  const name = item.food.trim();
+  const foodKey = foodKeyFor(name);
+  if (!foodKey) return null;
+  const q = Number(item.quantity);
+  const has = Number.isFinite(q) && q > 0;
+  const unit = ITEM_UNITS[(item.unit ?? "").toLowerCase()] ?? (has ? "piece" : "serving");
+  const notes = item.notes?.trim();
+  return {
+    phrase: [has ? `${q}${unit === "per_100g" ? " g" : unit === "per_100ml" ? " ml" : unit === "piece" ? "" : ` ${unit}`}` : "", name, notes ? `(${notes})` : ""].filter(Boolean).join(" "),
+    foodKey,
+    name,
+    quantity: has ? q : 1,
+    unit,
+    assumedQuantity: !has,
+    ...(item.size ? { size: item.size } : {}),
+  };
+}
+
+/** Lowest match strength (before popularity) for a search hit to stand for the food: a name word or an alias prefix. */
+const SEARCH_MIN = 60;
+
+/**
+ * The catalog food a name stands for when it isn't a key or alias ("tea" → Chai through search
+ * ranking). Only a strong match, so an unknown dish goes to the web instead of a lookalike.
+ */
+export function searchCatalogItem(c: FoodComponent, cat: Catalog): CatalogMatch | null {
+  const hit = searchCatalog(c.name, { limit: 1, eatenOnly: false }, cat)[0];
+  if (!hit || hit.score - 5 * popularityScore(hit.entry) < SEARCH_MIN) return null;
+  return resolveCatalogItem({ ...c, foodKey: hit.entry.key }, cat);
+}
+
+/** Estimate for foods the coach already read from the message (see ParsedFoodItem). */
+export async function estimateFromItems(
+  text: string,
+  items: ParsedFoodItem[],
+  breakdown: BreakdownFn | null,
+  deps: FoodDbDeps = {},
+): Promise<MealNutritionEstimate | null> {
+  const cat = deps.catalog ?? defaultCatalog();
+  const comps = items.flatMap((i) => {
+    const c = componentFromItem(i);
+    if (!c) return [];
+    // A detail that names a catalog food of its own ("chai" + "no sugar" → Chai without sugar).
+    const notes = i.notes?.trim();
+    if (notes) {
+      const withNotes = { ...c, foodKey: foodKeyFor(`${c.name} ${notes}`) };
+      if (resolveCatalogItem(withNotes, cat)) return [withNotes];
+    }
+    return [c];
+  });
+  return estimateFromComponents(text, comps, breakdown, deps, { search: true });
+}
+
+async function estimateFromComponents(
+  text: string,
+  comps: FoodComponent[],
+  breakdown: BreakdownFn | null,
+  deps: FoodDbDeps,
+  how: { search: boolean },
+): Promise<MealNutritionEstimate | null> {
+  const cat = deps.catalog ?? defaultCatalog();
   if (comps.length === 0 || comps.length > 12) return null;
 
-  // The curated catalog first; only items it can't answer touch the database.
-  const fromCatalog = comps.map((c) => resolveCatalogItem(c, cat));
+  // The curated catalog first (by key, then by search for parsed items); only items it can't
+  // answer touch the database.
+  const fromCatalog = comps.map((c) => resolveCatalogItem(c, cat) ?? (how.search ? searchCatalogItem(c, cat) : null));
   const dbKeys = comps.filter((_, i) => !fromCatalog[i]).map((c) => c.foodKey);
   const loaded: FoodTables = dbKeys.length
     ? await (deps.load ?? loadFoodTables)(dbKeys)
