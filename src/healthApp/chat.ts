@@ -330,8 +330,9 @@ const toolDefinitions: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
-        text: { type: "string", description: "What they ate, with portions if given." },
+        text: { type: "string", description: "Only the foods they named, in their words, with portions if given. Never add a food, ingredient or portion they didn't say: 'a tea' is 'a tea', not 'tea with milk'." },
         slot: { type: "string", enum: ["breakfast", "lunch", "dinner", "snack"] },
+        extra: { type: "boolean", description: "true when they add it on top of a meal ('add a tea to breakfast', 'also had a banana'), so it doesn't replace that meal's plan." },
       },
       required: ["text"],
     },
@@ -1039,8 +1040,17 @@ export function mealDraftReply(drafts: MealDraft[]): string {
   if (found.length) {
     const kcal = found.reduce((s, d) => s + d.totals.calories, 0);
     const protein = Math.round(found.reduce((s, d) => s + d.totals.protein_g, 0));
-    const slot = found.length === 1 && found[0]!.slot !== "unspecified" ? ` for ${found[0]!.slot}` : "";
-    parts.push(`That comes to about ${kcal} kcal and ${protein} g protein${slot}. Check the card, fix anything that's off, then tap Confirm & log.`);
+    const one = found.length === 1 ? found[0]! : null;
+    const slotName = one && one.slot !== "unspecified" ? one.slot : null;
+    // Say where it goes in the plan, so an add-on never reads as the whole meal.
+    const where = !one || !slotName
+      ? ""
+      : one.plan?.role === "extra" || one.extra
+        ? `, as an extra on top of your ${slotName}`
+        : one.plan?.role === "instead"
+          ? ` for ${slotName}, in place of the planned ${one.plan.insteadOf}`
+          : ` for ${slotName}`;
+    parts.push(`That comes to about ${kcal} kcal and ${protein} g protein${where}. Check the card, fix anything that's off, then tap Confirm & log.`);
   }
   const blanks = found.flatMap((d) => d.items.filter((i) => i.missing).map((i) => i.name));
   if (blanks.length) parts.push(`I couldn't find numbers for ${blanks.join(", ")}, so fill ${blanks.length === 1 ? "that one" : "those"} in on the card. The rest is counted.`);

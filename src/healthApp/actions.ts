@@ -10,7 +10,7 @@ import { localDateKey } from "../nutrition/localDate.js";
 import { logger } from "../logger.js";
 import { loggableError } from "../util/loggableError.js";
 import { ACTIVITY_SOURCES, upsertDailyActivity } from "./activityStore.js";
-import { afterMealLogged } from "./dietPlan/rhythm.js";
+import { afterMealLogged, previewPlanRole } from "./dietPlan/rhythm.js";
 import { setActiveGoal, updateDailyTargets, upsertBodyCheckin } from "./bodyStore.js";
 import { isOwnerProfile } from "./accounts.js";
 import { webGateFor } from "./webLookups.js";
@@ -86,6 +86,8 @@ export const targetsInput = z
 export const mealDraftInput = z.object({
   text: z.string().trim().min(2).max(500),
   slot: z.enum(MEAL_SLOTS).optional(),
+  /** Added on top of the meal ("add a tea to breakfast"), never in place of the planned one. */
+  extra: z.boolean().optional(),
 });
 
 const mealItem = z.object({
@@ -104,6 +106,8 @@ export const mealConfirmInput = z.object({
   items: z.array(mealItem).min(1).max(30),
   edited: z.boolean().default(false),
   date: DATE.optional(),
+  /** From the draft: an extra on the slot, so it doesn't take the planned meal's place. */
+  extra: z.boolean().optional(),
 });
 
 export type ActionContext = { userProfileId: string; timezone: string; now?: Date };
@@ -206,6 +210,14 @@ export async function startMealDraft(
     const note = "This month's web lookups are used up, so this is a rougher estimate. Check the numbers.";
     draft.servingAssumption = draft.servingAssumption ? `${draft.servingAssumption} ${note}` : note;
   }
+  const extra = input.extra === true || typed.extra === true;
+  if (extra) draft.extra = true;
+  // Say on the card, before it's logged, whether it replaces the planned meal or sits on top.
+  const plan = await previewPlanRole(ctx.userProfileId, localDateKey(ctx.now ?? new Date(), ctx.timezone), draft.slot, { extra }).catch((err) => {
+    logger.warn({ err: loggableError(err) }, "meal draft plan preview failed");
+    return null;
+  });
+  if (plan) draft.plan = plan;
   return draft;
 }
 
@@ -231,7 +243,7 @@ export async function confirmMeal(
   // The meal plan follows: the log takes a still-planned meal's place, or is an extra; the rest of
   // today is resized in the background. A failure here never fails the log.
   if (saved.ok && !saved.alreadySaved) {
-    const plan = await afterMealLogged(ctx, { date, slot: input.slot, mealSessionId: saved.mealSessionId }, ctx.now).catch((err) => {
+    const plan = await afterMealLogged(ctx, { date, slot: input.slot, mealSessionId: saved.mealSessionId, extra: input.extra }, ctx.now).catch((err) => {
       logger.warn({ err: loggableError(err) }, "meal plan follow-up failed");
       return null;
     });

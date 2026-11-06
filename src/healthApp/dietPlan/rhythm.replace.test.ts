@@ -86,7 +86,7 @@ vi.mock("../meals.js", async (orig) => ({
   },
 }));
 
-import { afterMealLogged, setMealPlanRole } from "./rhythm.js";
+import { afterMealLogged, previewPlanRole, setMealPlanRole } from "./rhythm.js";
 
 const ctx = { userProfileId: "u1", timezone: "Asia/Kolkata", now: new Date("2026-11-07T10:00:00Z") } as never;
 const later = new Date("2026-11-07T10:00:00Z");
@@ -120,5 +120,32 @@ describe("a meal logged for a slot already ticked as eaten", () => {
     T("meal_plan_entries")[0]!.metadata.off_plan = true;
     expect(await afterMealLogged(ctx, { date: "2026-11-05", slot: "dinner", mealSessionId: "s-burger" }, later)).toEqual({ role: "extra" });
     expect(await setMealPlanRole(ctx, "s-burger", "replace", later)).toEqual({ ok: false, error: "nothing_to_replace" });
+  });
+});
+
+// 6 Nov: "Add a tea in today's breakfast" must sit on top of breakfast, even while it's still planned.
+describe("an add-on logged for a still-planned meal", () => {
+  beforeEach(() => {
+    tables.clear();
+    T("meal_plan_entries").push({ id: "e2", user_profile_id: "u1", local_date: "2026-11-05", meal_slot: "breakfast", source: "plan", status: "planned", title: "Poha", metadata: { items: [{ text: "1 plate poha" }] } });
+    T("meal_logs").push({ meal_session_id: "s-tea", user_profile_id: "u1", local_date: "2026-11-05", meal_slot: "breakfast", description: "Chai", calories: 77, deleted_at: null, component_index: 0 });
+  });
+
+  it("stays extra and leaves the planned breakfast to eat", async () => {
+    const role = await afterMealLogged(ctx, { date: "2026-11-05", slot: "breakfast", mealSessionId: "s-tea", extra: true }, later);
+    expect(role).toEqual({ role: "extra", slot: "breakfast" });
+    expect(T("meal_plan_entries")[0]).toMatchObject({ status: "planned" });
+    expect(T("meal_plan_entries")[0]!.metadata.logged_session_id).toBeUndefined();
+  });
+
+  it("without the add-on flag it still takes the planned meal's place", async () => {
+    const role = await afterMealLogged(ctx, { date: "2026-11-05", slot: "breakfast", mealSessionId: "s-tea" }, later);
+    expect(role).toEqual({ role: "instead", slot: "breakfast", insteadOf: "1 plate poha" });
+  });
+
+  it("previews where the draft will go, without changing the plan", async () => {
+    expect(await previewPlanRole("u1", "2026-11-05", "breakfast")).toEqual({ role: "instead", slot: "breakfast", insteadOf: "1 plate poha" });
+    expect(await previewPlanRole("u1", "2026-11-05", "breakfast", { extra: true })).toEqual({ role: "extra", slot: "breakfast" });
+    expect(T("meal_plan_entries")[0]).toMatchObject({ status: "planned" });
   });
 });

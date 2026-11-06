@@ -244,7 +244,16 @@ export function splitWithParts(comps: FoodComponent[], cat: Catalog): FoodCompon
     const [first, ...rest] = c.phrase.split(/\s+with\s+/i);
     const parts = [first!, ...rest].map(parseFoodPhrase);
     if (parts.some((p) => !p) || parts.some((p) => !resolveCatalogItem(p!, cat))) return [c];
-    return parts as FoodComponent[];
+    // "tea with milk", "chai with sugar": the drink already has them. Only an amount of its own
+    // ("coffee with 1 glass milk") makes it a second item; otherwise the 6 Nov tea card added a
+    // whole glass of milk the person never had.
+    const base = resolveCatalogItem(parts[0]!, cat)!.entry;
+    const kept = parts.filter((p, i) => {
+      if (i === 0 || !p!.assumedQuantity) return true;
+      const e = resolveCatalogItem(p!, cat)!.entry;
+      return !base.contains.includes(e.key);
+    });
+    return kept as FoodComponent[];
   });
 }
 
