@@ -78,7 +78,9 @@
         <button class="icon-btn ghost" id="photo" type="button" aria-label="Log a meal from a photo">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
         </button>
-        <input id="photo-input" type="file" accept="image/*" hidden>
+        <!-- capture: the camera button opens the camera itself; the gallery picker is a separate input. -->
+        <input id="photo-camera" type="file" accept="image/*" capture="environment" hidden>
+        <input id="photo-input" type="file" accept="image/*,.heic,.heif" hidden>
         <button class="icon-btn ghost" id="mic" type="button" aria-label="Speak instead of typing" aria-pressed="false" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
         </button>

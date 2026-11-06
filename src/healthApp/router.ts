@@ -106,6 +106,7 @@ import {
 } from "./billing.js";
 import { getUsualMeals, repeatUsualMeal } from "./frequentMeals.js";
 import { photoMealInput } from "./photoMeal.js";
+import { preparePhotoForVision } from "./photoImage.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
 import { liftingGap, routineInput } from "./routine.js";
 import { answerRoutineCheck, routineCheckAnswerInput, setRoutine } from "./routineCheck.js";
@@ -753,9 +754,12 @@ export function createHealthAppRouter(): express.Router {
     "/meals/photo",
     route("meal-photo", async (ctx, req) => {
       const input = photoMealInput.parse(req.body);
+      // HEIC or oversized originals are converted first; a photo we can't open doesn't use up the day's allowance.
+      const photo = await preparePhotoForVision(input.image);
+      if (!photo.ok) return { status: 400, body: photo };
       const allowed = await allowUse(ctx, "photo");
       if (allowed !== true) return { status: 429, body: { ok: false, error: allowed } };
-      const r = await draftMealFromPhoto(ctx, input);
+      const r = await draftMealFromPhoto(ctx, { ...input, image: photo.image, mediaType: photo.mediaType });
       return { status: r.ok ? 200 : 400, body: r };
     }),
   );

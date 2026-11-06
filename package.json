@@ -21,6 +21,8 @@
     "@supabase/supabase-js": "^2.49.1",
     "dotenv": "^16.4.7",
     "express": "^4.22.3",
+    "heic-decode": "^2.1.0",
+    "jpeg-js": "^0.4.4",
     "pino": "^9.6.0",
     "web-push": "^3.6.7",
     "zod": "^4.6.7"
