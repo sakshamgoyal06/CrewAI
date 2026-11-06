@@ -169,10 +169,17 @@ async function claimNotification(userProfileId: string, n: Notification): Promis
 
 type SendFn = (sub: { endpoint: string; keys: { p256dh: string; auth: string } }, payload: string) => Promise<void>;
 
+/**
+ * Every push is a reminder the person chose, so it goes out as high urgency. With "normal",
+ * Android holds the message while the phone is idle (Doze), which is exactly when the morning
+ * plan and an early walk reminder are sent: on 6 Nov both were accepted by Google and never shown.
+ */
+export const PUSH_OPTIONS = { TTL: 6 * 3600, urgency: "high" } as const;
+
 function webPushSender(cfg: PushConfig): SendFn {
   webpush.setVapidDetails(cfg.subject, cfg.publicKey, cfg.privateKey);
   return async (sub, payload) => {
-    await webpush.sendNotification(sub, payload, { TTL: 6 * 3600, urgency: "normal" });
+    await webpush.sendNotification(sub, payload, PUSH_OPTIONS);
   };
 }
 
@@ -193,7 +200,8 @@ export async function sendNotification(
   const id = await claimNotification(userProfileId, n);
   if (!id) return { sent: false, delivered: 0, reason: "duplicate" };
 
-  const payload = JSON.stringify({ title: n.title, body: n.body, url: n.url ?? "/app/", tag: n.kind });
+  // `id` lets the phone report back that it got and showed the notification (see recordReceipt).
+  const payload = JSON.stringify({ id, title: n.title, body: n.body, url: n.url ?? "/app/", tag: n.kind });
   let delivered = 0;
   for (const s of subs) {
     try {
@@ -215,6 +223,32 @@ export async function sendNotification(
   }
   await supabase.from("health_notifications").update({ delivered }).eq("id", id);
   return { sent: delivered > 0, delivered };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The service worker's receipt for one push: it arrived on the phone, and was shown or failed
+ * to show. Without it a "delivered" row only means Google accepted it, which is all we knew on
+ * 6 Nov. The id is the notification's random uuid, so this needs no session (a service worker
+ * has none); only the first receipt counts.
+ */
+export async function recordReceipt(id: unknown, shown: unknown, error: unknown): Promise<boolean> {
+  if (typeof id !== "string" || !UUID.test(id)) return false;
+  const { error: dbError } = await supabase
+    .from("health_notifications")
+    .update({
+      received_at: new Date().toISOString(),
+      shown: shown === true,
+      show_error: typeof error === "string" && error ? error.slice(0, 300) : null,
+    })
+    .eq("id", id)
+    .is("received_at", null);
+  if (dbError) {
+    logger.warn({ error: dbError.message }, "push receipt failed");
+    return false;
+  }
+  return true;
 }
 
 export function generateVapidKeys(): { publicKey: string; privateKey: string } {

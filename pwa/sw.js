@@ -2,7 +2,7 @@
 // next open). API calls always go to the network so numbers are never stale.
 // The server swaps this name for a hash of the shell files on every deploy (src/swVersion.ts),
 // so there's no need to bump it by hand; the literal only applies when served as a plain file.
-const CACHE = "magnus-health-v52";
+const CACHE = "magnus-health-v53";
 const SHELL = ["/app/", "/app/index.html", "/app/styles.css", "/app/app.js", "/app/telemetry.js", "/app/session.js", "/app/onboarding.js", "/app/scan.js", "/app/foodprefs.js", "/app/routine.js", "/app/meals.js", "/app/mealbuilder.js", "/app/manifest.webmanifest", "/app/icon.svg", "/app/privacy.html", "/app/fonts/lato-latin-300-normal.woff2", "/app/fonts/lato-latin-400-normal.woff2", "/app/fonts/lato-latin-700-normal.woff2", "/app/fonts/lato-latin-900-normal.woff2"];
 
 self.addEventListener("install", (event) => {
@@ -39,6 +39,17 @@ self.addEventListener("fetch", (event) => {
 });
 
 // Push notifications from the proactive scheduler.
+// Tells the server the push arrived and whether it could be shown, so a missing notification
+// can be traced to the phone or the server. Never blocks or breaks the notification itself.
+function receipt(id, shown, error) {
+  if (!id) return Promise.resolve();
+  return fetch("/api/health/push/receipt", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, shown, error: error ? String(error).slice(0, 300) : undefined }),
+  }).catch(() => {});
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -54,11 +65,16 @@ self.addEventListener("push", (event) => {
       tag: data.tag || "magnus",
       renotify: true,
       data: { url: data.url || "/app/" },
-    }).then(() =>
-      // An open app refreshes its chat now instead of waiting for its next check.
-      self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
-        for (const w of wins) w.postMessage({ type: "push" });
-      })),
+    }).then(
+      () => Promise.all([
+        receipt(data.id, true),
+        // An open app refreshes its chat now instead of waiting for its next check.
+        self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+          for (const w of wins) w.postMessage({ type: "push" });
+        }),
+      ]),
+      (err) => receipt(data.id, false, err && (err.message || err)),
+    ),
   );
 });
 

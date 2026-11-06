@@ -31,6 +31,7 @@ vi.mock("../tools/clients.js", () => {
       update: (r: Record<string, unknown>) => ((op = "update"), (row = r), chain),
       delete: () => ((op = "delete"), chain),
       eq: (k: string, v: unknown) => ((filters[k] = v), chain),
+      is: (k: string, v: unknown) => ((filters[k] = v), chain),
       then: (res: (v: unknown) => unknown) => Promise.resolve(run()).then(res),
     });
     return chain;
@@ -38,7 +39,7 @@ vi.mock("../tools/clients.js", () => {
   return { supabase: { from }, anthropic: {} };
 });
 
-import { isQuiet, parsePrefs, sendNotification } from "./push.js";
+import { isQuiet, parsePrefs, PUSH_OPTIONS, recordReceipt, sendNotification } from "./push.js";
 
 const n = { kind: "meal_reminder" as const, dedupeKey: "meal_reminder:lunch:2026-11-01", title: "Lunch not logged", body: "…" };
 
@@ -72,7 +73,7 @@ describe("sendNotification", () => {
     expect(await sendNotification("u1", n, send)).toEqual({ sent: true, delivered: 2 });
     expect(await sendNotification("u1", n, send)).toMatchObject({ sent: false, reason: "duplicate" });
     expect(send).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(send.mock.calls[0]![1] as string)).toMatchObject({ title: "Lunch not logged", tag: "meal_reminder" });
+    expect(JSON.parse(send.mock.calls[0]![1] as string)).toMatchObject({ id: `n-${n.dedupeKey}`, title: "Lunch not logged", tag: "meal_reminder" });
   });
 
   it("removes a subscription the push service says is gone", async () => {
@@ -87,6 +88,28 @@ describe("sendNotification", () => {
     db.subs = [];
     expect(await sendNotification("u1", n, vi.fn())).toMatchObject({ sent: false, reason: "no_devices" });
     expect(db.sent.size).toBe(0);
+  });
+});
+
+describe("delivery to a sleeping phone", () => {
+  it("sends every push as high urgency so Doze doesn't hold it", () => {
+    expect(PUSH_OPTIONS.urgency).toBe("high");
+  });
+});
+
+describe("recordReceipt", () => {
+  it("records the phone's receipt for a real notification id", async () => {
+    expect(await recordReceipt("3b27a3e1-6cd1-42b8-bd07-f14c973be5b9", true, undefined)).toBe(true);
+    expect(db.updates.at(-1)).toMatchObject({ table: "health_notifications", shown: true, show_error: null });
+  });
+  it("ignores anything that isn't a uuid", async () => {
+    expect(await recordReceipt("n-1; drop", true, undefined)).toBe(false);
+    expect(await recordReceipt(undefined, true, undefined)).toBe(false);
+    expect(db.updates).toHaveLength(0);
+  });
+  it("keeps why a notification couldn't be shown", async () => {
+    await recordReceipt("3b27a3e1-6cd1-42b8-bd07-f14c973be5b9", false, "No notification permission");
+    expect(db.updates.at(-1)).toMatchObject({ shown: false, show_error: "No notification permission" });
   });
 });
 
