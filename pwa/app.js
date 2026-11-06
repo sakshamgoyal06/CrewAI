@@ -894,7 +894,13 @@ function renderMove(d, t, isToday) {
   const stepT = t.stepTarget || 8000;
   foldKey("move-meta", fmt(d.steps), " steps today",
     d.burn ? `${fmt(d.burn.kcal)} kcal burned` : isToday && d.isTrainingDay && s?.gym?.time ? `Gym ${clock(s.gym.time)}` : d.isTrainingDay ? "Training day" : "Rest day");
-  $("routine-meta").textContent = d.routine?.length ? `${d.routine.filter((r) => r.state === "done").length} of ${d.routine.length} done` : "";
+  // Routine folds like the rest: done count big, the next item still to do under it.
+  const items = d.routine || [];
+  const next = items.find((r) => r.state === "pending");
+  if (items.length) {
+    foldKey("routine-meta", `${items.filter((r) => r.state === "done").length} of ${items.length}`, " done",
+      next ? `Next: ${next.label}${isToday && next.startTime ? ` · ${clock(next.startTime.slice(0, 5))}` : ""}` : items.some((r) => r.state === "skipped") ? `${items.filter((r) => r.state === "skipped").length} skipped` : "All done");
+  } else foldKey("routine-meta", "–", "", d.activities?.length ? `${d.activities.length} logged` : "No routine set");
   const mins = d.workouts.reduce((a, w) => a + (w.durationMin || 0), 0);
   const tile = (label, value, unit, sub, pct) =>
     el("div", { class: "stat" },

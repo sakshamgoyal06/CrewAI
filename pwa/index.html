@@ -143,13 +143,19 @@
         </div>
       </section>
 
-      <section class="block routine-block" id="routine-block" aria-label="Routine">
-        <div class="block-head"><h2>Routine</h2><span class="meta" id="routine-meta"></span></div>
-        <ul class="routine-today" id="routine-today"></ul>
-        <ul class="list rows" id="activities"></ul>
-        <div class="block-links">
-          <button class="link" data-sheet="activity" type="button">Add swim, run or sport</button>
-          <button class="link quiet" id="routine-edit" data-sheet="routine" type="button">Set your routine</button>
+      <section class="block fold routine-block" id="routine-block" data-fold="routine" aria-label="Routine">
+        <button class="fold-head" type="button" aria-expanded="false" aria-controls="routine-fold">
+          <h2>Routine</h2>
+          <span class="key" id="routine-meta"></span>
+          <span class="chev" aria-hidden="true"></span>
+        </button>
+        <div class="fold-body" id="routine-fold">
+          <ul class="routine-today" id="routine-today"></ul>
+          <ul class="list rows" id="activities"></ul>
+          <div class="block-links">
+            <button class="link" data-sheet="activity" type="button">Add swim, run or sport</button>
+            <button class="link quiet" id="routine-edit" data-sheet="routine" type="button">Set your routine</button>
+          </div>
         </div>
       </section>
 
