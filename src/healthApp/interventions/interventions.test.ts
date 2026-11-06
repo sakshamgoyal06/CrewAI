@@ -185,7 +185,11 @@ describe("detectors", () => {
   });
 
   it("flags an over-ambitious pace and deadline drift", () => {
-    expect(detectOverAmbitious(input({ goal: goal({ requiredPerWeek: -1.2 }) }))!.pattern).toBe("over_ambitious");
+    const amb = detectOverAmbitious(input({ goal: goal({ requiredPerWeek: -1.2 }) }))!;
+    expect(amb.pattern).toBe("over_ambitious");
+    // The pace limit is the coach's guideline, never "your limit".
+    expect(amb.evidence[0]).toContain("I suggest no more than 0.75% a week");
+    expect(amb.evidence[0]).not.toMatch(/your (\d|limit)/i);
     expect(detectOverAmbitious(input())).toBeNull();
     expect(detectDeadlineDrift(input({ goal: goal({ pace: "behind", projectedDate: "2027-04-01", actualPerWeek: -0.3 }) }))!.facts.projectedDate).toBe("2027-04-01");
   });
@@ -239,6 +243,10 @@ describe("options", () => {
     const o = buildOffer(drift, ctx());
     expect(o.options[0]!.label).toBe("Move the goal to 1 Apr 2027");
     expect(o.recommendation).toMatch(/gets you there by 1 Feb 2027/);
+    // "Talk it through" asks to fix the goal, matching the card; no milestone talk.
+    const talk = o.options.find((x) => x.kind === "talk")!;
+    expect(talk.prompt).toBe("Help me fix my goal.");
+    expect(o.options.some((x) => /milestone/i.test(`${x.label} ${x.prompt ?? ""}`))).toBe(false);
   });
 
   it("caps extensions at six months past the original deadline and offers a rethink", () => {

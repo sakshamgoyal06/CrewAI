@@ -223,6 +223,9 @@ function nutritionOptions(f: Finding, ctx: OfferContext): Option[] {
   return out.filter((o): o is Option => o !== null);
 }
 
+/** What "Talk it through" sends on a goal-pace card. Matches the card: fix the goal, nothing about milestones. */
+export const GOAL_TALK_PROMPT = "Help me fix my goal.";
+
 /** A goal date the pace can keep: the safe pace for over-ambitious, the trend for drift. */
 function laterDeadline(f: Finding, ctx: OfferContext): string | null {
   const m = ctx.goal?.metrics.find((x) => x.metric === "weight_kg");
@@ -240,7 +243,7 @@ function goalOptions(f: Finding, ctx: OfferContext): Option[] {
     case "pace": {
       const d = laterDeadline(f, ctx);
       if (d && ctx.goal && d > ctx.goal.goal.deadline) out.push(opt(ctx, "new_date", `Move the goal to ${shortDate(d, ctx.today)}`, "change", { deadline: d }));
-      out.push(opt(ctx, "milestone", "Set a nearer first milestone", "talk", {}, "Help me set a nearer first milestone for my goal."));
+      out.push(opt(ctx, "fix_goal", "Fix my goal together", "talk", {}, GOAL_TALK_PROMPT));
       break;
     }
     case "above_maintenance":
@@ -295,7 +298,7 @@ export function buildOffer(f: Finding, ctx: OfferContext): Offer {
   const dropped = options.filter(beyond);
   options = options.filter((o) => !beyond(o));
   if (dropped.length && !options.some((o) => o.kind === "talk")) {
-    options.push({ id: "rethink", label: "Rethink the goal together", kind: "talk", change: {}, impact: { kind: "none", date: null, text: "" }, prompt: "My goal looks out of reach on this plan. Help me rethink it: a nearer milestone or a different target." });
+    options.push({ id: "rethink", label: "Rethink the goal together", kind: "talk", change: {}, impact: { kind: "none", date: null, text: "" }, prompt: "My goal looks out of reach on this plan. Help me fix my goal." });
   }
 
   const rank = (o: Option) => (o.kind === "talk" ? 2 : o.impact.kind === "moves" ? 1 : 0);

@@ -26,7 +26,7 @@ import { loadHealthProfile } from "../snapshot.js";
 import { getRoutineChecks } from "../routineStore.js";
 import { getWorkoutChecks, postCoachMessage } from "../workoutCheckStore.js";
 import { detectAll, detectOverAmbitious, itemHistory, itemHitRate, T, type DetectInput, type SessionRow } from "./detectors.js";
-import { BANNED, buildOffer, shortDate, type OfferContext } from "./options.js";
+import { BANNED, buildOffer, GOAL_TALK_PROMPT, shortDate, type OfferContext } from "./options.js";
 import { agreedSnapshot, applySnapshot, beforeOf, liveSnapshot, listVersions, originalDeadline, saveVersion, withChange, writeChange } from "./plan.js";
 import { cardFromIntervention } from "./card.js";
 import { getIntervention, insertIntervention, listInterventions, updateIntervention } from "./store.js";
@@ -312,6 +312,11 @@ export type RespondResult =
   | { ok: true; card: InterventionCard; talk?: string; message?: string }
   | { ok: false; error: string };
 
+/** Cards saved before the wording fix still carry the old milestone prompt; send the new one. */
+function talkPrompt(o: { id: string; prompt?: string }): string | undefined {
+  return o.id === "milestone" ? GOAL_TALK_PROMPT : o.prompt;
+}
+
 const REVIEW_DAYS: Record<string, number> = { stalled: 14, deadline_drift: 14, over_ambitious: 14 };
 const REASON_CAUSE: Record<Exclude<ReasonChoice, "away">, CauseId> = { time: "time", energy: "energy", enjoyment: "enjoyment", forgot: "forgot" };
 
@@ -370,7 +375,7 @@ export async function respond(
       if (i.status !== "offered") return { ok: false, error: "already_answered" };
       const o = i.options.find((x) => x.id === opts.optionId);
       if (!o) return { ok: false, error: "unknown_option" };
-      if (o.kind === "talk") return { ok: true, card: cardFromIntervention(i), talk: o.prompt ?? `Let's talk about "${i.title}".` };
+      if (o.kind === "talk") return { ok: true, card: cardFromIntervention(i), talk: talkPrompt(o) ?? `Let's talk about "${i.title}".` };
       const open = (await listInterventions(ctx.userProfileId)).filter((h) => h.id !== id && (h.status === "trial" || h.status === "confirm"));
       if (open.some((h) => h.area === i.area)) return { ok: false, error: "trial_running" };
       const live = await liveSnapshot(ctx.userProfileId);
