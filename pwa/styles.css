@@ -1041,8 +1041,8 @@ body.screen-open { overflow: hidden; }
 .plan-banner.warn { background: color-mix(in srgb, var(--warn) 14%, transparent); border-color: color-mix(in srgb, var(--warn) 55%, var(--hair)); }
 .plan-banner-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 /* ---------- Today: folding sections ----------
-   The scorecard stays open; Food and Movement fold to one line with their key number. */
-.scorecard { border-top: 0; padding-top: 8px; }
+   Scorecard, Food and Day totals fold to one line with their key number. */
+.scorecard { border-top: 0; padding-top: 0; }
 .fold { padding: 0; }
 .fold-head {
   width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
@@ -1064,6 +1064,15 @@ body.screen-open { overflow: hidden; }
 .water-block:has(> .water[hidden]) { display: none; }
 
 .fold.open .fold-head .key { visibility: hidden; }
+/* The scorecard keeps its % and colour in the header even when open. */
+.fold.open .fold-head .key.tone { visibility: visible; }
+.fold-head .tone .kv { display: inline-flex; align-items: center; gap: 7px; }
+.tone-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--tone); flex: none; }
+.tone { --tone: var(--faint); }
+.tone.green { --tone: var(--good); }
+.tone.yellow { --tone: var(--warn); }
+.tone.red { --tone: var(--bad); }
+.fold-head .tone:not(.gray) .kv b { color: var(--tone); }
 
 /* Compact day plan in chat: timeline, targets, one tip, "Full plan" opens the rest as a screen. */
 .dayplan.compact { gap: 12px; }

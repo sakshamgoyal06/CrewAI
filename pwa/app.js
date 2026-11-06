@@ -8,6 +8,7 @@ import { foodPrefsEditor } from "./foodprefs.js";
 import { fromServer, routineEditor, toPayload } from "./routine.js";
 import { dayMealList, initMeals, loadPlan, mealScreen, mealsTitles, openPlannedMeal, renderMeals, setupScreen } from "./meals.js";
 import { mealBuilder, fixedItem } from "./mealbuilder.js";
+import { dayTone } from "./dayTone.js";
 import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
 const TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } })();
@@ -229,7 +230,7 @@ function foldKey(id, value, unit, sub) {
   $(id).replaceChildren(el("span", { class: "kv" }, el("b", {}, value), el("small", {}, unit)), sub ? el("span", { class: "ks" }, sub) : null);
 }
 
-/** Food and Movement start folded; each remembers being opened on this phone. */
+/** Every Today section starts folded; each remembers being opened on this phone. */
 function initFolds() {
   const open = store.get(FOLD_KEY, {});
   for (const sec of document.querySelectorAll(".fold")) {
@@ -728,7 +729,17 @@ function renderDay() {
   renderFuel(d, t);
   renderMove(d, t, isToday);
   $("day-card-title").textContent = isToday ? "Today" : shortDate(d.date);
-  $("today-score").textContent = d.onTrack ? "On track" : `${d.score}%`;
+  // The header's % and colour; red waits for 2 pm on today (dayTone.js has the rules).
+  const now = new Date();
+  const tone = dayTone(d, t.calorieTarget, isToday ? now.getHours() * 60 + now.getMinutes() : null);
+  const met = d.checks.filter((c) => c.met).length;
+  const score = $("today-score");
+  score.className = `key tone ${tone.tone}`;
+  score.replaceChildren(
+    el("span", { class: "kv" }, el("i", { class: "tone-dot" }), el("b", {}, `${d.score}%`)),
+    el("span", { class: "ks" }, d.checks.length ? `${tone.label} · ${met} of ${d.checks.length}` : tone.label),
+  );
+  score.closest(".fold-head").setAttribute("aria-label", `On track ${d.score}%, ${tone.label}`);
   // A check that just turned green pops once; one already met when the day was first drawn doesn't.
   const seen = (state.metSeen ||= new Map());
   const before = seen.get(d.date);

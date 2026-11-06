@@ -117,14 +117,18 @@
         </span>
       </div>
 
-      <!-- The day's scorecard stays open; the rest fold away with their key number in the header. -->
-      <section class="block scorecard" id="day-card" aria-label="Scorecard">
-        <div class="block-head">
+      <!-- Each section folds away with its key number in the header. The scorecard's header keeps
+           the day's % and a colour for how it's going (dayTone.js), open or folded. -->
+      <section class="block fold scorecard" id="day-card" data-fold="score" aria-label="Scorecard">
+        <button class="fold-head" type="button" aria-expanded="false" aria-controls="score-fold">
           <h2>On track</h2>
-          <span class="score" id="today-score">–</span>
+          <span class="key tone gray" id="today-score"><span class="kv"><i class="tone-dot"></i><b>–</b></span></span>
+          <span class="chev" aria-hidden="true"></span>
+        </button>
+        <div class="fold-body" id="score-fold">
+          <ul class="checks" id="checks"></ul>
+          <div class="quick-row" id="quick-row" hidden></div>
         </div>
-        <ul class="checks" id="checks"></ul>
-        <div class="quick-row" id="quick-row" hidden></div>
       </section>
 
       <section class="block fold fuel" id="fuel" data-fold="fuel" aria-label="Food">
