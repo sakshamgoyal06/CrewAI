@@ -12,7 +12,7 @@ import { z } from "zod";
 import { logger } from "../logger.js";
 import { localDateKey } from "../nutrition/localDate.js";
 import { supabase } from "../tools/clients.js";
-import { syncHealthConnectActivities } from "./activityLog.js";
+import { refreshRoutineWalks, syncHealthConnectActivities } from "./activityLog.js";
 import { upsertDailyActivity } from "./activityStore.js";
 import type { ActionContext } from "./actions.js";
 
@@ -320,6 +320,10 @@ export async function ingestHealthConnect(
     if (!saved.ok) return saved;
     days.push({ date, ...totals });
   }
+
+  await refreshRoutineWalks(ctx, days.map((d) => ({ date: d.date, steps: d.steps, walkMinutes: d.walkMinutes }))).catch((err) =>
+    logger.warn({ err: err instanceof Error ? err.message : String(err) }, "health connect: routine walk refresh failed"),
+  );
 
   let weighIns = 0;
   for (const r of scale) {

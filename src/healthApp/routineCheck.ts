@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { localDateKey } from "../nutrition/localDate.js";
 import type { ActionContext } from "./actions.js";
-import { trainingActivity, typicalTrainingBurn } from "./activities.js";
+import { trainingActivity, typicalTrainingBurn, walkMinutesFromDay } from "./activities.js";
 import { deleteActivity, FALLBACK_WEIGHT_KG, getActivities, latestWeightKg, saveActivity } from "./activityLog.js";
 import { getActivityRange } from "./activityStore.js";
 import { zonedInstant } from "./gymSlot.js";
@@ -212,6 +212,8 @@ export async function answerRoutineCheck(
     /** The stored answer for the item and day (undo and skipped read the activity it logged). */
     current?: (userProfileId: string, itemId: string, date: string) => Promise<RoutineCheck | undefined>;
     removeActivity?: typeof deleteActivity;
+    /** The phone's totals for the day (steps, walk minutes), to size a walk nobody timed. */
+    dayTotals?: (userProfileId: string, date: string) => Promise<{ steps: number; walkMinutes: number | null } | undefined>;
   } = {
     loadProfile: (id) => loadHealthProfile(id),
     status: routineStatusFor,
@@ -258,11 +260,17 @@ export async function answerRoutineCheck(
   }
 
   // Done: log it, so the burn and the activity list match. The draft id makes a second tap a no-op.
+  // A walk nobody timed is sized from the phone's steps instead of assuming the full planned time.
+  let minutes = input.durationMin ?? item.durationMin;
+  if (input.durationMin === undefined && item.activityKey === "walking") {
+    const load = deps.dayTotals ?? (async (uid: string, d: string) => (await getActivityRange(uid, d, d)).get(d));
+    minutes = walkMinutesFromDay(item.durationMin, await load(ctx.userProfileId, date).catch(() => undefined));
+  }
   const logged = await deps.logActivity(ctx, {
     draftId: `routine:${item.id}:${date}`,
     date,
     startTime: item.startTime ? zonedInstant(date, item.startTime, ctx.timezone).toISOString() : null,
-    durationMin: input.durationMin ?? item.durationMin,
+    durationMin: minutes,
     key: item.activityKey,
     label: catalogLabel(item.activityKey),
     intensity: "moderate",

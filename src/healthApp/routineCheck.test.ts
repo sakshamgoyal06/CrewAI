@@ -79,6 +79,7 @@ describe("answerRoutineCheck", () => {
     logActivity: vi.fn(async () => ({ ok: true as const, activity: { id: "act-1" } as never, alreadySaved: false, training: { countsAsTraining: false, neededKcal: null, note: null, short: false } })),
     current: vi.fn(async (): Promise<RoutineCheck | undefined> => undefined),
     removeActivity: vi.fn(async () => ({ ok: true })),
+    dayTotals: vi.fn(async () => undefined),
   });
 
   it("done logs the walk at its planned time and length, idempotently", async () => {
@@ -88,6 +89,18 @@ describe("answerRoutineCheck", () => {
       draftId: `routine:${walk.id}:2026-11-03`, key: "walking", label: "Walking", durationMin: 30, startTime: "2026-11-03T01:30:00.000Z",
     }));
     expect(d.save).toHaveBeenCalledWith("u", expect.objectContaining({ status: "done", activityId: "act-1" }));
+  });
+
+  it("done sizes an untimed walk from the phone's steps, never above the plan", async () => {
+    const d = { ...base(), dayTotals: vi.fn(async () => ({ steps: 1650, walkMinutes: null })) };
+    await answerRoutineCheck(ctx, { itemId: walk.id, answer: "done" }, d);
+    expect(d.logActivity).toHaveBeenCalledWith(ctx, expect.objectContaining({ durationMin: 15 }));
+    const many = { ...base(), dayTotals: vi.fn(async () => ({ steps: 9000, walkMinutes: null })) };
+    await answerRoutineCheck(ctx, { itemId: walk.id, answer: "done" }, many);
+    expect(many.logActivity).toHaveBeenCalledWith(ctx, expect.objectContaining({ durationMin: 30 }));
+    const early = { ...base(), dayTotals: vi.fn(async () => ({ steps: 40, walkMinutes: null })) };
+    await answerRoutineCheck(ctx, { itemId: walk.id, answer: "done" }, early);
+    expect(early.logActivity).toHaveBeenCalledWith(ctx, expect.objectContaining({ durationMin: 30 }));
   });
 
   it("done with a different length logs those minutes", async () => {

@@ -881,10 +881,9 @@ function renderMove(d, t, isToday) {
   const hevy = state.history?.hevy;
   const s = state.snapshot;
   const stepT = t.stepTarget || 8000;
-  foldKey("move-meta", fmt(d.steps), " steps",
-    d.routine?.length
-      ? `${d.routine.filter((r) => r.state === "done").length} of ${d.routine.length} done`
-      : isToday && d.isTrainingDay && s?.gym?.time ? `Gym ${clock(s.gym.time)}` : d.isTrainingDay ? "Training day" : "Rest day");
+  foldKey("move-meta", fmt(d.steps), " steps today",
+    d.burn ? `${fmt(d.burn.kcal)} kcal burned` : isToday && d.isTrainingDay && s?.gym?.time ? `Gym ${clock(s.gym.time)}` : d.isTrainingDay ? "Training day" : "Rest day");
+  $("routine-meta").textContent = d.routine?.length ? `${d.routine.filter((r) => r.state === "done").length} of ${d.routine.length} done` : "";
   const mins = d.workouts.reduce((a, w) => a + (w.durationMin || 0), 0);
   const tile = (label, value, unit, sub, pct) =>
     el("div", { class: "stat" },
@@ -894,8 +893,8 @@ function renderMove(d, t, isToday) {
       el("div", { class: "ts" }, sub),
     );
   $("move-tiles").replaceChildren(
-    tile("Steps", fmt(d.steps), null, `of ${fmt(stepT)}`, d.steps / stepT),
-    tile("Burned", d.burn ? fmt(d.burn.kcal) : "–", d.burn ? "kcal" : null, d.burn ? (d.burn.source === "estimate" ? "estimated" : "from phone") : "no data yet", null),
+    tile("Steps today", fmt(d.steps), null, `of ${fmt(stepT)}`, d.steps / stepT),
+    tile("Burned today", d.burn ? fmt(d.burn.kcal) : "–", d.burn ? "kcal" : null, d.burn ? (d.burn.source === "estimate" ? "estimated" : "from phone") : "no data yet", null),
     tile("Workout", d.workouts.length ? fmt(mins) : d.trainedUnlogged || d.sportCounted ? "✓" : "–", d.workouts.length ? "min" : null,
       d.workouts.length ? `${fmt(d.workouts.reduce((a, w) => a + w.volumeKg, 0))} kg lifted` : d.trainedUnlogged ? (hevy === "not_connected" ? "marked done" : "not in Hevy") : d.sportCounted ? d.sportCounted.split(" · ")[0] : d.isTrainingDay ? "none logged" : "rest", null),
   );
@@ -971,7 +970,7 @@ function renderRecovery(d) {
   if (d.restingHr != null) parts.push(stat("Resting HR", fmt(d.restingHr), "bpm"));
   if (d.hrvMs != null) parts.push(stat("HRV", fmt(d.hrvMs), "ms"));
   // Health Connect's total includes resting metabolism; "Burned" above is activity only.
-  if (d.totalKcal != null) parts.push(stat("Total burn", fmt(d.totalKcal), "kcal"));
+  if (d.totalKcal != null) parts.push(stat("Total burn today", fmt(d.totalKcal), "kcal"));
   line.hidden = !parts.length;
   line.replaceChildren(...parts);
 }
@@ -1004,13 +1003,20 @@ function renderRoutineToday(d) {
         catch (err) { action.disabled = false; toast(err.message); }
       });
     }
+    // What was logged for this item: its minutes and kcal, so the row is the walk, not the day.
+    const logged = r.state === "done" && !r.gym
+      ? (d.activities || []).find((a) => a.key === r.activityKey && a.source !== "health_connect" && a.counted)
+      : null;
     const sub = r.state === "pending"
-      ? (r.gym ? (state.history?.hevy === "not_connected" ? r.detail : `${r.detail} · log it in Hevy`) : `${r.detail} · ${r.durationMin} min`)
-      : r.detail;
+      ? (r.gym ? (state.history?.hevy === "not_connected" ? r.detail : `${r.detail} · log it in Hevy`) : `${r.detail} · ${r.durationMin} min planned`)
+      : logged ? [r.startTime ? clock(r.startTime) : null, `${logged.durationMin} min`, `${fmt(logged.kcal)} kcal`].filter(Boolean).join(" · ") : r.detail;
+    const edit = el("button", { class: "link small quiet", type: "button", "aria-label": `Edit ${r.label}` }, "Edit");
+    edit.addEventListener("click", () => openSheet("routine"));
     return el("li", { class: r.state },
       el("span", { class: "mark", "aria-hidden": "true" }, mark),
       el("span", { class: "main" }, el("span", { class: "title" }, r.label), el("span", { class: "sub" }, sub)),
-      !today || d.date <= today ? action : null);
+      !today || d.date <= today ? action : null,
+      edit);
   }));
 }
 
@@ -3843,8 +3849,8 @@ function routineCheckCard(c) {
     }
     const done = el("button", { class: "btn primary", type: "button" }, `Done · ${cur.durationMin} min`);
     const mins = el("input", { class: "field", type: "number", inputmode: "numeric", min: "1", max: "600", placeholder: "Minutes", "aria-label": "Minutes done" });
-    const shorter = el("form", { class: "reason-other", hidden: true, onsubmit: (e) => { e.preventDefault(); const m = Number(mins.value); if (m > 0) answer({ answer: "done", durationMin: m }, all()); } },
-      mins, el("button", { class: "btn", type: "submit" }, "Save"));
+    const shorter = el("form", { class: "reason-other minutes", hidden: true, onsubmit: (e) => { e.preventDefault(); const m = Number(mins.value); if (m > 0) answer({ answer: "done", durationMin: m }, all()); } },
+      mins, el("span", { class: "hint" }, "min"), el("button", { class: "btn", type: "submit" }, "Save"));
     const other = el("button", { class: "btn", type: "button", onclick: () => { shorter.hidden = !shorter.hidden; if (!shorter.hidden) mins.focus(); } }, "Different length");
     const skipped = el("button", { class: "btn", type: "button" }, "Skipped");
     const instead = el("button", { class: "link", type: "button", onclick: () => { state.activityDate = cur.date; openSheet("activity"); } }, "Did something else instead");
