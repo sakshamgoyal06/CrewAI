@@ -118,6 +118,7 @@ import {
   getPrefs,
   prefsInput,
   pushConfig,
+  recordReceipt,
   saveSubscription,
   savePrefs,
   sendNotification,
@@ -247,6 +248,13 @@ export function createHealthAppRouter(): express.Router {
       logger.error({ err: (err as Error).message }, "razorpay webhook failed");
       res.status(500).json({ error: "webhook_failed" });
     }
+  });
+
+  /** The service worker says a push reached the phone (no session in a service worker). */
+  router.post("/push/receipt", (req, res) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    void recordReceipt(b.id, b.shown, b.error);
+    res.status(204).end();
   });
 
   router.use(async (req, res, next) => {
