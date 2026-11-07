@@ -5,6 +5,7 @@ const db = vi.hoisted(() => ({
   sent: new Set<string>(),
   deleted: [] as string[],
   updates: [] as Array<Record<string, unknown>>,
+  chat: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock("../tools/clients.js", () => {
@@ -17,6 +18,7 @@ vi.mock("../tools/clients.js", () => {
       if (table === "health_push_subscriptions" && op === "select") return { data: db.subs, error: null };
       if (table === "health_push_subscriptions" && op === "delete") db.deleted.push(String(filters.id));
       if (op === "update") db.updates.push({ table, ...row });
+      if (table === "health_chat_messages" && op === "insert") db.chat.push(row);
       if (table === "health_notifications" && op === "upsert") {
         const key = String(row.dedupe_key);
         if (db.sent.has(key)) return { data: [], error: null };
@@ -27,6 +29,7 @@ vi.mock("../tools/clients.js", () => {
     };
     Object.assign(chain, {
       select: () => chain,
+      insert: (r: Record<string, unknown>) => ((op = "insert"), (row = r), chain),
       upsert: (r: Record<string, unknown>) => ((op = "upsert"), (row = r), chain),
       update: (r: Record<string, unknown>) => ((op = "update"), (row = r), chain),
       delete: () => ((op = "delete"), chain),
@@ -39,9 +42,9 @@ vi.mock("../tools/clients.js", () => {
   return { supabase: { from }, anthropic: {} };
 });
 
-import { isQuiet, parsePrefs, PUSH_OPTIONS, recordReceipt, sendNotification } from "./push.js";
+import { isQuiet, nudgeChat, parsePrefs, PUSH_OPTIONS, recordReceipt, sendNotification } from "./push.js";
 
-const n = { kind: "meal_reminder" as const, dedupeKey: "meal_reminder:lunch:2026-11-01", title: "Lunch not logged", body: "…" };
+const n = { kind: "meal_reminder" as const, dedupeKey: "meal_reminder:lunch:2026-11-01", title: "Lunch not logged", body: "…", chat: "posted" as const };
 
 beforeEach(() => {
   db.subs = [
@@ -51,6 +54,7 @@ beforeEach(() => {
   db.sent = new Set();
   db.deleted = [];
   db.updates = [];
+  db.chat = [];
 });
 
 describe("quiet hours", () => {
@@ -84,10 +88,35 @@ describe("sendNotification", () => {
     expect(db.deleted).toEqual(["s1"]);
   });
 
+  it("posts the nudge's chat message once, before the push goes out", async () => {
+    const order: string[] = [];
+    const send = vi.fn(async () => {
+      order.push(`push after ${db.chat.length} chat`);
+    });
+    const walk = { ...n, kind: "routine_reminder" as const, dedupeKey: "routine_reminder:w:2026-11-07", chat: { text: "Morning walk in 15 min. 7:00 am · 60 min.", cards: [{ type: "routine_check" }] } };
+    await sendNotification("u1", walk, send);
+    await sendNotification("u1", walk, send);
+    expect(db.chat).toEqual([{ user_profile_id: "u1", role: "assistant", content: walk.chat.text, cards: [{ type: "routine_check" }] }]);
+    expect(order[0]).toBe("push after 1 chat");
+  });
+
+  it("posts nothing to chat when the caller already did", async () => {
+    await sendNotification("u1", n, vi.fn(async () => {}));
+    expect(db.chat).toEqual([]);
+  });
+
   it("does nothing without devices", async () => {
     db.subs = [];
     expect(await sendNotification("u1", n, vi.fn())).toMatchObject({ sent: false, reason: "no_devices" });
     expect(db.sent.size).toBe(0);
+  });
+});
+
+describe("nudgeChat", () => {
+  it("turns the push into one chat line", () => {
+    expect(nudgeChat({ title: "Dinner not logged", body: "Tell me what you had in a line and I'll estimate it." })).toEqual({
+      text: "Dinner not logged. Tell me what you had in a line and I'll estimate it.",
+    });
   });
 });
 

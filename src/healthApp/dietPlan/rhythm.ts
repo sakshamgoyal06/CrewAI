@@ -158,6 +158,7 @@ export async function runMealTimeTick(ctx: ActionContext, now = new Date()): Pro
         title: `${SLOT_LABEL[m.slot]}: ${m.title}`,
         body: `${fmt(card.kcal)} kcal, ${card.proteinG} g protein. Tap Ate this when you've eaten, or change the portions.`,
         url: "/app/#meals",
+        chat: "posted",
       });
     }
   }

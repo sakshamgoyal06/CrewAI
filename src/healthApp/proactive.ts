@@ -8,7 +8,7 @@ import { localDateKey } from "../nutrition/localDate.js";
 import { supabase } from "../tools/clients.js";
 import { loggableError } from "../util/loggableError.js";
 import { formatTime } from "./gymSlot.js";
-import { getPrefs, isQuiet, sendNotification, type Notification, type NotificationPrefs } from "./push.js";
+import { getPrefs, isQuiet, nudgeChat, sendNotification, type Notification, type NotificationPrefs } from "./push.js";
 import { cardFromReport, listReports, rcaDue, reviewExperiments, runRca } from "./rca.js";
 import { buildHealthSnapshot, loadHealthProfile, type HealthSnapshot } from "./snapshot.js";
 import { ensureDayPlan } from "./dailyChat.js";
@@ -26,6 +26,9 @@ import { DAY_MS, localClock } from "../util/time.js";
 /** A nudge only fires within this long after its time, so a late restart doesn't send stale ones. */
 const NUDGE_WINDOW_MIN = 90;
 const STEPS_PER_MIN = 110;
+
+/** A nudge with no card of its own posts its text to the chat with the push. */
+const nudge = (n: Omit<Notification, "chat">): Notification => ({ ...n, chat: nudgeChat(n) });
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
@@ -61,11 +64,12 @@ export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs
         .join(" · ") + ".",
       `Week so far: ${s.northStar.onTrackDays}/7 on track.`,
     ];
-    out.push({ kind: "morning_plan", dedupeKey: `morning_plan:${date}`, title: "Today's plan", body: parts.join(" "), url: "/app/#coach" });
+    // The day_plan card (posted from 05:00, first in every tick) is this push's chat side.
+    out.push({ kind: "morning_plan", dedupeKey: `morning_plan:${date}`, title: "Today's plan", body: parts.join(" "), url: "/app/#coach", chat: "posted" });
   }
 
   if (s.goal?.checkinDue && inWindow("08:30")) {
-    out.push({ kind: "weigh_in", dedupeKey: `weigh_in:${date}`, title: "Weekly weigh-in", body: "Step on the scale before breakfast and log it, so the goal pace stays honest.", url: "/app/#tracker" });
+    out.push(nudge({ kind: "weigh_in", dedupeKey: `weigh_in:${date}`, title: "Weekly weigh-in", body: "Step on the scale before breakfast and log it, so the goal pace stays honest.", url: "/app/#tracker" }));
   }
 
   const logged = new Set(s.meals.map((m) => m.slot));
@@ -75,25 +79,26 @@ export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs
     ["dinner", "21:15", "Dinner"],
   ] as const) {
     if (!logged.has(slot) && inWindow(time)) {
-      out.push({ kind: "meal_reminder", dedupeKey: `meal_reminder:${slot}:${date}`, title: `${label} not logged`, body: "Tell me what you had in a line and I'll estimate it.", url: "/app/#coach" });
+      out.push(nudge({ kind: "meal_reminder", dedupeKey: `meal_reminder:${slot}:${date}`, title: `${label} not logged`, body: "Tell me what you had in a line and I'll estimate it.", url: "/app/#coach" }));
     }
   }
 
   const steps = check("steps");
   if (steps && !steps.met && inWindow("17:00") && s.today.steps < s.targets.stepTarget * 0.6) {
     const gap = s.targets.stepTarget - s.today.steps;
-    out.push({
+    out.push(nudge({
       kind: "step_pace",
       dedupeKey: `step_pace:${date}`,
       title: "Steps are behind",
       body: `${fmt(s.today.steps)} of ${fmt(s.targets.stepTarget)}. A ${Math.ceil(gap / STEPS_PER_MIN / 5) * 5}-minute walk closes it.`,
       url: "/app/#tracker",
-    });
+    }));
   }
 
   if (inWindow("21:30")) {
     const open = s.today.checks.filter((c) => !c.met);
-    out.push({
+    // When the nightly digest already went out it holds this dedupe key, so this one is dropped.
+    out.push(nudge({
       kind: "evening_wrap",
       dedupeKey: `evening_wrap:${date}`,
       title: s.today.onTrack ? "On track today" : "Still open today",
@@ -101,7 +106,7 @@ export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs
         ? `Every check is done. ${s.northStar.onTrackDays}/7 this week.`
         : `${open.map((c) => `${c.label} (${c.detail})`).join(", ")}.`,
       url: "/app/#tracker",
-    });
+    }));
   }
 
   return out.filter((n) => !prefs.off.includes(n.kind));
@@ -128,6 +133,8 @@ async function runWorkoutCheckWithPush(userProfileId: string, now: Date): Promis
       title: "Did you train?",
       body: "No workout in Hevy after your gym slot. Tap to answer.",
       url: "/app/#coach",
+      // runWorkoutChecks posted the workout_check card for this day.
+      chat: "posted",
     });
   }
 }
@@ -177,6 +184,7 @@ async function maybeRunRca(userProfileId: string, now: Date): Promise<void> {
       title: trigger === "weekly_review" ? "Your weekly review" : "Why the last two days slipped",
       body: result ? result.report.hypothesis : verdicts[0]!,
       url: "/app/#coach",
+      chat: "posted",
     });
   }
 }

@@ -42,6 +42,26 @@ describe("runRoutineTick", () => {
     expect(d.notify).toHaveBeenCalledWith("u", expect.objectContaining({ kind: "routine_reminder", dedupeKey: `routine_reminder:${walk.id}:2026-11-03`, title: "Morning walk in 14 min" }));
   });
 
+  it("puts the reminder in chat too, with a card that can be answered there", async () => {
+    const d = deps("pending");
+    await runRoutineTick("u", new Date("2026-11-03T01:16:00Z"), d);
+    const sent = (d.notify.mock.calls[0] as unknown as [string, { url: string; chat: { text: string; cards: unknown[] } }])[1];
+    expect(sent.url).toBe("/app/#coach");
+    expect(sent.chat.text).toMatch(/^Morning walk in 14 min\. 7:00 am · 30 min\./);
+    expect(sent.chat.cards).toEqual([
+      expect.objectContaining({ type: "routine_check", itemId: walk.id, date: "2026-11-03", status: "missing", reminder: true }),
+    ]);
+  });
+
+  it("gives a gym reminder a chat line but no card (Hevy answers it)", async () => {
+    const d = deps("pending");
+    await runRoutineTick("u", new Date("2026-11-02T12:35:00Z"), d); // Mon 18:05 IST
+    const calls = d.notify.mock.calls as unknown as Array<[string, { kind: string; chat: { text: string; cards: unknown[] } }]>;
+    const sent = calls.map((c) => c[1]).find((x) => x.kind === "routine_reminder")!;
+    expect(sent.chat.text).toMatch(/^Evening gym in 25 min\./);
+    expect(sent.chat.cards).toEqual([]);
+  });
+
   it("skips the reminder when it's off or already done", async () => {
     expect((await runRoutineTick("u", new Date("2026-11-03T01:16:00Z"), deps("pending", ["routine_reminder"]))).reminders).toBe(0);
     expect((await runRoutineTick("u", new Date("2026-11-03T01:16:00Z"), deps("done"))).reminders).toBe(0);

@@ -198,6 +198,7 @@ export async function runNightlyDigest(
       title: "Your day, in short",
       body: firstSentence(text),
       url: "/app/#coach",
+      chat: "posted",
     });
   }
   return "posted";

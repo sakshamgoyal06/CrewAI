@@ -46,6 +46,15 @@ function snap(over: Partial<HealthSnapshot> = {}): HealthSnapshot {
 }
 
 describe("dueNudges", () => {
+  it("gives every nudge a chat side, so a push never opens an empty chat", () => {
+    const all = [ist("08:10"), ist("14:40"), ist("17:05"), ist("21:35")].flatMap((t) => dueNudges(snap(), t, prefs));
+    expect(all.length).toBeGreaterThan(3);
+    for (const n of all) {
+      if (n.kind === "morning_plan") expect(n.chat).toBe("posted"); // the day_plan card
+      else expect(n.chat).toEqual({ text: expect.stringContaining(n.body) });
+    }
+  });
+
   it("sends the morning plan with the gym slot", () => {
     const n = dueNudges(snap(), ist("08:10"), prefs);
     expect(n.map((x) => x.kind)).toEqual(["morning_plan"]);

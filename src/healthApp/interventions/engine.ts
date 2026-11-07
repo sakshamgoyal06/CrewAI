@@ -204,7 +204,7 @@ export async function offer(userProfileId: string, f: Finding, input: DetectInpu
   if (f.pattern === "safety" || f.pattern === "deadline_drift") {
     const prefs = await getPrefs(userProfileId);
     if (!prefs.off.includes("intervention")) {
-      await sendNotification(userProfileId, { kind: "intervention", dedupeKey: `intervention:${row.id}`, title: o.title, body: f.evidence[0] ?? o.title, url: "/app/#coach" });
+      await sendNotification(userProfileId, { kind: "intervention", dedupeKey: `intervention:${row.id}`, title: o.title, body: f.evidence[0] ?? o.title, url: "/app/#coach", chat: "posted" });
     }
   }
   return row;

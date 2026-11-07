@@ -247,7 +247,8 @@ export function cardHistoryNote(card: ChatCard, states: CardStates): string {
     }
     case "routine_check": {
       const state = CHECK_STATE[live.status] ?? live.status;
-      return `[Routine check for ${live.label} on ${live.date}: ${state}${live.reason ? `, reason: ${live.reason}` : ""}]`;
+      const what = live.reminder ? "Routine reminder" : "Routine check";
+      return `[${what} for ${live.label} on ${live.date}: ${state}${live.reason ? `, reason: ${live.reason}` : ""}]`;
     }
     case "hevy_proposal":
       return `[Hevy change card "${live.title}": ${live.status === "applied" ? "applied in Hevy" : live.status === "discarded" ? "discarded" : live.status === "failed" ? "failed to apply" : "not applied yet"}]`;

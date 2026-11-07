@@ -3865,7 +3865,8 @@ async function answerRoutine(body) {
   return r;
 }
 
-/** Asked after a routine slot (walk, swim, sport) passes with nothing logged for it. */
+/** Asked after a routine slot (walk, swim, sport) passes with nothing logged for it, and posted
+ *  with the reminder before it (c.reminder), so the push always has its card in chat. */
 function routineCheckCard(c) {
   const card = el("div", { class: "draft check" });
   const day = `${WD_LONG[dateOf(c.date).getUTCDay()]} ${dateOf(c.date).getUTCDate()}`;
@@ -3927,7 +3928,9 @@ function routineCheckCard(c) {
     card.className = "draft check";
     card.replaceChildren(
       el("p", { class: "eyebrow" }, `Routine · ${day}`),
-      el("p", { class: "check-line" }, `${cur.label}${cur.startTime ? ` at ${clock(cur.startTime)}` : ""}: nothing logged yet.`),
+      el("p", { class: "check-line" }, c.reminder && !cur.changing
+        ? `${cur.label}${cur.startTime ? ` at ${clock(cur.startTime)}` : ""} · ${cur.durationMin} min. Tap Done when you're back.`
+        : `${cur.label}${cur.startTime ? ` at ${clock(cur.startTime)}` : ""}: nothing logged yet.`),
       el("div", { class: "draft-actions" }, done),
       el("div", { class: "draft-actions" }, other, skipped),
       shorter,

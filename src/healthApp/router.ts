@@ -1122,6 +1122,8 @@ export function createHealthAppRouter(): express.Router {
         title: "Magnus",
         body: "Notifications are on. I'll nudge you about meals, steps, workouts and your weekly review.",
         url: "/app/#coach",
+        // A test ping from Settings, not a nudge.
+        chat: "posted",
       });
       return { status: r.sent ? 200 : 400, body: { ok: r.sent, ...r, error: r.reason } };
     }),

@@ -43,6 +43,8 @@ export async function alertOwnerCoachOffline(
       title: "Magnus coach is offline",
       body: "The Anthropic account refused a chat turn (credit or key). Top up or check the key in the Anthropic Console.",
       url: "/app/#coach",
+      // An alert for the owner, not a nudge: the chat already says the coach is offline.
+      chat: "posted",
     });
   } catch (err) {
     logger.warn({ err: (err as Error).message }, "coach offline alert failed");

@@ -13,7 +13,7 @@ import { trainingActivity, typicalTrainingBurn, walkMinutesFromDay } from "./act
 import { deleteActivity, FALLBACK_WEIGHT_KG, getActivities, latestWeightKg, saveActivity } from "./activityLog.js";
 import { getActivityRange } from "./activityStore.js";
 import { zonedInstant } from "./gymSlot.js";
-import { getPrefs, sendNotification } from "./push.js";
+import { getPrefs, nudgeChat, sendNotification } from "./push.js";
 import {
   catalogLabel,
   defaultLabel,
@@ -48,6 +48,8 @@ export type RoutineCheckCard = {
   durationMin: number;
   status: "missing" | "done" | "skipped";
   reason?: string | null;
+  /** Posted with the reminder before the slot, not as the follow-up after it. */
+  reminder?: boolean;
 };
 
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -147,12 +149,28 @@ export async function runRoutineTick(
   for (const r of reminders) {
     if (prefs.off.includes("routine_reminder") || stateOf(r.item.id, r.date) !== "pending") continue;
     const text = reminderText(r.item, now, r.startsAt);
+    // The chat gets the reminder too, with the routine card so it can be answered there once
+    // it's done. A gym item has no card: its answer comes from Hevy (the workout check).
+    const card: RoutineCheckCard | null = isGym(r.item)
+      ? null
+      : {
+          type: "routine_check",
+          itemId: r.item.id,
+          date: r.date,
+          label: r.item.label,
+          activityKey: r.item.activityKey,
+          startTime: r.item.startTime,
+          durationMin: r.item.durationMin,
+          status: "missing",
+          reminder: true,
+        };
     const sent = await deps.notify(userProfileId, {
       kind: "routine_reminder",
       dedupeKey: `routine_reminder:${r.item.id}:${r.date}`,
       title: text.title,
       body: text.body,
-      url: "/app/#tracker",
+      url: "/app/#coach",
+      chat: { ...nudgeChat(text), cards: card ? [card] : [] },
     });
     if (sent.sent) result.reminders += 1;
   }
@@ -190,6 +208,7 @@ export async function runRoutineTick(
         title: `${f.item.label}: done?`,
         body: "Nothing logged for it yet. Tap to answer.",
         url: "/app/#coach",
+        chat: "posted",
       });
     }
   }

@@ -91,7 +91,29 @@ export type Notification = {
   body: string;
   /** In-app link opened on tap, e.g. "/app/#coach". */
   url?: string;
+  /**
+   * The chat side of the push, so tapping it never opens a chat with nothing new in it.
+   * "posted": the caller already put its own message and card in the chat (day plan, checks,
+   * planned meals, analyses). Otherwise this message is posted once, with the push.
+   */
+  chat: "posted" | ChatPost;
 };
+
+/** A coach message posted to the chat alongside a push. */
+export type ChatPost = { text: string; cards?: unknown[] };
+
+/** The plain chat message for a nudge that has no card of its own: the push, as one line. */
+export function nudgeChat(n: Pick<Notification, "title" | "body">): ChatPost {
+  const title = n.title.trim().replace(/[.!?]$/, "");
+  return { text: `${title}. ${n.body.trim()}` };
+}
+
+async function postNudgeMessage(userProfileId: string, post: ChatPost): Promise<void> {
+  const { error } = await supabase
+    .from("health_chat_messages")
+    .insert({ user_profile_id: userProfileId, role: "assistant", content: post.text, cards: post.cards ?? [] });
+  if (error) logger.warn({ error: error.message }, "nudge chat message save failed");
+}
 
 // ---------- store ----------
 
@@ -199,6 +221,9 @@ export async function sendNotification(
   if (!subs.length) return { sent: false, delivered: 0, reason: "no_devices" };
   const id = await claimNotification(userProfileId, n);
   if (!id) return { sent: false, delivered: 0, reason: "duplicate" };
+  // Before the push goes out, so a tap opens a chat that already has it. Once per dedupe key,
+  // because only the call that claimed the key gets here. A failed save never stops the push.
+  if (n.chat !== "posted") await postNudgeMessage(userProfileId, n.chat);
 
   // `id` lets the phone report back that it got and showed the notification (see recordReceipt).
   const payload = JSON.stringify({ id, title: n.title, body: n.body, url: n.url ?? "/app/", tag: n.kind });
