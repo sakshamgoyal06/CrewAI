@@ -1029,14 +1029,72 @@ function renderRoutineToday(d) {
     const sub = r.state === "pending"
       ? (r.gym ? (state.history?.hevy === "not_connected" ? r.detail : `${r.detail} · log it in Hevy`) : `${r.detail} · ${r.durationMin} min planned`)
       : logged ? [r.startTime ? clock(r.startTime) : null, `${logged.durationMin} min`, `${fmt(logged.kcal)} kcal`].filter(Boolean).join(" · ") : r.detail;
+    // Skip asks why (same reasons and store as the chat check-in); a skip can be taken back here too.
+    let second = null;
+    if (r.state === "pending") {
+      second = el("button", { class: "link small quiet", type: "button", "aria-label": `Skip ${r.label}` }, "Skip");
+      second.addEventListener("click", () => { state.skipItem = { ...r, date: d.date }; openSheet("skip"); });
+    } else if (r.state === "skipped") {
+      second = el("button", { class: "link small quiet", type: "button", "aria-label": `Undo skip ${r.label}` }, "Undo");
+      second.addEventListener("click", async () => {
+        second.disabled = true;
+        try { await skipRoutineItem({ ...r, date: d.date }, "undo"); toast("Skip undone."); }
+        catch (err) { second.disabled = false; toast(err.message); }
+      });
+    }
     const edit = el("button", { class: "link small quiet", type: "button", "aria-label": `Edit ${r.label}` }, "Edit");
     edit.addEventListener("click", () => openSheet("routine"));
+    const open = !today || d.date <= today;
     return el("li", { class: r.state },
       el("span", { class: "mark", "aria-hidden": "true" }, mark),
       el("span", { class: "main" }, el("span", { class: "title" }, r.label), el("span", { class: "sub" }, sub)),
-      !today || d.date <= today ? action : null,
+      open ? action : null,
+      open ? second : null,
       edit);
   }));
+}
+
+/**
+ * Skip (with why) or undo a skip for a routine item, through the same endpoints as the chat
+ * check-ins, so on-track, the coach's open loops and the weekly review all see it.
+ */
+async function skipRoutineItem(r, answer, reason) {
+  const body = { date: r.date, answer, ...(answer === "skipped" && reason ? { reason } : {}) };
+  if (r.gym) {
+    const res = await api("/workout-check", { method: "POST", body: JSON.stringify(body) });
+    refresh();
+    return res;
+  }
+  return answerRoutine({ itemId: r.itemId, ...body });
+}
+
+/** The small "what got in the way?" pick list behind Skip on the Today routine. */
+function skipSheet() {
+  const r = state.skipItem;
+  if (!r) return el("div");
+  const otherReason = el("input", { class: "field", placeholder: "Other reason", maxlength: "300", "aria-label": "Other reason" });
+  const box = el("div", { class: "stack skip-sheet" });
+  const buttons = () => [...box.querySelectorAll("button")];
+  async function pick(reason) {
+    for (const b of buttons()) b.disabled = true;
+    try {
+      await skipRoutineItem(r, "skipped", reason);
+      state.skipItem = null;
+      closeSheet();
+      toast(`Skipped ${r.label.toLowerCase()}${reason ? ` · ${reason}` : ""}.`);
+    } catch (err) {
+      for (const b of buttons()) b.disabled = false;
+      toast(err.message);
+    }
+  }
+  box.append(
+    el("p", { class: "draft-note" }, `${r.label}: what got in the way? This feeds the weekly review.`),
+    el("div", { class: "chips wrap" },
+      ...SKIP_REASONS.map((reason) => el("button", { class: "chip", type: "button", onclick: () => pick(reason) }, reason))),
+    el("form", { class: "reason-other", onsubmit: (e) => { e.preventDefault(); pick(otherReason.value.trim() || undefined); } },
+      otherReason, el("button", { class: "btn", type: "submit" }, "Save")),
+  );
+  return box;
 }
 
 /** Steps + gym + each activity, so the Burned number explains itself. */
@@ -4318,7 +4376,7 @@ function finishedCard(card, draft, status, opts = {}) {
 
 // Only the + quick-log picker is a bottom sheet. Everything bigger opens as its own full screen
 // with a back arrow, and the phone's back button closes it (one history entry per open overlay).
-const SHEET_ONLY = new Set(["quick"]);
+const SHEET_ONLY = new Set(["quick", "skip"]);
 const AUTOFOCUS = new Set(["steps", "checkin"]);
 
 function hideOverlay() {
@@ -4416,7 +4474,7 @@ function openSheet(kind, { fromHistory = false } = {}) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", mealEdit: "Edit meal", mealFind: "Search for a food", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", replan: "Your updated plan", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", dayPlan: "Day plan", ...mealsTitles };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", mealEdit: "Edit meal", mealFind: "Search for a food", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", replan: "Your updated plan", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", dayPlan: "Day plan", skip: "Skip it", ...mealsTitles };
   const screen = !SHEET_ONLY.has(kind);
   const sheet = $("sheet");
   sheet.classList.toggle("screen", screen);
@@ -4458,6 +4516,7 @@ function submitter(fn) {
 const num = (v) => (v === "" || v == null ? undefined : Number(v));
 
 const SHEETS = {
+  skip: skipSheet,
   plans: plansScreen,
   checkout: checkoutScreen,
   payResult: payResultScreen,
