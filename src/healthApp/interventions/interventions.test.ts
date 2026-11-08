@@ -23,7 +23,7 @@ import {
   detectTooFast,
   type DetectInput,
 } from "./detectors.js";
-import { calorieFloor, measure, selectFinding } from "./engine.js";
+import { calorieFloor, goalOffersToClose, measure, selectFinding } from "./engine.js";
 import { BANNED, buildOffer, capDate, dateForTarget, impactOf, type OfferContext } from "./options.js";
 import { agreedSnapshot, beforeOf, originalDeadline, withChange, type PlanSnapshot, type PlanVersion } from "./plan.js";
 import type { Finding, Intervention } from "./types.js";
@@ -370,5 +370,17 @@ describe("root-cause evidence reuse", () => {
   it("signs evidence independent of order", () => {
     const a = { id: "a", text: "x" }, b = { id: "b", text: "y" };
     expect(evidenceSignature([a, b])).toBe(evidenceSignature([b, a]));
+  });
+});
+
+describe("goal changes", () => {
+  it("closes only unanswered goal offers when the goal changes", () => {
+    const history = [
+      row({ id: "old-goal", pattern: "over_ambitious", area: "goal", itemId: null, status: "offered" }),
+      row({ id: "goal-trial", pattern: "stalled", area: "goal", itemId: null, status: "trial" }),
+      row({ id: "goal-kept", pattern: "over_ambitious", area: "goal", itemId: null, status: "kept" }),
+      row({ id: "gym", status: "offered" }),
+    ];
+    expect(goalOffersToClose(history).map((h) => h.id)).toEqual(["old-goal"]);
   });
 });

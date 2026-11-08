@@ -291,14 +291,44 @@ export async function runInterventionTick(userProfileId: string, now = new Date(
   return pick ? offer(userProfileId, pick, input, now) : null;
 }
 
-/** After a goal is set: is the new deadline realistic? Offers right away when it isn't. */
+/**
+ * Unanswered offers about the goal. Their numbers, options and recommendation were written for the
+ * goal as it was when they were offered, so once the goal changes they describe a goal that no
+ * longer exists (and "Move the goal to …" would overwrite the new deadline). Pure.
+ */
+export function goalOffersToClose(history: Intervention[]): Intervention[] {
+  return history.filter((h) => h.area === "goal" && h.status === "offered");
+}
+
+export const GOAL_CHANGED_VERDICT = "Your goal changed after this was offered, so it no longer applies.";
+
+/** Closes the unanswered goal offers after the goal changed. Never throws. */
+export async function closeGoalOffers(userProfileId: string, history?: Intervention[]): Promise<number> {
+  try {
+    const stale = goalOffersToClose(history ?? (await listInterventions(userProfileId)));
+    const stamp = new Date().toISOString();
+    let closed = 0;
+    for (const h of stale) {
+      const row = await updateIntervention(userProfileId, h.id, ["offered"], { status: "expired", verdict: GOAL_CHANGED_VERDICT, closed_at: stamp });
+      if (row) closed++;
+    }
+    return closed;
+  } catch (err) {
+    logger.warn({ err: loggableError(err) }, "closing old goal offers failed");
+    return 0;
+  }
+}
+
+/**
+ * After a goal is set: offers about the old goal are closed, then the new deadline is checked and
+ * offered on right away when it isn't realistic.
+ */
 export async function checkNewGoal(userProfileId: string, now = new Date()): Promise<void> {
   try {
+    await closeGoalOffers(userProfileId);
     const { input } = await loadDetectInput(userProfileId, now);
     const f = detectOverAmbitious(input);
     if (!f) return;
-    const history = await listInterventions(userProfileId);
-    if (history.some((h) => h.pattern === "over_ambitious" && h.localDate === input.today)) return;
     await offer(userProfileId, f, input, now);
   } catch (err) {
     logger.warn({ err: loggableError(err) }, "new goal check failed");
@@ -454,6 +484,10 @@ export async function revertToVersion(ctx: ActionContext, versionId: string): Pr
   const live = await liveSnapshot(ctx.userProfileId);
   const r = await applySnapshot(ctx.userProfileId, v.snapshot, live);
   if (!r.ok) return r;
+  const g = v.snapshot.goal;
+  if (g && (!live.goal || live.goal.deadline !== g.deadline || JSON.stringify(live.goal.targets) !== JSON.stringify(g.targets))) {
+    await closeGoalOffers(ctx.userProfileId);
+  }
   const saved = await saveVersion(ctx.userProfileId, v.snapshot, `Went back to version ${v.version}`);
   return { ok: true, version: saved?.version };
 }
