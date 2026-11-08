@@ -194,11 +194,11 @@ export async function repeatUsualMeal(
   key: string,
   deps: { usual?: typeof getUsualMeals; record?: typeof recordChatTurn } = {},
 ): Promise<RepeatResult> {
-  const { slot } = context(ctx);
+  const { slot, today } = context(ctx);
   const { meals } = await (deps.usual ?? getUsualMeals)(ctx, 50);
   const meal = meals.find((m) => m.key === key);
   if (!meal) return { ok: false, error: "meal_not_found" };
-  const draft = draftFromUsual(meal, slot);
+  const draft: MealDraft = { ...draftFromUsual(meal, slot), date: today };
   const text = repeatReplyText(meal);
   const cards = [{ type: "meal_draft" as const, draft }];
   await (deps.record ?? recordChatTurn)(ctx.userProfileId, `Usual: ${meal.text}`, text, cards);

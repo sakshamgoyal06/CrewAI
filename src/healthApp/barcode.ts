@@ -157,9 +157,9 @@ export async function draftMealFromBarcode(
     return { ok: false, error: "barcode_lookup_failed" };
   }
   if (!product) return { ok: false, error: "barcode_not_found" };
-  const slot =
-    input.slot ?? slotForLocalHour(getLocalTimeParts(ctx.now ?? new Date(), resolveTimezone(ctx.timezone)).hour);
-  const draft = draftFromProduct(product, input, slot);
+  const local = getLocalTimeParts(ctx.now ?? new Date(), resolveTimezone(ctx.timezone));
+  const slot = input.slot ?? slotForLocalHour(local.hour);
+  const draft: MealDraft = { ...draftFromProduct(product, input, slot), date: local.dateKey };
   const text = barcodeReplyText(draft);
   const cards = [{ type: "meal_draft" as const, draft }];
   await (deps.record ?? recordChatTurn)(ctx.userProfileId, `▥ Scanned: ${product.name}`, text, cards);

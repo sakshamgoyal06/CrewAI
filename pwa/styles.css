@@ -301,6 +301,9 @@ body.composing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 
 
 /* Meal draft card (chat + sheet) */
 .draft { align-self: stretch; max-width: 100%; background: var(--surface); border: 1px solid var(--hair); border-radius: 20px; padding: 16px; animation: rise 0.25s ease both; }
+.closed-card { padding: 12px 16px; }
+.closed-card .closed-title { margin: 0 0 4px; font-size: 0.9rem; color: var(--muted); overflow-wrap: anywhere; }
+.closed-card .closed-label { margin: 0; font-size: 0.8rem; color: var(--faint); }
 .draft-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .draft-kcal { font-family: var(--serif); font-size: 1.9rem; line-height: 1; font-variant-numeric: tabular-nums;  font-weight: var(--num-w);}
 .draft-kcal small { font-family: var(--sans); font-size: 0.8rem; color: var(--muted); margin-left: 4px; }

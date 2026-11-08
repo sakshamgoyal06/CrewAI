@@ -7,6 +7,7 @@
 import { z } from "zod";
 
 import { localDateKey } from "../nutrition/localDate.js";
+import { isDayClosed } from "./cardDay.js";
 import {
   createHevyRoutine,
   createHevyWorkout,
@@ -281,9 +282,10 @@ export type ProposalRow = {
   status: ProposalStatus;
   hevy_id: string | null;
   error: string | null;
+  created_at?: string;
 };
 
-const COLS = "id, kind, routine_id, title, reason, payload, summary, status, hevy_id, error";
+const COLS = "id, kind, routine_id, title, reason, payload, summary, status, hevy_id, error, created_at";
 
 export function cardFromRow(r: ProposalRow): HevyProposalCard {
   return {
@@ -459,6 +461,11 @@ export async function applyProposal(ctx: ActionContext, id: string): Promise<App
   if (row.status === "applied") return { ok: true, status: "applied", hevyId: row.hevy_id, alreadyApplied: true };
   if (row.status === "discarded") return { ok: false, error: "proposal_discarded" };
   if (row.status === "applying") return { ok: false, error: "proposal_in_progress" };
+  // A proposal lives for its day (cardDay.ts): after that it may no longer match the routine in
+  // Hevy, so it is never sent, whether tapped on a stale screen or asked for by the coach.
+  if (row.created_at && isDayClosed(localDateKey(new Date(row.created_at), ctx.timezone), ctx.now ?? new Date(), ctx.timezone)) {
+    return { ok: false, error: "proposal_expired" };
+  }
   const apiKey = await hevyKey(ctx.userProfileId);
   if (!apiKey) return { ok: false, error: "hevy_not_connected" };
   if (!(await claimProposal(ctx.userProfileId, id))) return { ok: false, error: "proposal_in_progress" };
