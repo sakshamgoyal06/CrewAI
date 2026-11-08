@@ -59,6 +59,8 @@ export type MealDraft = {
   extra?: boolean;
   /** Where it will go in the day's plan once logged (dietPlan/rhythm.ts previewPlanRole). */
   plan?: MealPlanRole;
+  /** The local day it was drafted for: confirming it later (past midnight, synced offline) logs there. */
+  date?: string;
 };
 
 const r1 = (n: number): number => Math.round(n * 10) / 10;

@@ -335,6 +335,54 @@ export async function checkNewGoal(userProfileId: string, now = new Date()): Pro
   }
 }
 
+export const NO_LONGER_VERDICT = "This no longer applies to your plan as it is now.";
+
+/**
+ * What to do with an offer still waiting from an earlier day: rebuilt from today's finding for the
+ * same pattern and area (today's goal, logs and routine), or closed when there is none. Pure.
+ */
+export function refreshPlan(stale: Intervention[], findings: Finding[]): Array<{ i: Intervention; finding: Finding | null }> {
+  return stale.map((i) => ({ i, finding: findings.find((f) => f.pattern === i.pattern && f.area === i.area && f.itemId === i.itemId) ?? null }));
+}
+
+/**
+ * Each morning, before the day plan picks an offer: every offer from an earlier day is rebuilt
+ * from today's data, or closed. Its numbers, options and recommendation are template text, so no
+ * model call. The offer keeps its id and first day, so it still expires after CAPS.offerExpiryDays.
+ */
+export async function refreshOffers(userProfileId: string, now = new Date()): Promise<void> {
+  const history = await listInterventions(userProfileId, 21);
+  const waiting = history.filter((h) => h.status === "offered");
+  if (!waiting.length) return;
+  const { input } = await loadDetectInput(userProfileId, now);
+  const stamp = new Date().toISOString();
+  const age = (h: Intervention) => dayN(input.today) - dayN(h.localDate);
+  for (const h of waiting.filter((x) => age(x) >= CAPS.offerExpiryDays)) {
+    await updateIntervention(userProfileId, h.id, ["offered"], { status: "expired", closed_at: stamp });
+  }
+  const stale = waiting.filter((h) => age(h) > 0 && age(h) < CAPS.offerExpiryDays);
+  if (!stale.length) return;
+  for (const { i, finding } of refreshPlan(stale, detectAll(input))) {
+    if (!finding) {
+      await updateIntervention(userProfileId, i.id, ["offered"], { status: "expired", verdict: NO_LONGER_VERDICT, closed_at: stamp });
+      continue;
+    }
+    // A cause the person gave ("no time") outlives the detector's guess.
+    const f: Finding = { ...finding, cause: finding.cause === "unknown" ? i.cause : finding.cause };
+    const o = buildOffer(f, await offerContext(userProfileId, input, f.itemId));
+    await updateIntervention(userProfileId, i.id, ["offered"], {
+      cause: f.cause,
+      item_label: f.itemLabel,
+      title: o.title,
+      evidence: f.evidence,
+      facts: f.facts,
+      options: o.options,
+      recommendation: o.recommendation,
+      ...(o.options.length || f.cause === "unknown" ? {} : { status: "info" }),
+    });
+  }
+}
+
 // ---------- the person's answers ----------
 
 export type RespondAction = "choose" | "keep" | "reason" | "cancel" | "confirm" | "decline";

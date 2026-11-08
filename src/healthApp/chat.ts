@@ -34,7 +34,8 @@ import type { PlanAdjustCard, PlanMealCard } from "./dietPlan/rhythm.js";
 import { MEAL_PLAN_TOOL, mealPlanInput, runMealPlanTool } from "./dietPlan/chatTool.js";
 import { dayLabel, localDayRange } from "./dailyChat.js";
 import { localDateKey } from "../nutrition/localDate.js";
-import { cardHistoryNote, emptyCardStates, loadCardStates, type CardStates } from "./chatCards.js";
+import { cardHistoryNote, emptyCardStates, loadCardStates, mealDaysOf, type CardStates } from "./chatCards.js";
+import { cardAt } from "./cardDay.js";
 import { buildTurnContext, legacyTurnContext, systemPrompt, usingLegacyPrompt, type TurnLoops } from "./chatPrompt.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
 import {
@@ -1441,6 +1442,7 @@ export function historyToMessages(
   history: Array<{ role: "user" | "assistant"; content: string; cards?: ChatCard[]; turnId?: string | null; createdAt?: string }>,
   states: CardStates = emptyCardStates(),
   timezone?: string,
+  now: Date = new Date(),
 ): Anthropic.MessageParam[] {
   const out: Array<{ role: "user" | "assistant"; content: string }> = [];
   let lastDay: string | null = null;
@@ -1448,7 +1450,8 @@ export function historyToMessages(
     if (!h.content.trim()) continue;
     if (out.length === 0 && h.role !== "user") continue;
     const cards = h.cards ?? [];
-    const notes = h.role === "assistant" ? cards.map((c) => cardHistoryNote(c, states)) : [];
+    const where = cardAt(h.createdAt, timezone, now);
+    const notes = h.role === "assistant" ? cards.map((c) => cardHistoryNote(c, states, where)) : [];
     const automatic =
       h.role === "assistant" &&
       (cards.some((c) => c.type === "day_plan") ||
@@ -1567,8 +1570,9 @@ async function runTurn(ctx: ActionContext, userText: string, options: RunChatOpt
   let history = options.history;
   if (!history) {
     const past = historyWindow(completedTurns(await loadChatHistory(ctx.userProfileId)), new Date(now));
-    const states = await loadCardStates(ctx.userProfileId, past.flatMap((h) => h.cards)).catch(() => emptyCardStates());
-    history = historyToMessages(past, states, ctx.timezone);
+    const at = (createdAt?: string) => cardAt(createdAt, ctx.timezone, new Date(now));
+    const states = await loadCardStates(ctx.userProfileId, past.flatMap((h) => h.cards), mealDaysOf(past, at)).catch(() => emptyCardStates());
+    history = historyToMessages(past, states, ctx.timezone, new Date(now));
   }
 
   const start = await beginTurn(ctx.userProfileId, turnId, userText, now);

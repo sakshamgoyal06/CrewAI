@@ -227,7 +227,9 @@ export async function startMealDraft(
   const extra = input.extra === true || typed.extra === true;
   if (extra) draft.extra = true;
   // Say on the card, before it's logged, whether it replaces the planned meal or sits on top.
-  const plan = await previewPlanRole(ctx.userProfileId, localDateKey(ctx.now ?? new Date(), ctx.timezone), draft.slot, { extra }).catch((err) => {
+  const day = localDateKey(ctx.now ?? new Date(), ctx.timezone);
+  draft.date ??= day;
+  const plan = await previewPlanRole(ctx.userProfileId, day, draft.slot, { extra }).catch((err) => {
     logger.warn({ err: loggableError(err) }, "meal draft plan preview failed");
     return null;
   });

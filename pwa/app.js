@@ -152,6 +152,7 @@ function friendlyError(code) {
     routine_changed_in_hevy: "That routine changed in Hevy since. Ask the coach for a fresh suggestion.",
     routine_not_found: "That routine no longer exists in Hevy.",
     proposal_discarded: "That suggestion was discarded.",
+    proposal_expired: "That suggestion was for an earlier day, so it was not sent to Hevy. Ask the coach again if you still want it.",
     proposal_in_progress: "Already sending that to Hevy.",
     push_not_configured: "Push isn't set up on the server yet (VAPID keys).",
     no_devices: "This device isn't subscribed yet.",
@@ -1910,8 +1911,31 @@ function resetEarlier() {
 /** Cards past this age fold to one line in chat (unless they're the newest message). */
 const CARD_FOLD_MS = 30 * 60_000;
 
-/** One line that says what a folded card is and where it stands. */
+/** One line that says what a folded card is and where it stands. A card whose day has closed
+ *  says how it ended instead, and never asks for an answer. */
 function cardSummary(c) {
+  const s = baseSummary(c);
+  if (!c.closed || openLocally(c)) return s;
+  const text = typeof s === "string" ? s : s.text;
+  return { text: [text, c.closedLabel].filter(Boolean).join(" · "), open: false };
+}
+
+/** A meal or activity confirmed on this phone and still waiting to sync is not closed. */
+function openLocally(c) {
+  return (c.type === "meal_draft" || c.type === "activity_draft") && !!confirmedDrafts()[c.draft?.draftId];
+}
+
+/** A card from a day that has closed (05:00 next morning): what it was and how it ended, no buttons.
+ *  The server reads the ending from the logs, so a meal logged later in Meals shows here too. */
+function closedCard(c) {
+  const s = baseSummary(c);
+  const text = typeof s === "string" ? s : s.text;
+  return el("div", { class: "draft closed-card" },
+    el("p", { class: "closed-title" }, text || "Card"),
+    el("p", { class: "closed-label" }, c.closedLabel || "Closed"));
+}
+
+function baseSummary(c) {
   const kcal = (n) => (n != null ? `${fmt(n)} kcal` : null);
   const join = (...parts) => parts.filter(Boolean).join(" · ");
   switch (c.type) {
@@ -1933,7 +1957,7 @@ function cardSummary(c) {
     case "workout_check": return { text: join("Workout check", c.status === "missing" ? null : c.status === "skipped" ? "skipped" : "done"), open: c.status === "missing" };
     case "routine_check": return { text: join(c.label, c.status === "missing" ? null : c.status), open: c.status === "missing" };
     case "eating_out": return join(`Eating out · ${c.meal}`, c.reserveKcal != null ? `keep ${fmt(c.reserveKcal)} kcal` : null);
-    case "intervention": return { text: c.title, open: c.status === "open" };
+    case "intervention": return { text: c.title, open: c.status === "offered" };
     case "rca": return c.hypothesis;
     case "hevy_proposal": return "Hevy change";
     case "calorie_review": return "Calorie review";
@@ -2356,7 +2380,8 @@ function autosize() {
 }
 
 function appendCard(c, into = $("thread")) {
-  if (c.type === "meal_draft") into.append(mealDraftCard(c.draft, { saved: c.saved }));
+  if (c.closed && !openLocally(c)) into.append(closedCard(c));
+  else if (c.type === "meal_draft") into.append(mealDraftCard(c.draft, { saved: c.saved }));
   else if (c.type === "activity_draft") into.append(activityDraftCard(c.draft, { saved: c.saved }));
   else if (c.type === "workout_check") into.append(workoutCheckCard(c));
   else if (c.type === "routine_check") into.append(routineCheckCard(c));

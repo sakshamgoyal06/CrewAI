@@ -20,6 +20,7 @@ vi.mock("../tools/clients.js", () => {
       eq: (k: keyof Row, v: unknown) => { filters.push((r) => r[k] === v); return q; },
       order: () => q,
       limit: (n: number) => { limitN = n; return q; },
+      maybeSingle: () => Promise.resolve({ data: { timezone: "UTC" }, error: null }),
       then: (resolve: (v: unknown) => void) => resolve({ data: run(), error: null }),
     };
     return q;
@@ -39,7 +40,7 @@ vi.mock("./chatCards.js", () => ({
   hydrateCard: (c: { type: string; date?: string; status?: string }) => (c.date && answered.has(c.date) ? { ...c, status: "done" } : c),
 }));
 
-import { catchUpText, MAX_UNANSWERED, mergedCheckText, postCheck, type CheckCard } from "./coachInbox.js";
+import { catchUpText, MAX_UNANSWERED, mergedCheckText, postCheck, unansweredTail, type CheckCard } from "./coachInbox.js";
 
 const walk = (date: string): CheckCard => ({ type: "routine_check", itemId: "walk", date, label: "Morning walk", activityKey: "walking", startTime: "07:00", durationMin: 30, status: "missing" });
 const swim = (date: string): CheckCard => ({ type: "routine_check", itemId: "swim", date, label: "Swim", activityKey: "swimming", startTime: null, durationMin: 45, status: "missing" });
@@ -47,6 +48,9 @@ const gym = (date: string): CheckCard => ({ type: "workout_check", date, gymTime
 const userSaid = (text: string) => rows.push({ id: `u${rows.length + 1}`, user_profile_id: "u", role: "user", content: text, cards: [], turn_id: "t", created_at: stamp() });
 
 beforeEach(() => {
+  // The rows are stamped 3 Nov; "today" must be that day for them to count as today's chat.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-03T12:00:00Z"));
   rows.length = 0;
   answered.clear();
   clock = 0;
@@ -104,5 +108,21 @@ describe("postCheck", () => {
     expect(mergedCheckText([gym("2026-11-02"), gym("2026-11-03")])).toBe("No Hevy workout after your gym slot on Mon 2 Nov and Tue 3 Nov. Trained and didn't log, or skipped? Answer each below.");
     expect(mergedCheckText([{ ...gym("2026-11-02"), hevy: false }, { ...gym("2026-11-03"), hevy: false }])).toBe("Gym slots on Mon 2 Nov and Tue 3 Nov: did you train? Answer each below.");
     expect(catchUpText([walk("2026-11-02")])).toMatch(/piled up while you were away: morning walk\./);
+  });
+});
+
+describe("unanswered tail across days", () => {
+  const row = (created_at: string, extra: Partial<{ role: string; turn_id: string | null }> = {}) => ({ role: "assistant", turn_id: null, created_at, ...extra });
+
+  it("never reaches into yesterday: a new check starts today's own message", () => {
+    const rows = [row("2026-11-08T02:00:00Z"), row("2026-11-07T16:00:00Z"), row("2026-11-07T15:00:00Z")];
+    // 07:30 IST on 8 Nov is the newest row; the two below are from 7 Nov IST.
+    expect(unansweredTail(rows, "2026-11-08", "Asia/Kolkata")).toEqual([rows[0]]);
+    expect(unansweredTail(rows.slice(1), "2026-11-08", "Asia/Kolkata")).toEqual([]);
+  });
+
+  it("still stops at the person's last message", () => {
+    const rows = [row("2026-11-08T05:00:00Z"), row("2026-11-08T04:00:00Z", { role: "user" }), row("2026-11-08T03:00:00Z")];
+    expect(unansweredTail(rows, "2026-11-08", "Asia/Kolkata")).toEqual([rows[0]]);
   });
 });

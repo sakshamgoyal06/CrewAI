@@ -189,8 +189,16 @@ const LEAD: Record<CheckId, string> = {
   routine: "Pick the one routine item that matters most today and do that first.",
 };
 
-function focusLine(s: HealthSnapshot, intervention: Intervention | null, planNote: string | null): string | null {
+/** Yesterday's check, asked once more on today's plan. */
+export type CarriedCheck = Extract<ChatCard, { type: "routine_check" | "workout_check" }>;
+
+function carriedLine(c: CarriedCheck): string {
+  return c.type === "workout_check" ? "One from yesterday: did you get the gym in? Answer below." : `One from yesterday: did you get ${c.label.toLowerCase()} in? Answer below.`;
+}
+
+function focusLine(s: HealthSnapshot, intervention: Intervention | null, planNote: string | null, carried: CarriedCheck | null = null): string | null {
   if (intervention) return `One thing to decide: ${intervention.title}. The options are below.`;
+  if (carried) return carriedLine(carried);
   if (s.goal?.checkinDue) return "Weekly weigh-in today: step on the scale before breakfast and tell me the number.";
   if (planNote) return planNote;
   const missed = s.northStar.mostMissed;
@@ -248,7 +256,7 @@ function motivationFor(date: string, s: HealthSnapshot): string {
 }
 
 /** The day's plan as a card plus a short text the model reads in history. Pure. */
-export function buildDayPlan(input: { snapshot: HealthSnapshot; name: string | null; localHour: number; intervention: Intervention | null; meals?: DayMealLine[]; planNote?: string | null }): { text: string; card: DayPlanCard } {
+export function buildDayPlan(input: { snapshot: HealthSnapshot; name: string | null; localHour: number; intervention: Intervention | null; meals?: DayMealLine[]; planNote?: string | null; carried?: CarriedCheck | null }): { text: string; card: DayPlanCard } {
   const s = input.snapshot;
   const date = s.today.date;
   const plan = s.today.routine.map((r) => ({ time: r.startTime ? clock(r.startTime) : null, label: r.label }));
@@ -273,7 +281,7 @@ export function buildDayPlan(input: { snapshot: HealthSnapshot; name: string | n
     goal: goalLine(s),
     yesterday: yesterdayLine(s),
     week: `${s.northStar.onTrackDays} of the last 7 days on track (aim: ${s.northStar.goal})`,
-    focus: focusLine(s, input.intervention, input.planNote ?? null),
+    focus: focusLine(s, input.intervention, input.planNote ?? null, input.carried ?? null),
     motivation: motivationFor(date, s),
     ...(input.meals?.length ? { meals: input.meals } : {}),
   };
@@ -320,6 +328,45 @@ async function loadProfileBits(userProfileId: string, timezone: string): Promise
 
 export type MorningResult = "posted" | "exists" | "too_early" | "not_ready";
 
+/** The check to ask again: yesterday's checks still unanswered, the gym first. Pure. */
+export function pickCarriedCheck(cards: ChatCard[], yesterday: string, isOpen: (c: CarriedCheck) => boolean): CarriedCheck | null {
+  const checks = cards.filter((c): c is CarriedCheck => (c.type === "workout_check" || c.type === "routine_check") && c.date === yesterday);
+  const seen = new Set<string>();
+  const open = checks.filter((c) => {
+    const key = c.type === "workout_check" ? "gym" : c.itemId;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return isOpen(c);
+  });
+  return open.find((c) => c.type === "workout_check") ?? open[0] ?? null;
+}
+
+/**
+ * Yesterday's day is closed, so its check cards are frozen. If one is still unanswered (and Hevy
+ * found nothing since), today's plan asks it once more; the answer is saved for yesterday, so the
+ * old card and every summary update to match.
+ */
+async function carriedCheck(userProfileId: string, yesterday: string, timezone: string): Promise<CarriedCheck | null> {
+  const range = localDayRange(yesterday, timezone);
+  const { data, error } = await supabase
+    .from("health_chat_messages")
+    .select("cards")
+    .eq("user_profile_id", userProfileId)
+    .eq("role", "assistant")
+    .gte("created_at", range.from)
+    .lt("created_at", range.to);
+  if (error) return null;
+  const cards = ((data ?? []) as Array<{ cards: ChatCard[] | null }>).flatMap((r) => r.cards ?? []);
+  if (!cards.some((c) => (c.type === "workout_check" || c.type === "routine_check") && c.date === yesterday)) return null;
+  const { loadCardStates, hydrateCard } = await import("./chatCards.js");
+  const states = await loadCardStates(userProfileId, cards);
+  const found = pickCarriedCheck(cards, yesterday, (c) => {
+    const live = hydrateCard(c, states);
+    return (live.type === "workout_check" || live.type === "routine_check") && live.status === "missing";
+  });
+  return found ? { ...found, status: "missing" } : null;
+}
+
 /**
  * Posts today's plan into chat once a day, from MORNING_FROM_HOUR local. Called by the proactive
  * loop and by `GET /chat`, whichever comes first; the stable turn id and the unique index on
@@ -352,6 +399,11 @@ export async function ensureDayPlan(userProfileId: string, timezone: string, now
     handled.set(userProfileId, date);
     return "not_ready";
   }
+  // Offers waiting from earlier days are rebuilt from today's data, or closed when they no longer
+  // apply, before one is picked for the plan: the card never quotes an old goal or old numbers.
+  await import("./interventions/engine.js").then((m) => m.refreshOffers(userProfileId, now)).catch((err) => {
+    logger.warn({ err: loggableError(err) }, "refreshing open offers failed");
+  });
   const [snapshot, interventions, planView] = await Promise.all([
     buildHealthSnapshot(userProfileId, now),
     listInterventions(userProfileId, 21).catch(() => [] as Intervention[]),
@@ -368,8 +420,10 @@ export async function ensureDayPlan(userProfileId: string, timezone: string, now
   // A meal that keeps slipping off the plan is worth a look (only when it does; quiet otherwise).
   const adherence = planView ? await loadAdherence(userProfileId, date).catch(() => null) : null;
   const planNote = adherence?.slipping ? adherenceLine(adherence) : null;
-  const { text, card } = buildDayPlan({ snapshot, name: bits.name, localHour: hour, intervention: open, meals, planNote });
-  const cards: ChatCard[] = [card, ...(open ? [cardFromIntervention(open)] : [])];
+  // At most one carried-over question: a plan decision first, else yesterday's unanswered check.
+  const carried = open ? null : await carriedCheck(userProfileId, addDays(date, -1), tz).catch(() => null);
+  const { text, card } = buildDayPlan({ snapshot, name: bits.name, localHour: hour, intervention: open, meals, planNote, carried });
+  const cards: ChatCard[] = [card, ...(open ? [cardFromIntervention(open)] : carried ? [carried] : [])];
   const { error } = await supabase
     .from("health_chat_messages")
     .insert({ user_profile_id: userProfileId, role: "assistant", content: text, cards, turn_id: turnId, status: "ok" });

@@ -59,7 +59,8 @@ import {
 import { clientEventsInput, clientRows, enqueueEvents, recordServerRoute } from "./events.js";
 import { loadChatHistory, runHealthChat, stopChatTurn, type ChatStreamEvent } from "./chat.js";
 import { alertOwnerCoachOffline, COACH_OFFLINE_MESSAGE, isCoachOffline } from "./coachOffline.js";
-import { hydrateCard, loadCardStates } from "./chatCards.js";
+import { hydrateCard, loadCardStates, mealDaysOf } from "./chatCards.js";
+import { cardAt } from "./cardDay.js";
 import { isDateKey, listChatDays, localDayRange, tryDayPlan } from "./dailyChat.js";
 import { editLine, forgetLine, loadCoachMemory, MEMORY_MAX_CHARS, MEMORY_MAX_LINES, memoryToday, rememberLine } from "./coachMemory.js";
 import {
@@ -186,6 +187,7 @@ function fromResult(r: { ok: boolean; error?: string; [k: string]: unknown }): {
     "hevy_not_connected",
     "proposal_not_found",
     "proposal_discarded",
+    "proposal_expired",
     "proposal_in_progress",
     "proposal_not_pending",
     "routine_changed_in_hevy",
@@ -623,9 +625,12 @@ export function createHealthAppRouter(): express.Router {
       const date = isDateKey(req.query.date) && req.query.date <= today ? req.query.date : today;
       if (date === today) await tryDayPlan(ctx.userProfileId, ctx.timezone);
       const messages = await loadChatHistory(ctx.userProfileId, 200, localDayRange(date, ctx.timezone));
-      // Every card shows its live state (logged, answered, applied), whatever phone it's opened on.
-      const states = await loadCardStates(ctx.userProfileId, messages.flatMap((m) => m.cards));
-      for (const m of messages) m.cards = m.cards.map((c) => hydrateCard(c, states));
+      // Every card shows its live state (logged, answered, applied), whatever phone it's opened on,
+      // and a card whose day has closed shows how it ended instead of its buttons.
+      const now = new Date();
+      const at = (createdAt?: string) => cardAt(createdAt, ctx.timezone, now);
+      const states = await loadCardStates(ctx.userProfileId, messages.flatMap((m) => m.cards), mealDaysOf(messages, at));
+      for (const m of messages) m.cards = m.cards.map((c) => hydrateCard(c, states, at(m.createdAt)));
       return { body: { messages, date, today } };
     }),
   );

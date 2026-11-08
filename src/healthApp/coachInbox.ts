@@ -13,6 +13,7 @@ import { logger } from "../logger.js";
 import type { ChatCard } from "./chat.js";
 import { hydrateCard, loadCardStates } from "./chatCards.js";
 import { postCoachMessage } from "./workoutCheckStore.js";
+import { localDateKey, resolveTimezone } from "../nutrition/localDate.js";
 
 /** Unanswered app messages allowed before new ones fold into the latest. */
 export const MAX_UNANSWERED = 3;
@@ -20,7 +21,7 @@ const TAIL = 12;
 
 export type CheckCard = Extract<ChatCard, { type: "routine_check" | "workout_check" }>;
 
-type Row = { id: string; role: string; content: string; cards: ChatCard[] | null; turn_id: string | null };
+type Row = { id: string; role: string; content: string; cards: ChatCard[] | null; turn_id: string | null; created_at?: string };
 
 /** What ties a check to its item: one unanswered message per routine item, one for the gym. */
 export function checkKeyOf(card: ChatCard): string | null {
@@ -115,17 +116,31 @@ async function update(id: string, content: string, cards: ChatCard[], action: "m
 }
 
 /** The app's own messages since the person last wrote, newest first. */
-async function unansweredStack(userProfileId: string): Promise<Row[]> {
-  const { data, error } = await supabase
-    .from("health_chat_messages")
-    .select("id, role, content, cards, turn_id")
-    .eq("user_profile_id", userProfileId)
-    .order("created_at", { ascending: false })
-    .limit(TAIL);
+async function unansweredStack(userProfileId: string, now = new Date()): Promise<Row[]> {
+  const [{ data, error }, profile] = await Promise.all([
+    supabase
+      .from("health_chat_messages")
+      .select("id, role, content, cards, turn_id, created_at")
+      .eq("user_profile_id", userProfileId)
+      .order("created_at", { ascending: false })
+      .limit(TAIL),
+    supabase.from("user_profile").select("timezone").eq("id", userProfileId).maybeSingle(),
+  ]);
   if (error) throw new Error(error.message);
-  const stack: Row[] = [];
-  for (const r of (data ?? []) as Row[]) {
+  const tz = resolveTimezone((profile.data as { timezone?: string } | null)?.timezone);
+  return unansweredTail((data ?? []) as Row[], localDateKey(now, tz), tz);
+}
+
+/**
+ * The unanswered app messages at the end of the chat, newest first, stopping at the person's last
+ * message and at the start of today. Each day is its own chat thread, so a check posted today must
+ * never join yesterday's message: it would land in a day that's already over. Pure.
+ */
+export function unansweredTail<R extends { role: string; turn_id: string | null; created_at?: string }>(rows: R[], today: string, timezone: string): R[] {
+  const stack: R[] = [];
+  for (const r of rows) {
     if (r.role !== "assistant" || r.turn_id) break;
+    if (r.created_at && localDateKey(new Date(r.created_at), timezone) !== today) break;
     stack.push(r);
   }
   return stack;
