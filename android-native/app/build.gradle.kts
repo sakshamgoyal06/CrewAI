@@ -23,6 +23,12 @@ android {
         versionCode = magnusVersionCode
         versionName = "0.1.$magnusVersionCode-beta"
         buildConfigField("String", "MAGNUS_ORIGIN", "\"https://$magnusHost\"")
+        // Firebase (push) from -P properties or CI env; empty means a build without push.
+        fun cfg(name: String) = ((project.findProperty(name) as String?) ?: System.getenv(name) ?: "").trim()
+        buildConfigField("String", "FIREBASE_APP_ID", "\"${cfg("MAGNUS_FIREBASE_APP_ID")}\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"${cfg("MAGNUS_FIREBASE_API_KEY")}\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${cfg("MAGNUS_FIREBASE_PROJECT_ID")}\"")
+        buildConfigField("String", "FIREBASE_SENDER_ID", "\"${cfg("MAGNUS_FIREBASE_SENDER_ID")}\"")
         resValue("string", "app_name", if (magnusAppId.endsWith(".beta")) "Magnus Beta" else "Magnus")
     }
 
@@ -94,6 +100,10 @@ dependencies {
     // Health Connect sync (moved over from android/, same code).
     implementation("androidx.health.connect:connect-client:1.1.0")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+
+    // Native push (Firebase Cloud Messaging), set up in code from build config (no google-services plugin).
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-messaging")
 
     testImplementation("junit:junit:4.13.2")
 }

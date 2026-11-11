@@ -123,11 +123,13 @@ import {
   prefsInput,
   pushConfig,
   recordReceipt,
+  saveFcmToken,
   saveSubscription,
   savePrefs,
   sendNotification,
   subscriptionInput,
 } from "./push.js";
+import { fcmTokenInput } from "./fcm.js";
 import { cardFromReport, rcaResponseInput, respondToRca, runRca } from "./rca.js";
 import { answerWorkoutCheck, workoutCheckAnswerInput } from "./workoutCheck.js";
 import { logWater, waterInput } from "./water.js";
@@ -1222,6 +1224,13 @@ export function createHealthAppRouter(): express.Router {
     "/push/subscribe",
     route("push-subscribe", async (ctx, req) =>
       fromResult(await saveSubscription(ctx.userProfileId, subscriptionInput.parse(req.body), req.get("user-agent"))),
+    ),
+  );
+  /** The native app's Firebase token (Magnus Beta); stored with the web subscriptions. */
+  router.post(
+    "/push/fcm",
+    route("push-fcm", async (ctx, req) =>
+      fromResult(await saveFcmToken(ctx.userProfileId, fcmTokenInput.parse(req.body).token, req.get("user-agent"))),
     ),
   );
   router.post(

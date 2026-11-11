@@ -106,6 +106,21 @@ private fun SignedIn(graph: AppGraph) {
         }
     }
 
+    // Push: ask once for the notification permission (Android 13+), then register this install.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val askNotify = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { app.magnus.app.push.Push.register(context) }
+    LaunchedEffect(Unit) {
+        val prefs = context.getSharedPreferences("magnus-ui", android.content.Context.MODE_PRIVATE)
+        if (android.os.Build.VERSION.SDK_INT >= 33 && app.magnus.app.push.Push.configured() && !prefs.getBoolean("asked-notify", false)) {
+            prefs.edit().putBoolean("asked-notify", true).apply()
+            askNotify.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            app.magnus.app.push.Push.register(context)
+        }
+    }
+
     CompositionLocalProvider(LocalNav provides nav) {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().statusBarsPadding()) {
