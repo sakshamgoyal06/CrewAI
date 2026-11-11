@@ -136,6 +136,8 @@ import { loadCalorieReview } from "./calorieTarget.js";
 import { cardFromIntervention, checkNewGoal, recordManualPlan, respond as respondToIntervention, revertToVersion } from "./interventions/engine.js";
 import { listVersions } from "./interventions/plan.js";
 import { listInterventions } from "./interventions/store.js";
+import { activeBreaks, breakInput, endBreakEarly, previewBreak, startBreak, loadBreaks, BREAK_REASONS } from "./breaks.js";
+import { keepDateAccept, keepDatePreview, pendingResume, resumeMoveDate, resumeState } from "./resume.js";
 
 const chatInput = z.object({ text: z.string().trim().min(1).max(2000), turnId: z.string().uuid().optional() });
 
@@ -514,6 +516,72 @@ export function createHealthAppRouter(): express.Router {
     route("diet-protein-gap", async (ctx, req) => {
       const { choice } = z.object({ choice: z.enum(GAP_CHOICES) }).parse(req.body ?? {});
       const r = await answerProteinGap(ctx, choice);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  /** Pauses (breaks.ts): what's running or coming up, and a whole-plan pause waiting for its restart choice. */
+  router.get(
+    "/breaks",
+    route("breaks", async (ctx) => {
+      const today = localDateKey(new Date(), ctx.timezone);
+      const all = await loadBreaks(ctx.userProfileId, today);
+      return { body: { ok: true, breaks: all.filter((b) => b.endDate >= today), resume: pendingResume(all, today)?.id ?? null, reasons: BREAK_REASONS } };
+    }),
+  );
+  router.post(
+    "/breaks/preview",
+    route("breaks-preview", async (ctx, req) => {
+      const input = breakInput.pick({ scope: true, reason: true, itemId: true }).parse(req.body ?? {});
+      const r = await previewBreak(ctx, input);
+      return "ok" in r ? { status: 400, body: r } : { body: { ok: true, ...r } };
+    }),
+  );
+  router.post(
+    "/breaks",
+    route("breaks-start", async (ctx, req) => {
+      const r = await startBreak(ctx, breakInput.parse(req.body ?? {}));
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  router.post(
+    "/breaks/:id/end",
+    route("breaks-end", async (ctx, req) => {
+      const id = z.string().uuid().parse(req.params.id);
+      const r = await endBreakEarly(ctx.userProfileId, id, localDateKey(new Date(), ctx.timezone));
+      return r.ok ? { body: { ...r, active: await activeBreaks(ctx) } } : { status: 400, body: r };
+    }),
+  );
+  /** The way back from a whole-plan pause (resume.ts). */
+  router.get(
+    "/resume",
+    route("resume", async (ctx, req) => {
+      const id = typeof req.query.id === "string" ? z.string().uuid().parse(req.query.id) : undefined;
+      const r = await resumeState(ctx, id);
+      return r.ok ? { body: r } : { status: 404, body: r };
+    }),
+  );
+  router.post(
+    "/resume/:id/move-date",
+    route("resume-move-date", async (ctx, req) => {
+      const id = z.string().uuid().parse(req.params.id);
+      const r = await resumeMoveDate(ctx, id, async (t) => (await setTargets(ctx, t)).ok);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  router.post(
+    "/resume/:id/keep-date/preview",
+    route("resume-keep-preview", async (ctx, req) => {
+      const id = z.string().uuid().parse(req.params.id);
+      const { weightKg } = z.object({ weightKg: z.coerce.number().min(25).max(350).optional() }).parse(req.body ?? {});
+      const r = await keepDatePreview(ctx, id, weightKg);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  router.post(
+    "/resume/:id/keep-date/accept",
+    route("resume-keep-accept", async (ctx, req) => {
+      const id = z.string().uuid().parse(req.params.id);
+      const r = await keepDateAccept(ctx, id);
       return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );

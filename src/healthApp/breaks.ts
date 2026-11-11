@@ -36,6 +36,8 @@ export type Break = {
   startDate: string;
   endDate: string;
   endedAt: string | null;
+  /** Whole-plan pauses: when they chose how to restart (resume.ts); absent before the column exists. */
+  resumedAt?: string | null;
 };
 
 export const breakInput = z.object({
@@ -124,15 +126,15 @@ export function alternativeFor(scope: Break["scope"], reason: BreakReason, gym: 
 
 // ---------- storage ----------
 
-type Row = { id: string; scope: Break["scope"]; item_id: string | null; reason: BreakReason; note: string | null; start_date: string; end_date: string; ended_at: string | null };
+type Row = { id: string; scope: Break["scope"]; item_id: string | null; reason: BreakReason; note: string | null; start_date: string; end_date: string; ended_at: string | null; resumed_at?: string | null };
 
-const fromRow = (r: Row): Break => ({ id: r.id, scope: r.scope, itemId: r.item_id, reason: r.reason, note: r.note, startDate: r.start_date, endDate: r.end_date, endedAt: r.ended_at });
+const fromRow = (r: Row): Break => ({ id: r.id, scope: r.scope, itemId: r.item_id, reason: r.reason, note: r.note, startDate: r.start_date, endDate: r.end_date, endedAt: r.ended_at, resumedAt: r.resumed_at ?? null });
 
 /** Pauses that end on or after `fromDate` (plus the last 90 days' plan pauses, for the limit). Empty when the table isn't there yet. */
 export async function loadBreaks(userProfileId: string, fromDate: string): Promise<Break[]> {
   const { data, error } = await supabase
     .from("health_breaks")
-    .select("id, scope, item_id, reason, note, start_date, end_date, ended_at")
+    .select("*")
     .eq("user_profile_id", userProfileId)
     .gte("end_date", addDays(fromDate, -90))
     .order("start_date", { ascending: true });
@@ -230,4 +232,10 @@ export async function activeBreaks(ctx: { userProfileId: string; timezone: strin
   const { localDateKey } = await import("../nutrition/localDate.js");
   const today = localDateKey(ctx.now ?? new Date(), ctx.timezone);
   return (await loadBreaks(ctx.userProfileId, today)).filter((b) => b.endDate >= today);
+}
+
+/** Records how they restarted after a whole-plan pause, so the resume screen doesn't come back. */
+export async function markResumed(userProfileId: string, id: string, choice: "move_date" | "keep_date"): Promise<void> {
+  const { error } = await supabase.from("health_breaks").update({ resumed_at: new Date().toISOString(), resume_choice: choice }).eq("user_profile_id", userProfileId).eq("id", id);
+  if (error) logger.warn({ error: error.message }, "break resume not saved");
 }
