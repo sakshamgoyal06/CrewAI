@@ -8,6 +8,7 @@ import { foodPrefsEditor } from "./foodprefs.js";
 import { fromServer, routineEditor, toPayload } from "./routine.js";
 import { dayMealList, initMeals, loadPlan, mealScreen, mealsTitles, openPlannedMeal, renderMeals, setupScreen } from "./meals.js";
 import { mealBuilder, fixedItem } from "./mealbuilder.js";
+import { initPause, loadPauses, openResume, pauseAlt, pauseDone, pauseLength, pauseTitles, pauseWhat, pauseWhy, resumeKeep, resumeStart, resumeWeigh, startPause } from "./pause.js";
 import { dayTone } from "./dayTone.js";
 import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
@@ -423,6 +424,7 @@ async function refresh() {
     if (state.trainingLoaded) loadDays();
     state.snapshot = await api("/today");
     renderSnapshot(state.snapshot);
+    loadPauses().then((p) => { if (p.resume && location.hash === "#resume") openResume(p.resume); });
     store.set(SNAPSHOT_CACHE_KEY, state.snapshot);
     // Targets may have just been set from the Meals tab's first step.
     if (currentView() === "meals") renderMeals();
@@ -1097,6 +1099,7 @@ function skipSheet() {
       ...SKIP_REASONS.map((reason) => el("button", { class: "chip", type: "button", onclick: () => pick(reason) }, reason))),
     el("form", { class: "reason-other", onsubmit: (e) => { e.preventDefault(); pick(otherReason.value.trim() || undefined); } },
       otherReason, el("button", { class: "btn", type: "submit" }, "Save")),
+    el("button", { class: "link small", type: "button", onclick: () => { state.skipItem = null; closeSheet(); afterClose(() => startPause({ id: r.itemId, label: r.label })); } }, "Need more than a day? Pause it for a while"),
   );
   return box;
 }
@@ -1964,6 +1967,7 @@ function baseSummary(c) {
     case "rca": return c.hypothesis;
     case "hevy_proposal": return "Hevy change";
     case "calorie_review": return "Calorie review";
+    case "pause_resume": return { text: "Restart after your pause", open: true };
     case "log_receipt": return { text: join(receiptLine(c), c.state === "undone" ? "undone" : null), done: c.state !== "undone" };
     default: return "Card";
   }
@@ -2397,6 +2401,7 @@ function appendCard(c, into = $("thread")) {
   else if (c.type === "plan_meal") into.append(planMealCard(c));
   else if (c.type === "plan_adjust") into.append(planAdjustCard(c));
   else if (c.type === "log_receipt") into.append(logReceiptCard(c));
+  else if (c.type === "pause_resume") into.append(el("div", { class: "draft" }, el("button", { class: "btn primary block", type: "button", onclick: () => openResume(c.breakId) }, "Plan my restart")));
 }
 
 // ---------- what the coach logged straight from chat ----------
@@ -4545,7 +4550,7 @@ function openSheet(kind, { fromHistory = false } = {}) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", mealEdit: "Edit meal", mealFind: "Search for a food", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", replan: "Your updated plan", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", dayPlan: "Day plan", skip: "Skip it", ...mealsTitles };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", mealEdit: "Edit meal", mealFind: "Search for a food", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", replan: "Your updated plan", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", dayPlan: "Day plan", skip: "Skip it", ...mealsTitles, ...pauseTitles };
   const screen = !SHEET_ONLY.has(kind);
   const sheet = $("sheet");
   sheet.classList.toggle("screen", screen);
@@ -4588,6 +4593,7 @@ const num = (v) => (v === "" || v == null ? undefined : Number(v));
 
 const SHEETS = {
   skip: skipSheet,
+  pauseWhat, pauseWhy, pauseAlt, pauseLength, pauseDone, resumeStart, resumeWeigh, resumeKeep,
   plans: plansScreen,
   checkout: checkoutScreen,
   payResult: payResultScreen,
@@ -5200,6 +5206,8 @@ async function ensureOnboarded() {
   store.set(ONBOARDED_KEY, true);
   return true;
 }
+
+initPause({ api, el, toast, openSheet, closeSheet, backSheet, refresh, send: (t) => { setView("coach"); return send(t); }, snapshot: () => state.snapshot, todayKey: () => todayKey() || localToday() });
 
 initMeals({ api, el, svg, toast,
   findFood: (q, onAdd) => { state.mealBuild = { items: [], seed: q, onAdd }; openSheet("mealFind"); }, logOwn: (slot, date) => { state.mealSlot = slot || null; state.mealDate = date && date !== (todayKey() || localToday()) ? date : null; openSheet("meal"); }, openSheet, closeSheet, backSheet, setView, fmt, todayKey: () => todayKey() || localToday(), refresh });

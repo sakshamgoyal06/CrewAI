@@ -1444,3 +1444,9 @@ body.screen-open { overflow: hidden; }
 .gap-list { list-style: none; margin: 6px 0 8px; padding: 0; display: grid; gap: 4px; }
 .gap-list li { display: flex; gap: 6px; align-items: baseline; font-size: 14px; }
 .gap-list small { color: var(--muted, #8a8090); }
+
+/* Pause and resume screens (pause.js). */
+.pause-flow .pa-head { font-size: 17px; line-height: 1.4; }
+.pause-min { margin: 4px 0 8px; padding-left: 18px; display: grid; gap: 6px; font-size: 15px; }
+.pause-flow input[type="range"] { width: 100%; margin-top: 8px; }
+.pause-banner { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
