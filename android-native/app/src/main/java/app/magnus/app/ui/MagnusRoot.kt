@@ -107,7 +107,7 @@ private fun SignedIn(graph: AppGraph) {
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
-                Tab.Coach -> CoachScreen()
+                Tab.Coach -> CoachScreen(graph)
                 Tab.Today -> TodayScreen(graph)
                 Tab.Meals -> EmptyNote("Meals", "The meal plan arrives in a later Beta build. Use the main Magnus app for it until then.")
                 Tab.Progress -> EmptyNote("Progress", "Trends and the goal chart arrive in a later Beta build.")

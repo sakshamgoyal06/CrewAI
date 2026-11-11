@@ -30,4 +30,6 @@ object MagnusIcons {
     val Progress = line("progress", "M4 19h16M7 16v-5M12 16V7M17 16v-8")
     val You = line("you", "M15.6 8a3.6 3.6 0 1 1-7.2 0a3.6 3.6 0 1 1 7.2 0z", "M4.5 20c1.2-3.6 4.1-5.4 7.5-5.4s6.3 1.8 7.5 5.4")
     val Back = line("back", "M15 5l-7 7 7 7")
+    val Send = line("send", "M5 12h14M13 6l6 6-6 6")
+    val Stop = line("stop", "M8 8h8v8H8z")
 }

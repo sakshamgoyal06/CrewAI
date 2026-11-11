@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import app.magnus.app.auth.AuthRepository
 import app.magnus.app.data.Api
+import app.magnus.app.data.ChatStore
 import app.magnus.app.data.TodayRepository
 import app.magnus.app.ui.theme.ThemeChoice
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,6 +15,7 @@ class AppGraph(context: Context) {
     val auth = AuthRepository(context)
     val api = Api(auth)
     val today = TodayRepository(context, api)
+    val chat = ChatStore(context, api)
 
     private val prefs = context.getSharedPreferences("magnus-ui", Context.MODE_PRIVATE)
     private val _theme = MutableStateFlow(
@@ -32,6 +34,7 @@ class AppGraph(context: Context) {
     fun signOut() {
         auth.signOut()
         today.clear()
+        chat.clear()
     }
 }
 

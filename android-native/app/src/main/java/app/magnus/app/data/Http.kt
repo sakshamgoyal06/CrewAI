@@ -16,6 +16,12 @@ val HttpClient: OkHttpClient = OkHttpClient.Builder()
     .readTimeout(60, TimeUnit.SECONDS)
     .build()
 
+/**
+ * For streamed chat answers: the server sends a keepalive every 5 s, so 30 s of silence means the
+ * connection died (the PWA's STREAM_IDLE_MS).
+ */
+val StreamClient: OkHttpClient = HttpClient.newBuilder().readTimeout(30, TimeUnit.SECONDS).build()
+
 /** A non-2xx answer. `code` is the server's `{ "error": "…" }` when it sent one. */
 class ApiException(val status: Int, val code: String?) : IOException("HTTP $status${code?.let { " $it" } ?: ""}")
 
