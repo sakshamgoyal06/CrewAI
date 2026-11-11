@@ -62,7 +62,7 @@ import { alertOwnerCoachOffline, COACH_OFFLINE_MESSAGE, isCoachOffline } from ".
 import { hydrateCard, loadCardStates, mealDaysOf } from "./chatCards.js";
 import { cardAt } from "./cardDay.js";
 import { isDateKey, listChatDays, localDayRange, tryDayPlan } from "./dailyChat.js";
-import { editLine, forgetLine, loadCoachMemory, MEMORY_MAX_CHARS, MEMORY_MAX_LINES, memoryToday, rememberLine } from "./coachMemory.js";
+import { editLine, forgetLine, loadCoachMemory, MEMORY_MAX_CHARS, MEMORY_MAX_LINES, memoryToday, rememberLine, ruleKind } from "./coachMemory.js";
 import {
   activityDraftInput,
   activitySaveInput,
@@ -1142,7 +1142,11 @@ export function createHealthAppRouter(): express.Router {
   });
   router.get(
     "/memory",
-    route("memory", async (ctx) => ({ body: { ok: true, lines: await loadCoachMemory(ctx.userProfileId, memoryToday(ctx.timezone)), max: MEMORY_MAX_LINES } })),
+    route("memory", async (ctx) => {
+      const lines = await loadCoachMemory(ctx.userProfileId, memoryToday(ctx.timezone));
+      // A line that is really a rule (diet, no gym) reaches chat only: the You tab marks it and offers to apply it.
+      return { body: { ok: true, lines: lines.map((l) => ({ ...l, rule: ruleKind(l.text) })), max: MEMORY_MAX_LINES } };
+    }),
   );
   router.post(
     "/memory",

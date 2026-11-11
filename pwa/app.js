@@ -3120,6 +3120,15 @@ function memorySection() {
       } catch (err) { toast(err.message); }
     } }, "Remove");
     li.append(text, el("span", { class: "memory-actions" }, edit, remove));
+    if (line.rule) {
+      // Memory reaches chat only; the plan, reminders and gym checks follow their own settings.
+      const what = line.rule === "food" ? "your meal plan" : "your routine and gym reminders";
+      const apply = el("button", { class: "link small", type: "button", onclick: () => {
+        closeSheet();
+        afterClose(() => { setView("coach"); $("input").value = `Apply this to my plan: ${line.text}`; autosize(); $("input").focus(); });
+      } }, "Apply to plan");
+      li.append(el("p", { class: "memory-rule hint" }, `Chat only: not in ${what} yet. `, apply));
+    }
     return li;
   }
 
