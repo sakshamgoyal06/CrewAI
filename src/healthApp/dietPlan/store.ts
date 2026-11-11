@@ -10,6 +10,7 @@ import { loggableError } from "../../util/loggableError.js";
 import { addDays } from "../../util/time.js";
 import type { ActionContext } from "../actions.js";
 import { getBodyCheckins, updateDailyTargets } from "../bodyStore.js";
+import { forgetTimedRuleLines } from "../coachMemory.js";
 import { acceptedTarget, gapCause, gapsLine, openGaps, planGapsOf, plannedAverages, plannedProtein, proteinGapOf, rulesKey, type GapChoice, type GapKey, type NutrientGap, type ProteinGap } from "./proteinGap.js";
 import { FREQUENT_WINDOW_DAYS, loadLoggedSessions, rankUsualMeals } from "../frequentMeals.js";
 import { cleanAvoidList, loadFoodPrefs, saveFoodAvoid } from "../onboarding.js";
@@ -527,6 +528,7 @@ export async function loadPlanView(ctx: ActionContext, now = new Date(), opts: {
   const ov = prefs.prefs.dietOverride;
   if (ov && !activeOverride(ov, today)) {
     prefs.prefs = await saveDietPrefs(ctx.userProfileId, { ...prefs.prefs, dietOverride: null });
+    await forgetPeriodLines(ctx.userProfileId, today);
     const r = await rebuildPlan(ctx, "diet_period_end", now);
     if (!r.ok) return r;
     plan = r.plan;
@@ -629,6 +631,14 @@ async function replanAfter(ctx: ActionContext, reason: string, now: Date): Promi
 }
 
 /**
+ * A temporary diet ended: memory lines that restated it ("Vegetarian only till the 25th") go too,
+ * so the coach never keeps the old rule (5 Nov audit, finding 12). Never throws.
+ */
+async function forgetPeriodLines(userProfileId: string, today: string): Promise<void> {
+  await forgetTimedRuleLines(userProfileId, "food", today).catch((err) => logger.warn({ err: loggableError(err) }, "forgetting diet period memory lines failed"));
+}
+
+/**
  * Starts a temporary diet and/or foods to avoid until a date ("veg only for 20 days", "no sweets
  * this week"); with neither, ends the one running.
  */
@@ -641,6 +651,7 @@ export async function setDietPeriod(ctx: ActionContext, input: { diet: PeriodDie
   if (starting && (!input.until || input.until < today)) return { ok: false, error: "bad_dates" };
   const override: DietOverride | null = starting ? { ...(input.diet ? { diet: input.diet } : {}), ...(avoid.length ? { avoid } : {}), from: today, until: input.until! } : null;
   await saveDietPrefs(ctx.userProfileId, { ...row.prefs, dietOverride: override });
+  if (!override) await forgetPeriodLines(ctx.userProfileId, today);
   const r = await replanAfter(ctx, override ? "diet_period" : "diet_period_end", now);
   if (!r.ok) return r;
   return { ...r, diet: override?.diet ?? null, avoid, from: override?.from ?? null, until: override?.until ?? null };
