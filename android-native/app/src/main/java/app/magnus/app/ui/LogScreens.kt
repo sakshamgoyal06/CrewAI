@@ -181,9 +181,9 @@ fun WeighInScreen(graph: AppGraph) {
                         f?.let { put("bodyFatPct", it) }
                         m?.let { put("muscleMassKg", it) }
                     }.toString()
-                    graph.api.send("POST", "/checkins", body)
+                    val queued = app.magnus.app.data.Outbox.isQueued(graph.api.send("POST", "/checkins", body))
                     graph.chat.cardChanged()
-                    nav.say("Weigh-in saved.")
+                    if (!queued) nav.say("Weigh-in saved.")
                     nav.back()
                 } catch (_: Exception) {
                     error = "Couldn't save it. Check your connection and try again."
@@ -214,9 +214,11 @@ fun StepsScreen(graph: AppGraph) {
             busy = true
             scope.launch {
                 try {
-                    graph.api.send("POST", "/steps", buildJsonObject { put("steps", n ?: 0); put("source", "manual") }.toString())
+                    val queued = app.magnus.app.data.Outbox.isQueued(
+                        graph.api.send("POST", "/steps", buildJsonObject { put("steps", n ?: 0); put("source", "manual") }.toString()),
+                    )
                     graph.chat.cardChanged()
-                    nav.say("Steps saved.")
+                    if (!queued) nav.say("Steps saved.")
                     nav.back()
                 } catch (_: Exception) {
                     error = "Couldn't save them. Check your connection and try again."

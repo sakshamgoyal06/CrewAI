@@ -106,8 +106,20 @@ private fun SignedIn(graph: AppGraph) {
         }
     }
 
-    // Push: ask once for the notification permission (Android 13+), then register this install.
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Offline logs: say when one is kept or sent, and send what's waiting on every open.
+    LaunchedEffect(Unit) {
+        graph.outbox.events.collect { note ->
+            nav.say(note)
+            if (note != app.magnus.app.data.Outbox.SAVED) graph.chat.cardChanged()
+        }
+    }
+    LaunchedEffect(Unit) {
+        if (graph.outbox.size() > 0 && !graph.outbox.flush(graph.api)) app.magnus.app.data.Outbox.schedule(context)
+    }
+
+    // Push: ask once for the notification permission (Android 13+), then register this install.
     val askNotify = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
     ) { app.magnus.app.push.Push.register(context) }

@@ -16,6 +16,7 @@ class AppGraph(context: Context) {
     val api = Api(auth)
     val today = TodayRepository(context, api)
     val chat = ChatStore(context, api)
+    val outbox = app.magnus.app.data.Outbox(context).also { api.outbox = it }
 
     private val prefs = context.getSharedPreferences("magnus-ui", Context.MODE_PRIVATE)
     private val _theme = MutableStateFlow(
@@ -35,6 +36,7 @@ class AppGraph(context: Context) {
         auth.signOut()
         today.clear()
         chat.clear()
+        outbox.clear()
     }
 }
 

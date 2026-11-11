@@ -28,8 +28,24 @@ class Api(private val auth: AuthRepository) {
 
     suspend fun getText(path: String): String = call(path, "GET", null)
 
-    /** POST/PUT/DELETE with a JSON body; returns the answer's text. */
-    suspend fun send(method: String, path: String, json: String = "{}"): String = call(path, method, json)
+    /** Set by AppGraph: where logs made offline wait. */
+    var outbox: Outbox? = null
+
+    /**
+     * POST/PUT/DELETE with a JSON body; returns the answer's text. A log the outbox can hold is kept
+     * on the phone when there's no connection, and answers [Outbox.QUEUED_ANSWER].
+     */
+    suspend fun send(method: String, path: String, json: String = "{}"): String = try {
+        call(path, method, json)
+    } catch (e: java.io.IOException) {
+        val box = outbox
+        if (e is ApiException || box == null || !Outbox.queueable(method, path)) throw e
+        box.add(path, json)
+        Outbox.QUEUED_ANSWER
+    }
+
+    /** Sends once with no queueing, for the outbox itself. */
+    suspend fun sendNow(method: String, path: String, json: String): String = call(path, method, json)
 
     private suspend fun call(path: String, method: String, body: String?): String = try {
         HttpClient.text(request(path, force = false, method, body))
