@@ -3165,7 +3165,11 @@ function memorySection() {
       } catch (err) { toast(err.message); }
     } }, "Remove");
     li.append(text, el("span", { class: "memory-actions" }, edit, remove));
-    if (line.rule) {
+    if (line.rule && line.inPlanUntil) {
+      // The plan already holds this rule (temporary diet, gym pause or swap) for the line's whole span.
+      const until = new Date(`${line.inPlanUntil}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      li.append(el("p", { class: "memory-rule hint" }, `In your plan until ${until}.`));
+    } else if (line.rule) {
       // Memory reaches chat only; the plan, reminders and gym checks follow their own settings.
       const what = line.rule === "food" ? "your meal plan" : "your routine and gym reminders";
       const apply = el("button", { class: "link small", type: "button", onclick: () => {

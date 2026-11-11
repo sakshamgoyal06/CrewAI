@@ -63,6 +63,7 @@ import { hydrateCard, loadCardStates, mealDaysOf } from "./chatCards.js";
 import { cardAt } from "./cardDay.js";
 import { isDateKey, listChatDays, localDayRange, tryDayPlan } from "./dailyChat.js";
 import { editLine, forgetLine, loadCoachMemory, MEMORY_MAX_CHARS, MEMORY_MAX_LINES, memoryToday, rememberLine, ruleKind } from "./coachMemory.js";
+import { inPlanUntil, loadRuleSpans } from "./memoryRules.js";
 import {
   activityDraftInput,
   activitySaveInput,
@@ -1256,9 +1257,18 @@ export function createHealthAppRouter(): express.Router {
   router.get(
     "/memory",
     route("memory", async (ctx) => {
-      const lines = await loadCoachMemory(ctx.userProfileId, memoryToday(ctx.timezone));
-      // A line that is really a rule (diet, no gym) reaches chat only: the You tab marks it and offers to apply it.
-      return { body: { ok: true, lines: lines.map((l) => ({ ...l, rule: ruleKind(l.text) })), max: MEMORY_MAX_LINES } };
+      const today = memoryToday(ctx.timezone);
+      const lines = await loadCoachMemory(ctx.userProfileId, today);
+      // A line that is really a rule (diet, no gym) reaches chat only: the You tab marks it and offers
+      // to apply it, unless the plan already holds that rule for the line's whole span (inPlanUntil).
+      const spans = lines.some((l) => ruleKind(l.text)) ? await loadRuleSpans(ctx.userProfileId, today) : null;
+      return {
+        body: {
+          ok: true,
+          lines: lines.map((l) => ({ ...l, rule: ruleKind(l.text), inPlanUntil: spans ? inPlanUntil(l, spans, today) : null })),
+          max: MEMORY_MAX_LINES,
+        },
+      };
     }),
   );
   router.post(
