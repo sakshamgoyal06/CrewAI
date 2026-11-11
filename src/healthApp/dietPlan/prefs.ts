@@ -70,6 +70,11 @@ export const dietPrefsInput = z.object({
     .object({ choice: z.enum(["accept", "supplement"]), plannedG: z.number(), originalTargetG: z.number(), rulesKey: z.string().max(4000), at: z.string() })
     .nullable()
     .optional(),
+  /** Gaps other than protein they accepted for these rules (proteinGap.ts planGapsOf). */
+  planGapsOk: z
+    .object({ keys: z.array(z.enum(["kcal", "proteinG", "carbsG", "fatG", "fiberG"])).max(5), rulesKey: z.string().max(4000), at: z.string() })
+    .nullable()
+    .optional(),
 });
 
 export type DietPrefsInput = z.input<typeof dietPrefsInput>;

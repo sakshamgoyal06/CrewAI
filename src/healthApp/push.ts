@@ -53,6 +53,7 @@ export const NOTIFICATION_KINDS = [
   "plan_meal",
   "logging_nudge",
   "ops_alert",
+  "pause_end",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

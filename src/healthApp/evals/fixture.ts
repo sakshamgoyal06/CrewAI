@@ -54,6 +54,7 @@ export function fixtureSnapshot(overrides: Partial<HealthSnapshot> = {}): Health
       onTrackDays: 3,
       unloggedDays: 0,
       partialDays: 0,
+      pausedDays: 0,
       windowDays: 7,
       goal: 5,
       days: [day("2026-10-28", true), day("2026-10-29", false), day("2026-10-30", true), day("2026-10-31", false), day("2026-11-01", true), day("2026-11-02", false), day("2026-11-03", false)],

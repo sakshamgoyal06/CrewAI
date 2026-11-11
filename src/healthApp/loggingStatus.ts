@@ -50,12 +50,24 @@ export function plannedMealsAccountedFor(planned: Array<{ slot: string; status: 
   return MAIN_SLOTS.every((slot) => !planned.some((m) => m.slot === slot && m.status === "planned") || loggedSlots.has(slot));
 }
 
+const dateOf = (n: number) => new Date(n * DAY_MS).toISOString().slice(0, 10);
+
+/**
+ * Finished days after the last log, up to yesterday, that weren't paused (breaks.ts): a pause is
+ * never a lapse. 0 when they never logged: the ladder is for a habit that stopped. Pure.
+ */
+export function blankDaysSince(lastLogDate: string | null, today: string, paused: (date: string) => boolean = () => false): number {
+  if (!lastLogDate) return 0;
+  let n = 0;
+  for (let d = dayNum(lastLogDate) + 1; d < dayNum(today); d++) if (!paused(dateOf(d))) n += 1;
+  return n;
+}
+
 /** The summary from the window's scored days (oldest → newest, today last) and the last log date. Pure. */
-export function loggingSummary(today: string, lastLogDate: string | null, days: DayScore[]): LoggingStatus {
-  const past = days.filter((d) => d.date < today);
+export function loggingSummary(today: string, lastLogDate: string | null, days: DayScore[], paused: (date: string) => boolean = () => false): LoggingStatus {
+  const past = days.filter((d) => d.date < today && !d.paused && !paused(d.date));
   const daysSinceLog = lastLogDate ? Math.max(0, dayNum(today) - dayNum(lastLogDate)) : null;
-  // Someone who never logged hasn't lapsed: the ladder and the returning phase are for a habit that stopped.
-  const blankDays = lastLogDate === null ? 0 : Math.max(0, (daysSinceLog ?? 0) - 1);
+  const blankDays = blankDaysSince(lastLogDate, today, paused);
   let streak = 0;
   for (const d of [...past].reverse()) {
     if (d.unlogged || d.partial) break;
@@ -64,7 +76,8 @@ export function loggingSummary(today: string, lastLogDate: string | null, days: 
   let gapBefore = 0;
   const lastIdx = lastLogDate ? days.findIndex((d) => d.date === lastLogDate) : -1;
   if (lastIdx > 0) {
-    for (let i = lastIdx - 1; i >= 0 && days[i]!.unlogged; i--) gapBefore += 1;
+    // Paused days inside the gap are skipped, not counted.
+    for (let i = lastIdx - 1; i >= 0 && (days[i]!.unlogged || days[i]!.paused || paused(days[i]!.date)); i--) if (!days[i]!.paused && !paused(days[i]!.date)) gapBefore += 1;
   }
   // Newest run of 3+ days with food logged, before the latest gap.
   let lastGoodStretch: LoggingStatus["lastGoodStretch"] = null;
@@ -72,6 +85,7 @@ export function loggingSummary(today: string, lastLogDate: string | null, days: 
   let run: DayScore[] = [];
   for (let i = end - 1; i >= -1; i--) {
     const d = i >= 0 ? days[i] : undefined;
+    if (d && (d.paused || paused(d.date))) continue;
     if (d && !d.unlogged) {
       run.unshift(d);
       continue;

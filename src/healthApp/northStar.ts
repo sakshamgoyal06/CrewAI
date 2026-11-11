@@ -38,6 +38,8 @@ export type DayInputs = {
    * logged below PARTIAL_KCAL_SHARE of the calorie target.
    */
   loggedInFull?: boolean;
+  /** The whole plan was paused that day (breaks.ts): the day drops out of the score. */
+  paused?: boolean;
 };
 
 export type HealthTargets = {
@@ -78,6 +80,8 @@ export type DayScore = {
    * logged" in their detail), but they are counted as a logging gap, not as eating too little.
    */
   partial?: true;
+  /** The whole plan was paused (breaks.ts): no checks, not a miss, not on track. */
+  paused?: true;
   /** 0–100, mean progress across applicable checks. */
   score: number;
 };
@@ -195,6 +199,7 @@ function foodChecks(day: DayInputs, targets: HealthTargets, checks: DayCheck[]):
 }
 
 export function scoreDay(day: DayInputs, targets: HealthTargets): DayScore {
+  if (day.paused) return { date: day.date, checks: [], onTrack: false, score: 0, paused: true };
   const checks: DayCheck[] = [];
 
   const state = day.date >= FOOD_RULE_FROM ? foodLogState(day, targets) : "full";
@@ -248,6 +253,8 @@ export type NorthStar = {
   unloggedDays: number;
   /** Past days in the window with food logged only in part. */
   partialDays: number;
+  /** Days in the window the whole plan was paused (they drop out, and the week's goal scales down). */
+  pausedDays: number;
   windowDays: number;
   goal: number;
   days: DayScore[];
@@ -283,5 +290,8 @@ export function computeNorthStar(days: DayScore[], goal = WEEKLY_ON_TRACK_GOAL):
   }
   const unloggedDays = days.slice(0, -1).filter((d) => d.unlogged).length;
   const partialDays = days.slice(0, -1).filter((d) => d.partial).length;
-  return { onTrackDays, unloggedDays, partialDays, windowDays: days.length, goal, days, mostMissed };
+  const pausedDays = days.filter((d) => d.paused).length;
+  // A paused stretch lowers the week's goal in proportion, so a holiday isn't a failed week.
+  const scaled = pausedDays ? Math.max(0, Math.round((goal * (days.length - pausedDays)) / Math.max(1, days.length))) : goal;
+  return { onTrackDays, unloggedDays, partialDays, pausedDays, windowDays: days.length, goal: scaled, days, mostMissed };
 }

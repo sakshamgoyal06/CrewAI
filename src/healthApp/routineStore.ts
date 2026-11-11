@@ -47,7 +47,17 @@ export async function loadRoutine(userProfileId: string): Promise<RoutineItem[] 
     logger.debug?.({ error: error.message }, "routine not available");
     return null;
   }
-  return ((data ?? []) as ItemRow[]).map(rowToItem);
+  const items = ((data ?? []) as ItemRow[]).map(rowToItem);
+  if (!items.length) return items;
+  // Pauses (breaks.ts): an item's own, and a whole-plan pause on every item. Missing table → none.
+  const { loadBreaks } = await import("./breaks.js");
+  const recent = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
+  const breaks = (await loadBreaks(userProfileId, recent).catch(() => [])).filter((b) => b.endDate >= recent);
+  if (!breaks.length) return items;
+  return items.map((i) => {
+    const pauses = breaks.filter((b) => b.scope === "plan" || b.itemId === i.id).map((b) => ({ from: b.startDate, until: b.endDate }));
+    return pauses.length ? { ...i, pauses } : i;
+  });
 }
 
 /** Replaces the whole routine. Items that keep their id keep their past follow-ups. */

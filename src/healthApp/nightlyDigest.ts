@@ -152,7 +152,7 @@ Write 2 or 3 short sentences, second person, plain words, no lists, no emoji, no
 Never invent numbers. Under 400 characters.
 If the facts include mealsNotLogged, the day's food isn't fully logged: don't call calories or protein low or missed. Say which meals aren't logged and ask them to add them, mark them skipped if they didn't eat, or say that was everything; that is the one thing for tomorrow morning.
 If the facts include dayClose, tomorrow's meals and calories are already set there (the person just read it): don't repeat its numbers or suggest a different food for tomorrow; make your one thing about something else (steps, sleep, training, timing) or simply sticking to tomorrow's plan.
-If the facts include planProteinGap, the meal plan itself can't reach the protein target under their rules: never blame them for that gap or tell them to add protein beyond the plan; if it says not decided yet, point them to the choice on the Meals tab instead.
+If the facts include planProteinGap, the meal plan itself can't reach some targets under their rules: never blame them for those gaps or tell them to eat beyond the plan; if it says not decided yet, point them to the choice on the Meals tab instead.
 If the facts include foodRules, they are hard rules: any food you name must obey them (never name a meat, fish, egg or food they rule out). A TEMPORARY RULE overrides their usual diet: while it runs, foods the usual diet allows but the temporary rule rules out are out.`;
 
 type Create = (p: Record<string, unknown>) => Promise<Anthropic.Message>;
@@ -233,9 +233,8 @@ export type DigestDeps = { snapshot: typeof buildHealthSnapshot; write: typeof w
 /** The plan's protein gap as one line for the note, or null when the plan reaches the target. */
 export async function loadPlanProteinGap(userProfileId: string, timezone: string, now: Date): Promise<string | null> {
   const { planViewOrNull } = await import("./dietPlan/rhythm.js");
-  const { gapLine } = await import("./dietPlan/proteinGap.js");
   const view = await planViewOrNull({ userProfileId, timezone, now }, now);
-  return view?.proteinGap ? gapLine(view.proteinGap) : null;
+  return view?.gapsLine ?? null;
 }
 
 export async function runNightlyDigest(

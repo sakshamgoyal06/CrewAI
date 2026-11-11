@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS public.health_breaks (
   start_date DATE NOT NULL,
   end_date DATE NOT NULL CHECK (end_date >= start_date),
   ended_at TIMESTAMPTZ,
+  -- The way back from a whole-plan pause (resume.ts): when they chose, and what.
+  resumed_at TIMESTAMPTZ,
+  resume_choice TEXT CHECK (resume_choice IS NULL OR resume_choice IN ('move_date', 'keep_date')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK ((scope = 'item') = (item_id IS NOT NULL))
 );
