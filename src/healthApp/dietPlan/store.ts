@@ -717,6 +717,15 @@ export async function mealFeedback(
 
 // ---------- protein the plan can't reach ----------
 
+/**
+ * The plan's protein gap as one line, for every way a plan gets built (setup, fresh plan, goal
+ * change, food settings, chat): null when the plan reaches the target or there's no plan.
+ */
+export async function planGapLine(ctx: ActionContext, now = new Date()): Promise<string | null> {
+  const view = await loadPlanView(ctx, now).catch(() => null);
+  return view && view.ok && "days" in view && view.proteinGap ? gapLine(view.proteinGap) : null;
+}
+
 async function restoreProteinTarget(ctx: ActionContext, prefs: DietPrefs, current: number | null): Promise<void> {
   const g = prefs.proteinGap;
   if (!g) return;

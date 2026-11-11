@@ -11,7 +11,7 @@ import { eatPlanned } from "./log.js";
 import { confirmDayComplete, mealsOn, planMealCard, planViewOrNull, rebalanceToday, type PlanMealCard } from "./rhythm.js";
 import { addDays } from "../../util/time.js";
 import { PERIOD_DIETS } from "./dietPeriod.js";
-import { answerProteinGap, changeAvoidList, markOption, rebuildPlan, setDietPeriod, swapPick } from "./store.js";
+import { answerProteinGap, changeAvoidList, markOption, planGapLine, rebuildPlan, setDietPeriod, swapPick } from "./store.js";
 import { GAP_CHOICES, gapLine } from "./proteinGap.js";
 import { PLAN_SLOTS } from "./targets.js";
 
@@ -131,7 +131,8 @@ export async function runMealPlanTool(ctx: ActionContext, input: z.infer<typeof 
     }
     case "rebuild": {
       const r = await rebuildPlan(ctx, "chat", now);
-      return { result: r.ok ? { ok: true, note: "New options from tomorrow; today stays as it is." } : r, changed: r.ok };
+      const gap = r.ok ? await planGapLine(ctx, now) : null;
+      return { result: r.ok ? { ok: true, note: "New options from tomorrow; today stays as it is.", ...(gap ? { proteinGap: gap } : {}) } : r, changed: r.ok };
     }
   }
 }

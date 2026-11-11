@@ -14,7 +14,7 @@ import { dayNumber } from "../util/time.js";
 import type { ActionContext } from "./actions.js";
 import { getActiveGoal, getBodyCheckins } from "./bodyStore.js";
 import { loadCalorieReview } from "./calorieTarget.js";
-import { rebuildPlan } from "./dietPlan/store.js";
+import { planGapLine, rebuildPlan } from "./dietPlan/store.js";
 import type { HealthGoal } from "./goalProgress.js";
 import { humanDate, startingPlan, type OnboardingInput } from "./onboarding.js";
 import { loadHealthProfile } from "./snapshot.js";
@@ -49,6 +49,8 @@ export type ReplanResult = {
   safeDate: string | null;
   source: "your_data" | "formula";
   mealPlanRebuilt: boolean;
+  /** The rebuilt plan can't reach the new protein target under their food rules (proteinGap.ts). */
+  proteinGap?: string | null;
   changes: ReplanChange[];
   /** Plain-language notes, the unsafe-pace warning first. */
   lines: string[];
@@ -209,6 +211,7 @@ export async function replanForGoal(
 
     const rebuilt = changes.length > 0 ? (await rebuildPlan(ctx, "Goal date changed", now).catch(() => ({ ok: false as const }))).ok : false;
     if (rebuilt) changes.push({ label: "Meal plan", from: null, to: "Rebuilt for the new target" });
+    const proteinGap = rebuilt ? await planGapLine(ctx, now).catch(() => null) : null;
 
     return {
       changed: changes.length > 0,
@@ -219,8 +222,12 @@ export async function replanForGoal(
       safeDate,
       source,
       mealPlanRebuilt: rebuilt,
+      proteinGap,
       changes,
-      lines: replanLines({ deadline: goal.deadline, targetWeightKg: goal.targets.weight_kg ?? null, weeksLeft, from, to, plannedKgPerWeek: planned, neededKgPerWeek: needed, capped, safeDate }),
+      lines: [
+        ...replanLines({ deadline: goal.deadline, targetWeightKg: goal.targets.weight_kg ?? null, weeksLeft, from, to, plannedKgPerWeek: planned, neededKgPerWeek: needed, capped, safeDate }),
+        ...(proteinGap ? ["Your meal plan can't reach the new protein target with your food rules. The Meals tab asks what you'd like to do about it."] : []),
+      ],
     };
   } catch (err) {
     logger.warn({ err: loggableError(err) }, "re-plan after goal change failed");
