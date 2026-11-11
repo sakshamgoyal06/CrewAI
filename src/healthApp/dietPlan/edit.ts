@@ -3,6 +3,7 @@
  * search and every added food go through the same restriction check as the planner
  * (compose.ts `restrictionCheck`), so an edit can't bring back a food the person avoids.
  */
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { catalog, servingId, servingLabel, type Catalog, type CatalogEntry } from "../../meals/catalog/index.js";
@@ -134,7 +135,18 @@ export function searchMealFoods(q: string, slot: PlanSlot, allows: (e: CatalogEn
 }
 
 /** Saves an edited planned meal (not yet eaten) in place; the plan keeps it for that day. */
-export async function editPick(ctx: ActionContext, date: string, slot: PlanSlot, input: EditInput): Promise<EditResult | { ok: false; error: "meal_not_planned" | "eat_out" }> {
+/**
+ * Whether an edit to a planned meal changes the plan or records what was eaten (Saksham, 11 Nov):
+ * before midnight starting the meal's day it changes the plan; on the day itself (or later) the
+ * plan stays as planned and the edited meal is logged as Had instead. Pure.
+ */
+export function editIsSwap(mealDate: string, today: string): boolean {
+  return mealDate <= today;
+}
+
+export type EditOutcome = (EditResult & { logged?: undefined }) | { ok: true; items: PlanItem[]; totals: Totals; logged: true; mealSessionId: string };
+
+export async function editPick(ctx: ActionContext, date: string, slot: PlanSlot, input: EditInput): Promise<EditOutcome | { ok: false; error: "meal_not_planned" | "eat_out" | "log_failed" }> {
   const { data, error } = await supabase
     .from("meal_plan_entries")
     .select("id, metadata")
@@ -152,6 +164,21 @@ export async function editPick(ctx: ActionContext, date: string, slot: PlanSlot,
   const allows = await restrictionsFor(ctx.userProfileId, localDateKey(ctx.now ?? new Date(), ctx.timezone), date);
   const r = applyEdit((meta.items as PlanItem[] | undefined) ?? [], input, allows, catalog(), allows.byName);
   if (!r.ok) return r;
+  if (editIsSwap(date, localDateKey(ctx.now ?? new Date(), ctx.timezone))) {
+    // The meal's own day: what they had is logged in its place, and the plan keeps its pick.
+    const { confirmMeal } = await import("../actions.js");
+    const saved = await confirmMeal(ctx, {
+      draftId: randomUUID(),
+      text: titleOf(r.items).slice(0, 500),
+      slot,
+      source: "food_db",
+      items: r.items.map((i) => ({ name: i.text, calories: i.kcal, protein_g: i.proteinG, carbs_g: i.carbsG, fat_g: i.fatG })),
+      edited: true,
+      date,
+    });
+    if (!saved.ok) return { ok: false, error: "log_failed" };
+    return { ok: true, items: r.items, totals: r.totals, logged: true, mealSessionId: saved.mealSessionId };
+  }
   const { error: e2 } = await supabase
     .from("meal_plan_entries")
     .update({

@@ -350,6 +350,8 @@ export function mealScreen() {
   document.getElementById("sheet-title").textContent = `${SLOT_NAME[slot]} · ${dayLabel(date)}`;
   if (!p) { wrap.append(el("p", { class: "none" }, "This meal isn't in the plan any more.")); return wrap; }
   const canEat = date <= todayKey();
+  // Before midnight starting the meal's day an edit changes the plan; on the day it records a swap.
+  const onTheDay = canEat;
   const eaten = isEaten(p);
   const budget = budgetOf(slot);
 
@@ -414,9 +416,13 @@ export function mealScreen() {
   const paintAction = () => {
     const dirty = editDirty(e);
     const kids = [];
-    if (dirty) {
+    if (dirty && onTheDay) {
+      // On the meal's day an edit is what they had: logged as Had instead, the plan keeps its meal.
+      kids.push(el("button", { class: "btn primary block", type: "button", disabled: !e.rows.length, onclick: (ev) => save(ev, false) }, "Log what I had"),
+        el("p", { class: "hint" }, "Logged as what you had instead. The plan keeps its meal, so you can see the swap."));
+      kids.push(el("button", { class: "link quiet", type: "button", onclick: () => { startEdit(date, slot, p.items); paintAdd(); repaint(); } }, "Discard changes"));
+    } else if (dirty) {
       kids.push(el("button", { class: "btn primary block", type: "button", disabled: !e.rows.length, onclick: (ev) => save(ev, false) }, "Save changes"));
-      if (canEat) kids.push(el("button", { class: "btn block", type: "button", disabled: !e.rows.length, onclick: (ev) => save(ev, true) }, "Save and mark eaten"));
       kids.push(el("button", { class: "link quiet", type: "button", onclick: () => { startEdit(date, slot, p.items); paintAdd(); repaint(); } }, "Discard changes"));
     } else if (canEat) {
       kids.push(el("button", { class: "btn primary block", type: "button", onclick: (ev) => save(ev, true) }, "Ate this"),
@@ -490,12 +496,12 @@ export function mealScreen() {
   async function save(ev, andEat) {
     ev.target.disabled = true;
     try {
-      if (editDirty(e)) await d.api(`/diet/days/${date}/${slot}/items`, { method: "PUT", body: editBody(e) });
-      if (andEat) await d.api(`/diet/days/${date}/${slot}/eat`, { method: "POST", body: JSON.stringify(ev.target.dataset.early ? { early: true } : {}) });
+      const r = editDirty(e) ? await d.api(`/diet/days/${date}/${slot}/items`, { method: "PUT", body: editBody(e) }) : null;
+      if (andEat && !r?.logged) await d.api(`/diet/days/${date}/${slot}/eat`, { method: "POST", body: JSON.stringify(ev.target.dataset.early ? { early: true } : {}) });
       ms.edit = null;
       await loadPlan(true);
-      d.toast(andEat ? "Logged." : "Saved. The plan keeps this meal for the day.");
-      if (andEat) d.refresh?.();
+      d.toast(r?.logged ? "Logged as what you had instead." : andEat ? "Logged." : "Saved. The plan keeps this meal for that day.");
+      if (andEat || r?.logged) d.refresh?.();
       d.openSheet("dietMeal", { fromHistory: true });
       paint();
     } catch (err) {
