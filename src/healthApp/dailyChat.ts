@@ -174,9 +174,19 @@ function yesterdayLine(s: HealthSnapshot): string | null {
   if (!y || !y.checks.length) return null;
   if (y.onTrack) return "On track. Every check was done.";
   // Nothing logged: say so plainly, and that it can still be filled in (11 Nov rule).
-  if (y.unlogged) return "Nothing was logged yesterday. You can't improve what you don't track: tell me roughly what you ate and I'll fill the day in.";
+  if (y.unlogged) {
+    const n = s.logging?.blankDays ?? 1;
+    return n >= 2
+      ? `Nothing logged for ${n} days. You can't improve what you don't track: one rough line for today gets you going again.`
+      : "Nothing was logged yesterday. You can't improve what you don't track: tell me roughly what you ate and I'll fill the day in.";
+  }
   const open = y.checks.filter((c) => !c.met);
   const met = y.checks.length - open.length;
+  // Partly logged: the food numbers are incomplete, so they aren't quoted as misses.
+  if (y.partial) {
+    const other = open.filter((c) => !["calories", "protein", "macros"].includes(c.id));
+    return `Partly logged, so the food numbers aren't the full day. Add what's missing in a line, or tell me that was everything.${other.length ? ` Also open: ${other.map((c) => `${c.label.toLowerCase()} (${c.detail})`).join(", ")}.` : ""}`;
+  }
   return `${met} of ${y.checks.length} checks. Open: ${open.map((c) => `${c.label.toLowerCase()} (${c.detail})`).join(", ")}.`;
 }
 
@@ -201,6 +211,8 @@ function carriedLine(c: CarriedCheck): string {
 function focusLine(s: HealthSnapshot, intervention: Intervention | null, planNote: string | null, carried: CarriedCheck | null = null): string | null {
   if (intervention) return `One thing to decide: ${intervention.title}. The options are below.`;
   if (carried) return carriedLine(carried);
+  // Away from logging: the one thing that matters today is a first log (lapsed-logging design).
+  if ((s.logging?.blankDays ?? 0) >= 2) return "Restart small: log one meal today, even a rough line, or tap Ate this on a planned meal.";
   if (s.goal?.checkinDue) {
     return s.targets.weighInDay == null
       ? "Weekly weigh-in today: step on the scale before breakfast and tell me the number. Pick a fixed weigh-in day in You so it lands the same day each week."
@@ -286,7 +298,10 @@ export function buildDayPlan(input: { snapshot: HealthSnapshot; name: string | n
     targets,
     goal: goalLine(s),
     yesterday: yesterdayLine(s),
-    week: `${s.northStar.onTrackDays} of the last 7 days on track (aim: ${s.northStar.goal})`,
+    // After a long logging gap "0 of 7 on track" is true but useless: show the logging count instead.
+    week: s.logging && s.logging.blankDays >= 4
+      ? `${s.logging.loggedDays} of the last ${s.logging.windowDays} days logged`
+      : `${s.northStar.onTrackDays} of the last 7 days on track (aim: ${s.northStar.goal})`,
     focus: focusLine(s, input.intervention, input.planNote ?? null, input.carried ?? null),
     motivation: motivationFor(date, s),
     ...(input.meals?.length ? { meals: input.meals } : {}),

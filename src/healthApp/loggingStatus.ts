@@ -26,6 +26,13 @@ export type LoggingStatus = {
   windowDays: number;
   /** Finished days in a row logged in full, ending yesterday. */
   streak: number;
+  /**
+   * Days with nothing logged right before the last logged day, as far as the window shows (up to
+   * 6). With lastLogDate today and this at 3 or more, they've just come back.
+   */
+  gapBefore: number;
+  /** The last stretch of 3+ logged days before the gap, for a welcome back ("4–6 Nov"). */
+  lastGoodStretch: { from: string; to: string; days: number } | null;
 };
 
 const MAIN_SLOTS = ["breakfast", "lunch", "dinner"] as const;
@@ -53,6 +60,27 @@ export function loggingSummary(today: string, lastLogDate: string | null, days: 
     if (d.unlogged || d.partial) break;
     streak += 1;
   }
+  let gapBefore = 0;
+  const lastIdx = lastLogDate ? days.findIndex((d) => d.date === lastLogDate) : -1;
+  if (lastIdx > 0) {
+    for (let i = lastIdx - 1; i >= 0 && days[i]!.unlogged; i--) gapBefore += 1;
+  }
+  // Newest run of 3+ days with food logged, before the latest gap.
+  let lastGoodStretch: LoggingStatus["lastGoodStretch"] = null;
+  const end = lastIdx > 0 ? lastIdx - gapBefore : past.length;
+  let run: DayScore[] = [];
+  for (let i = end - 1; i >= -1; i--) {
+    const d = i >= 0 ? days[i] : undefined;
+    if (d && !d.unlogged) {
+      run.unshift(d);
+      continue;
+    }
+    if (run.length >= 3) {
+      lastGoodStretch = { from: run[0]!.date, to: run.at(-1)!.date, days: run.length };
+      break;
+    }
+    run = [];
+  }
   return {
     lastLogDate,
     daysSinceLog,
@@ -60,6 +88,8 @@ export function loggingSummary(today: string, lastLogDate: string | null, days: 
     loggedDays: past.filter((d) => !d.unlogged).length,
     windowDays: past.length,
     streak,
+    gapBefore,
+    lastGoodStretch,
   };
 }
 

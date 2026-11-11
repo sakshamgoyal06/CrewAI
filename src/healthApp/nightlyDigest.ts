@@ -64,6 +64,11 @@ async function loadDayClose(userProfileId: string, date: string): Promise<DayClo
   return { hasPlan: true, text: row?.content ?? null };
 }
 
+/** Today's planned main meals with nothing logged (and not skipped): the day's food isn't complete. */
+export function unloggedPlannedMeals(s: Pick<HealthSnapshot, "mealList">): string[] {
+  return (s.mealList?.rows ?? []).filter((r) => (r.state === "todo" || r.state === "missed") && ["breakfast", "lunch", "dinner"].includes(r.slot)).map((r) => r.slot);
+}
+
 /** The day as plain facts for the model (and the fallback). */
 export function digestFacts(s: HealthSnapshot, weekday: number): Record<string, unknown> {
   const t = s.targets;
@@ -77,6 +82,7 @@ export function digestFacts(s: HealthSnapshot, weekday: number): Record<string, 
     trainingDay: s.today.isTrainingDay,
     trainedToday: s.workouts.some((w) => w.localDate === s.today.date),
     checks: s.today.checks.map((c) => `${c.label}: ${c.met ? "done" : "missed"} (${c.detail})`),
+    ...(unloggedPlannedMeals(s).length ? { mealsNotLogged: unloggedPlannedMeals(s) } : {}),
     onTrackToday: s.today.onTrack,
     weekOnTrack: `${s.northStar.onTrackDays} of 7 days`,
     tomorrow: `${WEEKDAYS[tomorrow]}, ${trainingDayOn(nextDate(s.today.date), t.trainingDays, s.routine) ? "training day" : "rest day"}`,
@@ -89,6 +95,11 @@ export function digestFacts(s: HealthSnapshot, weekday: number): Record<string, 
 
 /** A digest without the model: the first missed check with its number, and a matching fix. */
 export function fallbackDigest(s: HealthSnapshot): string {
+  const gaps = unloggedPlannedMeals(s);
+  if (gaps.length) {
+    const names = gaps.map((g, i) => (i === 0 ? g[0]!.toUpperCase() + g.slice(1) : g));
+    return `${names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0]} ${gaps.length > 1 ? "aren't" : "isn't"} logged, so today's food numbers are incomplete. Add ${gaps.length > 1 ? "them" : "it"} in a line, mark it skipped if you didn't eat, or tell me that was everything.`;
+  }
   const missed = s.today.checks.filter((c) => !c.met);
   if (!missed.length) return `Every check done today, ${s.northStar.onTrackDays} of 7 days on track this week. Same again tomorrow.`;
   const first = missed[0]!;
@@ -107,6 +118,7 @@ Write 2 or 3 short sentences, second person, plain words, no lists, no emoji, no
 1. How the day went, quoting the numbers that matter most (good or bad).
 2. ONE specific thing to do tomorrow (a food, a time, an amount), chosen to fix today's biggest gap or keep a good streak. Use what tomorrow is (training or rest day).
 Never invent numbers. Under 400 characters.
+If the facts include mealsNotLogged, the day's food isn't fully logged: don't call calories or protein low or missed. Say which meals aren't logged and ask them to add them, mark them skipped if they didn't eat, or say that was everything; that is the one thing for tomorrow morning.
 If the facts include dayClose, tomorrow's meals and calories are already set there (the person just read it): don't repeat its numbers or suggest a different food for tomorrow; make your one thing about something else (steps, sleep, training, timing) or simply sticking to tomorrow's plan.
 If the facts include foodRules, they are hard rules: any food you name must obey them (never name a meat, fish, egg or food they rule out). A TEMPORARY RULE overrides their usual diet: while it runs, foods the usual diet allows but the temporary rule rules out are out.`;
 
