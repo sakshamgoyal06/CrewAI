@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { localDateKey } from "../../nutrition/localDate.js";
+import { localClock } from "../../util/time.js";
 import { supabase } from "../../tools/clients.js";
 import type { ActionContext } from "../actions.js";
 import { deleteMeal, saveConfirmedMeal } from "../meals.js";
@@ -17,7 +18,19 @@ import type { PlanSlot } from "./targets.js";
 export const eatInput = z.object({
   /** New quantity per item, in the order the plan lists them; 0 leaves an item out. */
   qty: z.array(z.number().min(0).max(20)).max(12).optional(),
+  /** They confirmed they ate it, though it's more than an hour before the meal's time. */
+  early: z.boolean().optional(),
 });
+
+/** "Ate this" this long before the meal's planned time asks once (5 Nov: dinner ticked at 6 pm, eaten out at 8:30). */
+export const EARLY_TICK_MIN = 60;
+
+/** True when `now` is more than an hour before the meal's planned time today. Pure. */
+export function tooEarlyToTick(date: string, today: string, mealTime: string | null, nowMinutes: number): boolean {
+  if (date !== today || !mealTime) return false;
+  const [h, m] = mealTime.split(":").map(Number) as [number, number];
+  return nowMinutes < h * 60 + m - EARLY_TICK_MIN;
+}
 
 type Entry = { id: string; status: string; title: string; metadata: Record<string, unknown> | null };
 
@@ -47,10 +60,18 @@ export function portioned(items: PlanItem[], qty: number[] | undefined): PlanIte
 
 export type EatResult =
   | { ok: true; mealSessionId: string; status: "logged" | "partial"; totals: ReturnType<typeof sumTotals> }
-  | { ok: false; error: "future_date" | "meal_not_planned" | "already_logged" | "eat_out" | "nothing_to_log" | string };
+  | { ok: false; error: "future_date" | "meal_not_planned" | "already_logged" | "eat_out" | "nothing_to_log" | string; mealTime?: string | null };
 
 export async function eatPlanned(ctx: ActionContext, date: string, slot: PlanSlot, input: z.infer<typeof eatInput>): Promise<EatResult> {
-  if (date > localDateKey(ctx.now ?? new Date(), ctx.timezone)) return { ok: false, error: "future_date" };
+  const now = ctx.now ?? new Date();
+  const today = localDateKey(now, ctx.timezone);
+  if (date > today) return { ok: false, error: "future_date" };
+  if (!input.early && date === today) {
+    const { data } = await supabase.from("health_diet_preferences").select("prefs").eq("user_profile_id", ctx.userProfileId).maybeSingle();
+    const meals = ((data?.prefs as { meals?: Array<{ slot?: string; time?: string | null }> } | null)?.meals ?? []);
+    const time = meals.find((m) => m.slot === slot)?.time ?? null;
+    if (tooEarlyToTick(date, today, time, localClock(now, ctx.timezone).minutes)) return { ok: false, error: "too_early", mealTime: time };
+  }
   const entry = await findEntry(ctx, date, slot);
   if (!entry) return { ok: false, error: "meal_not_planned" };
   if (entry.status !== "planned") return { ok: false, error: "already_logged" };

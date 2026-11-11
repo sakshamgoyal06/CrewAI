@@ -467,7 +467,7 @@ export function createHealthAppRouter(): express.Router {
       const r = await eatPlanned(ctx, date, slot, eatInput.parse(req.body ?? {}));
       // Ate more or less than planned: the rest of today follows (before the reply, so the tab shows it).
       if (r.ok && r.status === "partial") await rebalanceToday(ctx).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance failed"));
-      return r.ok ? { body: r } : { status: r.error === "already_logged" ? 409 : 400, body: r };
+      return r.ok ? { body: r } : { status: r.error === "already_logged" || r.error === "too_early" ? 409 : 400, body: r };
     }),
   );
   /** "Took my supplements": logs the day's supplements from the plan setup (idempotent). */

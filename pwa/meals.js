@@ -491,7 +491,7 @@ export function mealScreen() {
     ev.target.disabled = true;
     try {
       if (editDirty(e)) await d.api(`/diet/days/${date}/${slot}/items`, { method: "PUT", body: editBody(e) });
-      if (andEat) await d.api(`/diet/days/${date}/${slot}/eat`, { method: "POST", body: "{}" });
+      if (andEat) await d.api(`/diet/days/${date}/${slot}/eat`, { method: "POST", body: JSON.stringify(ev.target.dataset.early ? { early: true } : {}) });
       ms.edit = null;
       await loadPlan(true);
       d.toast(andEat ? "Logged." : "Saved. The plan keeps this meal for the day.");
@@ -501,6 +501,7 @@ export function mealScreen() {
     } catch (err) {
       d.toast(err.message);
       ev.target.disabled = false;
+      if (err.code === "too_early") { ev.target.dataset.early = "1"; ev.target.textContent = "Yes, I've eaten it"; }
       // Saved but the log failed: what's on screen is now the plan.
       if (andEat) { await loadPlan(true).catch(() => {}); }
     }
@@ -886,11 +887,13 @@ async function afterChange(msg) {
 async function ateThis(btn, date, slot) {
   btn.disabled = true;
   try {
-    await d.api(`/diet/days/${date}/${slot}/eat`, { method: "POST", body: "{}" });
+    await d.api(`/diet/days/${date}/${slot}/eat`, { method: "POST", body: JSON.stringify(btn.dataset.early ? { early: true } : {}) });
     await afterChange("Logged as planned.");
   } catch (err) {
     btn.disabled = false;
     if (err.code === "already_logged") return afterChange();
+    // More than an hour before the meal: ask once, the next tap logs it.
+    if (err.code === "too_early") { btn.dataset.early = "1"; btn.textContent = "Yes, I've eaten it"; }
     d.toast(err.message);
   }
 }

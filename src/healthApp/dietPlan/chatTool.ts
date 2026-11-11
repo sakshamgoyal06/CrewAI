@@ -80,7 +80,8 @@ export async function runMealPlanTool(ctx: ActionContext, input: z.infer<typeof 
     case "ate": {
       const miss = needSlot();
       if (miss) return miss;
-      const r = await eatPlanned(ctx, date, input.slot!, {});
+      // They told the coach they ate it: no "it's early" check.
+      const r = await eatPlanned(ctx, date, input.slot!, { early: true });
       if (!r.ok) return { result: r };
       const after = await planViewOrNull(ctx, now);
       const m = after && mealsOn(after, date).find((x) => x.slot === input.slot);

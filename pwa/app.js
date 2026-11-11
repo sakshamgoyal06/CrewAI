@@ -181,6 +181,7 @@ function friendlyError(code) {
     option_not_found: "That option isn't in your plan any more.",
     meal_not_planned: "That meal isn't planned any more.",
     already_logged: "Already logged.",
+    too_early: "That meal is planned for later. Tap Ate this again if you've already eaten it.",
     nothing_to_log: "Add at least one item.",
     nothing_to_undo: "Nothing to undo.",
     not_allowed: "That food is outside your diet or foods to avoid.",
@@ -2581,7 +2582,7 @@ function planMealCard(c) {
     ate.addEventListener("click", async () => {
       ate.disabled = change.disabled = true;
       try {
-        const r = await api(`/diet/days/${cur.date}/${cur.slot}/eat`, { method: "POST", body: "{}" });
+        const r = await api(`/diet/days/${cur.date}/${cur.slot}/eat`, { method: "POST", body: JSON.stringify(ate.dataset.early ? { early: true } : {}) });
         c.status = "logged";
         if (r.mealSessionId) c.loggedSessionId = r.mealSessionId;
         render(c);
@@ -2591,6 +2592,8 @@ function planMealCard(c) {
       } catch (err) {
         if (err.code === "already_logged") { c.status = "logged"; render(c); return; }
         ate.disabled = change.disabled = false;
+        // More than an hour before the meal: ask once, the next tap logs it.
+        if (err.code === "too_early") { ate.dataset.early = "1"; ate.textContent = "Yes, I've eaten it"; }
         toast(err.message);
       }
     });
