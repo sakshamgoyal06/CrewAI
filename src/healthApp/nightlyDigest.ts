@@ -64,6 +64,19 @@ async function loadDayClose(userProfileId: string, date: string): Promise<DayClo
   return { hasPlan: true, text: row?.content ?? null };
 }
 
+/**
+ * Today's misses that keep coming back: missed today and on 3 or more of the 6 days before
+ * (unlogged days don't count). A pattern to decode, not a tip to repeat. Pure.
+ */
+export function repeatMisses(s: HealthSnapshot): string[] {
+  const before = s.northStar.days.slice(0, -1).slice(-6).filter((d) => !d.unlogged);
+  return s.today.checks
+    .filter((c) => !c.met && c.id !== "meals_logged")
+    .map((c) => ({ c, n: before.filter((d) => d.checks.some((x) => x.id === c.id && !x.met)).length }))
+    .filter((x) => x.n >= 3)
+    .map((x) => `${x.c.label} missed today and on ${x.n} of the ${before.length} days before`);
+}
+
 /** The day as plain facts for the model (and the fallback). */
 export function digestFacts(s: HealthSnapshot, weekday: number): Record<string, unknown> {
   const t = s.targets;
@@ -81,6 +94,7 @@ export function digestFacts(s: HealthSnapshot, weekday: number): Record<string, 
     weekOnTrack: `${s.northStar.onTrackDays} of 7 days`,
     tomorrow: `${WEEKDAYS[tomorrow]}, ${trainingDayOn(nextDate(s.today.date), t.trainingDays, s.routine) ? "training day" : "rest day"}`,
     sleepLastNight: s.today.sleepMinutes ? `${(s.today.sleepMinutes / 60).toFixed(1)} h` : null,
+    ...(repeatMisses(s).length ? { pattern: repeatMisses(s).join("; ") } : {}),
     goal: s.goal
       ? s.goal.metrics.map((m) => `${m.label} ${m.latest ?? "?"} → ${m.target} ${m.unit}, pace ${m.pace}`).join("; ") + `; ${s.goal.weeksLeft} weeks left`
       : null,
@@ -105,7 +119,9 @@ export function fallbackDigest(s: HealthSnapshot): string {
 const SYSTEM = `You are Magnus, a health coach, writing the person's end-of-day note. You get today's numbers.
 Write 2 or 3 short sentences, second person, plain words, no lists, no emoji, no greeting:
 1. How the day went, quoting the numbers that matter most (good or bad).
-2. ONE specific thing to do tomorrow (a food, a time, an amount), chosen to fix today's biggest gap or keep a good streak. Use what tomorrow is (training or rest day).
+2. If onTrackToday is true: one short line that says so, and stop. No tip: an on-track day needs nothing extra.
+   Otherwise ONE specific thing to do tomorrow (a food, a time, an amount) for today's biggest miss. Use what tomorrow is (training or rest day).
+   If the facts include pattern, the same miss keeps coming back: name the pattern, say what the numbers suggest is behind it, and suggest one realistic change to the routine or plan instead of repeating the usual advice.
 Never invent numbers. Under 400 characters.
 If the facts include dayClose, tomorrow's meals and calories are already set there (the person just read it): don't repeat its numbers or suggest a different food for tomorrow; make your one thing about something else (steps, sleep, training, timing) or simply sticking to tomorrow's plan.
 If the facts include planProteinGap, the meal plan itself can't reach the protein target under their rules: never blame them for that gap or tell them to add protein beyond the plan; if it says not decided yet, point them to the choice on the Meals tab instead.

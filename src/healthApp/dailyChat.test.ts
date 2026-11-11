@@ -172,9 +172,17 @@ describe("the day's plan", () => {
       yesterday: "2 of 3 checks. Open: protein (90 / 150 g).",
       week: "3 of the last 7 days on track (aim: 5)",
     });
-    expect(card.focus).toContain("Protein slipped on 3 of the last 6 days");
+    expect(card.focus).toContain("Protein slipped again yesterday, 3 of the last 6 days");
     expect(text.split("\n")[0]).toBe("Good morning, Saksham. Today's plan for Wed 4 Nov.");
     expect(text).toContain("Today: Morning walk 7:00 am · Gym 6:30 pm.");
+  });
+
+  it("says nothing extra after an on-track day, even with older misses", () => {
+    const s = snap();
+    const y = s.northStar.days.at(-2)!;
+    s.northStar.days[s.northStar.days.length - 2] = { ...y, onTrack: true, checks: y.checks.map((c) => ({ ...c, met: true })) };
+    s.today.sleepMinutes = null;
+    expect(buildDayPlan({ snapshot: s, name: null, localHour: 7, intervention: null }).card.focus ?? null).toBeNull();
   });
 
   it("calls out an unlogged yesterday instead of listing missed checks", () => {
