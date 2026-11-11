@@ -81,7 +81,7 @@ import { eatInput, eatPlanned, undoPlanned } from "./dietPlan/log.js";
 import { editReceipt, getLoggedMeal, mealReplaceInput, receiptEditInput, replaceLoggedMeal, undoReceipt } from "./logEdits.js";
 import { logSupplements, undoSupplements } from "./dietPlan/supplementLog.js";
 import { rebalanceToday, setMealPlanRole } from "./dietPlan/rhythm.js";
-import { FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
+import { FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, prefsChangeReason, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
 import { replanForGoal } from "./replan.js";
 import { getActiveGoal } from "./bodyStore.js";
 import { PLAN_SLOTS } from "./dietPlan/targets.js";
@@ -387,8 +387,9 @@ export function createHealthAppRouter(): express.Router {
   router.put(
     "/diet/prefs",
     route("diet-prefs-save", async (ctx, req) => {
+      const before = await loadDietPrefs(ctx.userProfileId);
       const prefs = await saveDietPrefs(ctx.userProfileId, req.body);
-      const r = await rebuildPlan(ctx, "prefs_changed");
+      const r = await rebuildPlan(ctx, before.saved ? prefsChangeReason(before.prefs, prefs) : "prefs_changed");
       // Saved without targets: the answers are kept and the plan builds once targets are set.
       if (!r.ok && r.error === "no_targets") return { body: { ok: true, prefs, version: null, needsTargets: true } };
       return r.ok ? { body: { ok: true, prefs, version: r.plan.version } } : { status: 409, body: r };

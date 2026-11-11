@@ -313,6 +313,20 @@ export async function rebuildPlan(ctx: ActionContext, reason: string, now = new 
   return { ok: true, plan };
 }
 
+/**
+ * Why a plan-setup save rebuilds: a change to what they can eat or when (restrictions, fasting
+ * days, meals eaten out) re-picks today's meals too; anything else (meal times, cooking time)
+ * leaves today as it is.
+ */
+export function prefsChangeReason(before: DietPrefs, after: DietPrefs): "food_prefs_changed" | "prefs_changed" {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  const sorted = (xs: number[]) => [...xs].sort((a, b) => a - b);
+  const eatOut = (p: DietPrefs) => p.eatOut.map((e) => `${e.day}:${e.slot}`).sort();
+  return same(before.restrictions, after.restrictions) && same(sorted(before.fastingDays), sorted(after.fastingDays)) && same(eatOut(before), eatOut(after))
+    ? "prefs_changed"
+    : "food_prefs_changed";
+}
+
 /** What the person's food settings allow right now (diet, avoid list, diet note, plan restrictions). */
 export async function rulesFor(userProfileId: string, prefs: DietPrefs, today: string): Promise<PlanRules> {
   return planRules(await loadFoodPrefs(userProfileId), prefs, today);
@@ -488,7 +502,7 @@ export type PlanView = {
  * What the Meals tab shows. Builds the plan on first open after setup, and rebuilds it when the
  * profile's calorie or protein target has moved since (onboarding, review, intervention).
  */
-export async function loadPlanView(ctx: ActionContext, now = new Date()): Promise<PlanView | { ok: false; error: string }> {
+export async function loadPlanView(ctx: ActionContext, now = new Date(), opts: { afterRetarget?: boolean } = {}): Promise<PlanView | { ok: false; error: string }> {
   const today = localDateKey(now, ctx.timezone);
   const [prefs, profile] = await Promise.all([loadDietPrefs(ctx.userProfileId), loadHealthProfile(ctx.userProfileId)]);
   const t = profile.targets;
@@ -515,6 +529,13 @@ export async function loadPlanView(ctx: ActionContext, now = new Date()): Promis
   if (!plan || stale) {
     const r = await rebuildPlan(ctx, plan ? "target_change" : "setup", now);
     if (!r.ok) return r;
+    // New targets: today's meals still to come resize to them (a rebuild keeps today's picks),
+    // then the view is read again with those sizes. The plan isn't stale any more, so this runs once.
+    if (plan && !opts.afterRetarget) {
+      const { rebalanceToday } = await import("./rhythm.js");
+      await rebalanceToday(ctx, now).catch((err) => logger.warn({ err }, "rebalance after a target change failed"));
+      return loadPlanView(ctx, now, { afterRetarget: true });
+    }
     plan = r.plan;
   }
   // Options saved in an older plan version may include food they have since ruled out: never show them.
