@@ -193,7 +193,10 @@ export function buildTurnContext(
   const last = [...s.checkins].reverse().find((c) => c.weight_kg != null);
   if (last) lines.push(`Last weigh-in: ${last.weight_kg} kg on ${last.localDate}${last.body_fat_pct != null ? `, ${last.body_fat_pct}% body fat` : ""}.`);
 
-  const openGym = s.workoutChecks.filter((c) => c.status === "missing").map((c) => c.localDate);
+  // Only today's and yesterday's: an older unanswered gym check has closed with its day (cardDay.ts),
+  // and asking about last Tuesday's gym reads as nagging.
+  const yesterday = localDateKey(new Date(now.getTime() - DAY_MS), s.timezone);
+  const openGym = s.workoutChecks.filter((c) => c.status === "missing" && c.localDate >= yesterday).map((c) => c.localDate);
   // A routine item is "open" once its slot has passed with nothing logged; before that it's just upcoming.
   // h23 (via localClock): hour12:false can print midnight as "24:00", which sorts after every slot.
   const { hhmm } = localClock(now, s.timezone);

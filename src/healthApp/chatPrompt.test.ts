@@ -27,11 +27,17 @@ describe("buildTurnContext", () => {
     expect(ctx).toContain("Last weigh-in: 81.9 kg on 2026-11-02, 22.8% body fat.");
     expect(ctx).not.toContain("Open check-ins");
     const later = buildTurnContext(
-      fixtureSnapshot({ workoutChecks: [{ localDate: "2026-11-01", gymTime: "18:30", status: "missing", hevyWorkoutId: null, reason: null }] }),
+      fixtureSnapshot({
+        workoutChecks: [
+          { localDate: "2026-11-01", gymTime: "18:30", status: "missing", hevyWorkoutId: null, reason: null },
+          { localDate: "2026-11-02", gymTime: "18:30", status: "missing", hevyWorkoutId: null, reason: null },
+        ],
+      }),
       null,
       new Date("2026-11-03T20:00:00+05:30"),
     );
-    expect(later).toContain("Open check-ins: gym on 2026-11-01");
+    // Yesterday's is still open; the day before closed with its day.
+    expect(later).toContain("Open check-ins: gym on 2026-11-02.");
     expect(ctx).toContain("Last Hevy workout: Push day on 2026-11-01.");
   });
 
