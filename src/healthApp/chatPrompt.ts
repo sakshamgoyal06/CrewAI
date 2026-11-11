@@ -181,7 +181,7 @@ export function buildTurnContext(
   const room = t.calorieTarget != null ? t.calorieTarget - s.today.calories : null;
   const todayChecks = s.today.checks.map((c) => `${c.label}: ${c.met ? "met" : c.detail}`).join("; ");
   lines.push(
-    `Today: ${s.today.calories} kcal eaten${room != null ? ` (${room >= 0 ? `${room} left` : `${-room} over`})` : ""}, ${Math.round(s.today.proteinG)} g protein, ${s.today.steps} steps${s.today.stepsFromPhone ? " (synced from their phone; never ask them for steps)" : ""}, ${s.meals.length} meal${s.meals.length === 1 ? "" : "s"} logged${s.today.isTrainingDay ? ", training day" : ""}. Checks: ${todayChecks}.`,
+    `Today: ${s.today.calories} kcal eaten${room != null ? ` (${room >= 0 ? `${room} left` : `${-room} over`})` : ""}, ${Math.round(s.today.proteinG)} g protein, ${s.today.steps} steps${s.today.stepsFromPhone ? ` (synced from their phone${phoneSync(s, now)}; never ask them for steps)` : ""}, ${s.meals.length} meal${s.meals.length === 1 ? "" : "s"} logged${s.today.isTrainingDay ? ", training day" : ""}. Checks: ${todayChecks}.`,
   );
   if (s.today.routine.length) {
     lines.push(`Routine today: ${s.today.routine.map((r) => `${r.label} ${r.state}${r.detail ? ` (${r.detail})` : ""}`).join("; ")}.`);
@@ -213,6 +213,14 @@ export function buildTurnContext(
     lines.push("Hevy: not connected (they paste their Hevy Pro API key from https://hevy.com/settings?developer in You → Food, connections & account).");
   }
   return lines.join("\n");
+}
+
+/** " at 15:10", plus "; may be behind" when that's over 2 hours ago; "" when nothing synced today. */
+function phoneSync(s: HealthSnapshot, now: Date): string {
+  const at = s.today.phoneSyncedAt ? new Date(s.today.phoneSyncedAt) : null;
+  if (!at || Number.isNaN(at.getTime())) return "";
+  const stale = now.getTime() - at.getTime() > 2 * 60 * 60 * 1000;
+  return ` at ${localClock(at, s.timezone).hhmm}${stale ? "; may be behind" : ""}`;
 }
 
 /** The old one-line context, kept for `MAGNUS_CHAT_PROMPT=legacy`. */

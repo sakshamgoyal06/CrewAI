@@ -94,3 +94,14 @@ describe("open loops", () => {
     expect(buildTurnContext(s, null, FIXTURE_NOW)).toContain("Open loops: skipped Evening gym on 2026-11-03 (knee hurts)");
   });
 });
+
+describe("phone step sync in the context", () => {
+  it("says when the phone last synced, and when that count may be behind", () => {
+    const s = fixtureSnapshot();
+    const at = (iso: string) => buildTurnContext({ ...s, today: { ...s.today, phoneSyncedAt: iso } }, null, FIXTURE_NOW);
+    const fresh = new Date(FIXTURE_NOW.getTime() - 30 * 60_000).toISOString();
+    const old = new Date(FIXTURE_NOW.getTime() - 3 * 60 * 60_000).toISOString();
+    expect(at(fresh)).toMatch(/steps \(synced from their phone at \d\d:\d\d; never ask them for steps\)/);
+    expect(at(old)).toMatch(/synced from their phone at \d\d:\d\d; may be behind; never ask/);
+  });
+});

@@ -63,6 +63,14 @@ describe("dueNudges", () => {
     expect(n[0]).toMatchObject({ kind: "step_pace", body: "2,400 of 8,000. A 55-minute walk closes it." });
   });
 
+  it("skips the step nudge when the phone's steps haven't synced in 2 hours", () => {
+    const today = snap().today;
+    const phone = (syncedAt: string | null) => snap({ today: { ...today, stepsFromPhone: true, phoneSyncedAt: syncedAt } });
+    expect(dueNudges(phone(ist("16:30").toISOString()), ist("17:05"), prefs).map((x) => x.kind)).toEqual(["step_pace"]);
+    expect(dueNudges(phone(ist("14:30").toISOString()), ist("17:05"), prefs)).toEqual([]);
+    expect(dueNudges(phone(null), ist("17:05"), prefs)).toEqual([]);
+  });
+
   it("wraps up the evening with what's open", () => {
     const n = dueNudges(snap(), ist("21:35"), prefs);
     expect(n.map((x) => x.kind)).toEqual(["meal_reminder", "evening_wrap"]);

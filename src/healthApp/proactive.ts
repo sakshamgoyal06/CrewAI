@@ -26,6 +26,8 @@ import { DAY_MS, localClock } from "../util/time.js";
 /** A nudge only fires within this long after its time, so a late restart doesn't send stale ones. */
 const NUDGE_WINDOW_MIN = 90;
 const STEPS_PER_MIN = 110;
+/** Phone steps older than this don't trigger the step nudge. */
+const STEP_SYNC_FRESH_MS = 2 * 60 * 60 * 1000;
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
@@ -80,7 +82,10 @@ export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs
   }
 
   const steps = check("steps");
-  if (steps && !steps.met && inWindow("17:00") && s.today.steps < s.targets.stepTarget * 0.6) {
+  // With Health Connect, a count that hasn't synced in 2 hours is behind the phone, not the person.
+  const syncedAt = s.today.phoneSyncedAt ? Date.parse(s.today.phoneSyncedAt) : NaN;
+  const stepsStale = s.today.stepsFromPhone && !(now.getTime() - syncedAt <= STEP_SYNC_FRESH_MS);
+  if (steps && !steps.met && !stepsStale && inWindow("17:00") && s.today.steps < s.targets.stepTarget * 0.6) {
     const gap = s.targets.stepTarget - s.today.steps;
     out.push({
       kind: "step_pace",
