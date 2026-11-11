@@ -90,6 +90,16 @@ describe("dueNudges", () => {
     expect(n[1]!.body).toContain("Protein (60 / 150 g)");
   });
 
+  it("makes the evening wrap a reminder when meal cards are still unconfirmed", () => {
+    const n = dueNudges(snap(), ist("21:35"), prefs, null, ["2 roti and a dal katori"]);
+    const wrap = n.find((x) => x.kind === "evening_wrap")!;
+    expect(wrap).toMatchObject({ title: "A meal isn't logged yet", url: "/app/#coach" });
+    expect(wrap.body).toBe('"2 roti and a dal katori" is waiting in chat. Tap Confirm & log, or it closes unlogged overnight.');
+    const three = dueNudges(snap(), ist("21:35"), prefs, null, ["poha", "chai", "dal rice"]).find((x) => x.kind === "evening_wrap")!;
+    expect(three.title).toBe("3 meals aren't logged yet");
+    expect(three.body).toContain('"poha" and "chai" and 1 more are waiting');
+  });
+
   it("respects quiet hours, turned-off kinds and the 90-minute window", () => {
     expect(dueNudges(snap(), ist("21:35"), parsePrefs({ quietStart: "21:00", quietEnd: "07:00" }))).toEqual([]);
     expect(dueNudges(snap(), ist("08:10"), parsePrefs({ off: ["morning_plan"] }))).toEqual([]);

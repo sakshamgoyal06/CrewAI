@@ -11,7 +11,7 @@ import { formatTime } from "./gymSlot.js";
 import { getPrefs, isQuiet, sendNotification, type Notification, type NotificationPrefs } from "./push.js";
 import { cardFromReport, listReports, rcaDue, reviewExperiments, runRca } from "./rca.js";
 import { buildHealthSnapshot, loadHealthProfile, type HealthSnapshot } from "./snapshot.js";
-import { ensureDayPlan } from "./dailyChat.js";
+import { ensureDayPlan, localDayRange } from "./dailyChat.js";
 import { routineLine } from "./routine.js";
 import { runRoutineTick } from "./routineCheck.js";
 import { runInterventionTick } from "./interventions/engine.js";
@@ -69,7 +69,13 @@ export function mealReminderTimes(plan: MealPlanTimes | null): Array<{ slot: str
  * The nudges due at `now`, given today's snapshot. Pure. Each has a per-day dedupe key; the
  * sender drops any already sent.
  */
-export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs, plan: MealPlanTimes | null = null): Notification[] {
+/**
+ * Meal cards from today's chat still waiting for Confirm & log (their text), so the evening wrap
+ * can remind once before they close at 05:00 (11 Nov: 9 drafts were never confirmed).
+ */
+export type PendingDrafts = string[];
+
+export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs, plan: MealPlanTimes | null = null, pending: PendingDrafts = []): Notification[] {
   const { hhmm, minutes } = localClock(now, s.timezone);
   if (isQuiet(hhmm, prefs)) return [];
   const date = s.today.date;
@@ -123,15 +129,27 @@ export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs
 
   if (inWindow("21:30")) {
     const open = s.today.checks.filter((c) => !c.met);
-    out.push({
-      kind: "evening_wrap",
-      dedupeKey: `evening_wrap:${date}`,
-      title: s.today.onTrack ? "On track today" : "Still open today",
-      body: s.today.onTrack
-        ? `Every check is done. ${s.northStar.onTrackDays}/7 this week.`
-        : `${open.map((c) => `${c.label} (${c.detail})`).join(", ")}.`,
-      url: "/app/#tracker",
-    });
+    // Unconfirmed meal cards first: they're the one thing that's lost if nobody taps.
+    if (pending.length) {
+      const what = pending.slice(0, 2).map((t) => `"${t.length > 40 ? `${t.slice(0, 38)}…` : t}"`).join(" and ");
+      out.push({
+        kind: "evening_wrap",
+        dedupeKey: `evening_wrap:${date}`,
+        title: pending.length === 1 ? "A meal isn't logged yet" : `${pending.length} meals aren't logged yet`,
+        body: `${what}${pending.length > 2 ? ` and ${pending.length - 2} more` : ""} ${pending.length === 1 ? "is" : "are"} waiting in chat. Tap Confirm & log, or ${pending.length === 1 ? "it closes" : "they close"} unlogged overnight.`,
+        url: "/app/#coach",
+      });
+    } else {
+      out.push({
+        kind: "evening_wrap",
+        dedupeKey: `evening_wrap:${date}`,
+        title: s.today.onTrack ? "On track today" : "Still open today",
+        body: s.today.onTrack
+          ? `Every check is done. ${s.northStar.onTrackDays}/7 this week.`
+          : `${open.map((c) => `${c.label} (${c.detail})`).join(", ")}.`,
+        url: "/app/#tracker",
+      });
+    }
   }
 
   return out.filter((n) => !prefs.off.includes(n.kind));
@@ -145,10 +163,37 @@ async function loadMealPlanTimes(userProfileId: string): Promise<Omit<MealPlanTi
   return { meals: meals.filter((m) => typeof m.slot === "string").map((m) => ({ slot: String(m.slot), time: typeof m.time === "string" ? m.time : null })) };
 }
 
+/** Today's chat meal cards with nothing logged from them, and no other log in their meal. */
+export async function loadPendingDrafts(userProfileId: string, date: string, timezone: string): Promise<PendingDrafts> {
+  const range = localDayRange(date, timezone);
+  const { data } = await supabase
+    .from("health_chat_messages")
+    .select("cards")
+    .eq("user_profile_id", userProfileId)
+    .eq("role", "assistant")
+    .gte("created_at", range.from)
+    .lt("created_at", range.to);
+  const drafts = ((data ?? []) as Array<{ cards?: Array<{ type?: string; draft?: { draftId?: string; text?: string; slot?: string; date?: string } }> }>)
+    .flatMap((m) => m.cards ?? [])
+    .filter((c) => c.type === "meal_draft" && c.draft?.draftId && (c.draft.date ?? date) === date)
+    .map((c) => c.draft!);
+  if (!drafts.length) return [];
+  const { data: logs } = await supabase.from("meal_logs").select("meal_session_id, meal_slot").eq("user_profile_id", userProfileId).eq("local_date", date);
+  const rows = (logs ?? []) as Array<{ meal_session_id: string | null; meal_slot: string | null }>;
+  const sessions = new Set(rows.map((r) => r.meal_session_id));
+  const slots = new Set(rows.map((r) => r.meal_slot));
+  return drafts.filter((d) => !sessions.has(d.draftId!) && !slots.has(d.slot ?? "")).map((d) => d.text ?? "a meal");
+}
+
 async function runNudges(userProfileId: string, now: Date): Promise<number> {
   const [snapshot, prefs, plan] = await Promise.all([buildHealthSnapshot(userProfileId, now), getPrefs(userProfileId), loadMealPlanTimes(userProfileId)]);
+  // Only read at the evening wrap, the one time the reminder can go out.
+  const { minutes } = localClock(now, snapshot.timezone);
+  const pending = minutes >= 21 * 60 + 30 && minutes < 23 * 60
+    ? await loadPendingDrafts(userProfileId, snapshot.today.date, snapshot.timezone).catch(() => [] as PendingDrafts)
+    : [];
   let sent = 0;
-  for (const n of dueNudges(snapshot, now, prefs, plan ? { ...plan, planPushOn: !prefs.off.includes("plan_meal") } : null)) {
+  for (const n of dueNudges(snapshot, now, prefs, plan ? { ...plan, planPushOn: !prefs.off.includes("plan_meal") } : null, pending)) {
     if ((await sendNotification(userProfileId, n)).sent) sent += 1;
   }
   return sent;
