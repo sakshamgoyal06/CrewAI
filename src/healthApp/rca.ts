@@ -19,6 +19,8 @@ import { scoreDay, type CheckId, type DayScore, type HealthTargets } from "./nor
 import { loadHealthProfile, summarizeWorkout, weekdayOfDate, windowDates, type WorkoutSummary } from "./snapshot.js";
 import { hevyKey, loadWorkoutHistory } from "./training.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
+import { loadDigestFoodRules } from "./nightlyDigest.js";
+import { loadRoutine } from "./routineStore.js";
 import { rcaModel } from "../models.js";
 import { DAY_MS, localHourOf } from "../util/time.js";
 
@@ -453,14 +455,17 @@ const insightSchema = z.object({
 });
 
 const SYSTEM = `You are a health coach doing a root-cause analysis for one person. You get evidence mined from their last few weeks of logs, plus earlier experiments and whether they helped.
-Write ONE hypothesis about the main reason they are off track, grounded in the evidence (quote its numbers), and ONE small, specific experiment for the next 7 days that tests it: something concrete they can do daily, not a program change. Don't repeat an experiment that didn't help. Plain words, second person, no hedging, no lists. Answer only by calling the write_rca tool.`;
+Write ONE hypothesis about the main reason they are off track, grounded in the evidence (quote its numbers), and ONE small, specific experiment for the next 7 days that tests it: something concrete they can do daily, not a program change. Don't repeat an experiment that didn't help. The experiment must keep their rules: never name a food their food rules rule out, and never ask for a routine item that is paused or swapped. Plain words, second person, no hedging, no lists. Answer only by calling the write_rca tool.`;
+
+/** Their food rules and routine changes in force: the experiment must fit them (5 Nov audit). */
+export type RcaRules = { food: string | null; routine: string | null; allows: (text: string) => boolean };
 
 export { rcaModel };
 
 /** One hypothesis + one experiment from Claude, or a deterministic one if the call fails. */
 export async function writeInsight(
   signals: Signal[],
-  context: { targets: HealthTargets; onTrackDays: number; days: number; past: RcaReport[] },
+  context: { targets: HealthTargets; onTrackDays: number; days: number; past: RcaReport[]; rules?: RcaRules | null },
   create: (p: Record<string, unknown>) => Promise<Anthropic.Message> = (p) => anthropic.messages.create(p as never) as Promise<Anthropic.Message>,
 ): Promise<{ hypothesis: string; experiment: string; targetCheck: CheckId | null; source: "model" | "fallback" }> {
   if (!signals.length) return { ...fallbackInsight(signals), source: "fallback" };
@@ -497,13 +502,17 @@ export async function writeInsight(
             targets: context.targets,
             evidence: signals.map((s) => s.text),
             earlierExperiments: context.past.map((p) => ({ experiment: p.experiment, status: p.status })),
+            ...(context.rules?.food || context.rules?.routine ? { rules: { food: context.rules.food, routine: context.rules.routine } } : {}),
           }),
         },
       ],
     });
     const block = msg.content.find((b) => b.type === "tool_use");
     const parsed = insightSchema.safeParse(block && "input" in block ? block.input : null);
-    if (parsed.success) return { ...parsed.data, source: "model" };
+    // A food their rules rule out ("eggs" in a veg period): the plain fallback instead.
+    if (parsed.success && context.rules && !context.rules.allows(`${parsed.data.hypothesis} ${parsed.data.experiment}`)) {
+      logger.info("rca insight named a ruled-out food; using the fallback");
+    } else if (parsed.success) return { ...parsed.data, source: "model" };
   } catch (err) {
     logger.warn({ err: loggableError(err) }, "rca model call failed");
   }
@@ -513,6 +522,7 @@ export async function writeInsight(
 type RunDeps = {
   load: typeof loadDayRecords;
   past: typeof listReports;
+  rules?: (userProfileId: string, now: Date) => Promise<RcaRules | null>;
   insight: typeof writeInsight;
   save: (userProfileId: string, row: Record<string, unknown>) => Promise<RcaReport | null>;
 };
@@ -520,6 +530,7 @@ type RunDeps = {
 const defaultRunDeps: RunDeps = {
   load: (id, now, days) => loadDayRecords(id, now, days),
   past: (id, limit) => listReports(id, limit),
+  rules: (id, now) => loadRcaRules(id, now),
   insight: (s, c) => writeInsight(s, c),
   save: async (userProfileId, row) => {
     const { data, error } = await supabase.from("health_rca_reports").insert({ user_profile_id: userProfileId, ...row }).select(COLS).single();
@@ -530,6 +541,17 @@ const defaultRunDeps: RunDeps = {
     return fromRow(data as Record<string, unknown>);
   },
 };
+
+/** Food rules (a temporary diet first) and routine swaps running today, for the RCA prompt. */
+async function loadRcaRules(userProfileId: string, now: Date): Promise<RcaRules | null> {
+  const { timezone } = await loadHealthProfile(userProfileId);
+  const today = localDateKey(now, timezone);
+  const [food, routine] = await Promise.all([loadDigestFoodRules(userProfileId, today, today).catch(() => null), loadRoutine(userProfileId).catch(() => null)]);
+  const swaps = (routine ?? [])
+    .filter((i) => i.swap && i.swap.from <= today && today <= i.swap.until)
+    .map((i) => `${i.label} paused until ${i.swap!.until}, ${i.swap!.label} instead`);
+  return { food: food?.line ?? null, routine: swaps.length ? swaps.join("; ") : null, allows: food?.allows ?? (() => true) };
+}
 
 export const REUSE_DAYS = 14;
 
@@ -575,7 +597,8 @@ export async function runRca(
   const past = await deps.past(userProfileId, 6);
   // Same evidence as a report from the last two weeks: reuse its insight instead of a model call.
   const reused = reusableInsight(signals, past, now);
-  const insight = reused ?? (await deps.insight(signals, { targets, onTrackDays, days: recent.length, past }));
+  const rules = reused ? null : await (deps.rules?.(userProfileId, now) ?? Promise.resolve(null)).catch(() => null);
+  const insight = reused ?? (await deps.insight(signals, { targets, onTrackDays, days: recent.length, past, rules }));
   const baseline = insight.targetCheck ? checkHitRate(recent.slice(-14), insight.targetCheck).rate : null;
   const report = await deps.save(userProfileId, {
     trigger,

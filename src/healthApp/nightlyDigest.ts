@@ -17,7 +17,7 @@ import { loggableError } from "../util/loggableError.js";
 import { stableTurnId } from "../util/stableId.js";
 import { localClock } from "../util/time.js";
 import { hasFeature } from "./billing.js";
-import { nameRestrictionCheck } from "./dietPlan/compose.js";
+import { nameRestrictionCheck, type PersonDiet } from "./dietPlan/compose.js";
 import { planRules } from "./dietPlan/rules.js";
 import { foodPrefsLine, loadFoodPrefs, planRulesLine, type FoodPrefs } from "./onboarding.js";
 import { getPrefs, isQuiet, sendNotification } from "./push.js";
@@ -121,7 +121,7 @@ async function alreadyPosted(userProfileId: string, turnId: string): Promise<boo
 const firstSentence = (text: string) => (/^.*?[.!?](\s|$)/.exec(text)?.[0] ?? text).trim().slice(0, 180);
 
 /** Their food rules for the digest, and a check that a written note keeps them. */
-export type DigestFoodRules = { line: string | null; allows: (text: string) => boolean };
+export type DigestFoodRules = { line: string | null; allows: (text: string) => boolean; diet?: PersonDiet };
 
 /**
  * The rules the note's food tip must keep: a running temporary diet ("veg only till the 25th")
@@ -139,10 +139,11 @@ export function digestFoodRules(food: FoodPrefs | null, prefs: unknown, today: s
     tomorrow,
   );
   const ok = nameRestrictionCheck({ diet: rules.diet, avoid: rules.avoid });
-  return { line, allows: (text) => ok(text) };
+  return { line, allows: (text) => ok(text), diet: rules.diet };
 }
 
-async function loadDigestFoodRules(userProfileId: string, today: string, tomorrow: string): Promise<DigestFoodRules> {
+/** Their food rules for `tomorrow` (a temporary diet first): the nightly note, the eating-out card and the RCA read the same. */
+export async function loadDigestFoodRules(userProfileId: string, today: string, tomorrow: string): Promise<DigestFoodRules> {
   const [food, dp] = await Promise.all([
     loadFoodPrefs(userProfileId).catch(() => null),
     (async () => {

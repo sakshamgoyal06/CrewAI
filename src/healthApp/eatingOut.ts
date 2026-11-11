@@ -9,6 +9,8 @@ import { localDateKey } from "../nutrition/localDate.js";
 import type { ActionContext } from "./actions.js";
 import { recordChatTurn, type ChatCard } from "./chat.js";
 import { buildHealthSnapshot } from "./snapshot.js";
+import type { PersonDiet } from "./dietPlan/compose.js";
+import { loadDigestFoodRules } from "./nightlyDigest.js";
 
 export const eatingOutInput = z.object({ meal: z.enum(["lunch", "dinner"]).optional() });
 
@@ -42,6 +44,34 @@ export const ORDER_TIPS = [
   "One drink at most: a beer is about 150 kcal, a cocktail 200 or more.",
 ];
 
+type Diet = PersonDiet;
+const noEgg = (d: Diet) => d === "vegetarian" || d === "jain" || d === "vegan";
+const noDairy = (d: Diet) => d === "vegan";
+const noMeat = (d: Diet) => d === "vegetarian" || d === "jain" || d === "vegan" || d === "eggetarian";
+
+/** The order tips for their diet (a veg period included): no tandoori chicken for a vegetarian. Pure. */
+export function orderTips(diet: Diet = null, allows: (text: string) => boolean = () => true): string[] {
+  const first = noDairy(diet)
+    ? "Tandoori vegetables, chana or dal over fried or cream gravies."
+    : noMeat(diet)
+      ? "Paneer or soya tikka and tandoori vegetables over fried, butter or cream gravies."
+      : ORDER_TIPS[0]!;
+  const third = noDairy(diet) ? "Dal and a salad fill you up for little." : ORDER_TIPS[2]!;
+  return [first, ORDER_TIPS[1]!, third, ORDER_TIPS[3]!, ORDER_TIPS[4]!].filter((t) => allows(t));
+}
+
+/** Protein to eat before going out, for their diet and avoid list. Pure. */
+export function proteinBefore(diet: Diet = null, allows: (text: string) => boolean = () => true): string {
+  const all = noDairy(diet) ? ["dal", "tofu", "sprouts", "soy milk"] : ["curd", "dal", ...(noEgg(diet) ? [] : ["eggs"]), "paneer", "sprouts", "a shake"];
+  const ok = all.filter((f) => allows(f));
+  return ok.length > 1 ? `${ok.slice(0, -1).join(", ")} or ${ok.at(-1)}` : (ok[0] ?? "dal");
+}
+
+/** One light main for when the day is spent. Pure. */
+function lightMain(diet: Diet): string {
+  return noDairy(diet) ? "one chana or dal main with salad" : noMeat(diet) ? "one paneer or soya tikka with dal or salad" : "one grilled or tandoori main with dal or salad";
+}
+
 export function eatingOutPlan(input: {
   date: string;
   meal: "lunch" | "dinner";
@@ -49,8 +79,13 @@ export function eatingOutPlan(input: {
   caloriesEaten: number;
   proteinTarget: number | null;
   proteinEaten: number;
+  /** Their diet today (a temporary veg period included) and a check against their avoid list. */
+  diet?: Diet;
+  allows?: (text: string) => boolean;
 }): EatingOutCard {
   const { date, meal, calorieTarget: target, caloriesEaten: eaten, proteinTarget, proteinEaten } = input;
+  const diet = input.diet ?? null;
+  const allows = input.allows ?? (() => true);
   const lines: string[] = [];
   let reserveKcal: number | null = null;
   let beforeKcal: number | null = null;
@@ -63,14 +98,14 @@ export function eatingOutPlan(input: {
     if (left < RESERVE_MIN) {
       lines.push(
         left === 0
-          ? `Today's ${target} kcal are already used, so keep the ${meal} light: one grilled or tandoori main with dal or salad, no starters. Tomorrow goes back to the plan.`
-          : `About ${left} kcal are left today, less than a restaurant ${meal} usually is. Order one grilled or tandoori main with dal or salad, skip starters and dessert, and tomorrow goes back to the plan.`,
+          ? `Today's ${target} kcal are already used, so keep the ${meal} light: ${lightMain(diet)}, no starters. Tomorrow goes back to the plan.`
+          : `About ${left} kcal are left today, less than a restaurant ${meal} usually is. Order ${lightMain(diet)}, skip starters and dessert, and tomorrow goes back to the plan.`,
       );
     } else {
       lines.push(`Keep about ${reserveKcal} kcal for ${meal} out.`);
       lines.push(
         beforeKcal > 0
-          ? `Until then, about ${beforeKcal} kcal, mostly protein and vegetables: curd, dal, eggs, paneer, sprouts or a shake.`
+          ? `Until then, about ${beforeKcal} kcal, mostly protein and vegetables: ${proteinBefore(diet, allows)}.`
           : "Nothing more before it, apart from tea, water or a piece of fruit.",
       );
     }
@@ -84,7 +119,7 @@ export function eatingOutPlan(input: {
   }
   lines.push("Log what you order when you're back, even roughly. A rough log keeps the week honest.");
 
-  return { type: "eating_out", date, meal, reserveKcal, beforeKcal, proteinBeforeG, lines, tips: ORDER_TIPS };
+  return { type: "eating_out", date, meal, reserveKcal, beforeKcal, proteinBeforeG, lines, tips: orderTips(diet, allows) };
 }
 
 export function eatingOutReply(card: EatingOutCard): string {
@@ -98,12 +133,18 @@ export async function planEatingOut(
   ctx: ActionContext,
   input: z.infer<typeof eatingOutInput>,
   opts: { record?: boolean } = {},
-  deps: { snapshot?: typeof buildHealthSnapshot; recordTurn?: typeof recordChatTurn } = {},
+  deps: { snapshot?: typeof buildHealthSnapshot; recordTurn?: typeof recordChatTurn; foodRules?: typeof loadDigestFoodRules } = {},
 ): Promise<{ ok: true; text: string; cards: ChatCard[]; card: EatingOutCard; changed: false }> {
-  const s = await (deps.snapshot ?? buildHealthSnapshot)(ctx.userProfileId, ctx.now ?? new Date());
+  const date = localDateKey(ctx.now ?? new Date(), ctx.timezone);
+  const [s, rules] = await Promise.all([
+    (deps.snapshot ?? buildHealthSnapshot)(ctx.userProfileId, ctx.now ?? new Date()),
+    (deps.foodRules ?? loadDigestFoodRules)(ctx.userProfileId, date, date).catch(() => null),
+  ]);
   const meal = input.meal ?? "dinner";
   const card = eatingOutPlan({
-    date: localDateKey(ctx.now ?? new Date(), ctx.timezone),
+    date,
+    diet: rules?.diet ?? null,
+    allows: rules?.allows,
     meal,
     calorieTarget: s.targets.calorieTarget,
     caloriesEaten: s.today.calories,
