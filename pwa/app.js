@@ -2618,7 +2618,25 @@ function planAdjustCard(c) {
         el("span", {}, m.title, el("small", {}, ` · ${fmt(m.kcal)} kcal`))))),
       el("button", { class: "link", type: "button", onclick: () => setView("meals") }, "See tomorrow's meals")) : null,
     close && meals.length ? null : el("button", { class: "link", type: "button", onclick: () => setView("meals") }, close ? "See tomorrow's meals" : "See today's meals"),
+    close && c.missing?.length ? dayCompleteButton(c.date) : null,
   );
+}
+
+/** Day close with meals unlogged: "That was everything" lets the day count as logged in full. */
+function dayCompleteButton(date) {
+  const b = el("button", { class: "btn", type: "button" }, "That was everything");
+  b.addEventListener("click", async () => {
+    b.disabled = true;
+    try {
+      await api(`/diet/days/${date}/complete`, { method: "POST" });
+      b.replaceWith(el("p", { class: "hint" }, "Counted as the whole day."));
+      refresh();
+    } catch (err) {
+      b.disabled = false;
+      toast(err.message);
+    }
+  });
+  return b;
 }
 
 /** The plan around a meal out: what to keep for it, what's left before, and how to order. */

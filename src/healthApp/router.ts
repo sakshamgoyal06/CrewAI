@@ -80,7 +80,7 @@ import { editInput, editPick, restrictionsFor, searchMealFoods } from "./dietPla
 import { eatInput, eatPlanned, undoPlanned } from "./dietPlan/log.js";
 import { editReceipt, getLoggedMeal, mealReplaceInput, receiptEditInput, replaceLoggedMeal, undoReceipt } from "./logEdits.js";
 import { logSupplements, undoSupplements } from "./dietPlan/supplementLog.js";
-import { rebalanceToday, setMealPlanRole } from "./dietPlan/rhythm.js";
+import { confirmDayComplete, rebalanceToday, setMealPlanRole } from "./dietPlan/rhythm.js";
 import { FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, prefsChangeReason, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
 import { replanForGoal } from "./replan.js";
 import { getActiveGoal } from "./bodyStore.js";
@@ -503,6 +503,16 @@ export function createHealthAppRouter(): express.Router {
       const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
       const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
       const r = await undoPlanned(ctx, date, slot);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+
+  /** "That was everything": a closed day with planned meals unlogged counts as fully logged. */
+  router.post(
+    "/diet/days/:date/complete",
+    route("diet-day-complete", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const r = await confirmDayComplete(ctx, date);
       return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );

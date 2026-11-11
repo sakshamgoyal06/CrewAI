@@ -27,7 +27,6 @@ export const MEAL_CARD_AFTER_MIN = 60;
 /** The day closes from this local time, and at least an hour after the last planned meal. */
 export const DAY_CLOSE_FROM = "21:45";
 /** Fewer meals logged than this and the day close doesn't move tomorrow (it can't tell a miss from a gap). */
-export const DAY_CLOSE_MIN_MEALS = 2;
 /** Never plan a day below this, whatever the carry-over (the calorie review's floor). */
 export const FLOOR_KCAL = 1200;
 
@@ -56,6 +55,8 @@ export type PlanAdjustCard = {
   lines: string[];
   /** Day close only: tomorrow's planned meals. */
   next?: { date: string; meals: DayMealLine[] };
+  /** Day close only: planned main meals with nothing logged; the card offers "That was everything". */
+  missing?: PlanSlot[];
 };
 
 export type DayMealLine = { slot: PlanSlot; time: string | null; title: string; kcal: number; status: string };
@@ -424,13 +425,69 @@ export function dayCloseDue(minutes: number, lastMealTime: string | null): boole
   return minutes >= Math.min(from, 23 * 60 + 30);
 }
 
-export function dayCloseCard(input: { date: string; summary: string; next: { date: string; meals: DayMealLine[] } }): { text: string; card: PlanAdjustCard } {
+/**
+ * Day close with gaps: never treated as eating less. Nothing logged, or main meals missing: the
+ * next days stay as planned until the rest is logged or they say that was everything. Pure.
+ */
+export function dayGapSummary(missing: PlanSlot[], loggedMeals: number): string {
+  if (!loggedMeals) return "Nothing logged today, so I'm not counting it as a low day. Tomorrow's plan stays as it is. Tell me roughly what you ate, even tomorrow, and I'll fill it in.";
+  const verb = missing.length > 1 ? "aren't" : "isn't";
+  return `${slotList(missing)} ${verb} logged, so I haven't changed the next days yet. Log ${missing.length > 1 ? "them" : "it"} (a line in chat is fine, even tomorrow) and I'll balance from there. Nothing else eaten? Tap That was everything.`;
+}
+
+export function dayCloseCard(input: { date: string; summary: string; next: { date: string; meals: DayMealLine[] }; missing?: PlanSlot[] }): { text: string; card: PlanAdjustCard } {
   const meals = input.next.meals.filter((m) => m.status === "planned");
   const lines = meals.map((m) => `${SLOT_LABEL[m.slot]}${m.time ? ` ${clock(m.time)}` : ""}: ${m.title} (${fmt(m.kcal)} kcal)`);
   return {
     text: [input.summary, meals.length ? "Tomorrow:" : null, ...lines].filter(Boolean).join("\n"),
-    card: { type: "plan_adjust", kind: "day_close", date: input.date, headline: input.summary, lines: [], next: { date: input.next.date, meals } },
+    card: { type: "plan_adjust", kind: "day_close", date: input.date, headline: input.summary, lines: [], next: { date: input.next.date, meals }, ...(input.missing?.length ? { missing: input.missing } : {}) },
   };
+}
+
+// ---------- is the day fully logged? ----------
+
+const MAIN_SLOTS: PlanSlot[] = ["breakfast", "lunch", "dinner"];
+
+/**
+ * The day's planned main meals with nothing logged for them. Snacks don't count: a skipped
+ * snack is normal, a missing dinner usually means it wasn't logged. Pure.
+ */
+export function unloggedMeals(planned: Array<{ slot: string; status: string }>, loggedSlots: Set<string>): PlanSlot[] {
+  return MAIN_SLOTS.filter((slot) => planned.some((m) => m.slot === slot && m.status === "planned") && !loggedSlots.has(slot));
+}
+
+/** "Breakfast", "Breakfast and dinner", "Breakfast, lunch and dinner". */
+export function slotList(slots: PlanSlot[]): string {
+  const names = slots.map((s, i) => (i === 0 ? SLOT_LABEL[s] : SLOT_LABEL[s].toLowerCase()));
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : (names[0] ?? "");
+}
+
+async function plannedOn(userProfileId: string, date: string): Promise<Array<{ slot: string; status: string }>> {
+  const { data, error } = await supabase.from("meal_plan_entries").select("meal_slot, status").eq("user_profile_id", userProfileId).eq("local_date", date);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Array<{ meal_slot: string; status: string }>).map((r) => ({ slot: r.meal_slot, status: r.status }));
+}
+
+const completeTurn = (userProfileId: string, date: string) => stableTurnId(`magnus-day-complete:${userProfileId}:${date}`);
+
+/**
+ * Whether a closed day's log can be trusted for carry: every planned main meal has a log, or they
+ * said "that was everything". A gap is never read as eating less (week review 11 Nov).
+ */
+async function loggedInFull(userProfileId: string, date: string, slots: Set<string>): Promise<boolean> {
+  if (slots.size === 0) return false;
+  if (!unloggedMeals(await plannedOn(userProfileId, date), slots).length) return true;
+  return exists(userProfileId, completeTurn(userProfileId, date));
+}
+
+/** "That was everything" on a day close with meals missing: the day counts as logged, and its carry runs. */
+export async function confirmDayComplete(ctx: ActionContext, date: string, now = new Date()): Promise<{ ok: true; carried: boolean } | { ok: false; error: string }> {
+  if (date >= localDateKey(now, ctx.timezone) && !(await exists(ctx.userProfileId, stableTurnId(`magnus-day-close:${ctx.userProfileId}:${date}`)))) {
+    return { ok: false, error: "day_not_closed" };
+  }
+  await postOnce(ctx.userProfileId, completeTurn(ctx.userProfileId, date), "Got it, that was the whole day. The next days are balanced from what's logged.", []);
+  const carried = await redoCarry(ctx, date, now, { closedToday: true });
+  return { ok: true, carried };
 }
 
 /**
@@ -438,13 +495,14 @@ export function dayCloseCard(input: { date: string; summary: string; next: { dat
  * carry out again from what's logged now, and move the next days' meals by the difference.
  * Nothing for today (it isn't closed yet) or a day the close never ran for.
  */
-export async function redoCarry(ctx: ActionContext, date: string, now = new Date()): Promise<boolean> {
-  if (date >= localDateKey(now, ctx.timezone)) return false;
+export async function redoCarry(ctx: ActionContext, date: string, now = new Date(), opts: { closedToday?: boolean } = {}): Promise<boolean> {
+  if (date >= localDateKey(now, ctx.timezone) && !opts.closedToday) return false;
   if (!(await exists(ctx.userProfileId, stableTurnId(`magnus-day-close:${ctx.userProfileId}:${date}`)))) return false;
   const view = await planViewOrNull(ctx, now);
   if (!view?.plan) return false;
   const { totals, slots } = await eatenOn(ctx.userProfileId, date);
-  const carry = slots.size >= DAY_CLOSE_MIN_MEALS ? closeDay({ date, target: view.plan.targets, eaten: totals, floorKcal: FLOOR_KCAL }).carry : [];
+  const full = await loggedInFull(ctx.userProfileId, date, slots);
+  const carry = full ? closeDay({ date, target: view.plan.targets, eaten: totals, floorKcal: FLOOR_KCAL }).carry : [];
   return reviseCarry(ctx.userProfileId, view.plan.budgets, date, carry, localDateKey(now, ctx.timezone));
 }
 
@@ -464,19 +522,18 @@ export async function runDayClose(ctx: ActionContext, now = new Date()): Promise
   if (!dayCloseDue(minutes, last)) return "not_yet";
 
   const { totals, slots } = await eatenOn(ctx.userProfileId, date);
+  const missing = slots.size ? unloggedMeals(today, slots) : [];
   let summary: string;
-  if (slots.size >= DAY_CLOSE_MIN_MEALS) {
+  if (slots.size && !missing.length) {
     const c = closeDay({ date, target: view.plan.targets, eaten: totals, floorKcal: FLOOR_KCAL });
     await saveCarry(ctx.userProfileId, date, c.carry);
     summary = c.summary;
   } else {
-    summary = slots.size
-      ? "Only one meal logged today, so tomorrow's plan stays as it is."
-      : "No meals logged today, so tomorrow's plan stays as it is.";
+    summary = dayGapSummary(missing, slots.size);
   }
   // Re-read so tomorrow shows with any carry-over applied.
   const after = (await planViewOrNull(ctx, now)) ?? view;
   const tomorrow = addDays(date, 1);
-  const { text, card } = dayCloseCard({ date, summary, next: { date: tomorrow, meals: mealLines(after, tomorrow) } });
+  const { text, card } = dayCloseCard({ date, summary, next: { date: tomorrow, meals: mealLines(after, tomorrow) }, missing });
   return (await postOnce(ctx.userProfileId, turnId, text, [card])) ? "posted" : "exists";
 }
