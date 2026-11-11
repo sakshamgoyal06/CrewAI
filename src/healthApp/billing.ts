@@ -230,8 +230,8 @@ export function razorpayConfig(env: NodeJS.ProcessEnv = process.env): RazorpayCo
 
 export function priceLabels(env: NodeJS.ProcessEnv = process.env): Record<PlanId, string> {
   return {
-    monthly: env.MAGNUS_PRICE_MONTHLY_LABEL?.trim() || "₹649 / month",
-    yearly: env.MAGNUS_PRICE_YEARLY_LABEL?.trim() || "₹6,999 / year",
+    monthly: env.MAGNUS_PRICE_MONTHLY_LABEL?.trim() || "₹999 / month",
+    yearly: env.MAGNUS_PRICE_YEARLY_LABEL?.trim() || "₹8,999 / year",
   };
 }
 
@@ -241,7 +241,7 @@ export function priceAmounts(env: NodeJS.ProcessEnv = process.env): Record<PlanI
     const n = Number.parseInt(v?.trim() ?? "", 10);
     return Number.isFinite(n) && n > 0 ? n : d;
   };
-  return { monthly: rupees(env.MAGNUS_PRICE_MONTHLY, 649), yearly: rupees(env.MAGNUS_PRICE_YEARLY, 6999) };
+  return { monthly: rupees(env.MAGNUS_PRICE_MONTHLY, 999), yearly: rupees(env.MAGNUS_PRICE_YEARLY, 8999) };
 }
 
 const hmac = (secret: string, data: string | Buffer) => createHmac("sha256", secret).update(data).digest("hex");

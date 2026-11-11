@@ -1,5 +1,6 @@
 import { supabase } from "../tools/clients.js";
 import type { BodyCheckin, HealthGoal } from "./goalProgress.js";
+import type { BodyBasics } from "./energy.js";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -143,4 +144,11 @@ export async function updateDailyTargets(
     .from("user_health_profile")
     .upsert(patch, { onConflict: "user_profile_id" });
   return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+/** Sex, birth year and height from the health profile, for BMR; nulls when not set or unreadable. */
+export async function loadBodyBasics(userProfileId: string): Promise<BodyBasics> {
+  const { data } = await supabase.from("user_health_profile").select("sex, birth_year, height_cm").eq("user_profile_id", userProfileId).maybeSingle();
+  const d = (data ?? {}) as Record<string, unknown>;
+  return { sex: d.sex ? String(d.sex) : null, birthYear: d.birth_year ? Number(d.birth_year) : null, heightCm: d.height_cm ? Number(d.height_cm) : null };
 }
