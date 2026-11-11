@@ -8,7 +8,7 @@ import { z } from "zod";
 import { localDateKey } from "../../nutrition/localDate.js";
 import type { ActionContext } from "../actions.js";
 import { eatPlanned } from "./log.js";
-import { mealsOn, planMealCard, planViewOrNull, rebalanceToday, type PlanMealCard } from "./rhythm.js";
+import { confirmDayComplete, mealsOn, planMealCard, planViewOrNull, rebalanceToday, type PlanMealCard } from "./rhythm.js";
 import { addDays } from "../../util/time.js";
 import { PERIOD_DIETS } from "./dietPeriod.js";
 import { changeAvoidList, markOption, rebuildPlan, setDietPeriod, swapPick } from "./store.js";
@@ -17,7 +17,7 @@ import { PLAN_SLOTS } from "./targets.js";
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const mealPlanInput = z.object({
-  action: z.enum(["view", "ate", "swap", "pin", "unpin", "like", "hide", "rebuild", "diet_period", "avoid", "unavoid"]),
+  action: z.enum(["view", "ate", "swap", "pin", "unpin", "like", "hide", "rebuild", "diet_period", "avoid", "unavoid", "day_complete"]),
   date: DATE.optional(),
   slot: z.enum(PLAN_SLOTS).optional(),
   optionId: z.string().max(64).optional(),
@@ -32,11 +32,11 @@ export const mealPlanInput = z.object({
 export const MEAL_PLAN_TOOL = {
   name: "meal_plan",
   description:
-    "Their meal plan (Meals tab). view: a day's planned meals (default today), with swap options when slot is given. ate: they ate a planned meal as planned (date, slot); logs it, no card to confirm. swap: replace a planned meal with another option of that meal (optionId from view). pin / unpin / like / hide: an option (optionId); hide never offers it again. rebuild: fresh options for every meal (replaces meals they edited too). diet_period: a rule for a while (veg only for 20 days, no sweets this week): diet (vegetarian = no egg, eggetarian, vegan, jain) and/or foods, with days or until; with neither diet nor foods it ends the running one. avoid / unavoid: foods (an allergy, a food they won't eat) added to or taken off their lasting avoid list. diet_period, avoid and unavoid re-plan every planned meal that breaks the rule and return the plan as it is now: describe only that, name the meals replaced, and say so if violations is above 0. Ate something other than the plan: use draft_meal instead.",
+    "Their meal plan (Meals tab). view: a day's planned meals (default today), with swap options when slot is given. ate: they ate a planned meal as planned (date, slot); logs it, no card to confirm. swap: replace a planned meal with another option of that meal (optionId from view). pin / unpin / like / hide: an option (optionId); hide never offers it again. rebuild: fresh options for every meal (replaces meals they edited too). diet_period: a rule for a while (veg only for 20 days, no sweets this week): diet (vegetarian = no egg, eggetarian, vegan, jain) and/or foods, with days or until; with neither diet nor foods it ends the running one. avoid / unavoid: foods (an allergy, a food they won't eat) added to or taken off their lasting avoid list. diet_period, avoid and unavoid re-plan every planned meal that breaks the rule and return the plan as it is now: describe only that, name the meals replaced, and say so if violations is above 0. day_complete: an earlier day (date) whose day close said a meal wasn't logged, and they say that was all they ate; it then counts as logged in full and the next days are balanced. Ate something other than the plan: use draft_meal instead.",
   input_schema: {
     type: "object" as const,
     properties: {
-      action: { type: "string", enum: ["view", "ate", "swap", "pin", "unpin", "like", "hide", "rebuild", "diet_period", "avoid", "unavoid"] },
+      action: { type: "string", enum: ["view", "ate", "swap", "pin", "unpin", "like", "hide", "rebuild", "diet_period", "avoid", "unavoid", "day_complete"] },
       diet: { type: "string", enum: [...PERIOD_DIETS] },
       foods: { type: "array", items: { type: "string" }, description: "Food names, e.g. ['peanuts'] or ['mushroom', 'brinjal']." },
       days: { type: "integer", description: "diet_period: how many days from today, today included." },
@@ -113,6 +113,11 @@ export async function runMealPlanTool(ctx: ActionContext, input: z.infer<typeof 
     case "unavoid": {
       if (!input.foods?.length) return { result: { ok: false, error: "foods_required" } };
       const r = await changeAvoidList(ctx, input.action === "avoid" ? { add: input.foods } : { remove: input.foods }, now);
+      return { result: r, changed: r.ok };
+    }
+    case "day_complete": {
+      if (!input.date) return { result: { ok: false, error: "date_required" } };
+      const r = await confirmDayComplete(ctx, input.date, now);
       return { result: r, changed: r.ok };
     }
     case "rebuild": {
