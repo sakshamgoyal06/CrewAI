@@ -108,6 +108,7 @@ Write 2 or 3 short sentences, second person, plain words, no lists, no emoji, no
 2. ONE specific thing to do tomorrow (a food, a time, an amount), chosen to fix today's biggest gap or keep a good streak. Use what tomorrow is (training or rest day).
 Never invent numbers. Under 400 characters.
 If the facts include dayClose, tomorrow's meals and calories are already set there (the person just read it): don't repeat its numbers or suggest a different food for tomorrow; make your one thing about something else (steps, sleep, training, timing) or simply sticking to tomorrow's plan.
+If the facts include planProteinGap, the meal plan itself can't reach the protein target under their rules: never blame them for that gap or tell them to add protein beyond the plan; if it says not decided yet, point them to the choice on the Meals tab instead.
 If the facts include foodRules, they are hard rules: any food you name must obey them (never name a meat, fish, egg or food they rule out). A TEMPORARY RULE overrides their usual diet: while it runs, foods the usual diet allows but the temporary rule rules out are out.`;
 
 type Create = (p: Record<string, unknown>) => Promise<Anthropic.Message>;
@@ -183,12 +184,20 @@ export async function loadDigestFoodRules(userProfileId: string, today: string, 
 
 const nextDate = (date: string) => new Date(Date.parse(`${date}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 
-export type DigestDeps = { snapshot: typeof buildHealthSnapshot; write: typeof writeDigest; foodRules?: typeof loadDigestFoodRules; dayClose?: typeof loadDayClose };
+export type DigestDeps = { snapshot: typeof buildHealthSnapshot; write: typeof writeDigest; foodRules?: typeof loadDigestFoodRules; dayClose?: typeof loadDayClose; proteinGap?: typeof loadPlanProteinGap };
+
+/** The plan's protein gap as one line for the note, or null when the plan reaches the target. */
+export async function loadPlanProteinGap(userProfileId: string, timezone: string, now: Date): Promise<string | null> {
+  const { planViewOrNull } = await import("./dietPlan/rhythm.js");
+  const { gapLine } = await import("./dietPlan/proteinGap.js");
+  const view = await planViewOrNull({ userProfileId, timezone, now }, now);
+  return view?.proteinGap ? gapLine(view.proteinGap) : null;
+}
 
 export async function runNightlyDigest(
   userProfileId: string,
   now = new Date(),
-  deps: DigestDeps = { snapshot: buildHealthSnapshot, write: writeDigest, foodRules: loadDigestFoodRules },
+  deps: DigestDeps = { snapshot: buildHealthSnapshot, write: writeDigest, foodRules: loadDigestFoodRules, proteinGap: loadPlanProteinGap },
 ): Promise<"off" | "not_yet" | "exists" | "nothing_logged" | "not_included" | "posted"> {
   if (process.env.MAGNUS_DIGEST === "off") return "off";
   const s = await deps.snapshot(userProfileId, now);
@@ -206,7 +215,8 @@ export async function runNightlyDigest(
 
   const rules = await (deps.foodRules ?? loadDigestFoodRules)(userProfileId, s.today.date, nextDate(s.today.date));
   const fallback = fallbackDigest(s);
-  const written = await deps.write({ ...digestFacts(s, weekday), ...(rules.line ? { foodRules: rules.line } : {}), ...(close.text ? { dayClose: close.text.slice(0, 500) } : {}) }, fallback);
+  const gap = deps.proteinGap ? await deps.proteinGap(userProfileId, s.timezone, now).catch(() => null) : null;
+  const written = await deps.write({ ...digestFacts(s, weekday), ...(rules.line ? { foodRules: rules.line } : {}), ...(close.text ? { dayClose: close.text.slice(0, 500) } : {}), ...(gap ? { planProteinGap: gap } : {}) }, fallback);
   // The model was told the rules; a note that still names a food they ruled out never goes out.
   const broke = written.source === "model" && !rules.allows(written.text);
   if (broke) logger.warn({ userProfileId }, "nightly digest named a food outside their rules; using the fallback");

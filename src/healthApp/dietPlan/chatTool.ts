@@ -11,13 +11,16 @@ import { eatPlanned } from "./log.js";
 import { confirmDayComplete, mealsOn, planMealCard, planViewOrNull, rebalanceToday, type PlanMealCard } from "./rhythm.js";
 import { addDays } from "../../util/time.js";
 import { PERIOD_DIETS } from "./dietPeriod.js";
-import { changeAvoidList, markOption, rebuildPlan, setDietPeriod, swapPick } from "./store.js";
+import { answerProteinGap, changeAvoidList, markOption, rebuildPlan, setDietPeriod, swapPick } from "./store.js";
+import { GAP_CHOICES, gapLine } from "./proteinGap.js";
 import { PLAN_SLOTS } from "./targets.js";
 
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const mealPlanInput = z.object({
-  action: z.enum(["view", "ate", "swap", "pin", "unpin", "like", "hide", "rebuild", "diet_period", "avoid", "unavoid", "day_complete"]),
+  action: z.enum(["view", "ate", "swap", "pin", "unpin", "like", "hide", "rebuild", "diet_period", "avoid", "unavoid", "day_complete", "protein_gap"]),
+  /** protein_gap: their answer. */
+  choice: z.enum(GAP_CHOICES).optional(),
   date: DATE.optional(),
   slot: z.enum(PLAN_SLOTS).optional(),
   optionId: z.string().max(64).optional(),
@@ -32,11 +35,12 @@ export const mealPlanInput = z.object({
 export const MEAL_PLAN_TOOL = {
   name: "meal_plan",
   description:
-    "Their meal plan (Meals tab). view: a day's planned meals (default today), with swap options when slot is given. ate: they ate a planned meal as planned (date, slot); logs it, no card to confirm. swap: replace a planned meal with another option of that meal (optionId from view). pin / unpin / like / hide: an option (optionId); hide never offers it again. rebuild: fresh options for every meal (replaces meals they edited too). diet_period: a rule for a while (veg only for 20 days, no sweets this week): diet (vegetarian = no egg, eggetarian, vegan, jain) and/or foods, with days or until; with neither diet nor foods it ends the running one. avoid / unavoid: foods (an allergy, a food they won't eat) added to or taken off their lasting avoid list. diet_period, avoid and unavoid re-plan every planned meal that breaks the rule and return the plan as it is now: describe only that, name the meals replaced, and say so if violations is above 0. day_complete: an earlier day (date) whose day close said a meal wasn't logged, and they say that was all they ate; it then counts as logged in full and the next days are balanced. Ate something other than the plan: use draft_meal instead.",
+    "Their meal plan (Meals tab). view: a day's planned meals (default today), with swap options when slot is given. ate: they ate a planned meal as planned (date, slot); logs it, no card to confirm. swap: replace a planned meal with another option of that meal (optionId from view). pin / unpin / like / hide: an option (optionId); hide never offers it again. rebuild: fresh options for every meal (replaces meals they edited too). diet_period: a rule for a while (veg only for 20 days, no sweets this week): diet (vegetarian = no egg, eggetarian, vegan, jain) and/or foods, with days or until; with neither diet nor foods it ends the running one. avoid / unavoid: foods (an allergy, a food they won't eat) added to or taken off their lasting avoid list. diet_period, avoid and unavoid re-plan every planned meal that breaks the rule and return the plan as it is now: describe only that, name the meals replaced, and say so if violations is above 0. protein_gap: when view shows proteinGap (the plan can't reach their protein target under their own rules) and they answer: choice accept (protein target follows the plan until the rules change), supplement (adds a protein supplement serving and rebuilds), or loosen (they'll change a rule; tell them it's in plan setup). day_complete: an earlier day (date) whose day close said a meal wasn't logged, and they say that was all they ate; it then counts as logged in full and the next days are balanced. Ate something other than the plan: use draft_meal instead.",
   input_schema: {
     type: "object" as const,
     properties: {
-      action: { type: "string", enum: ["view", "ate", "swap", "pin", "unpin", "like", "hide", "rebuild", "diet_period", "avoid", "unavoid", "day_complete"] },
+      action: { type: "string", enum: ["view", "ate", "swap", "pin", "unpin", "like", "hide", "rebuild", "diet_period", "avoid", "unavoid", "day_complete", "protein_gap"] },
+      choice: { type: "string", enum: [...GAP_CHOICES], description: "protein_gap only." },
       diet: { type: "string", enum: [...PERIOD_DIETS] },
       foods: { type: "array", items: { type: "string" }, description: "Food names, e.g. ['peanuts'] or ['mushroom', 'brinjal']." },
       days: { type: "integer", description: "diet_period: how many days from today, today included." },
@@ -75,7 +79,7 @@ export async function runMealPlanTool(ctx: ActionContext, input: z.infer<typeof 
             .filter((o) => !view.marks.hidden.includes(o.id))
             .map((o) => ({ optionId: o.id, meal: o.items.map((i) => i.text).join(", "), kcal: short(o.totals.kcal), proteinG: short(o.totals.proteinG), pinned: view.marks.pinned.includes(o.id) || undefined }))
         : undefined;
-      return { result: { ok: true, date, targets: { kcal: view.plan.targets.calories, proteinG: view.plan.targets.proteinG }, meals, ...(options ? { options } : {}) } };
+      return { result: { ok: true, date, targets: { kcal: view.plan.targets.calories, proteinG: view.plan.targets.proteinG }, meals, ...(options ? { options } : {}), ...(view.proteinGap ? { proteinGap: gapLine(view.proteinGap) } : {}) } };
     }
     case "ate": {
       const miss = needSlot();
@@ -114,6 +118,11 @@ export async function runMealPlanTool(ctx: ActionContext, input: z.infer<typeof 
       if (!input.foods?.length) return { result: { ok: false, error: "foods_required" } };
       const r = await changeAvoidList(ctx, input.action === "avoid" ? { add: input.foods } : { remove: input.foods }, now);
       return { result: r, changed: r.ok };
+    }
+    case "protein_gap": {
+      if (!input.choice) return { result: { ok: false, error: "choice_required" } };
+      const r = await answerProteinGap(ctx, input.choice, now);
+      return { result: r.ok ? { ...r, gap: r.gap ? gapLine(r.gap) : null } : r, changed: r.ok };
     }
     case "day_complete": {
       if (!input.date) return { result: { ok: false, error: "date_required" } };

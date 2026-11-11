@@ -65,6 +65,11 @@ export const dietPrefsInput = z.object({
     .object({ diet: z.enum(PERIOD_DIETS).nullable().optional(), avoid: z.array(z.string().trim().min(1).max(40)).max(20).optional(), from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })
     .nullable()
     .optional(),
+  /** Their answer when the plan couldn't reach the protein target under their rules (proteinGap.ts). */
+  proteinGap: z
+    .object({ choice: z.enum(["accept", "supplement"]), plannedG: z.number(), originalTargetG: z.number(), rulesKey: z.string().max(4000), at: z.string() })
+    .nullable()
+    .optional(),
 });
 
 export type DietPrefsInput = z.input<typeof dietPrefsInput>;

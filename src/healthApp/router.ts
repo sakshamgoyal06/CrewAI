@@ -81,7 +81,8 @@ import { eatInput, eatPlanned, undoPlanned } from "./dietPlan/log.js";
 import { editReceipt, getLoggedMeal, mealReplaceInput, receiptEditInput, replaceLoggedMeal, undoReceipt } from "./logEdits.js";
 import { logSupplements, undoSupplements } from "./dietPlan/supplementLog.js";
 import { confirmDayComplete, rebalanceToday, setMealPlanRole } from "./dietPlan/rhythm.js";
-import { FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, prefsChangeReason, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
+import { GAP_CHOICES } from "./dietPlan/proteinGap.js";
+import { answerProteinGap, FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, prefsChangeReason, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
 import { replanForGoal } from "./replan.js";
 import { getActiveGoal } from "./bodyStore.js";
 import { PLAN_SLOTS } from "./dietPlan/targets.js";
@@ -503,6 +504,16 @@ export function createHealthAppRouter(): express.Router {
       const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
       const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
       const r = await undoPlanned(ctx, date, slot);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+
+  /** The plan can't reach their protein target under their rules: accept, supplement, or loosen a rule. */
+  router.post(
+    "/diet/protein-gap",
+    route("diet-protein-gap", async (ctx, req) => {
+      const { choice } = z.object({ choice: z.enum(GAP_CHOICES) }).parse(req.body ?? {});
+      const r = await answerProteinGap(ctx, choice);
       return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );
