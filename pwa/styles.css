@@ -305,6 +305,9 @@ body.composing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 
 .closed-card .closed-title { margin: 0 0 4px; font-size: 0.9rem; color: var(--muted); overflow-wrap: anywhere; }
 .closed-card .closed-label { margin: 0; font-size: 0.8rem; color: var(--faint); }
 .draft-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.slot-ask { margin: 8px 0 4px; }
+.slot-ask-q { margin: 0 0 6px; font-weight: 600; }
+.slot-ask .chips-row { margin-bottom: 0; }
 .draft-kcal { font-family: var(--serif); font-size: 1.9rem; line-height: 1; font-variant-numeric: tabular-nums;  font-weight: var(--num-w);}
 .draft-kcal small { font-family: var(--sans); font-size: 0.8rem; color: var(--muted); margin-left: 4px; }
 .macros { display: flex; gap: 14px; color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; margin: 6px 0 12px; }

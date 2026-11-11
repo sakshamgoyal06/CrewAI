@@ -25,6 +25,7 @@ import {
   type MealDraft,
 } from "./meals.js";
 
+const DRAFT_SLOTS = ["breakfast", "lunch", "dinner", "snack"] as const;
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
 const num = (min: number, max: number) => z.coerce.number().min(min).max(max);
 
@@ -230,10 +231,20 @@ export async function startMealDraft(
   // Say on the card, before it's logged, whether it replaces the planned meal or sits on top.
   const day = localDateKey(ctx.now ?? new Date(), ctx.timezone);
   draft.date ??= day;
-  const plan = await previewPlanRole(ctx.userProfileId, day, draft.slot, { extra }).catch((err) => {
-    logger.warn({ err: loggableError(err) }, "meal draft plan preview failed");
-    return null;
-  });
+  const preview = (slot: typeof draft.slot) =>
+    previewPlanRole(ctx.userProfileId, day, slot, { extra }).catch((err) => {
+      logger.warn({ err: loggableError(err) }, "meal draft plan preview failed");
+      return null;
+    });
+  // "I had 2 roti and dal today" names no meal: never guess, the card asks which one.
+  const said = (input.slot && input.slot !== "unspecified") || !!typed.slot;
+  if (!said && !how.webFirst) {
+    draft.slotUnsure = true;
+    const roles = await Promise.all(DRAFT_SLOTS.map(async (s) => [s, await preview(s)] as const));
+    draft.planBySlot = Object.fromEntries(roles.filter(([, r]) => r)) as MealDraft["planBySlot"];
+    return draft;
+  }
+  const plan = await preview(draft.slot);
   if (plan) draft.plan = plan;
   return draft;
 }

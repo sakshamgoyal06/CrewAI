@@ -61,6 +61,10 @@ export type MealDraft = {
   plan?: MealPlanRole;
   /** The local day it was drafted for: confirming it later (past midnight, synced offline) logs there. */
   date?: string;
+  /** They didn't say which meal: the card asks before it can be logged (`slot` is only a guess). */
+  slotUnsure?: boolean;
+  /** With slotUnsure: the plan role for each meal they might pick. */
+  planBySlot?: Partial<Record<Exclude<AppMealSlot, "unspecified">, MealPlanRole>>;
 };
 
 const r1 = (n: number): number => Math.round(n * 10) / 10;
