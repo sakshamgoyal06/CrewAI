@@ -111,3 +111,36 @@ describe("dueNudges", () => {
     expect(dueNudges(s, ist("08:40"), prefs).map((x) => x.kind)).toEqual(["morning_plan", "weigh_in"]);
   });
 });
+
+describe("logging lapses (11 Nov design)", () => {
+  const logging = (blankDays: number) => ({ lastLogDate: "2026-10-30", daysSinceLog: blankDays + 1, blankDays, loggedDays: 0, windowDays: 6, streak: 0 });
+
+  it("nothing logged today: one catch-up after the first meal reminder, not one per meal", () => {
+    const s = snap({ meals: [] });
+    expect(dueNudges(s, ist("10:45"), prefs).map((x) => x.dedupeKey)).toEqual(["meal_reminder:breakfast:2026-11-02"]);
+    expect(dueNudges(s, ist("14:40"), prefs).map((x) => x.dedupeKey)).toEqual(["meal_catchup:2026-11-02"]);
+    expect(dueNudges(s, ist("21:20"), prefs).map((x) => x.dedupeKey)).toEqual(["meal_catchup:2026-11-02"]);
+  });
+
+  it("an unlogged day's evening wrap asks for the log instead of listing zeros", () => {
+    const s = snap({ meals: [] });
+    s.today = { ...s.today, unlogged: true, checks: [{ id: "meals_logged", label: "Meals logged", met: false, progress: 0, detail: "Nothing logged" }, s.today.checks[2]!] };
+    const wrap = dueNudges(s, ist("21:35"), prefs).find((x) => x.kind === "evening_wrap")!;
+    expect(wrap.title).toBe("Food not logged today");
+    expect(wrap.body).toMatch(/^Nothing's logged yet/);
+    expect(wrap.body).toBe("Nothing's logged yet. Tell me roughly what you ate, one line is enough. Also open: Steps (2,400 / 8,000).");
+  });
+
+  it("two blank days: the lapse message replaces meal reminders, and the morning plan drops 0/7 after four", () => {
+    const s = snap({ meals: [], logging: logging(2) });
+    expect(dueNudges(s, ist("14:40"), prefs).map((x) => x.kind)).toEqual([]);
+    expect(dueNudges(s, ist("12:40"), prefs).map((x) => x.dedupeKey)).toEqual(["logging_nudge:2:2026-11-02"]);
+    expect(dueNudges(snap({ logging: logging(4) }), ist("08:10"), prefs)[0]!.body).not.toMatch(/Week so far/);
+    expect(dueNudges(s, ist("08:10"), prefs)[0]!.body).toMatch(/Week so far/);
+  });
+
+  it("no lapse message on days off the ladder, and it can be switched off", () => {
+    expect(dueNudges(snap({ meals: [], logging: logging(4) }), ist("12:40"), prefs)).toEqual([]);
+    expect(dueNudges(snap({ meals: [], logging: logging(3) }), ist("12:40"), parsePrefs({ off: ["logging_nudge"] }))).toEqual([]);
+  });
+});

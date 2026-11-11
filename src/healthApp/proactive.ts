@@ -18,6 +18,8 @@ import { runInterventionTick } from "./interventions/engine.js";
 import { runDayClose, runMealTimeTick } from "./dietPlan/rhythm.js";
 import { runWorkoutChecks, SCHEDULER_INTERVAL_MS } from "./workoutCheck.js";
 import { runNightlyDigest } from "./nightlyDigest.js";
+import { LAPSE_AT, LAPSE_LAST_DAY, LAPSE_QUIET_FROM, lapseNudge } from "./lapse.js";
+import { blankDaysSince, loadLastLogDate } from "./loggingStatus.js";
 import { hasFeature } from "./billing.js";
 import { isAccountDisabled } from "./accountStatus.js";
 import { postCoachMessage } from "./workoutCheckStore.js";
@@ -98,8 +100,9 @@ export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs
       ]
         .filter(Boolean)
         .join(" · ") + ".",
-      `Week so far: ${s.northStar.onTrackDays}/7 on track.`,
-    ];
+      // A long gap in logging makes "0/7" true but useless; leave it out until they're back.
+      (s.logging?.blankDays ?? 0) >= 4 ? null : `Week so far: ${s.northStar.onTrackDays}/7 on track.`,
+    ].filter(Boolean);
     out.push({ kind: "morning_plan", dedupeKey: `morning_plan:${date}`, title: "Today's plan", body: parts.join(" "), url: "/app/#coach" });
   }
 
@@ -108,8 +111,21 @@ export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs
   }
 
   const logged = new Set(s.meals.map((m) => m.slot));
-  for (const r of mealReminderTimes(plan)) {
-    if (!logged.has(r.slot) && inWindow(r.time)) {
+  const blankDays = s.logging?.blankDays ?? 0;
+  const nothingToday = s.meals.length === 0 && !(s.mealList?.done ?? 0);
+  if (blankDays >= 2) {
+    // Away from logging: one calm message on set days instead of a reminder per meal (lapse.ts).
+    const n = inWindow(LAPSE_AT) ? lapseNudge(s, blankDays, date) : null;
+    if (n) out.push(n);
+  } else {
+    const reminders = mealReminderTimes(plan);
+    for (const [i, r] of reminders.entries()) {
+      if (logged.has(r.slot) || !inWindow(r.time)) continue;
+      // Nothing at all logged today: after the first reminder, one catch-up instead of one per meal.
+      if (nothingToday && i > 0) {
+        out.push({ kind: "meal_reminder", dedupeKey: `meal_catchup:${date}`, title: "Nothing logged yet today", body: "One line for the whole day is enough, or tap Ate this on the meals you had from the plan.", url: "/app/#coach" });
+        continue;
+      }
       out.push({ kind: "meal_reminder", dedupeKey: `meal_reminder:${r.slot}:${date}`, title: `${r.label} not logged`, body: "Tell me what you had in a line and I'll estimate it.", url: "/app/#coach" });
     }
   }
@@ -145,10 +161,15 @@ export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs
       out.push({
         kind: "evening_wrap",
         dedupeKey: `evening_wrap:${date}`,
-        title: s.today.onTrack ? "On track today" : "Still open today",
+        title: s.today.onTrack ? "On track today" : s.today.unlogged ? "Food not logged today" : "Still open today",
         body: s.today.onTrack
           ? `Every check is done. ${s.northStar.onTrackDays}/7 this week.`
-          : `${open.map((c) => `${c.label} (${c.detail})`).join(", ")}.`,
+          : s.today.unlogged
+            // Not a list of zeros: the one thing missing is the log itself.
+            ? ((rest) => `Nothing's logged yet. Tell me roughly what you ate, one line is enough.${rest.length ? ` Also open: ${rest.join(", ")}.` : ""}`)(
+                open.filter((c) => c.id !== "meals_logged").map((c) => `${c.label} (${c.detail})`),
+              )
+            : `${open.map((c) => `${c.label} (${c.detail})`).join(", ")}.`,
         url: "/app/#tracker",
       });
     }
@@ -238,7 +259,9 @@ async function maybeRunRca(userProfileId: string, now: Date): Promise<void> {
     localDate: localDateKey(now, snapshot.timezone),
     localHour: minutes / 60,
     weekday,
-    lastTwoDaysOffTrack: lastTwo.length === 2 && lastTwo.every((d) => !d.onTrack),
+    // Days that weren't logged (or only partly) say nothing about why: the morning brief and the
+    // lapse ladder handle them, and no analysis (a model call) runs on missing data.
+    lastTwoDaysOffTrack: lastTwo.length === 2 && lastTwo.every((d) => !d.onTrack && !d.unlogged && !d.partial),
     lastStreakReportAt: newest("off_track_streak"),
     lastWeeklyReportAt: newest("weekly_review"),
     now,
@@ -265,6 +288,36 @@ async function maybeRunRca(userProfileId: string, now: Date): Promise<void> {
       url: "/app/#coach",
     });
   }
+}
+
+/** Finished days in a row with nothing logged, ending yesterday; null when they never logged. */
+async function blankDaysFor(userProfileId: string, now: Date, breaks: Break[]): Promise<number | null> {
+  const { timezone } = await loadHealthProfile(userProfileId);
+  const today = localDateKey(now, timezone);
+  const last = await loadLastLogDate(userProfileId, today);
+  if (!last) return null;
+  // Paused days don't count towards a lapse (breaks.ts).
+  return blankDaysSince(last, today, (d) => !!planBreakOn(breaks, d));
+}
+
+/**
+ * Two weeks or more without a log: daily coaching has stopped, and only the lapse ladder's
+ * check-ins go out (every 3 days to day 30, weekly to day 60). Also runs for people who no
+ * longer open the app, so the last word isn't silence.
+ */
+export async function lapseOnlyTick(userProfileId: string, now = new Date()): Promise<boolean> {
+  if (await isAccountDisabled(userProfileId)) return false;
+  const [s, prefs] = await Promise.all([buildHealthSnapshot(userProfileId, now), getPrefs(userProfileId)]);
+  // A paused plan gets no lapse check-ins (breaks.ts): they told us they're away.
+  if (planBreakOn(s.breaks ?? [], s.today.date)) return false;
+  const blank = s.logging?.blankDays ?? 0;
+  if (blank > LAPSE_LAST_DAY) return false;
+  const { hhmm, minutes } = localClock(now, s.timezone);
+  if (isQuiet(hhmm, prefs) || prefs.off.includes("logging_nudge")) return false;
+  const [h, m] = LAPSE_AT.split(":").map(Number) as [number, number];
+  if (minutes < h * 60 + m || minutes >= h * 60 + m + NUDGE_WINDOW_MIN) return false;
+  const n = lapseNudge(s, blank, s.today.date);
+  return n ? (await sendNotification(userProfileId, n)).sent : false;
 }
 
 /** The evening before a pause ends (from 18:00): one message and push to plan the way back. */
@@ -305,6 +358,12 @@ export async function proactiveTick(userProfileId: string, now = new Date()): Pr
   }
   if (planBreakOn(breaks, today)) {
     await runNudges(userProfileId, now, new Set(["weigh_in"])).catch((err) => logger.warn({ err: loggableError(err), part: "nudges" }, "proactive tick part failed"));
+    return;
+  }
+  // Two weeks without a log: no day plans, checks or reminders any more, just the lapse check-ins.
+  const blank = await blankDaysFor(userProfileId, now, breaks).catch(() => null);
+  if (blank !== null && blank >= LAPSE_QUIET_FROM) {
+    await lapseOnlyTick(userProfileId, now).catch((err) => logger.warn({ err: loggableError(err) }, "lapse tick failed"));
     return;
   }
   for (const [name, fn] of [
@@ -360,6 +419,27 @@ export async function listActiveUsers(now = new Date()): Promise<string[]> {
   return [...new Set([...(chat.data ?? []), ...(events.data ?? [])].map((r) => String(r.user_profile_id)))];
 }
 
+/**
+ * People who logged a meal in the last 60 days but no longer use the app (not in the active
+ * list): they only get the lapse ladder's check-ins (lapseOnlyTick).
+ */
+export async function listLapsedUsers(active: string[], now = new Date()): Promise<string[]> {
+  const since = new Date(now.getTime() - (LAPSE_LAST_DAY + 2) * DAY_MS).toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from("meal_logs")
+    .select("user_profile_id")
+    .is("deleted_at", null)
+    .gte("local_date", since)
+    .order("local_date", { ascending: false })
+    .limit(ACTIVE_ROWS);
+  if (error) throw new Error(`lapsed users: ${error.message}`);
+  const skip = new Set(active);
+  return [...new Set((data ?? []).map((r) => String(r.user_profile_id)))].filter((id) => !skip.has(id));
+}
+
+/** Lapsed people are checked at most this often: their one message a day goes out in a 90-minute window. */
+const LAPSED_EVERY_MS = 30 * 60_000;
+
 /** Users ticked at the same time: enough to keep a slow Hevy call from holding up everyone. */
 const TICK_CONCURRENCY = 4;
 
@@ -379,10 +459,13 @@ export function startProactiveScheduler(
   alwaysInclude: string[] = [],
   intervalMs = SCHEDULER_INTERVAL_MS,
   loadUsers: () => Promise<string[]> = () => listActiveUsers(),
+  loadLapsed: (active: string[]) => Promise<string[]> = (active) => listLapsedUsers(active),
 ): () => void {
   let running = false;
   let users: string[] = [...alwaysInclude];
+  let lapsed: string[] = [];
   let usersAt = 0;
+  let lapsedAt = 0;
   const tick = async (): Promise<void> => {
     if (running) return;
     running = true;
@@ -396,6 +479,17 @@ export function startProactiveScheduler(
         }
       }
       await forEachLimited(users, TICK_CONCURRENCY, (id) => proactiveTick(id));
+      if (Date.now() - lapsedAt > LAPSED_EVERY_MS) {
+        lapsedAt = Date.now();
+        try {
+          lapsed = await loadLapsed(users);
+        } catch (err) {
+          logger.warn({ err: loggableError(err) }, "proactive: could not list lapsed users");
+        }
+        await forEachLimited(lapsed, TICK_CONCURRENCY, (id) =>
+          lapseOnlyTick(id).then(() => undefined, (err) => logger.warn({ err: loggableError(err) }, "lapse tick failed")),
+        );
+      }
     } finally {
       running = false;
     }

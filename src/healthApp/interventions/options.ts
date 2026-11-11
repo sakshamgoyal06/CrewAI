@@ -260,8 +260,8 @@ function goalOptions(f: Finding, ctx: OfferContext): Option[] {
       if (review?.recommend) out.push(targetOption(ctx, "recalibrate", "Recalibrate to {t}", review.suggestedTarget));
       break;
     case "logging_effort":
-      out.push(opt(ctx, "dinner_only", "Log just dinner for a week", "experiment", { experiment: "For a week, log just dinner. The coach fills in the rest from your usual meals." }));
-      out.push(opt(ctx, "quick", "Use one-tap logs for repeat meals", "experiment", { experiment: "Log repeat meals with one tap from your frequent meals on the Log screen." }));
+      out.push(opt(ctx, "one_line", "One line a day", "experiment", { experiment: "For a week, send one rough line a day with everything you ate. Skipped a meal? Say so, it counts as 0." }));
+      out.push(opt(ctx, "quick", "Tap Ate this on planned meals", "experiment", { experiment: "For a week, tap Ate this on each planned meal you eat (or Skipped it), and add only what's different." }));
       break;
     case "recomp":
       break;

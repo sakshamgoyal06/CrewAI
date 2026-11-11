@@ -23,7 +23,7 @@ export async function loadPlanEntries(userProfileId: string, from: string, to: s
     .eq("source", "plan")
     .gte("local_date", from)
     .lte("local_date", to)
-    .in("status", ["planned", "logged", "partial"]);
+    .in("status", ["planned", "logged", "partial", "skipped"]);
   if (error) throw new Error(error.message);
   const byDate = new Map<string, PlanEntryLite[]>();
   for (const r of (data ?? []) as Array<{ local_date: string; meal_slot: string; title: string; status: string; metadata: Record<string, unknown> | null }>) {

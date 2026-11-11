@@ -149,3 +149,15 @@ describe("meal card plan line", () => {
     expect(card.saved).toEqual({ calories: 225, plan: { role: "instead", slot: "snack", insteadOf: "2 glasses double toned milk" } });
   });
 });
+
+describe("a skipped planned meal", () => {
+  it("shows as skipped with 0 kcal and counts as done", () => {
+    const list = buildDayMeals({ date: "2026-11-10", today: "2026-11-11", plan: [entry("lunch", "Dal, rice", 700, { status: "skipped" }), entry("dinner", "Roti, sabzi", 600)], logs: [] });
+    const lunch = list.rows.find((r) => r.slot === "lunch")!;
+    expect(lunch.state).toBe("skipped");
+    expect(lunch.totals.kcal).toBe(0);
+    expect(list.done).toBe(1);
+    expect(list.rows.find((r) => r.slot === "dinner")!.state).toBe("missed");
+    expect(dayMealLines(list)[0]).toMatch(/skipped/);
+  });
+});

@@ -832,7 +832,7 @@ export function setupScreen() {
 // A planned meal shows the plan until it's eaten, then what was logged. Anything else logged is an
 // Extra under its meal. Tap an eaten row to see its items; tap a planned one to open it.
 
-const STATE_ICON = { eaten: "✓", instead: "⇄", extra: "+", todo: "", missed: "–" };
+const STATE_ICON = { eaten: "✓", instead: "⇄", extra: "+", todo: "", missed: "–", skipped: "0" };
 const openRows = new Set();
 
 /** Calories with the eating-out "~" for a planned meal whose food isn't known yet. */
@@ -873,6 +873,7 @@ function dayMealRow(list, r, planBySlot) {
   const note = r.state === "instead" ? `instead of ${r.insteadOf}`
     : r.state === "extra" ? `logged ${loggedClock(r.loggedAt)}`
     : r.state === "missed" ? "Not logged"
+    : r.state === "skipped" ? "Skipped, counts as 0 kcal"
     : r.changed ? "portions changed"
     : r.eatOut && planned ? "Eating out: log what you have"
     : null;
@@ -903,7 +904,9 @@ function dayMealRow(list, r, planBySlot) {
       r.eatOut
         ? el("button", { class: "btn small", type: "button", onclick: () => d.logOwn(r.slot, date) }, "Log what I had")
         : el("button", { class: "btn small primary", type: "button", onclick: (ev) => ateThis(ev.currentTarget, date, r.slot) }, "Ate this"),
-      el("button", { class: "btn small", type: "button", onclick: () => openPlannedMeal(date, r.slot) }, r.eatOut ? "Plan it" : "Edit or swap")));
+      el("button", { class: "btn small", type: "button", onclick: () => openPlannedMeal(date, r.slot) }, r.eatOut ? "Plan it" : "Edit or swap"),
+      // Only a skip counts as eating nothing; a meal left blank stays "not logged".
+      el("button", { class: "btn small", type: "button", onclick: (ev) => skipMeal(ev.currentTarget, date, r.slot) }, "Skipped it")));
   }
   li.append(body);
   return li;
@@ -931,6 +934,9 @@ function detail(list, r, planBySlot) {
   if (r.state === "extra" && planBySlot.get(r.slot)?.state === "todo" && !planBySlot.get(r.slot)?.eatOut) {
     acts.push(el("button", { class: "link", type: "button", onclick: (ev) => setRole(ev.currentTarget, r, "instead") }, `Count it as my ${SLOT_NAME[r.slot].toLowerCase()}`));
   }
+  if (r.state === "skipped") {
+    acts.push(el("button", { class: "link", type: "button", onclick: (ev) => undoSkip(ev.currentTarget, list.date, r.slot) }, "Undo skip"));
+  }
   if (r.mealSessionId) acts.push(el("button", { class: "link danger", type: "button", onclick: (ev) => removeLogged(ev.currentTarget, r) }, "Remove"));
   return [chips, items, acts.length ? el("div", { class: "row-actions" }, ...acts) : null].filter(Boolean);
 }
@@ -951,6 +957,29 @@ async function ateThis(btn, date, slot) {
     if (err.code === "already_logged") return afterChange();
     // More than an hour before the meal: ask once, the next tap logs it.
     if (err.code === "too_early") { btn.dataset.early = "1"; btn.textContent = "Yes, I've eaten it"; }
+    d.toast(err.message);
+  }
+}
+
+async function skipMeal(btn, date, slot) {
+  btn.disabled = true;
+  try {
+    await d.api(`/diet/days/${date}/${slot}/skip`, { method: "POST" });
+    await afterChange(`${SLOT_NAME[slot] || "Meal"} marked as skipped.`);
+  } catch (err) {
+    btn.disabled = false;
+    if (err.code === "already_logged") return afterChange();
+    d.toast(err.message);
+  }
+}
+
+async function undoSkip(btn, date, slot) {
+  btn.disabled = true;
+  try {
+    await d.api(`/diet/days/${date}/${slot}/undo`, { method: "POST" });
+    await afterChange(`${SLOT_NAME[slot] || "Meal"} is back on your plan.`);
+  } catch (err) {
+    btn.disabled = false;
     d.toast(err.message);
   }
 }

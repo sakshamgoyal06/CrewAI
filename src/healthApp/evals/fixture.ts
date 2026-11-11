@@ -53,6 +53,7 @@ export function fixtureSnapshot(overrides: Partial<HealthSnapshot> = {}): Health
     northStar: {
       onTrackDays: 3,
       unloggedDays: 0,
+      partialDays: 0,
       pausedDays: 0,
       windowDays: 7,
       goal: 5,

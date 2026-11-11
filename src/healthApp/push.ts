@@ -51,6 +51,7 @@ export const NOTIFICATION_KINDS = [
   "routine_check",
   "intervention",
   "plan_meal",
+  "logging_nudge",
   "ops_alert",
   "pause_end",
 ] as const;

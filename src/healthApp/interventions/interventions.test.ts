@@ -184,6 +184,15 @@ describe("detectors", () => {
     expect(detectLoggingFading(input({ records: days((_, __, i) => ({ mealSessions: i >= 16 && i % 2 === 0 ? 0 : 3 })) }))).not.toBeNull();
   });
 
+  it("notices patchy logging from the start, not only a fade after a strong stretch", () => {
+    // Logged 3 days a week throughout (no strong stretch to fade from).
+    const f = detectLoggingFading(input({ records: days((_, __, i) => ({ mealSessions: i % 7 < 3 ? 3 : 0 })) }))!;
+    expect(f.pattern).toBe("logging_fading");
+    expect(f.evidence[0]).toMatch(/You logged on 3 of the last 7 days and 3 of the 7 before/);
+    // Nothing logged at all lately is a lapse (lapse.ts), not this card.
+    expect(detectLoggingFading(input({ records: days((_, __, i) => ({ mealSessions: i < 7 ? 3 : 0 })) }))).toBeNull();
+  });
+
   it("flags an over-ambitious pace and deadline drift", () => {
     const amb = detectOverAmbitious(input({ goal: goal({ requiredPerWeek: -1.2 }) }))!;
     expect(amb.pattern).toBe("over_ambitious");

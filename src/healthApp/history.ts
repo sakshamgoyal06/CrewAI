@@ -21,6 +21,7 @@ import { DAY_MS } from "../util/time.js";
 import { buildDayMeals, groupMeals, type DayMeals, type MealRow } from "./dayMeals.js";
 export { groupMeals } from "./dayMeals.js";
 import { loadPlanEntries } from "./dayMealsStore.js";
+import { loadDayAccounting } from "./loggingStatus.js";
 
 export const DEFAULT_HISTORY_DAYS = 30;
 /** 12 weeks, for the Progress charts' weekly view. */
@@ -67,6 +68,8 @@ export type HistoryDay = {
   checks: DayCheck[];
   /** Nothing eaten was logged: not a missed day, an unlogged one (northStar.ts). */
   unlogged?: true;
+  /** Food logged only in part: its food misses are a logging gap (northStar.ts). */
+  partial?: true;
   /** The whole plan was paused that day (breaks.ts). */
   paused?: true;
   calories: number;
@@ -209,6 +212,10 @@ export async function buildHealthHistory(
   }
 
   const meals = groupMeals((mealRes.data ?? []) as MealRow[]);
+  // Skipped meals and whether each finished day is logged in full (same rule as the snapshot).
+  const accounting = await loadDayAccounting(userProfileId, from, to, new Map([...meals].map(([d, ms]) => [d, new Set(ms.map((m) => m.slot))]))).catch(
+    () => new Map<string, { skipped: number; loggedInFull?: boolean }>(),
+  );
   const activity = new Map<string, Record<string, unknown>>();
   for (const r of (activityRes.data ?? []) as Record<string, unknown>[]) activity.set(String(r.local_date), r);
 
@@ -273,6 +280,8 @@ export async function buildHealthHistory(
         date,
         weekday,
         mealSessions: dayMeals.length,
+        mealsSkipped: accounting.get(date)?.skipped ?? 0,
+        loggedInFull: date === to ? true : accounting.get(date)?.loggedInFull,
         calories,
         proteinG,
         carbsG: dayMeals.reduce((t, m) => t + m.carbsG, 0),
@@ -293,6 +302,7 @@ export async function buildHealthHistory(
       score: score.score,
       checks: score.checks,
       ...(score.unlogged ? { unlogged: true as const } : {}),
+      ...(score.partial ? { partial: true as const } : {}),
       ...(score.paused ? { paused: true as const } : {}),
       calories,
       proteinG,

@@ -12,6 +12,7 @@ import { loggableError } from "../../util/loggableError.js";
 import { stableTurnId } from "../../util/stableId.js";
 import { addDays, localClock } from "../../util/time.js";
 import type { ActionContext } from "../actions.js";
+import { dayCompleteTurnId } from "../loggingStatus.js";
 import { getPrefs, isQuiet, sendNotification } from "../push.js";
 import { closeDay, rebalanceDay } from "./adjust.js";
 import { reviseCarry, saveCarry } from "./carry.js";
@@ -468,7 +469,7 @@ async function plannedOn(userProfileId: string, date: string): Promise<Array<{ s
   return ((data ?? []) as Array<{ meal_slot: string; status: string }>).map((r) => ({ slot: r.meal_slot, status: r.status }));
 }
 
-const completeTurn = (userProfileId: string, date: string) => stableTurnId(`magnus-day-complete:${userProfileId}:${date}`);
+const completeTurn = dayCompleteTurnId;
 
 /**
  * Whether a closed day's log can be trusted for carry: every planned main meal has a log, or they

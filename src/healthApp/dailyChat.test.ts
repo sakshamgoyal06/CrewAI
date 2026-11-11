@@ -192,6 +192,30 @@ describe("the day's plan", () => {
     expect(buildDayPlan({ snapshot: s, name: null, localHour: 7, intervention: null }).card.yesterday).toMatch(/^Nothing was logged yesterday\. You can't improve what you don't track/);
   });
 
+  it("after days without logs: counts the days, leads with a small restart, shows days logged instead of 0/7", () => {
+    const s = snap();
+    const y = s.northStar.days.at(-2)!;
+    s.northStar.days[s.northStar.days.length - 2] = { ...y, onTrack: false, unlogged: true, checks: [{ id: "meals_logged", label: "Meals logged", met: false, progress: 0, detail: "Nothing logged" }] };
+    s.logging = { lastLogDate: "2026-10-27", daysSinceLog: 5, blankDays: 4, loggedDays: 2, windowDays: 6, streak: 0, gapBefore: 0, lastGoodStretch: null };
+    const card = buildDayPlan({ snapshot: s, name: null, localHour: 7, intervention: null }).card;
+    expect(card.yesterday).toMatch(/^Nothing logged for 4 days\./);
+    expect(card.focus).toMatch(/^Restart small/);
+    expect(card.week).toBe("2 of the last 6 days logged");
+  });
+
+  it("a partly logged yesterday isn't quoted as low calories or protein", () => {
+    const s = snap();
+    const y = s.northStar.days.at(-2)!;
+    s.northStar.days[s.northStar.days.length - 2] = { ...y, onTrack: false, partial: true, checks: [
+      { id: "calories", label: "Calories in range", met: false, progress: 0.1, detail: "120 / 2200 kcal, partly logged" },
+      { id: "steps", label: "Steps", met: false, progress: 0.7, detail: "6,333 / 8,000" },
+    ] };
+    const line = buildDayPlan({ snapshot: s, name: null, localHour: 7, intervention: null }).card.yesterday!;
+    expect(line).toMatch(/^Partly logged/);
+    expect(line).not.toMatch(/kcal/);
+    expect(line).toMatch(/steps \(6,333 \/ 8,000\)/);
+  });
+
   it("puts an open plan-change offer first, then a due weigh-in", () => {
     const iv = { title: "Make the evening gym easier to keep" } as Intervention;
     expect(buildDayPlan({ snapshot: snap(), name: null, localHour: 9, intervention: iv }).card.focus).toBe(

@@ -65,6 +65,11 @@ async function loadDayClose(userProfileId: string, date: string): Promise<DayClo
   return { hasPlan: true, text: row?.content ?? null };
 }
 
+/** Today's planned main meals with nothing logged (and not skipped): the day's food isn't complete. */
+export function unloggedPlannedMeals(s: Pick<HealthSnapshot, "mealList">): string[] {
+  return (s.mealList?.rows ?? []).filter((r) => (r.state === "todo" || r.state === "missed") && ["breakfast", "lunch", "dinner"].includes(r.slot)).map((r) => r.slot);
+}
+
 /**
  * Today's misses that keep coming back: missed today and on 3 or more of the 6 days before
  * (unlogged days don't count). A pattern to decode, not a tip to repeat. Pure.
@@ -104,6 +109,7 @@ export function digestFacts(s: HealthSnapshot, weekday: number, ctx: FocusContex
     trainingDay: s.today.isTrainingDay,
     trainedToday: s.workouts.some((w) => w.localDate === s.today.date),
     checks: s.today.checks.map((c) => `${c.label}: ${c.met ? "done" : "missed"} (${c.detail})`),
+    ...(unloggedPlannedMeals(s).length ? { mealsNotLogged: unloggedPlannedMeals(s) } : {}),
     onTrackToday: s.today.onTrack,
     weekOnTrack: `${s.northStar.onTrackDays} of 7 days`,
     tomorrow: `${WEEKDAYS[tomorrow]}, ${trainingDayOn(nextDate(s.today.date), t.trainingDays, s.routine) ? "training day" : "rest day"}`,
@@ -118,6 +124,11 @@ export function digestFacts(s: HealthSnapshot, weekday: number, ctx: FocusContex
 
 /** A digest without the model: the first missed check with its number, and a matching fix. */
 export function fallbackDigest(s: HealthSnapshot, ctx: FocusContext = NO_FOCUS_CONTEXT): string {
+  const gaps = unloggedPlannedMeals(s);
+  if (gaps.length) {
+    const names = gaps.map((g, i) => (i === 0 ? g[0]!.toUpperCase() + g.slice(1) : g));
+    return `${names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0]} ${gaps.length > 1 ? "aren't" : "isn't"} logged, so today's food numbers are incomplete. Add ${gaps.length > 1 ? "them" : "it"} in a line, mark it skipped if you didn't eat, or tell me that was everything.`;
+  }
   const ranked = rankedMisses(s, ctx);
   const missed = ranked.length ? ranked : s.today.checks.filter((c) => !c.met && c.id !== "protein");
   if (!missed.length) return `Every check done today, ${s.northStar.onTrackDays} of 7 days on track this week. Same again tomorrow.`;
@@ -139,6 +150,7 @@ Write 2 or 3 short sentences, second person, plain words, no lists, no emoji, no
    Otherwise ONE specific thing to do tomorrow (a food, a time, an amount) for the focus fact (the miss that matters most for their goal). Use what tomorrow is (training or rest day).
    If the facts include pattern, the same miss keeps coming back: name the pattern, say what the numbers suggest is behind it, and suggest one realistic change to the routine or plan instead of repeating the usual advice.
 Never invent numbers. Under 400 characters.
+If the facts include mealsNotLogged, the day's food isn't fully logged: don't call calories or protein low or missed. Say which meals aren't logged and ask them to add them, mark them skipped if they didn't eat, or say that was everything; that is the one thing for tomorrow morning.
 If the facts include dayClose, tomorrow's meals and calories are already set there (the person just read it): don't repeat its numbers or suggest a different food for tomorrow; make your one thing about something else (steps, sleep, training, timing) or simply sticking to tomorrow's plan.
 If the facts include planProteinGap, the meal plan itself can't reach some targets under their rules: never blame them for those gaps or tell them to eat beyond the plan; if it says not decided yet, point them to the choice on the Meals tab instead.
 If the facts include foodRules, they are hard rules: any food you name must obey them (never name a meat, fish, egg or food they rule out). A TEMPORARY RULE overrides their usual diet: while it runs, foods the usual diet allows but the temporary rule rules out are out.`;

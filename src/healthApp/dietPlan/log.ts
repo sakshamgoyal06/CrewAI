@@ -42,7 +42,7 @@ async function findEntry(ctx: ActionContext, date: string, slot: PlanSlot): Prom
     .eq("local_date", date)
     .eq("meal_slot", slot)
     .eq("source", "plan")
-    .in("status", ["planned", "logged", "partial"])
+    .in("status", ["planned", "logged", "partial", "skipped"])
     .limit(1);
   if (error) throw new Error(error.message);
   return ((data ?? [])[0] as Entry | undefined) ?? null;
@@ -120,10 +120,31 @@ export async function undoPlanned(ctx: ActionContext, date: string, slot: PlanSl
   delete meta.logged_session_id;
   delete meta.eaten_items;
   delete meta.off_plan;
+  delete meta.skipped_at;
   const { error } = await supabase
     .from("meal_plan_entries")
     .update({ status: "planned", metadata: meta, updated_at: new Date().toISOString() })
     .eq("id", entry.id);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+/**
+ * "Skip" on a planned meal: they didn't eat it, for whatever reason. A skip is a logged zero for
+ * that meal (11 Nov rule): only a skip counts as eating nothing; a meal with no entry is unlogged.
+ * Undo (undoPlanned) puts it back to planned.
+ */
+export async function skipPlanned(ctx: ActionContext, date: string, slot: PlanSlot): Promise<{ ok: true } | { ok: false; error: "future_date" | "meal_not_planned" | "already_logged" }> {
+  const today = localDateKey(ctx.now ?? new Date(), ctx.timezone);
+  if (date > today) return { ok: false, error: "future_date" };
+  const entry = await findEntry(ctx, date, slot);
+  if (!entry) return { ok: false, error: "meal_not_planned" };
+  if (entry.status !== "planned") return { ok: false, error: "already_logged" };
+  const { error } = await supabase
+    .from("meal_plan_entries")
+    .update({ status: "skipped", metadata: { ...(entry.metadata ?? {}), skipped_at: new Date().toISOString() }, updated_at: new Date().toISOString() })
+    .eq("id", entry.id)
+    .eq("status", "planned");
   if (error) throw new Error(error.message);
   return { ok: true };
 }

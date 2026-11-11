@@ -12,6 +12,7 @@
  * - eaten:   eaten from the plan ("Ate this"); `changed` when portions or items were changed
  * - instead: they logged their own food for this planned meal
  * - extra:   logged food that isn't any planned meal
+ * - skipped: they said they didn't eat this planned meal (a logged zero, 11 Nov rule)
  *
  * Pure: the loaders pass rows in.
  */
@@ -46,7 +47,7 @@ export type PlanEntryLite = {
   offPlan?: boolean;
 };
 
-export type DayMealState = "todo" | "missed" | "eaten" | "instead" | "extra";
+export type DayMealState = "todo" | "missed" | "eaten" | "instead" | "extra" | "skipped";
 
 export type DayMealRow = {
   /** Stable per day: the slot for a planned meal, the session id for an extra. */
@@ -72,7 +73,7 @@ export type DayMealRow = {
 export type DayMeals = {
   date: string;
   rows: DayMealRow[];
-  /** Planned meals done (eaten or replaced) of all planned meals. */
+  /** Planned meals done (eaten, replaced or skipped) of all planned meals. */
   done: number;
   planned: number;
   extras: number;
@@ -199,6 +200,11 @@ export function buildDayMeals(input: {
       });
       continue;
     }
+    if (e.status === "skipped") {
+      done++;
+      rows.push({ key: e.slot, slot: e.slot, state: "skipped", text: plannedText(e), items: [], totals: zero(), time });
+      continue;
+    }
     // Marked eaten but its log is gone (deleted elsewhere): nothing was eaten, so it shows as not eaten.
     const past = date < today;
     const planned = tidy(e.totals);
@@ -256,9 +262,10 @@ export function entryLite(r: { meal_slot: string; status: string; title: string;
 
 /** The day's meals in the app's words: from the plan, had instead, extra, not eaten. */
 export function dayMealLines(list: DayMeals): string[] {
-  const note: Record<string, string> = { eaten: "from the plan", instead: "had instead of the plan", extra: "extra, on top of the plan", todo: "planned, not eaten", missed: "planned, not eaten" };
+  const note: Record<string, string> = { eaten: "from the plan", instead: "had instead of the plan", extra: "extra, on top of the plan", todo: "planned, not eaten", missed: "planned, nothing logged", skipped: "skipped (ate nothing)" };
   const hasPlan = list.planned > 0;
   return list.rows.map((r) => {
+    if (r.state === "skipped") return `${r.slot}: skipped (planned ${r.text.slice(0, 60)}), counts as 0 kcal`;
     const what = `${r.slot}: ${r.text.slice(0, 80)} (${Math.round(r.totals.kcal).toLocaleString("en-US")} kcal, ${Math.round(r.totals.proteinG)} g protein)`;
     if (!hasPlan) return what;
     const how = r.state === "instead" && r.insteadOf ? `had instead of planned ${r.insteadOf.slice(0, 60)}` : note[r.state];

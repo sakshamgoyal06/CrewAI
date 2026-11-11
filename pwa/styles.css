@@ -1412,6 +1412,7 @@ body.screen-open { overflow: hidden; }
 .dm-dot.extra { color: var(--warn); background: color-mix(in srgb, var(--warn) 18%, transparent); }
 .dm-dot.todo { border: 2px solid var(--faint); }
 .dm-dot.missed { color: var(--faint); background: var(--sunken); }
+.dm-dot.skipped { color: var(--muted); background: var(--sunken); font-size: 0.7em; }
 .dm-what { display: grid; gap: 2px; min-width: 0; }
 .dm-slot { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
 .dm-text { font-size: 0.92rem; line-height: 1.35; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
@@ -1419,7 +1420,8 @@ body.screen-open { overflow: hidden; }
 .dm-text .tag::before { display: none; }
 .dm-note { font-size: 0.78rem; color: var(--muted); overflow-wrap: anywhere; }
 .dm-row.instead .dm-note { color: var(--accent); }
-.dm-row.todo .dm-text, .dm-row.missed .dm-text { color: var(--muted); }
+.dm-row.todo .dm-text, .dm-row.missed .dm-text, .dm-row.skipped .dm-text { color: var(--muted); }
+.dm-row.skipped .dm-text { text-decoration: line-through; }
 .dm-kcal { font-size: 0.92rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
 .dm-kcal small { font-weight: 400; color: var(--faint); font-size: 0.72rem; }
 .dm-row.todo .dm-kcal, .dm-row.missed .dm-kcal { color: var(--muted); font-weight: 400; }

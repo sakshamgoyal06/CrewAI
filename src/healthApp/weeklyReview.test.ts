@@ -5,6 +5,7 @@ vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 import type { HistoryDay } from "./history.js";
 import type { HealthTargets } from "./northStar.js";
 import { summarizeWeek } from "./weeklyReview.js";
+import { loggingLine } from "./weeklyReview.js";
 
 const targets: HealthTargets = { calorieTarget: 2000, proteinTarget: 140, stepTarget: 8000, trainingDays: [1, 3, 5], minMealSessions: 3 };
 
@@ -66,5 +67,15 @@ describe("summarizeWeek", () => {
     expect(r.week.avgCalories).toBeNull();
     expect(r.headline).toMatch(/Nothing logged/);
     expect(r.bestDay).toBeNull();
+  });
+});
+
+describe("logging line (lapsed logging)", () => {
+  it("sets next week's logging target one day above this week's, up to 6", () => {
+    const week = (logged: number, partial = 0) => Array.from({ length: 7 }, (_, i) => (i < logged ? (i < partial ? { partial: true as const } : {}) : { unlogged: true as const }));
+    expect(loggingLine(week(3))).toBe("Logged 3 of 7 days. Next week, aim to log 4 days, even roughly.");
+    expect(loggingLine(week(5, 2))).toBe("Logged 5 of 7 days (2 only partly). Next week, aim to log 6 days, even roughly.");
+    expect(loggingLine(week(6))).toMatch(/^Logged 6 of 7 days\. Keep logging/);
+    expect(loggingLine(week(7))).toBeNull();
   });
 });
