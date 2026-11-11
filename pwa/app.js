@@ -3056,6 +3056,7 @@ const NUDGES = [
   ["rca", "Root-cause reviews"],
   ["intervention", "Plan check-ins"],
   ["plan_meal", "Planned meals"],
+  ["logging_nudge", "When I stop logging"],
 ];
 
 /** Settings: the weekly routine. Saving replaces it, and training days follow from it. */
