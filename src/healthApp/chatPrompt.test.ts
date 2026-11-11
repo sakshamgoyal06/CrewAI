@@ -105,3 +105,14 @@ describe("phone step sync in the context", () => {
     expect(at(old)).toMatch(/synced from their phone at \d\d:\d\d; may be behind; never ask/);
   });
 });
+
+describe("plan line", () => {
+  it("tells the coach about a trial or free plan, and nothing for Pro", () => {
+    const all = { digest: true, rca: true, photo: true };
+    const ctx = (plan: Parameters<typeof buildTurnContext>[4]["plan"]) => buildTurnContext(fixtureSnapshot(), null, FIXTURE_NOW, [], { plan });
+    expect(ctx({ tier: "trial", trialEndsAt: "2026-11-09T18:00:00Z", features: all })).toContain("Magnus plan: free trial until 2026-11-09 (everything included).");
+    expect(ctx({ tier: "free", trialEndsAt: null, features: { digest: false, rca: false, photo: true } })).toContain("Magnus plan: free; not included: nightly note, off-track analysis");
+    expect(ctx({ tier: "pro", trialEndsAt: null, features: all })).not.toContain("Magnus plan");
+    expect(ctx(undefined)).not.toContain("Magnus plan");
+  });
+});

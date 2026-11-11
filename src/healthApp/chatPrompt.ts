@@ -129,7 +129,21 @@ export type TurnLoops = {
   experiment?: { text: string; startedAt: string | null } | null;
   /** Plan changes in motion: open offers, trials, "make it your plan?" questions. */
   interventions?: Intervention[];
+  /** Their Magnus plan, when billing is on: so the coach never offers what their plan lacks. */
+  plan?: { tier: "trial" | "pro" | "free"; trialEndsAt: string | null; features: Record<"digest" | "rca" | "photo", boolean> };
 };
+
+/** "Magnus plan: free trial until 12 Nov." / "Magnus plan: free (no nightly note or off-track analysis)." */
+export function planLine(plan: TurnLoops["plan"], timezone: string): string | null {
+  if (!plan) return null;
+  if (plan.tier === "pro") return null;
+  if (plan.tier === "trial") {
+    const until = plan.trialEndsAt ? localDateKey(new Date(plan.trialEndsAt), timezone) : null;
+    return `Magnus plan: free trial${until ? ` until ${until}` : ""} (everything included).`;
+  }
+  const missing = [!plan.features.digest && "nightly note", !plan.features.rca && "off-track analysis"].filter(Boolean);
+  return `Magnus plan: free${missing.length ? `; not included: ${missing.join(", ")} (Pro brings them back; mention only if they ask for one)` : ""}.`;
+}
 
 const MAX_SKIPS = 5;
 
@@ -206,6 +220,8 @@ export function buildTurnContext(
   }
   const loopsLine = openLoopsLine(s, loops);
   if (loopsLine) lines.push(loopsLine);
+  const plan = planLine(loops.plan, s.timezone);
+  if (plan) lines.push(plan);
   if (s.hevyConnected) {
     const w = s.workouts[0];
     if (w) lines.push(`Last Hevy workout: ${w.title} on ${w.localDate}.`);

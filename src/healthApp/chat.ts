@@ -77,6 +77,7 @@ async function getLoggedMealSafe(userProfileId: string, sessionId: string) {
   return r?.ok ? r : null;
 }
 import { eatingOutInput, planEatingOut, type EatingOutCard } from "./eatingOut.js";
+import { billingMode, experienceFor, loadEntitlement } from "./billing.js";
 import { checkNewGoal, openInterventions, recordManualPlan, respond as respondToIntervention } from "./interventions/engine.js";
 import type { InterventionCard } from "./interventions/types.js";
 import { chatFastModel, chatModel } from "../models.js";
@@ -1627,9 +1628,22 @@ async function runTurn(ctx: ActionContext, userText: string, options: RunChatOpt
 
 /** The experiment they agreed to try in the weekly root-cause card, if one is running. */
 async function loadTurnLoops(userProfileId: string): Promise<TurnLoops> {
-  const [reports, interventions] = await Promise.all([listReports(userProfileId, 3), openInterventions(userProfileId).catch(() => [])]);
+  const now = new Date();
+  const [reports, interventions, plan] = await Promise.all([
+    listReports(userProfileId, 3),
+    openInterventions(userProfileId).catch(() => []),
+    billingMode() === "off"
+      ? Promise.resolve(null)
+      : loadEntitlement(userProfileId, now)
+          .then((ent) => ({ tier: ent.tier, trialEndsAt: ent.trialEndsAt, features: experienceFor(ent, now).features }))
+          .catch(() => null),
+  ]);
   const trying = reports.find((r) => r.status === "trying");
-  return { ...(trying ? { experiment: { text: trying.experiment, startedAt: trying.startedAt } } : {}), ...(interventions.length ? { interventions } : {}) };
+  return {
+    ...(trying ? { experiment: { text: trying.experiment, startedAt: trying.startedAt } } : {}),
+    ...(interventions.length ? { interventions } : {}),
+    ...(plan ? { plan } : {}),
+  };
 }
 
 /** The model loop for one turn: rounds of tool calls until the coach answers in text. */
