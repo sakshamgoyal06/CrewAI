@@ -44,6 +44,8 @@ export type WeeklyReview = {
   } | null;
   headline: string;
   focus: string;
+  /** Days logged this week and next week's logging target (one more day, up to 6); null when every day was logged in full. */
+  loggingLine: string | null;
   /** Swims, runs, sports this week, and what they meant for the strength plan; null when none. */
   activityLine: string | null;
   /** How the meal plan went: meals eaten from it, and the meal that slips most; null without a plan. */
@@ -117,10 +119,16 @@ export function summarizeWeek(
 
   const missed = new Map<CheckId, { label: string; count: number }>();
   for (const d of week) {
+    // A partly logged day's food misses are a logging gap (northStar.ts), counted once.
+    const ids = new Map<CheckId, string>();
     for (const c of d.checks) {
       if (c.met) continue;
-      const m = missed.get(c.id);
-      missed.set(c.id, { label: c.label, count: (m?.count ?? 0) + 1 });
+      if (d.partial && ["calories", "protein", "macros"].includes(c.id)) ids.set("meals_logged", "Meals logged");
+      else ids.set(c.id, c.label);
+    }
+    for (const [id, label] of ids) {
+      const m = missed.get(id);
+      missed.set(id, { label, count: (m?.count ?? 0) + 1 });
     }
   }
   let mostMissed: WeeklyReview["mostMissed"] = null;
@@ -170,8 +178,25 @@ export function summarizeWeek(
       : null,
     headline,
     focus,
+    loggingLine: loggingLine(week),
     activityLine: activityLine(stats, week, targets.trainingDays),
   };
+}
+
+/** The logging target rises a day each week until it reaches this. */
+export const LOGGING_TARGET_MAX = 6;
+
+/**
+ * Logging as its own habit: how many days were logged this week, and next week's target, one day
+ * more than this week (so it's always within reach), up to 6. Pure.
+ */
+export function loggingLine(week: Array<Pick<HistoryDay, "unlogged" | "partial">>): string | null {
+  const logged = week.filter((d) => !d.unlogged).length;
+  const full = week.filter((d) => !d.unlogged && !d.partial).length;
+  if (full === week.length) return null;
+  const part = logged > full ? ` (${logged - full} only partly)` : "";
+  if (logged >= LOGGING_TARGET_MAX) return `Logged ${logged} of ${week.length} days${part}. Keep logging every day you can; that's what lets the plan adjust.`;
+  return `Logged ${logged} of ${week.length} days${part}. Next week, aim to log ${Math.max(1, logged + 1)} days, even roughly.`;
 }
 
 export async function loadWeeklyReview(userProfileId: string, now = new Date()): Promise<WeeklyReview> {

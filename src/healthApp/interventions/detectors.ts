@@ -38,6 +38,8 @@ export const T = {
   stallPaceShare: 0.25,
   /** P6 */
   fadeDrop: 0.6,
+  /** P6: fewer logged days than this in each of the last two weeks is patchy logging. */
+  patchyDays: 4,
   /** P7: weekly loss as a share of body weight, and deficit as a share of maintenance. */
   ambitiousPace: 0.0075,
   ambitiousDeficit: 0.25,
@@ -385,6 +387,21 @@ export function detectLoggingFading(input: DetectInput): Finding | null {
   const a = avg(last7.map((r) => r.mealSessions)), b = avg(prev7.map((r) => r.mealSessions));
   const empty5 = rs.slice(-5).filter((r) => r.mealSessions === 0).length;
   const goodDays = rs.slice(0, -5).filter((r) => r.mealSessions >= 2).length;
+  // Patchy from the start (no strong stretch to fade from): fewer than 4 of 7 days logged, two weeks running.
+  const loggedIn = (w: typeof rs) => w.filter((r) => r.mealSessions > 0).length;
+  const patchy = loggedIn(last7) < T.patchyDays && loggedIn(prev7) < T.patchyDays && loggedIn(last7) > 0;
+  if (patchy && !((b >= 2 && a <= b * T.fadeDrop) || (empty5 >= 2 && goodDays >= 10))) {
+    return {
+      pattern: "logging_fading",
+      cause: "logging_effort",
+      area: "logging",
+      itemId: null,
+      itemLabel: null,
+      weight: 3,
+      evidence: [`You logged on ${loggedIn(last7)} of the last 7 days and ${loggedIn(prev7)} of the 7 before.`, "The plan can only adjust to what it sees, so let's make logging lighter."],
+      facts: { before: loggedIn(prev7), after: loggedIn(last7) },
+    };
+  }
   if ((b >= 2 && a <= b * T.fadeDrop) || (empty5 >= 2 && goodDays >= 10)) {
     return {
       pattern: "logging_fading",

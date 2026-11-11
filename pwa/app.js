@@ -2346,6 +2346,7 @@ function weeklyReviewView(r) {
       stat("Workouts", `${w.workouts}`, w.plannedWorkouts ? `${w.plannedWorkouts} planned` : null, null),
     ),
   ];
+  if (r.loggingLine) out.push(el("p", { class: "section-label" }, "Logging"), el("p", { class: "hint" }, r.loggingLine));
   if (r.activityLine) out.push(el("p", { class: "section-label" }, "Outside the gym"), el("p", { class: "hint" }, r.activityLine));
   if (r.mealPlanLine) out.push(el("p", { class: "section-label" }, "Meal plan"), el("p", { class: "hint" }, r.mealPlanLine));
   if (r.goal) {
