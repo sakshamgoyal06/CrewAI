@@ -91,5 +91,9 @@ dependencies {
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
+    // Health Connect sync (moved over from android/, same code).
+    implementation("androidx.health.connect:connect-client:1.1.0")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
     testImplementation("junit:junit:4.13.2")
 }

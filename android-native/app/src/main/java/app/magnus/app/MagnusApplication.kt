@@ -45,6 +45,8 @@ class MagnusApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         graph = AppGraph(this)
+        // Keep the hourly Health Connect sync scheduled once this phone is linked.
+        if (app.magnus.app.health.SyncStore(this).token != null) app.magnus.app.health.SyncWorker.schedule(this)
     }
 }
 

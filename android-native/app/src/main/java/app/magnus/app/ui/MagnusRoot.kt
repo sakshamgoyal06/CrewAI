@@ -47,6 +47,7 @@ import app.magnus.app.data.WhoAmI
 import app.magnus.app.ui.coach.CoachScreen
 import app.magnus.app.ui.signin.SignInScreen
 import app.magnus.app.ui.today.TodayScreen
+import app.magnus.app.ui.you.ConnectionsScreen
 import app.magnus.app.ui.you.YouScreen
 import app.magnus.app.ui.theme.Magnus
 
@@ -114,6 +115,7 @@ private fun SignedIn(graph: AppGraph) {
                         Screen.LogMeal -> LogMealScreen(graph)
                         Screen.WeighIn -> WeighInScreen(graph)
                         Screen.Steps -> StepsScreen(graph)
+                        Screen.Connections -> ConnectionsScreen(graph)
                     }
                 } else {
                     Box(Modifier.weight(1f).fillMaxWidth()) {

@@ -43,6 +43,14 @@ fun YouScreen(graph: AppGraph) {
             Text(me?.name ?: "Signed in", style = MaterialTheme.typography.titleMedium, color = c.text)
             me?.email?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.muted) }
         }
+        val nav = app.magnus.app.ui.LocalNav.current
+        MagnusCard {
+            Text(
+                "Connections", style = MaterialTheme.typography.titleMedium, color = c.text,
+                modifier = Modifier.fillMaxWidth().clickable { nav.open(app.magnus.app.ui.Screen.Connections) }.padding(vertical = 4.dp),
+            )
+            Text("Health Connect and Hevy", style = MaterialTheme.typography.bodySmall, color = c.muted)
+        }
         MagnusCard {
             Text("Theme", style = MaterialTheme.typography.titleMedium, color = c.text)
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -57,11 +65,17 @@ fun YouScreen(graph: AppGraph) {
             }
         }
         MagnusCard {
+            val context = androidx.compose.ui.platform.LocalContext.current
             Text(
                 "Sign out",
                 style = MaterialTheme.typography.labelLarge,
                 color = c.bad,
-                modifier = Modifier.fillMaxWidth().clickable { graph.signOut() }.padding(vertical = 6.dp),
+                modifier = Modifier.fillMaxWidth().clickable {
+                    // Signing out stops this phone's sync too; the token is revoked by linking again.
+                    app.magnus.app.health.SyncWorker.cancel(context)
+                    app.magnus.app.health.SyncStore(context).clear()
+                    graph.signOut()
+                }.padding(vertical = 6.dp),
             )
         }
         Text("Magnus Beta ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall, color = c.faint)

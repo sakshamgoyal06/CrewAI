@@ -7,7 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 
 /** Screens that open over the tabs, each with a back arrow (anything taller than a small pick list). */
-enum class Screen(val title: String) { LogMeal("Log a meal"), WeighIn("Weigh-in"), Steps("Steps") }
+enum class Screen(val title: String) { LogMeal("Log a meal"), WeighIn("Weigh-in"), Steps("Steps"), Connections("Connections") }
 
 /**
  * Where you are: the tab, the screens opened on top of it, and the + Log sheet. Back closes the
