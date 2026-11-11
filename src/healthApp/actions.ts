@@ -10,7 +10,8 @@ import { localDateKey } from "../nutrition/localDate.js";
 import { logger } from "../logger.js";
 import { loggableError } from "../util/loggableError.js";
 import { ACTIVITY_SOURCES, upsertDailyActivity } from "./activityStore.js";
-import { afterMealLogged, previewPlanRole } from "./dietPlan/rhythm.js";
+import { afterMealLogged, previewPlanRole, rebalanceToday } from "./dietPlan/rhythm.js";
+import { unlinkDeletedMeal } from "./dietPlan/log.js";
 import { setActiveGoal, updateDailyTargets, upsertBodyCheckin } from "./bodyStore.js";
 import { isOwnerProfile } from "./accounts.js";
 import { webGateFor } from "./webLookups.js";
@@ -276,5 +277,11 @@ export async function removeMeal(
     return { ok: false, error: "invalid_id" };
   }
   const r = await deleteMeal(ctx.userProfileId, mealSessionId, ctx.timezone);
-  return r.ok ? { ok: true, date: r.localDate } : r;
+  if (!r.ok) return r;
+  // The planned meal it stood for is planned again, and today's meals still to come resize to fit.
+  await unlinkDeletedMeal(ctx.userProfileId, mealSessionId).catch((err) => logger.warn({ err: loggableError(err) }, "unlink after meal delete failed"));
+  if (r.localDate === localDateKey(ctx.now ?? new Date(), ctx.timezone)) {
+    await rebalanceToday(ctx).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance after meal delete failed"));
+  }
+  return { ok: true, date: r.localDate };
 }

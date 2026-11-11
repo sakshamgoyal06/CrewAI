@@ -77,7 +77,7 @@ import { draftMealFromPhoto } from "./mealCards.js";
 import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
 import { loadWeeklyReview } from "./weeklyReview.js";
 import { editInput, editPick, restrictionsFor, searchMealFoods } from "./dietPlan/edit.js";
-import { eatInput, eatPlanned, undoPlanned, unlinkDeletedMeal } from "./dietPlan/log.js";
+import { eatInput, eatPlanned, undoPlanned } from "./dietPlan/log.js";
 import { editReceipt, getLoggedMeal, mealReplaceInput, receiptEditInput, replaceLoggedMeal, undoReceipt } from "./logEdits.js";
 import { logSupplements, undoSupplements } from "./dietPlan/supplementLog.js";
 import { rebalanceToday, setMealPlanRole } from "./dietPlan/rhythm.js";
@@ -874,9 +874,7 @@ export function createHealthAppRouter(): express.Router {
     "/meals/:id",
     route("meal-delete", async (ctx, req) => {
       const id = String(req.params.id);
-      const r = await removeMeal(ctx, id);
-      if (r.ok) await unlinkDeletedMeal(ctx.userProfileId, id);
-      return fromResult(r);
+      return fromResult(await removeMeal(ctx, id));
     }),
   );
 

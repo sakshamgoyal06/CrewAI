@@ -68,7 +68,6 @@ import { randomUUID } from "node:crypto";
 import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } from "./workoutCheck.js";
 import { logWater, waterInput } from "./water.js";
 import { bodyBefore, getLoggedMeal, receipt, stepsBefore, type LogReceiptCard } from "./logEdits.js";
-import { unlinkDeletedMeal } from "./dietPlan/log.js";
 import { loadHealthProfile } from "./snapshot.js";
 
 /** The meal before it's removed, for the receipt; null when it can't be read. */
@@ -873,7 +872,6 @@ export async function runTool(
       const sid = typeof id === "string" ? id : "";
       const before = z.string().uuid().safeParse(sid).success ? await getLoggedMealSafe(ctx.userProfileId, sid) : null;
       const r = await removeMeal(ctx, sid);
-      if (r.ok) await unlinkDeletedMeal(ctx.userProfileId, sid).catch(() => {});
       const card = r.ok && before ? receipt({ type: "log_receipt", kind: "meal_removed", date: r.date, value: { mealSessionId: sid, text: before.items.map((i) => i.name).join(", ").slice(0, 120), calories: before.items.reduce((a, i) => a + i.calories, 0) } }) : undefined;
       return { result: r, changed: r.ok, card };
     }
