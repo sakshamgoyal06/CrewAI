@@ -821,7 +821,7 @@ export function setupScreen() {
 
   wrap.append(
     el("p", { class: "hint" }, "Your diet and foods to avoid come from your food preferences. The plan always fits your calorie and protein targets."),
-    el("button", { class: "menu-row", type: "button", onclick: () => d.openSheet("account") }, el("span", {}, el("b", {}, "Diet and foods to avoid"), el("small", {}, "Change them in Food, connections & account")), el("i", { class: "chev-r" })),
+    el("button", { class: "menu-row", type: "button", onclick: () => d.openSheet("foodPrefs") }, el("span", {}, el("b", {}, "Diet and foods to avoid"), el("small", {}, "Change them in You, then Food")), el("i", { class: "chev-r" })),
     el("p", { class: "section-label" }, "Your meals"),
     mealsBox,
     el("p", { class: "section-label" }, "Who cooks"),

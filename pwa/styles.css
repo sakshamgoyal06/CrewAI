@@ -507,13 +507,15 @@ body.composing .tabbar { display: none; }
 .hint a { color: var(--muted); }
 
 /* Log sheet */
-.log-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+/* Two rows of five round icons: the sheet stays a small pick list (about a quarter of the screen). */
+.log-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px 2px; }
 .log-tile {
-  display: grid; justify-items: center; gap: 6px; padding: 12px 6px 10px; border-radius: 16px;
-  background: var(--surface); border: 1px solid var(--hair); color: var(--text); font-size: 0.86rem; font-weight: 500;
+  display: grid; justify-items: center; gap: 6px; padding: 0; border: 0; background: none;
+  color: var(--text); font-size: 0.74rem; font-weight: 500; min-width: 0;
 }
-.log-tile span { white-space: nowrap; }
-.log-tile svg { width: 24px; height: 24px; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.log-tile span { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.log-tile i { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--hair); }
+.log-tile svg { width: 22px; height: 22px; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -1120,6 +1122,11 @@ body.screen-open { overflow: hidden; }
 .settings-form .section-label:not(:first-child) { margin-top: 12px; }
 .date-line { margin: -4px 0 4px; }
 .field.date { color-scheme: inherit; }
+.date-field { position: relative; display: flex; align-items: center; min-height: 44px; }
+.date-field .date-when small { color: var(--muted); }
+.date-field::after { content: ""; margin-left: auto; width: 8px; height: 8px; border-right: 1.5px solid var(--faint); border-top: 1.5px solid var(--faint); transform: rotate(45deg); }
+.date-field .date-hit { position: absolute; inset: 0; border: 0; background: none; cursor: pointer; }
+.date-native { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .field.date::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: pointer; filter: invert(0.7) sepia(0.4) hue-rotate(230deg); }
 :root[data-theme="light"] .field.date::-webkit-calendar-picker-indicator { filter: none; }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .field.date::-webkit-calendar-picker-indicator { filter: none; } }
@@ -1468,3 +1475,4 @@ body.screen-open { overflow: hidden; }
 .gap-banner .gap-cta { font-size: 0.85rem; font-weight: 700; color: var(--accent); }
 .gap-screen .pa-head { font-size: 1rem; }
 .day-meals.compact .dm-all { justify-self: start; margin-top: 2px; }
+.danger-label { color: var(--bad); margin-top: 18px; }

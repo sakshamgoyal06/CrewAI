@@ -468,13 +468,6 @@ function eatingOut() {
   );
 }
 
-function repeatMeal(m) {
-  return coachTurn(
-    () => addMessage("user", `Usual: ${m.text}`),
-    () => api("/meals/repeat", { method: "POST", body: JSON.stringify({ key: m.key }) }),
-  );
-}
-
 /** A usual meal as a local draft (for the meal sheet): same items, fresh id, confirm as usual. */
 function usualDraft(m) {
   const h = new Date().getHours();
@@ -3612,12 +3605,17 @@ function resetLocalState() {
   getCache.clear();
 }
 
-function accountSection() {
-  const wrap = el("div", { class: "stack" }, el("p", { class: "section-label" }, "Account"));
+/**
+ * One of three You screens, drawn from the same /account read: "food" (diet and foods to avoid),
+ * "connections" (Hevy, Health Connect, MyFitnessPal import) or "account" (who's signed in, your
+ * data, sign out, and the danger zone last).
+ */
+function accountSection(part = "account") {
+  const wrap = el("div", { class: "stack" });
   const who = el("p", { class: "hint" }, "Loading…");
   const hevy = el("div", { class: "stack" });
   const hc = el("div", { class: "stack" });
-  const out = el("button", { class: "link danger", type: "button", onclick: () => { if (confirm("Sign out of Magnus on this phone?")) { closeSheet(); endSession(); } } }, "Sign out");
+  const out = el("button", { class: "link", type: "button", onclick: () => { if (confirm("Sign out of Magnus on this phone?")) { closeSheet(); endSession(); } } }, "Sign out");
   const download = el("button", { class: "link", type: "button", onclick: async () => {
     try {
       const data = await api("/account/export");
@@ -3640,8 +3638,7 @@ function accountSection() {
   const food = el("div", { class: "stack" });
   // Owner only: try Magnus as a brand-new user, any time. Keeps the Google sign-in.
   const fresh = el("div", { class: "stack", hidden: true },
-    el("p", { class: "section-label" }, "Owner"),
-    el("p", { class: "hint" }, "Start fresh: wipes your meals, weigh-ins, chats, plan and connections, and opens onboarding as a new user. You stay signed in. It can't be undone."),
+    el("p", { class: "hint" }, "Owner only. Start fresh: wipes your meals, weigh-ins, chats, plan and connections, and opens onboarding as a new user. You stay signed in. It can't be undone."),
     el("button", { class: "link danger", type: "button", onclick: async () => {
       const typed = prompt("Start over as a new user? Everything is wiped. Type RESET to confirm.");
       if (typed !== "RESET") return;
@@ -3651,9 +3648,17 @@ function accountSection() {
         location.replace("/app/");
       } catch (err) { toast(err.message); }
     } }, "Start fresh as a new user"));
-  wrap.append(who, fresh, el("p", { class: "section-label" }, "Food"), food, el("p", { class: "section-label" }, "Hevy"), hevy, el("p", { class: "section-label" }, "Health Connect"), hc,
-    el("p", { class: "section-label" }, "Your data"), el("p", { class: "hint" }, "Your data is yours: download all of it, or delete it for good."), el("div", { class: "row-between" }, download, remove),
-    el("p", { class: "hint" }, "Coming from MyFitnessPal? Export your data there (Settings, then Export data) and pick the zip here. Your past days show up in your trends."), mfp, mfpFile, out);
+  if (part === "food") wrap.append(food);
+  else if (part === "connections") {
+    wrap.append(el("p", { class: "section-label" }, "Health Connect"), hc, el("p", { class: "section-label" }, "Hevy"), hevy,
+      el("p", { class: "section-label" }, "MyFitnessPal"),
+      el("p", { class: "hint" }, "Coming from MyFitnessPal? Export your data there (Settings, then Export data) and pick the zip here. Your past days show up in your trends."), mfp, mfpFile);
+  } else {
+    wrap.append(who, out,
+      el("p", { class: "section-label" }, "Your data"), el("p", { class: "hint" }, "Your data is yours: download all of it, or delete it for good."), download,
+      // Anything that can't be undone sits last, apart from everything else.
+      el("p", { class: "section-label danger-label" }, "Can't be undone"), remove, fresh);
+  }
 
   function paintFood(prefs) {
     if (!prefs) { food.replaceChildren(); return; }
@@ -3860,28 +3865,35 @@ function renderTraining(r) {
 
 const WD_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-/** Which weekday the weekly weigh-in lands on; saved as soon as it's picked. */
+/** Which weekday the weekly weigh-in lands on: seven day chips, saved as soon as one is tapped. */
 function weighInDayForm(t) {
-  const current = Number.isInteger(t.weighInDay) ? String(t.weighInDay) : "";
-  const select = el("select", { class: "field", name: "weighInDay", "aria-label": "Weigh-in day" },
-    el("option", { value: "", selected: current === "" }, "Any day, a week after the last"),
-    ...WD_FULL.map((name, i) => el("option", { value: String(i), selected: current === String(i) }, name)));
-  select.addEventListener("change", async () => {
-    select.disabled = true;
+  let current = Number.isInteger(t.weighInDay) ? t.weighInDay : null;
+  const row = el("div", { class: "weekdays", role: "radiogroup", "aria-label": "Weigh-in day" });
+  const paint = () => {
+    row.replaceChildren(...WD_FULL.map((name, i) => el("button", {
+      type: "button", class: `chip${current === i ? " on" : ""}`, role: "radio", "aria-checked": String(current === i), "aria-label": name,
+      onclick: () => pick(current === i ? null : i),
+    }, name[0])));
+  };
+  const pick = async (day) => {
+    const before = current;
+    current = day;
+    paint();
     try {
-      await api("/targets", { method: "POST", body: JSON.stringify({ weighInDay: select.value === "" ? null : Number(select.value) }) });
-      toast(select.value === "" ? "Weigh-in a week after the last one." : `Weigh-ins on ${WD_FULL[Number(select.value)]}s.`);
+      await api("/targets", { method: "POST", body: JSON.stringify({ weighInDay: day }) });
+      toast(day == null ? "Weigh-in a week after the last one." : `Weigh-ins on ${WD_FULL[day]}s.`);
       refresh();
     } catch (err) {
+      current = before;
+      paint();
       toast(err.message);
-    } finally {
-      select.disabled = false;
     }
-  });
+  };
+  paint();
   return el("div", { class: "stack" },
     el("p", { class: "section-label" }, "Weekly weigh-in"),
-    el("label", {}, "Weigh-in day", select),
-    el("p", { class: "hint" }, "Same day each week, before breakfast, gives the cleanest trend. Miss it and the reminder carries on the next day."),
+    row,
+    el("p", { class: "hint" }, "Same day each week, before breakfast, gives the cleanest trend. Miss it and the reminder carries on the next day. With no day picked, it's a week after the last one."),
   );
 }
 
@@ -4551,7 +4563,7 @@ function openSheet(kind, { fromHistory = false } = {}) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", mealEdit: "Edit meal", mealFind: "Search for a food", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", replan: "Your updated plan", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", dayPlan: "Day plan", skip: "Skip it", ...mealsTitles, ...pauseTitles };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", mealEdit: "Edit meal", mealFind: "Search for a food", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", replan: "Your updated plan", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Account", foodPrefs: "Food", connections: "Connections", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", dayPlan: "Day plan", skip: "Skip it", ...mealsTitles, ...pauseTitles };
   const screen = !SHEET_ONLY.has(kind);
   const sheet = $("sheet");
   sheet.classList.toggle("screen", screen);
@@ -4660,7 +4672,7 @@ const SHEETS = {
 
   quick() {
     const icon = (d) => { const g = svg("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }); g.innerHTML = d; return g; };
-    const tile = (label, d, onclick) => el("button", { class: "log-tile", type: "button", onclick }, icon(d), el("span", {}, label));
+    const tile = (label, d, onclick) => el("button", { class: "log-tile", type: "button", onclick }, el("i", {}, icon(d)), el("span", {}, label));
     return el("div", { class: "stack" },
       el("div", { class: "log-grid" },
         tile("Meal", '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M16 3c-1.7 1-2.5 3-2.5 6s1 4 2.5 4v8"/>', () => { state.mealSlot = null; state.mealDate = null; openSheet("meal"); }),
@@ -4672,12 +4684,7 @@ const SHEETS = {
         tile("Weigh-in", '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9.5a4 4 0 0 1 6 0M12 9.5l1.2-1.6"/>', () => openSheet("checkin")),
         tile("Water", '<path d="M12 3.5c3 4 5.5 7 5.5 10a5.5 5.5 0 0 1-11 0c0-3 2.5-6 5.5-10z"/>', () => { closeSheet(); quickWater(); }),
         tile("Eating out", '<path d="M5 3v7a2 2 0 0 0 4 0V3M7 10v11M15 21V3c2.5 1.5 4 4 4 8h-4"/>', () => { closeSheet(); afterClose(() => { if ($("view-coach").hidden) setView("coach"); eatingOut(); }); })),
-      (state.usual || []).length
-        ? el("div", { class: "usual-list" },
-            el("p", { class: "section-label" }, "Again"),
-            ...state.usual.slice(0, 2).map((m) => el("button", { class: "usual-row", type: "button", onclick: () => { closeSheet(); afterClose(() => { if ($("view-coach").hidden) setView("coach"); repeatMeal(m); }); } },
-              el("span", {}, m.text), el("small", {}, `${fmt(m.totals.calories)} kcal`))))
-        : null,
+      // "Again" used to sit here; the Meal screen already lists your usual meals.
     );
   },
 
@@ -4897,7 +4904,14 @@ const SHEETS = {
     // One Save for the screen: it sends the goal and/or the targets, whichever changed. The weigh-in
     // day below saves the moment it's picked, as before.
     const save = el("button", { class: "btn primary block", type: "submit", disabled: true }, "Save");
-    const when = el("p", { class: "hint date-line" });
+    // The deadline as one app-styled field ("Mon, 15 March 2027 · 18 weeks away"); a tap opens the
+    // phone's calendar through the hidden date input, so the browser's mm/dd/yyyy box never shows.
+    const dateInput = el("input", { class: "date-native", name: "deadline", type: "date", value: g?.deadline ?? null, tabindex: "-1", "aria-hidden": "true" });
+    const when = el("span", { class: "date-when" });
+    const dateButton = el("span", { class: "field date-field" },
+      when,
+      el("button", { class: "date-hit", type: "button", "aria-label": "Pick the deadline", onclick: () => { try { dateInput.showPicker(); } catch { dateInput.focus(); dateInput.click(); } } }),
+      dateInput);
     const goalFields = ["tw", "tbf", "tmm", "deadline"], targetFields = ["kcal", "prot", "steps"];
     let start = null, replan = null;
     const form = el("form", { class: "stack settings-form", onsubmit: submitter(async (fd) => {
@@ -4925,8 +4939,7 @@ const SHEETS = {
         el("label", {}, "Body fat %", el("input", { class: "field", name: "tbf", type: "number", step: "0.1", inputmode: "decimal", value: g?.targets.body_fat_pct ?? null })),
         el("label", {}, "Muscle kg", el("input", { class: "field", name: "tmm", type: "number", step: "0.1", inputmode: "decimal", value: g?.targets.muscle_mass_kg ?? null })),
       ),
-      el("label", {}, "Deadline", el("input", { class: "field date", name: "deadline", type: "date", required: true, value: g?.deadline ?? null })),
-      when,
+      el("label", {}, "Deadline", dateButton),
       el("p", { class: "section-label" }, "Daily targets"),
       el("div", { class: "grid3" },
         el("label", {}, "Calories", el("input", { class: "field", name: "kcal", type: "number", inputmode: "numeric", value: t.calorieTarget ?? null })),
@@ -4945,8 +4958,9 @@ const SHEETS = {
       const d = now.deadline;
       if (d) {
         const weeks = Math.round((dateOf(d) - dateOf(todayKey() || localToday())) / (7 * 86_400_000));
-        when.textContent = `${dateOf(d).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}${weeks > 0 ? ` · ${weeks} week${weeks === 1 ? "" : "s"} away` : ""}`;
-      } else when.textContent = "";
+        when.replaceChildren(dateOf(d).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }),
+          weeks > 0 ? el("small", {}, ` · ${weeks} week${weeks === 1 ? "" : "s"} away`) : "");
+      } else when.replaceChildren(el("small", {}, "Pick a date"));
     }
     start = snapshotForm();
     form.addEventListener("input", sync);
@@ -5003,7 +5017,13 @@ const SHEETS = {
   },
 
   account() {
-    return accountSection();
+    return accountSection("account");
+  },
+  foodPrefs() {
+    return accountSection("food");
+  },
+  connections() {
+    return accountSection("connections");
   },
 };
 
