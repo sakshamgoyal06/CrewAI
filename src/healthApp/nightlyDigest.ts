@@ -8,6 +8,7 @@
  * MAGNUS_DIGEST=off.
  */
 import { dayMealLines } from "./dayMeals.js";
+import { focusContext, focusWeight, gapUndecided, NO_FOCUS_CONTEXT, type FocusContext } from "./focus.js";
 import type Anthropic from "@anthropic-ai/sdk";
 
 import { logger } from "../logger.js";
@@ -77,8 +78,21 @@ export function repeatMisses(s: HealthSnapshot): string[] {
     .map((x) => `${x.c.label} missed today and on ${x.n} of the ${before.length} days before`);
 }
 
+/**
+ * Today's misses, the one that matters most for their goal first (focus.ts): a wide miss before a
+ * near one, calories first while weight is behind pace, and never a protein gap their plan made. Pure.
+ */
+export function rankedMisses(s: HealthSnapshot, ctx: FocusContext = NO_FOCUS_CONTEXT): HealthSnapshot["today"]["checks"] {
+  return s.today.checks
+    .filter((c) => !c.met && focusWeight(c.id, 1, ctx) > 0)
+    .map((c) => ({ c, w: focusWeight(c.id, 0.5 + 0.5 * (1 - Math.max(0, Math.min(1, c.progress ?? 0))), ctx) }))
+    .sort((a, b) => b.w - a.w)
+    .map((x) => x.c);
+}
+
 /** The day as plain facts for the model (and the fallback). */
-export function digestFacts(s: HealthSnapshot, weekday: number): Record<string, unknown> {
+export function digestFacts(s: HealthSnapshot, weekday: number, ctx: FocusContext = NO_FOCUS_CONTEXT): Record<string, unknown> {
+  const top = s.today.onTrack ? null : rankedMisses(s, ctx)[0] ?? null;
   const t = s.targets;
   const tomorrow = (weekday + 1) % 7;
   return {
@@ -94,6 +108,7 @@ export function digestFacts(s: HealthSnapshot, weekday: number): Record<string, 
     weekOnTrack: `${s.northStar.onTrackDays} of 7 days`,
     tomorrow: `${WEEKDAYS[tomorrow]}, ${trainingDayOn(nextDate(s.today.date), t.trainingDays, s.routine) ? "training day" : "rest day"}`,
     sleepLastNight: s.today.sleepMinutes ? `${(s.today.sleepMinutes / 60).toFixed(1)} h` : null,
+    ...(top ? { focus: `${top.label}: ${top.detail}` } : {}),
     ...(repeatMisses(s).length ? { pattern: repeatMisses(s).join("; ") } : {}),
     goal: s.goal
       ? s.goal.metrics.map((m) => `${m.label} ${m.latest ?? "?"} → ${m.target} ${m.unit}, pace ${m.pace}`).join("; ") + `; ${s.goal.weeksLeft} weeks left`
@@ -102,8 +117,9 @@ export function digestFacts(s: HealthSnapshot, weekday: number): Record<string, 
 }
 
 /** A digest without the model: the first missed check with its number, and a matching fix. */
-export function fallbackDigest(s: HealthSnapshot): string {
-  const missed = s.today.checks.filter((c) => !c.met);
+export function fallbackDigest(s: HealthSnapshot, ctx: FocusContext = NO_FOCUS_CONTEXT): string {
+  const ranked = rankedMisses(s, ctx);
+  const missed = ranked.length ? ranked : s.today.checks.filter((c) => !c.met && c.id !== "protein");
   if (!missed.length) return `Every check done today, ${s.northStar.onTrackDays} of 7 days on track this week. Same again tomorrow.`;
   const first = missed[0]!;
   const fix: Record<string, string> = {
@@ -120,7 +136,7 @@ const SYSTEM = `You are Magnus, a health coach, writing the person's end-of-day 
 Write 2 or 3 short sentences, second person, plain words, no lists, no emoji, no greeting:
 1. How the day went, quoting the numbers that matter most (good or bad).
 2. If onTrackToday is true: one short line that says so, and stop. No tip: an on-track day needs nothing extra.
-   Otherwise ONE specific thing to do tomorrow (a food, a time, an amount) for today's biggest miss. Use what tomorrow is (training or rest day).
+   Otherwise ONE specific thing to do tomorrow (a food, a time, an amount) for the focus fact (the miss that matters most for their goal). Use what tomorrow is (training or rest day).
    If the facts include pattern, the same miss keeps coming back: name the pattern, say what the numbers suggest is behind it, and suggest one realistic change to the routine or plan instead of repeating the usual advice.
 Never invent numbers. Under 400 characters.
 If the facts include dayClose, tomorrow's meals and calories are already set there (the person just read it): don't repeat its numbers or suggest a different food for tomorrow; make your one thing about something else (steps, sleep, training, timing) or simply sticking to tomorrow's plan.
@@ -230,9 +246,10 @@ export async function runNightlyDigest(
   if (!(await hasFeature(userProfileId, "digest", now))) return "not_included";
 
   const rules = await (deps.foodRules ?? loadDigestFoodRules)(userProfileId, s.today.date, nextDate(s.today.date));
-  const fallback = fallbackDigest(s);
   const gap = deps.proteinGap ? await deps.proteinGap(userProfileId, s.timezone, now).catch(() => null) : null;
-  const written = await deps.write({ ...digestFacts(s, weekday), ...(rules.line ? { foodRules: rules.line } : {}), ...(close.text ? { dayClose: close.text.slice(0, 500) } : {}), ...(gap ? { planProteinGap: gap } : {}) }, fallback);
+  const ctx = focusContext(s.goal, gapUndecided(gap));
+  const fallback = fallbackDigest(s, ctx);
+  const written = await deps.write({ ...digestFacts(s, weekday, ctx), ...(rules.line ? { foodRules: rules.line } : {}), ...(close.text ? { dayClose: close.text.slice(0, 500) } : {}), ...(gap ? { planProteinGap: gap } : {}) }, fallback);
   // The model was told the rules; a note that still names a food they ruled out never goes out.
   const broke = written.source === "model" && !rules.allows(written.text);
   if (broke) logger.warn({ userProfileId }, "nightly digest named a food outside their rules; using the fallback");

@@ -7,6 +7,7 @@
  * target check is compared with its baseline to say whether it helped.
  */
 import type Anthropic from "@anthropic-ai/sdk";
+import { focusWeight, loadFocusContext, NO_FOCUS_CONTEXT, type FocusContext } from "./focus.js";
 import { z } from "zod";
 
 import { logger } from "../logger.js";
@@ -73,7 +74,10 @@ function missed(r: DayRecord, check: CheckId): boolean | null {
 }
 
 /** Evidence for why days were off track, strongest first. `records` are complete days only. */
-export function findSignals(records: DayRecord[], targets: HealthTargets): Signal[] {
+/** A signal the focus context didn't silence (its own weight may be 0). */
+const x0 = (s: Signal): boolean => s.weight <= 0;
+
+export function findSignals(records: DayRecord[], targets: HealthTargets, ctx: FocusContext = NO_FOCUS_CONTEXT): Signal[] {
   const off = records.filter((r) => !r.score.onTrack);
   if (!records.length || !off.length) return [];
   const out: Signal[] = [];
@@ -235,7 +239,13 @@ export function findSignals(records: DayRecord[], targets: HealthTargets): Signa
     });
   }
 
-  return out.sort((a, b) => b.weight - a.weight).slice(0, 6);
+  // Ranked the shared way (focus.ts): a protein gap the plan made drops out, calories lead while weight is behind.
+  return out
+    .map((x) => ({ x, w: focusWeight(x.check, x.weight, ctx) }))
+    .filter((r) => r.w > 0 || x0(r.x))
+    .sort((a, b) => b.w - a.w)
+    .map((r) => r.x)
+    .slice(0, 6);
 }
 
 /** Hit rate of one check over complete days. */
@@ -523,6 +533,7 @@ type RunDeps = {
   load: typeof loadDayRecords;
   past: typeof listReports;
   rules?: (userProfileId: string, now: Date) => Promise<RcaRules | null>;
+  focus?: (userProfileId: string, timezone: string, now: Date) => Promise<FocusContext>;
   insight: typeof writeInsight;
   save: (userProfileId: string, row: Record<string, unknown>) => Promise<RcaReport | null>;
 };
@@ -531,6 +542,7 @@ const defaultRunDeps: RunDeps = {
   load: (id, now, days) => loadDayRecords(id, now, days),
   past: (id, limit) => listReports(id, limit),
   rules: (id, now) => loadRcaRules(id, now),
+  focus: (id, tz, now) => loadFocusContext(id, tz, now),
   insight: (s, c) => writeInsight(s, c),
   save: async (userProfileId, row) => {
     const { data, error } = await supabase.from("health_rca_reports").insert({ user_profile_id: userProfileId, ...row }).select(COLS).single();
@@ -591,7 +603,8 @@ export async function runRca(
   const records = loaded.records.slice(firstLogged);
   const recent = records.filter((r) => r.mealSessions > 0 || r.steps > 0 || r.workout);
   if (recent.length < 3) return null;
-  const signals = findSignals(recent, targets);
+  const ctx = deps.focus && loaded.timezone ? await deps.focus(userProfileId, loaded.timezone, now).catch(() => NO_FOCUS_CONTEXT) : NO_FOCUS_CONTEXT;
+  const signals = findSignals(recent, targets, ctx);
   const onTrackDays = recent.filter((r) => r.score.onTrack).length;
   if (!signals.length && trigger !== "manual") return null;
   const past = await deps.past(userProfileId, 6);

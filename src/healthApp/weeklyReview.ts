@@ -3,6 +3,7 @@
  * week before, and the one thing to fix next week. Pure summary over the tracker's history.
  */
 import { MIN_LIFTING_DAYS } from "./activities.js";
+import { loadFocusContext, NO_FOCUS_CONTEXT, pickFocus, type FocusContext } from "./focus.js";
 import type { GoalProgress, MetricProgress } from "./goalProgress.js";
 import { buildHealthHistory, type HistoryDay } from "./history.js";
 import type { CheckId, HealthTargets } from "./northStar.js";
@@ -110,6 +111,7 @@ export function summarizeWeek(
   targets: HealthTargets,
   goal: GoalProgress | null,
   onTrackGoal = WEEKLY_ON_TRACK_GOAL,
+  focusCtx: FocusContext = NO_FOCUS_CONTEXT,
 ): WeeklyReview {
   const week = days.slice(-7);
   const prev = days.length >= 14 ? days.slice(-14, -7) : null;
@@ -140,7 +142,14 @@ export function summarizeWeek(
   else if (weight?.pace === "ahead" || weight?.pace === "on_pace") headline += ` ${weight.label} is on pace.`;
   else if (weight?.pace === "reached") headline += ` ${weight.label} goal reached.`;
 
-  const focus = mostMissed && mostMissed.missedDays >= 2 ? FOCUS[mostMissed.id] : "Repeat this week. Consistency is the whole plan.";
+  // The shared ranking (focus.ts): unlogged days aren't misses, a protein gap the plan made isn't
+  // theirs, and what moves the goal counts more. Nothing missed twice → no focus to push.
+  const picked = pickFocus(week, focusCtx);
+  const focus = picked
+    ? `${picked.pattern ? `${picked.label} missed on ${picked.missedDays} of ${picked.judgedDays} logged days, so it's the plan to change, not effort. ` : ""}${FOCUS[picked.id as CheckId] ?? ""}`.trim()
+    : focusCtx.proteinPlanShort
+      ? "Your meal plan can't reach your protein target with your food rules. Choose what to do about it on the Meals tab."
+      : "Repeat this week. Consistency is the whole plan.";
 
   return {
     week: stats,
@@ -180,5 +189,6 @@ export async function loadWeeklyReview(userProfileId: string, now = new Date()):
     buildHealthSnapshot(userProfileId, now),
   ]);
   const adherence = await loadAdherence(userProfileId, snapshot.today.date).catch(() => null);
-  return { ...summarizeWeek(history.days, history.targets, snapshot.goal), mealPlanLine: adherence ? adherenceLine(adherence) : null };
+  const ctx = await loadFocusContext(userProfileId, snapshot.timezone, now, snapshot.goal).catch(() => NO_FOCUS_CONTEXT);
+  return { ...summarizeWeek(history.days, history.targets, snapshot.goal, undefined, ctx), mealPlanLine: adherence ? adherenceLine(adherence) : null };
 }
