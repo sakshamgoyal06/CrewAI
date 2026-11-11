@@ -735,12 +735,14 @@ export function statusForModel(s: HealthSnapshot): Record<string, unknown> {
     timezone: s.timezone,
     northStar: {
       onTrackDays: s.northStar.onTrackDays,
+      unloggedDays: s.northStar.unloggedDays,
       of: s.northStar.windowDays,
       goal: s.northStar.goal,
       mostMissed: s.northStar.mostMissed,
       days: s.northStar.days.map((d) => ({
         date: d.date,
         onTrack: d.onTrack,
+        ...(d.unlogged ? { unlogged: true } : {}),
         missed: d.checks.filter((c) => !c.met).map((c) => c.id),
       })),
     },

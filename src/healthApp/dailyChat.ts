@@ -173,6 +173,8 @@ function yesterdayLine(s: HealthSnapshot): string | null {
   const y = s.northStar.days.at(-2);
   if (!y || !y.checks.length) return null;
   if (y.onTrack) return "On track. Every check was done.";
+  // Nothing logged: say so plainly, and that it can still be filled in (11 Nov rule).
+  if (y.unlogged) return "Nothing was logged yesterday. You can't improve what you don't track: tell me roughly what you ate and I'll fill the day in.";
   const open = y.checks.filter((c) => !c.met);
   const met = y.checks.length - open.length;
   return `${met} of ${y.checks.length} checks. Open: ${open.map((c) => `${c.label.toLowerCase()} (${c.detail})`).join(", ")}.`;

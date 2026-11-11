@@ -177,6 +177,13 @@ describe("the day's plan", () => {
     expect(text).toContain("Today: Morning walk 7:00 am · Gym 6:30 pm.");
   });
 
+  it("calls out an unlogged yesterday instead of listing missed checks", () => {
+    const s = snap();
+    const y = s.northStar.days.at(-2)!;
+    s.northStar.days[s.northStar.days.length - 2] = { ...y, onTrack: false, unlogged: true, checks: [{ id: "meals_logged", label: "Meals logged", met: false, progress: 0, detail: "Nothing logged" }] };
+    expect(buildDayPlan({ snapshot: s, name: null, localHour: 7, intervention: null }).card.yesterday).toMatch(/^Nothing was logged yesterday\. You can't improve what you don't track/);
+  });
+
   it("puts an open plan-change offer first, then a due weigh-in", () => {
     const iv = { title: "Make the evening gym easier to keep" } as Intervention;
     expect(buildDayPlan({ snapshot: snap(), name: null, localHour: 9, intervention: iv }).card.focus).toBe(

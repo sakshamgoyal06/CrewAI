@@ -134,6 +134,8 @@ export function summarizeWeek(
   else if (stats.onTrackDays >= onTrackGoal) headline = `${stats.onTrackDays} of 7 days on track. That's the week that gets you there.`;
   else if (prev && stats.onTrackDays > weekStats(prev, targets.trainingDays).onTrackDays) headline = `${stats.onTrackDays} of 7 days on track, up from last week. Keep the direction.`;
   else headline = `${stats.onTrackDays} of 7 days on track. The goal needs ${onTrackGoal}.`;
+  const unlogged = week.filter((d) => d.unlogged).length;
+  if (stats.daysLogged > 0 && unlogged) headline += ` ${unlogged === 1 ? "1 day wasn't" : `${unlogged} days weren't`} logged, so ${unlogged === 1 ? "it isn't" : "they aren't"} counted as missed. Fill ${unlogged === 1 ? "it" : "them"} in from Today's day strip or in chat.`;
   if (weight?.pace === "behind") headline += ` ${weight.label} is behind the pace the deadline needs.`;
   else if (weight?.pace === "ahead" || weight?.pace === "on_pace") headline += ` ${weight.label} is on pace.`;
   else if (weight?.pace === "reached") headline += ` ${weight.label} goal reached.`;

@@ -57,6 +57,11 @@ export type DayScore = {
   date: string;
   checks: DayCheck[];
   onTrack: boolean;
+  /**
+   * Nothing eaten was logged (food-rule days). The food checks are replaced by one "Meals logged"
+   * check, so a blank day reads as unlogged, never as missed calories or protein (11 Nov rule).
+   */
+  unlogged?: true;
   /** 0–100, mean progress across applicable checks. */
   score: number;
 };
@@ -163,7 +168,9 @@ function foodChecks(day: DayInputs, targets: HealthTargets, checks: DayCheck[]):
 export function scoreDay(day: DayInputs, targets: HealthTargets): DayScore {
   const checks: DayCheck[] = [];
 
-  if (day.date >= FOOD_RULE_FROM) foodChecks(day, targets, checks);
+  const unlogged = day.date >= FOOD_RULE_FROM && day.mealSessions === 0 && day.calories <= 0;
+  if (unlogged) checks.push({ id: "meals_logged", label: "Meals logged", met: false, progress: 0, detail: "Nothing logged" });
+  else if (day.date >= FOOD_RULE_FROM) foodChecks(day, targets, checks);
   else legacyFoodChecks(day, targets, checks);
 
   checks.push({
@@ -198,11 +205,13 @@ export function scoreDay(day: DayInputs, targets: HealthTargets): DayScore {
   const score = Math.round(
     (checks.reduce((s, c) => s + c.progress, 0) / checks.length) * 100,
   );
-  return { date: day.date, checks, onTrack: checks.every((c) => c.met), score };
+  return { date: day.date, checks, onTrack: checks.every((c) => c.met), score, ...(unlogged ? { unlogged: true as const } : {}) };
 }
 
 export type NorthStar = {
   onTrackDays: number;
+  /** Past days in the window with nothing logged (today isn't counted until it's over). */
+  unloggedDays: number;
   windowDays: number;
   goal: number;
   days: DayScore[];
@@ -231,5 +240,6 @@ export function computeNorthStar(days: DayScore[], goal = WEEKLY_ON_TRACK_GOAL):
       mostMissed = { id, label: v.label, missedDays: v.count };
     }
   }
-  return { onTrackDays, windowDays: days.length, goal, days, mostMissed };
+  const unloggedDays = days.slice(0, -1).filter((d) => d.unlogged).length;
+  return { onTrackDays, unloggedDays, windowDays: days.length, goal, days, mostMissed };
 }

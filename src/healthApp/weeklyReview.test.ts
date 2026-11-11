@@ -50,6 +50,14 @@ describe("summarizeWeek", () => {
     expect(r.days).toHaveLength(7);
   });
 
+  it("says how many days weren't logged, and doesn't count them as missed", () => {
+    const blank = { meals: [], onTrack: false, score: 0, unlogged: true as const, checks: [{ id: "meals_logged" as const, label: "Meals logged", met: false, progress: 0, detail: "Nothing logged" }] };
+    const week = Array.from({ length: 7 }, (_, i) => day(i, i === 2 || i === 4 ? blank : {}));
+    const r = summarizeWeek(week, targets, null);
+    expect(r.headline).toMatch(/^5 of 7 days on track\..* 2 days weren't logged, so they aren't counted as missed\./);
+    expect(r.mostMissed?.id).toBe("meals_logged");
+  });
+
   it("praises a week that meets the goal and handles an empty week", () => {
     const good = Array.from({ length: 7 }, (_, i) => day(i));
     expect(summarizeWeek(good, targets, null).headline).toMatch(/^7 of 7 days on track/);

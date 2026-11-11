@@ -64,6 +64,8 @@ export type HistoryDay = {
   onTrack: boolean;
   score: number;
   checks: DayCheck[];
+  /** Nothing eaten was logged: not a missed day, an unlogged one (northStar.ts). */
+  unlogged?: true;
   calories: number;
   proteinG: number;
   carbsG: number;
@@ -284,6 +286,7 @@ export async function buildHealthHistory(
       onTrack: score.onTrack,
       score: score.score,
       checks: score.checks,
+      ...(score.unlogged ? { unlogged: true as const } : {}),
       calories,
       proteinG,
       carbsG: r1(dayMeals.reduce((t, m) => t + m.carbsG, 0)),
