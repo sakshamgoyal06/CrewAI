@@ -6,7 +6,7 @@ import { runOnboarding } from "./onboarding.js";
 import { scanView } from "./scan.js";
 import { foodPrefsEditor } from "./foodprefs.js";
 import { fromServer, routineEditor, toPayload } from "./routine.js";
-import { dayMealList, initMeals, loadPlan, mealScreen, mealsTitles, openPlannedMeal, renderMeals, setupScreen } from "./meals.js";
+import { dayMealList, initMeals, loadPlan, mealScreen, mealsTitles, openPlannedMeal, planGapsScreen, renderMeals, setupScreen } from "./meals.js";
 import { mealBuilder, fixedItem } from "./mealbuilder.js";
 import { initPause, loadPauses, openResume, pauseAlt, pauseDone, pauseLength, pauseTitles, pauseWhat, pauseWhy, resumeKeep, resumeStart, resumeWeigh, startPause } from "./pause.js";
 import { dayTone } from "./dayTone.js";
@@ -804,7 +804,7 @@ function renderFuel(d, t) {
     macros = el("div", { class: "macro-legend" }, el("div", { class: "ml" }, el("span", { class: "k" }, el("i", { class: "sw p" }), "Protein"), el("span", { class: "v" }, `${fmt(d.proteinG)}`, el("small", {}, " g"))));
   }
   // One list for the day's meals: planned ones with their state, then anything extra (dayMeals.ts).
-  $("fuel-body").replaceChildren(...[top, meter, macros, ml ? dayMealList(ml) : null].filter(Boolean));
+  $("fuel-body").replaceChildren(...[top, meter, macros, ml ? dayMealList(ml, { title: ml.date === todayKey() ? "Still to log" : null, compact: true }) : null].filter(Boolean));
 
   $("meals").replaceChildren(
     ...(ml
@@ -4601,6 +4601,7 @@ const SHEETS = {
   managePlan: managePlanScreen,
   dietSetup: setupScreen,
   dietMeal: mealScreen,
+  planGaps: planGapsScreen,
   activity() {
     const date = state.activityDate || null;
     state.activityDate = null;

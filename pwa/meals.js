@@ -136,6 +136,28 @@ function gapCard(g, gaps, cause) {
     ? el("p", { class: "hint gap-note" }, `Protein target is ${Math.round(g.plannedG / 5) * 5} g while ${g.cause} limits the plan. It goes back to ${g.targetG} g when that ends.`)
     : null;
   if (!proteinOpen && !others.length) return note;
+  // One line on the Meals tab; the choices open as their own screen (UI rule: big content = screen).
+  const first = proteinOpen ? `Plan reaches ${fmt(g.plannedG)} of ${fmt(g.targetG)} g protein` : `Plan misses ${others[0].label.toLowerCase()}`;
+  const more = (proteinOpen ? others.length : others.length - 1);
+  return el("div", {},
+    note,
+    el("button", { class: "gap-banner", type: "button", onclick: () => d.openSheet("planGaps") },
+      el("span", { class: "gap-dot", "aria-hidden": "true" }),
+      el("span", { class: "gap-text" }, first, more ? el("small", {}, ` and ${more} more`) : null),
+      el("span", { class: "gap-cta" }, "Decide"),
+      el("i", { class: "chev-r", "aria-hidden": "true" })));
+}
+
+/** The plan's gaps and what to do about them, as its own screen. */
+export function planGapsScreen() {
+  const { el, fmt } = d;
+  const v = ms.view;
+  const g = v?.proteinGap;
+  const gaps = v?.planGaps || [];
+  const cause = v?.gapCause;
+  const others = gaps.filter((x) => x.key !== "proteinG");
+  const proteinOpen = g && g.answered?.choice !== "accept";
+  if (!proteinOpen && !others.length) return el("div", { class: "stack" }, el("p", { class: "none" }, "Your plan reaches every target now."));
   const act = async (btn, path, body, done) => {
     btn.disabled = true;
     try {
@@ -144,6 +166,7 @@ function gapCard(g, gaps, cause) {
       await loadPlan(true);
       d.refresh?.();
       paint();
+      d.closeSheet();
     } catch (err) {
       btn.disabled = false;
       d.toast(err.message);
@@ -156,18 +179,16 @@ function gapCard(g, gaps, cause) {
   const why = cause || g?.cause || "your food settings";
   const row = (x) => el("li", {}, el("b", {}, x.label), ` ${fmt(x.planned)} of ${fmt(x.target)} ${x.unit}`, el("small", {}, x.direction === "over" ? " over" : " short"));
   const list = [...(proteinOpen ? [{ key: "proteinG", label: "Protein", unit: "g", planned: g.plannedG, target: g.targetG, direction: "under" }] : []), ...others];
-  return el("div", {},
-    note,
-    el("div", { class: "draft gap-card" },
-      el("p", { class: "eyebrow" }, "Plan vs your targets"),
-      el("p", { class: "pa-head" }, `${again ? "Even with the supplement, your" : "Your"} planned meals don't reach ${list.length === 1 ? "one target" : `${list.length} targets`}. ${why[0].toUpperCase()}${why.slice(1)} limits what fits.`),
-      el("ul", { class: "gap-list" }, ...list.map(row)),
-      el("p", { class: "hint" }, "Those gaps are the plan's, not yours. Pick how to handle them:"),
-      el("div", { class: "stack" },
-        proteinOpen ? el("button", { class: "btn primary block", type: "button", onclick: (e) => answer(e.currentTarget, "accept") }, `Aim for ${Math.round(g.plannedG / 5) * 5} g protein for now`) : null,
-        proteinOpen && !again ? el("button", { class: "btn block", type: "button", onclick: (e) => answer(e.currentTarget, "supplement") }, "Add a protein supplement") : null,
-        others.length ? el("button", { class: `btn block${proteinOpen ? "" : " primary"}`, type: "button", onclick: (e) => act(e.currentTarget, "/diet/plan-gaps/accept", {}, () => "Kept. The coach won't count these against you.") }, `Keep ${others.map((x) => x.label.toLowerCase()).join(", ")} as planned`) : null,
-        el("button", { class: "btn block", type: "button", onclick: (e) => answer(e.currentTarget, "loosen") }, "Loosen a food rule"))));
+  // One strong button (the first choice); the rest are plain rows.
+  return el("div", { class: "stack gap-screen" },
+    el("p", { class: "pa-head" }, `${again ? "Even with the supplement, your" : "Your"} planned meals don't reach ${list.length === 1 ? "one target" : `${list.length} targets`}. ${why[0].toUpperCase()}${why.slice(1)} limits what fits.`),
+    el("ul", { class: "gap-list" }, ...list.map(row)),
+    el("p", { class: "hint" }, "Those gaps are the plan's, not yours. Pick how to handle them:"),
+    el("div", { class: "stack" },
+      proteinOpen ? el("button", { class: "btn primary block", type: "button", onclick: (e) => answer(e.currentTarget, "accept") }, `Aim for ${Math.round(g.plannedG / 5) * 5} g protein for now`) : null,
+      proteinOpen && !again ? el("button", { class: "btn block", type: "button", onclick: (e) => answer(e.currentTarget, "supplement") }, "Add a protein supplement") : null,
+      others.length ? el("button", { class: `btn block${proteinOpen ? "" : " primary"}`, type: "button", onclick: (e) => act(e.currentTarget, "/diet/plan-gaps/accept", {}, () => "Kept. The coach won't count these against you.") }, `Keep ${others.map((x) => x.label.toLowerCase()).join(", ")} as planned`) : null,
+      el("button", { class: "link center", type: "button", onclick: (e) => answer(e.currentTarget, "loosen") }, "Loosen a food rule")));
 }
 
 /**
@@ -839,7 +860,7 @@ const openRows = new Set();
 /** Calories with the eating-out "~" for a planned meal whose food isn't known yet. */
 const kcalText = (r) => `${r.eatOut && r.state === "todo" ? "~" : ""}${d.fmt(r.totals.kcal)}`;
 
-export function dayMealList(list, { title = null } = {}) {
+export function dayMealList(list, { title = null, compact = false } = {}) {
   const { el, fmt } = d;
   if (!list) return null;
   const isToday = list.date === todayKey();
@@ -857,6 +878,17 @@ export function dayMealList(list, { title = null } = {}) {
     return el("div", { class: "day-meals" }, head, el("p", { class: "none" }, isToday ? "Nothing logged yet today." : future ? "Nothing planned." : "Nothing logged this day."), addPast);
   }
   const planBySlot = new Map(list.rows.filter((r) => r.state !== "extra").map((r) => [r.slot, r]));
+  // Today's Food section shows only what still needs an answer (the full list lives on Meals).
+  if (compact && isToday) {
+    const open = list.rows.filter((r) => r.state === "todo" || r.state === "missed").slice(0, 2);
+    const all = el("button", { class: "link small dm-all", type: "button", onclick: () => d.setView("meals") },
+      open.length ? `All ${list.rows.length} meals` : "See today's meals");
+    return el("div", { class: "day-meals compact" }, head,
+      open.length
+        ? el("ul", { class: "dm-list" }, ...open.map((r) => dayMealRow(list, r, planBySlot)))
+        : el("p", { class: "none" }, list.planned ? "Every planned meal is answered." : "Nothing planned for the rest of today."),
+      all);
+  }
   const rows = list.rows.map((r) => dayMealRow(list, r, planBySlot));
   const foot = !future && list.eaten.kcal
     ? el("div", { class: "dm-foot" },
@@ -1014,4 +1046,4 @@ export function listFor(date) {
   return (ms.view?.lists || []).find((x) => x.date === date) || null;
 }
 
-export const mealsTitles = { dietSetup: "Your meals", dietMeal: "" };
+export const mealsTitles = { dietSetup: "Your meals", dietMeal: "", planGaps: "Plan vs your targets" };
