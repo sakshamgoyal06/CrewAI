@@ -176,3 +176,25 @@ describe("runRca", () => {
     expect(save).not.toHaveBeenCalled();
   });
 });
+
+describe("writeInsight keeps their rules", () => {
+  const sig = [{ id: "protein_low", check: "protein", text: "Protein met on 1 of 10 days (avg 70 g vs 150 g)." }] as never;
+  const ctx = { targets: { calorieTarget: 2000, proteinTarget: 150, stepTarget: 8000, trainingDays: [1], minMealSessions: 3 } as never, onTrackDays: 2, days: 10, past: [] };
+  const answer = (experiment: string) => async () =>
+    ({ content: [{ type: "tool_use", id: "t", name: "write_rca", input: { hypothesis: "Protein is low most days.", experiment, targetCheck: "protein" } }] }) as never;
+  const veg = { food: "TEMPORARY RULE vegetarian until 2026-11-25", routine: "Gym paused until 2026-11-25, walking instead", allows: (t: string) => !/\begg|chicken/i.test(t) };
+
+  it("sends the rules to the model", async () => {
+    let sent: Record<string, unknown> | null = null;
+    await writeInsight(sig, { ...ctx, rules: veg }, async (p) => { sent = p; return answer("Add a bowl of curd to lunch for 7 days.")(); });
+    expect(JSON.stringify(sent)).toContain("Gym paused until 2026-11-25");
+    expect(JSON.stringify(sent)).toContain("vegetarian until 2026-11-25");
+  });
+  it("falls back when the experiment names a ruled-out food", async () => {
+    const r = await writeInsight(sig, { ...ctx, rules: veg }, answer("Add 2 boiled eggs to breakfast for 7 days."));
+    expect(r.source).toBe("fallback");
+    expect(r.experiment).not.toMatch(/egg/i);
+    const ok = await writeInsight(sig, { ...ctx, rules: veg }, answer("Add a bowl of curd to lunch for 7 days."));
+    expect(ok.source).toBe("model");
+  });
+});

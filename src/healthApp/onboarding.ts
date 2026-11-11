@@ -90,6 +90,8 @@ export const onboardingInput = z
       .optional(),
     /** The weekly routine; when given, training days and the gym slot come from it. */
     routine: z.array(routineItemInput).max(MAX_ROUTINE_ITEMS).optional(),
+    /** Weekday of the weekly weigh-in (0 = Sunday); a scale reading through Health Connect counts. */
+    weighInDay: z.coerce.number().int().min(0).max(6).nullable().optional(),
     ...foodPrefsShape,
   })
   .refine((v) => v.diet !== "custom" || !!v.dietNote, { message: "describe your diet", path: ["dietNote"] })
@@ -320,13 +322,14 @@ export async function completeOnboarding(
     diet_note: input.dietNote?.trim() || null,
     food_avoid: cleanAvoidList(input.foodAvoid),
     goal_type: input.goalType,
+    ...(input.weighInDay != null ? { weigh_in_day: input.weighInDay } : {}),
     onboarded_at: now.toISOString(),
   };
   let profile = await supabase.from("user_health_profile").upsert(row, { onConflict: "user_profile_id" });
   if (profile.error && /diet_note|food_avoid|diet_check/.test(profile.error.message)) {
     // The food-preferences migration isn't applied yet: save the rest rather than block sign-up.
     logger.warn({ err: profile.error.message }, "food preferences not saved (migration pending)");
-    const { diet_note: _n, food_avoid: _a, ...legacy } = row;
+    const { diet_note: _n, food_avoid: _a, ...legacy } = row as typeof row & { diet_note?: unknown; food_avoid?: unknown };
     profile = await supabase
       .from("user_health_profile")
       .upsert({ ...legacy, diet: input.diet === "custom" ? null : input.diet }, { onConflict: "user_profile_id" });

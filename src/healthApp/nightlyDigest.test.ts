@@ -77,6 +77,15 @@ describe("nightly digest", () => {
     expect(f).toMatchObject({ today: "Monday", calories: "1,900 of 2,200 kcal", protein: "60 of 150 g", trainedToday: true, tomorrow: "Tuesday, rest day", sleepLastNight: "7.0 h" });
   });
 
+  it("names a miss that keeps coming back as a pattern, leaving unlogged days out", () => {
+    const s = snap();
+    expect(digestFacts(s, 1).pattern).toBeUndefined();
+    const miss = (date: string) => ({ date, onTrack: false, score: 50, checks: [{ id: "protein" as const, label: "Protein", met: false, progress: 0.5, detail: "" }] });
+    const blank = (date: string) => ({ date, onTrack: false, score: 0, unlogged: true as const, checks: [{ id: "meals_logged" as const, label: "Meals logged", met: false, progress: 0, detail: "Nothing logged" }] });
+    s.northStar.days = [miss("2026-11-04"), blank("2026-11-05"), miss("2026-11-06"), miss("2026-11-07"), { ...miss("2026-11-08") }];
+    expect(digestFacts(s, 1).pattern).toBe("Protein missed today and on 3 of the 3 days before");
+  });
+
   it("falls back to the first missed check and its fix", () => {
     expect(fallbackDigest(snap())).toBe("Today: protein missed (60 / 150 g). Tomorrow, put 30 g of protein into breakfast so the evening isn't a catch-up.");
   });
@@ -86,6 +95,22 @@ describe("nightly digest", () => {
     expect(ok).toEqual({ text: "Protein landed at 60 of 150 g. Tomorrow, add paneer at lunch.", source: "model" });
     const failed = await writeDigest({}, "fb", async () => { throw new Error("down"); });
     expect(failed).toEqual({ text: "fb", source: "fallback" });
+  });
+
+  it("with a meal plan, waits for the day close and gives the note what it set for tomorrow", async () => {
+    let facts: Record<string, unknown> | null = null;
+    const write = async (f: Record<string, unknown>) => { facts = f; return { text: "A steady day.", source: "model" as const }; };
+    const waiting = { snapshot: async () => snap(), write, dayClose: async () => ({ hasPlan: true, text: null }) };
+    expect(await runNightlyDigest("u1", ist("21:35"), waiting)).toBe("not_yet");
+    expect(await runNightlyDigest("u1", ist("23:20"), waiting)).toBe("not_yet");
+    const closed = { ...waiting, dayClose: async () => ({ hasPlan: true, text: "1,950 of 2,000: on track.\nTomorrow:\nBreakfast: Poha (350 kcal)" }) };
+    expect(await runNightlyDigest("u1", ist("21:50"), closed)).toBe("posted");
+    expect(facts!.dayClose).toContain("Tomorrow:");
+  });
+
+  it("without a plan the note keeps its 21:30 to 23:00 window", () => {
+    expect(digestDue(23 * 60 + 10)).toBe(false);
+    expect(digestDue(23 * 60 + 10, { waitsForDayClose: true })).toBe(true);
   });
 
   it("posts once at 21:30 and sends it as the evening push", async () => {

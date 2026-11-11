@@ -27,11 +27,17 @@ describe("buildTurnContext", () => {
     expect(ctx).toContain("Last weigh-in: 81.9 kg on 2026-11-02, 22.8% body fat.");
     expect(ctx).not.toContain("Open check-ins");
     const later = buildTurnContext(
-      fixtureSnapshot({ workoutChecks: [{ localDate: "2026-11-01", gymTime: "18:30", status: "missing", hevyWorkoutId: null, reason: null }] }),
+      fixtureSnapshot({
+        workoutChecks: [
+          { localDate: "2026-11-01", gymTime: "18:30", status: "missing", hevyWorkoutId: null, reason: null },
+          { localDate: "2026-11-02", gymTime: "18:30", status: "missing", hevyWorkoutId: null, reason: null },
+        ],
+      }),
       null,
       new Date("2026-11-03T20:00:00+05:30"),
     );
-    expect(later).toContain("Open check-ins: gym on 2026-11-01");
+    // Yesterday's is still open; the day before closed with its day.
+    expect(later).toContain("Open check-ins: gym on 2026-11-02.");
     expect(ctx).toContain("Last Hevy workout: Push day on 2026-11-01.");
   });
 
@@ -86,5 +92,27 @@ describe("open loops", () => {
       'Open loops: trying "Gym at 7 am instead of 6:30 pm" since 2026-10-30; skipped Evening gym on 2026-11-03 (knee hurts), Morning walk on 2026-11-01.',
     );
     expect(buildTurnContext(s, null, FIXTURE_NOW)).toContain("Open loops: skipped Evening gym on 2026-11-03 (knee hurts)");
+  });
+});
+
+describe("phone step sync in the context", () => {
+  it("says when the phone last synced, and when that count may be behind", () => {
+    const s = fixtureSnapshot();
+    const at = (iso: string) => buildTurnContext({ ...s, today: { ...s.today, phoneSyncedAt: iso } }, null, FIXTURE_NOW);
+    const fresh = new Date(FIXTURE_NOW.getTime() - 30 * 60_000).toISOString();
+    const old = new Date(FIXTURE_NOW.getTime() - 3 * 60 * 60_000).toISOString();
+    expect(at(fresh)).toMatch(/steps \(synced from their phone at \d\d:\d\d; never ask them for steps\)/);
+    expect(at(old)).toMatch(/synced from their phone at \d\d:\d\d; may be behind; never ask/);
+  });
+});
+
+describe("plan line", () => {
+  it("tells the coach about a trial or free plan, and nothing for Pro", () => {
+    const all = { digest: true, rca: true, photo: true };
+    const ctx = (plan: Parameters<typeof buildTurnContext>[4]["plan"]) => buildTurnContext(fixtureSnapshot(), null, FIXTURE_NOW, [], { plan });
+    expect(ctx({ tier: "trial", trialEndsAt: "2026-11-09T18:00:00Z", features: all })).toContain("Magnus plan: free trial until 2026-11-09 (everything included).");
+    expect(ctx({ tier: "free", trialEndsAt: null, features: { digest: false, rca: false, photo: true } })).toContain("Magnus plan: free; not included: nightly note, off-track analysis");
+    expect(ctx({ tier: "pro", trialEndsAt: null, features: all })).not.toContain("Magnus plan");
+    expect(ctx(undefined)).not.toContain("Magnus plan");
   });
 });

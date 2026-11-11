@@ -234,3 +234,16 @@ describe("time of day, skips and swaps", () => {
     expect(followUps.map((f) => f.item.label)).toEqual(["Evening walk (for evening gym)"]);
   });
 });
+
+describe("trainingDayOn", () => {
+  const gym = { id: "g", activityKey: "gym", label: "Evening gym", days: [0, 1, 3, 4, 6], startTime: "18:30", durationMin: 60, remindBeforeMin: 15, checkAfterMin: 180, position: 0 } as never;
+  const swapped = { ...(gym as object), swap: { activityKey: "walking", label: "Evening walk", durationMin: 30, startTime: null, from: "2026-11-05", until: "2026-11-25", reason: "no gym" } } as never;
+  it("a swapped gym day is a rest day; the day after the swap ends is training again", async () => {
+    const { trainingDayOn } = await import("./routine.js");
+    expect(trainingDayOn("2026-11-09", [0, 1, 3, 4, 6], [gym])).toBe(true); // Monday
+    expect(trainingDayOn("2026-11-09", [0, 1, 3, 4, 6], [swapped])).toBe(false);
+    expect(trainingDayOn("2026-11-26", [0, 1, 3, 4, 6], [swapped])).toBe(true); // Thursday after
+    expect(trainingDayOn("2026-11-10", [0, 1, 3, 4, 6], [gym])).toBe(false); // Tuesday
+    expect(trainingDayOn("2026-11-09", [1], null)).toBe(true);
+  });
+});

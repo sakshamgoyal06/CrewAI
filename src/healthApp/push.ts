@@ -52,6 +52,7 @@ export const NOTIFICATION_KINDS = [
   "intervention",
   "plan_meal",
   "ops_alert",
+  "pause_end",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

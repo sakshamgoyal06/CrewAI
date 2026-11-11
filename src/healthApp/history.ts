@@ -4,6 +4,7 @@
  * between days and charts on the phone needs no further round trips.
  */
 import { localDateKey } from "../nutrition/localDate.js";
+import { loadBreaks, planBreakOn } from "./breaks.js";
 import type { HevyWorkout } from "../pillars/health/workouts/hevy/index.js";
 import { supabase } from "../tools/clients.js";
 import { burnForDay, trainingActivity, typicalTrainingBurn, type Activity, type Burn, type NotCounted, type StepBucket, type TimedWorkout } from "./activities.js";
@@ -64,6 +65,10 @@ export type HistoryDay = {
   onTrack: boolean;
   score: number;
   checks: DayCheck[];
+  /** Nothing eaten was logged: not a missed day, an unlogged one (northStar.ts). */
+  unlogged?: true;
+  /** The whole plan was paused that day (breaks.ts). */
+  paused?: true;
   calories: number;
   proteinG: number;
   carbsG: number;
@@ -168,6 +173,8 @@ export async function buildHealthHistory(
   const from = dates[0]!;
   const to = dates[dates.length - 1]!;
 
+  const breaks = await loadBreaks(userProfileId, from).catch(() => []);
+  const planPaused = (date: string) => !!planBreakOn(breaks, date);
   const [mealRes, activityRes, hevy, checkins, workoutChecks, activities, stepRes, routineChecks, water] = await Promise.all([
     supabase
       .from("meal_logs")
@@ -274,6 +281,7 @@ export async function buildHealthHistory(
         workoutsLogged: dayWorkouts.length || (trainedUnlogged ? 1 : 0),
         sportLabel: sportCounted,
         routine: dayRoutine,
+        paused: planPaused(date),
       },
       { ...targets, weightKg: kg },
     );
@@ -284,6 +292,8 @@ export async function buildHealthHistory(
       onTrack: score.onTrack,
       score: score.score,
       checks: score.checks,
+      ...(score.unlogged ? { unlogged: true as const } : {}),
+      ...(score.paused ? { paused: true as const } : {}),
       calories,
       proteinG,
       carbsG: r1(dayMeals.reduce((t, m) => t + m.carbsG, 0)),

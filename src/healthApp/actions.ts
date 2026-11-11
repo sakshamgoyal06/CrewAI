@@ -7,10 +7,12 @@ import { z } from "zod";
 import { mealContext } from "../meals/mealPhrases.js";
 
 import { localDateKey } from "../nutrition/localDate.js";
+import { addDays } from "../util/time.js";
 import { logger } from "../logger.js";
 import { loggableError } from "../util/loggableError.js";
 import { ACTIVITY_SOURCES, upsertDailyActivity } from "./activityStore.js";
-import { afterMealLogged, previewPlanRole } from "./dietPlan/rhythm.js";
+import { afterMealLogged, previewPlanRole, rebalanceToday, redoCarry } from "./dietPlan/rhythm.js";
+import { unlinkDeletedMeal } from "./dietPlan/log.js";
 import { setActiveGoal, updateDailyTargets, upsertBodyCheckin } from "./bodyStore.js";
 import { isOwnerProfile } from "./accounts.js";
 import { webGateFor } from "./webLookups.js";
@@ -24,6 +26,7 @@ import {
   type MealDraft,
 } from "./meals.js";
 
+const DRAFT_SLOTS = ["breakfast", "lunch", "dinner", "snack"] as const;
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
 const num = (min: number, max: number) => z.coerce.number().min(min).max(max);
 
@@ -102,7 +105,18 @@ export const mealDraftInput = z.object({
     .min(1)
     .max(12)
     .optional(),
+  /** An earlier day they're telling us about ("yesterday's dinner"), YYYY-MM-DD; default today. */
+  date: DATE.optional(),
 });
+
+/** How far back a meal can be filled in from chat. */
+export const BACKFILL_DAYS = 30;
+
+/** The day a drafted meal is for: the date given, "yesterday" in the text, else today. Never ahead of today or past the backfill window. */
+export function draftDayFor(input: { date?: string; yesterday?: boolean }, today: string): string {
+  const want = input.date ?? (input.yesterday ? addDays(today, -1) : today);
+  return want > today || want < addDays(today, -BACKFILL_DAYS) ? today : want;
+}
 
 const mealItem = z.object({
   name: z.string().trim().min(1).max(200),
@@ -227,12 +241,22 @@ export async function startMealDraft(
   const extra = input.extra === true || typed.extra === true;
   if (extra) draft.extra = true;
   // Say on the card, before it's logged, whether it replaces the planned meal or sits on top.
-  const day = localDateKey(ctx.now ?? new Date(), ctx.timezone);
-  draft.date ??= day;
-  const plan = await previewPlanRole(ctx.userProfileId, day, draft.slot, { extra }).catch((err) => {
-    logger.warn({ err: loggableError(err) }, "meal draft plan preview failed");
-    return null;
-  });
+  const day = draftDayFor({ date: input.date, yesterday: typed.yesterday }, localDateKey(ctx.now ?? new Date(), ctx.timezone));
+  draft.date = day;
+  const preview = (slot: typeof draft.slot) =>
+    previewPlanRole(ctx.userProfileId, day, slot, { extra }).catch((err) => {
+      logger.warn({ err: loggableError(err) }, "meal draft plan preview failed");
+      return null;
+    });
+  // "I had 2 roti and dal today" names no meal: never guess, the card asks which one.
+  const said = (input.slot && input.slot !== "unspecified") || !!typed.slot;
+  if (!said && !how.webFirst) {
+    draft.slotUnsure = true;
+    const roles = await Promise.all(DRAFT_SLOTS.map(async (s) => [s, await preview(s)] as const));
+    draft.planBySlot = Object.fromEntries(roles.filter(([, r]) => r)) as MealDraft["planBySlot"];
+    return draft;
+  }
+  const plan = await preview(draft.slot);
   if (plan) draft.plan = plan;
   return draft;
 }
@@ -276,5 +300,14 @@ export async function removeMeal(
     return { ok: false, error: "invalid_id" };
   }
   const r = await deleteMeal(ctx.userProfileId, mealSessionId, ctx.timezone);
-  return r.ok ? { ok: true, date: r.localDate } : r;
+  if (!r.ok) return r;
+  // The planned meal it stood for is planned again, and today's meals still to come resize to fit.
+  await unlinkDeletedMeal(ctx.userProfileId, mealSessionId).catch((err) => logger.warn({ err: loggableError(err) }, "unlink after meal delete failed"));
+  if (r.localDate === localDateKey(ctx.now ?? new Date(), ctx.timezone)) {
+    await rebalanceToday(ctx).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance after meal delete failed"));
+  } else {
+    // A closed day lost a meal (a double count removed): its carry is worked out again.
+    await redoCarry(ctx, r.localDate).catch((err) => logger.warn({ err: loggableError(err) }, "carry redo after meal delete failed"));
+  }
+  return { ok: true, date: r.localDate };
 }

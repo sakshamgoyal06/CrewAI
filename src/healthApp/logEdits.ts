@@ -16,7 +16,7 @@ import { logCheckin, logSteps } from "./actions.js";
 import { upsertBodyCheckin } from "./bodyStore.js";
 import { logWater } from "./water.js";
 import type { PlanItem } from "./dietPlan/compose.js";
-import { rebalanceToday } from "./dietPlan/rhythm.js";
+import { afterMealLogged, rebalanceToday, redoCarry } from "./dietPlan/rhythm.js";
 
 // ---------- logged meals ----------
 
@@ -165,6 +165,9 @@ export async function replaceLoggedMeal(
       await rebalanceToday(ctx).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance after meal edit failed"));
     }
   }
+  if (date !== localDateKey(ctx.now ?? new Date(), ctx.timezone)) {
+    await redoCarry(ctx, date).catch((err) => logger.warn({ err: loggableError(err) }, "carry redo after meal edit failed"));
+  }
   const totals = input.items.reduce((a, i) => ({ calories: a.calories + Math.round(i.calories), protein_g: r1(a.protein_g + i.protein_g) }), { calories: 0, protein_g: 0 });
   return { ok: true, date, totals };
 }
@@ -185,6 +188,20 @@ async function restoreMeal(userProfileId: string, sessionId: string): Promise<{ 
   // Only the rows that delete removed (an earlier edit's old rows stay deleted).
   const r = await supabase.from("meal_logs").update({ deleted_at: null }).eq("user_profile_id", userProfileId).eq("meal_session_id", sessionId).eq("deleted_at", at);
   return r.error ? { ok: false, error: r.error.message } : { ok: true };
+}
+
+/** A restored meal takes its planned meal's place again (or counts as extra), and today rebalances. */
+async function relinkRestoredMeal(ctx: ActionContext, sessionId: string): Promise<void> {
+  const { data } = await supabase
+    .from("meal_logs")
+    .select("local_date, meal_slot")
+    .eq("user_profile_id", ctx.userProfileId)
+    .eq("meal_session_id", sessionId)
+    .is("deleted_at", null)
+    .limit(1);
+  const row = (data ?? [])[0] as { local_date: string; meal_slot: string | null } | undefined;
+  if (!row?.meal_slot) return;
+  await afterMealLogged(ctx, { date: String(row.local_date), slot: row.meal_slot, mealSessionId: sessionId });
 }
 
 async function restoreActivity(userProfileId: string, id: string): Promise<{ ok: boolean; error?: string }> {
@@ -315,6 +332,7 @@ export async function undoReceipt(ctx: ActionContext, receiptId: string): Promis
       break;
     case "meal_removed":
       r = await restoreMeal(uid, card.value.mealSessionId);
+      if (r.ok) await relinkRestoredMeal(ctx, card.value.mealSessionId).catch((err) => logger.warn({ err: loggableError(err) }, "relink after meal restore failed"));
       break;
     case "activity_removed":
       r = await restoreActivity(uid, card.value.activityId);

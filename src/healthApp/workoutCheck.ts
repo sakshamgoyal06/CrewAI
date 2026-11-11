@@ -165,6 +165,8 @@ export async function runWorkoutChecks(
     for (const d of dueWorkoutChecks({ now, timezone, trainingDays: plan.trainingDays, slot: plan.slot })) {
       // A gym day swapped for something else ("no gym till the 25th") gets that item's own check, not the Hevy one.
       if (plan.item && !isGym(onDate(plan.item, d.date))) continue;
+      // A paused gym ("gym paused till the 25th", or the whole plan paused) gets no check at all.
+      if (plan.item && onDate(plan.item, d.date).pausedOn) continue;
       if (!byDate.has(d.date)) byDate.set(d.date, { ...d, slot: plan.slot });
     }
   }

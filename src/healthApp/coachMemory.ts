@@ -79,6 +79,33 @@ const HIJACK = [
 ];
 
 /** True when a memory line reads as an instruction to the coach rather than a fact about the person. */
+/**
+ * Lines that are really rules the plan and every scheduled job must follow: a diet or food rule
+ * ("vegetarian till 25 Nov", "no eggs", "allergic to peanuts") or a training break ("no gym till
+ * 25 Nov"). Memory reaches only the chat, so a rule kept here is ignored by the meal plan, reminders,
+ * the gym check and the nightly note (5 Nov audit). These go to the structured setting instead.
+ * Plain likes and dislikes ("hates karela") stay facts.
+ */
+const FOOD_RULE = [
+  /\b(vegetarian|vegan|jain|eggetarian|pure veg|veg only|only veg)\b/i,
+  /\bno (meat|chicken|fish|eggs?|non-?veg|beef|pork|mutton|seafood|onion|garlic|dairy|milk|gluten|sugar|sweets|alcohol)\b/i,
+  /\b(allergic|allergy|intolerant|intolerance)\b/i,
+  /\b(doesn'?t|does not|won'?t|cannot|can'?t) eat\b/i,
+];
+const TRAINING_RULE = [
+  /\bno (gym|workouts?|training|lifting|weights)\b/i,
+  /\b(gym|training|workout) (break|pause)\b/i,
+  /\b(skipping|off|away from) (the )?gym\b/i,
+];
+
+export type RuleKind = "food" | "training";
+
+export function ruleKind(text: string): RuleKind | null {
+  if (FOOD_RULE.some((r) => r.test(text))) return "food";
+  if (TRAINING_RULE.some((r) => r.test(text))) return "training";
+  return null;
+}
+
 export function isInstructionLike(text: string): boolean {
   return HIJACK.some((re) => re.test(text));
 }
@@ -87,7 +114,8 @@ const same = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivi
 
 export type RememberResult =
   | { ok: true; line: MemoryLine; duplicate: boolean; count: number }
-  | { ok: false; error: "empty" | "memory_full" | "not_a_fact"; count: number };
+  | { ok: false; error: "empty" | "memory_full" | "not_a_fact"; count: number }
+  | { ok: false; error: "is_a_rule"; rule: RuleKind; count: number };
 
 /**
  * Adds a line unless an equal one is already there. Refuses past the cap so the list stays short.
@@ -105,6 +133,10 @@ export async function rememberLine(
   const lines = await loadCoachMemory(userProfileId, today);
   if (!text) return { ok: false, error: "empty", count: lines.length };
   if (isInstructionLike(text)) return { ok: false, error: "not_a_fact", count: lines.length };
+  // From the coach, a rule goes to its real setting; a line the person types on the You tab is
+  // theirs to keep, and the You tab offers to apply it.
+  const rule = source === "coach" ? ruleKind(text) : null;
+  if (rule) return { ok: false, error: "is_a_rule", rule, count: lines.length };
   const existing = lines.find((l) => same(l.text, text));
   if (existing) {
     if (until && until !== existing.expiresOn) {

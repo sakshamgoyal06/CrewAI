@@ -117,10 +117,57 @@ function paint() {
   const order = SLOT_ORDER.filter((s) => v.prefs.meals.some((m) => m.slot === s));
   const list = dayMealList(listFor(ms.date), { title: isToday ? "Meals today" : `Meals · ${dayLabel(ms.date)}` })
     || el("ul", { class: "list meal-plan" }, ...order.map((slot) => mealCard(ms.date, slot)).filter(Boolean));
-  host.replaceChildren(...[strip, summary, list,
+  host.replaceChildren(...[gapCard(v.proteinGap, v.planGaps || [], v.gapCause), strip, summary, list,
     el("div", { class: "fresh-plan" },
       el("button", { class: "btn block", type: "button", onclick: rebuild }, "Make me a fresh plan"),
       el("p", { class: "hint" }, "New options from your current food settings. Meals you've already eaten stay."))].filter(Boolean));
+}
+
+/**
+ * Every target the planned meals can't reach under their own rules (calories, protein, carbs, fat,
+ * fibre), flagged together when the plan is built. Protein keeps its three choices; the rest can be
+ * kept as they are or fixed by loosening a rule. Answered protein: one quiet line until the rules change.
+ */
+function gapCard(g, gaps, cause) {
+  const { el, fmt } = d;
+  const others = gaps.filter((x) => x.key !== "proteinG");
+  const proteinOpen = g && g.answered?.choice !== "accept";
+  const note = g && g.answered?.choice === "accept"
+    ? el("p", { class: "hint gap-note" }, `Protein target is ${Math.round(g.plannedG / 5) * 5} g while ${g.cause} limits the plan. It goes back to ${g.targetG} g when that ends.`)
+    : null;
+  if (!proteinOpen && !others.length) return note;
+  const act = async (btn, path, body, done) => {
+    btn.disabled = true;
+    try {
+      const r = await d.api(path, { method: "POST", body: JSON.stringify(body || {}) });
+      d.toast(done(r));
+      await loadPlan(true);
+      d.refresh?.();
+      paint();
+    } catch (err) {
+      btn.disabled = false;
+      d.toast(err.message);
+    }
+  };
+  const answer = (btn, choice) => choice === "loosen"
+    ? d.openSheet("dietSetup")
+    : act(btn, "/diet/protein-gap", { choice }, (r) => (choice === "accept" ? `Protein target set to ${r.proteinTarget} g for now.` : `Added ${r.supplement} to your supplements.`));
+  const again = g?.answered?.choice === "supplement";
+  const why = cause || g?.cause || "your food settings";
+  const row = (x) => el("li", {}, el("b", {}, x.label), ` ${fmt(x.planned)} of ${fmt(x.target)} ${x.unit}`, el("small", {}, x.direction === "over" ? " over" : " short"));
+  const list = [...(proteinOpen ? [{ key: "proteinG", label: "Protein", unit: "g", planned: g.plannedG, target: g.targetG, direction: "under" }] : []), ...others];
+  return el("div", {},
+    note,
+    el("div", { class: "draft gap-card" },
+      el("p", { class: "eyebrow" }, "Plan vs your targets"),
+      el("p", { class: "pa-head" }, `${again ? "Even with the supplement, your" : "Your"} planned meals don't reach ${list.length === 1 ? "one target" : `${list.length} targets`}. ${why[0].toUpperCase()}${why.slice(1)} limits what fits.`),
+      el("ul", { class: "gap-list" }, ...list.map(row)),
+      el("p", { class: "hint" }, "Those gaps are the plan's, not yours. Pick how to handle them:"),
+      el("div", { class: "stack" },
+        proteinOpen ? el("button", { class: "btn primary block", type: "button", onclick: (e) => answer(e.currentTarget, "accept") }, `Aim for ${Math.round(g.plannedG / 5) * 5} g protein for now`) : null,
+        proteinOpen && !again ? el("button", { class: "btn block", type: "button", onclick: (e) => answer(e.currentTarget, "supplement") }, "Add a protein supplement") : null,
+        others.length ? el("button", { class: `btn block${proteinOpen ? "" : " primary"}`, type: "button", onclick: (e) => act(e.currentTarget, "/diet/plan-gaps/accept", {}, () => "Kept. The coach won't count these against you.") }, `Keep ${others.map((x) => x.label.toLowerCase()).join(", ")} as planned`) : null,
+        el("button", { class: "btn block", type: "button", onclick: (e) => answer(e.currentTarget, "loosen") }, "Loosen a food rule"))));
 }
 
 /**
@@ -350,6 +397,8 @@ export function mealScreen() {
   document.getElementById("sheet-title").textContent = `${SLOT_NAME[slot]} · ${dayLabel(date)}`;
   if (!p) { wrap.append(el("p", { class: "none" }, "This meal isn't in the plan any more.")); return wrap; }
   const canEat = date <= todayKey();
+  // Before midnight starting the meal's day an edit changes the plan; on the day it records a swap.
+  const onTheDay = canEat;
   const eaten = isEaten(p);
   const budget = budgetOf(slot);
 
@@ -414,9 +463,13 @@ export function mealScreen() {
   const paintAction = () => {
     const dirty = editDirty(e);
     const kids = [];
-    if (dirty) {
+    if (dirty && onTheDay) {
+      // On the meal's day an edit is what they had: logged as Had instead, the plan keeps its meal.
+      kids.push(el("button", { class: "btn primary block", type: "button", disabled: !e.rows.length, onclick: (ev) => save(ev, false) }, "Log what I had"),
+        el("p", { class: "hint" }, "Logged as what you had instead. The plan keeps its meal, so you can see the swap."));
+      kids.push(el("button", { class: "link quiet", type: "button", onclick: () => { startEdit(date, slot, p.items); paintAdd(); repaint(); } }, "Discard changes"));
+    } else if (dirty) {
       kids.push(el("button", { class: "btn primary block", type: "button", disabled: !e.rows.length, onclick: (ev) => save(ev, false) }, "Save changes"));
-      if (canEat) kids.push(el("button", { class: "btn block", type: "button", disabled: !e.rows.length, onclick: (ev) => save(ev, true) }, "Save and mark eaten"));
       kids.push(el("button", { class: "link quiet", type: "button", onclick: () => { startEdit(date, slot, p.items); paintAdd(); repaint(); } }, "Discard changes"));
     } else if (canEat) {
       kids.push(el("button", { class: "btn primary block", type: "button", onclick: (ev) => save(ev, true) }, "Ate this"),
@@ -490,17 +543,18 @@ export function mealScreen() {
   async function save(ev, andEat) {
     ev.target.disabled = true;
     try {
-      if (editDirty(e)) await d.api(`/diet/days/${date}/${slot}/items`, { method: "PUT", body: editBody(e) });
-      if (andEat) await d.api(`/diet/days/${date}/${slot}/eat`, { method: "POST", body: "{}" });
+      const r = editDirty(e) ? await d.api(`/diet/days/${date}/${slot}/items`, { method: "PUT", body: editBody(e) }) : null;
+      if (andEat && !r?.logged) await d.api(`/diet/days/${date}/${slot}/eat`, { method: "POST", body: JSON.stringify(ev.target.dataset.early ? { early: true } : {}) });
       ms.edit = null;
       await loadPlan(true);
-      d.toast(andEat ? "Logged." : "Saved. The plan keeps this meal for the day.");
-      if (andEat) d.refresh?.();
+      d.toast(r?.logged ? "Logged as what you had instead." : andEat ? "Logged." : "Saved. The plan keeps this meal for that day.");
+      if (andEat || r?.logged) d.refresh?.();
       d.openSheet("dietMeal", { fromHistory: true });
       paint();
     } catch (err) {
       d.toast(err.message);
       ev.target.disabled = false;
+      if (err.code === "too_early") { ev.target.dataset.early = "1"; ev.target.textContent = "Yes, I've eaten it"; }
       // Saved but the log failed: what's on screen is now the plan.
       if (andEat) { await loadPlan(true).catch(() => {}); }
     }
@@ -794,8 +848,12 @@ export function dayMealList(list, { title = null } = {}) {
     el("span", { class: "dm-tags" },
       list.planned ? el("span", { class: `tag ${list.done === list.planned ? "good" : ""}` }, `${list.done} of ${list.planned} done`) : null,
       list.extras ? el("span", { class: "tag extra" }, `${list.extras} extra`) : null));
+  // An earlier day can still be filled in: whatever is added there counts on that day everywhere.
+  const addPast = !isToday && !future
+    ? el("button", { class: "btn small", type: "button", onclick: () => d.logOwn(null, list.date) }, "Add a meal to this day")
+    : null;
   if (!list.rows.length) {
-    return el("div", { class: "day-meals" }, head, el("p", { class: "none" }, isToday ? "Nothing logged yet today." : future ? "Nothing planned." : "No meals logged this day."));
+    return el("div", { class: "day-meals" }, head, el("p", { class: "none" }, isToday ? "Nothing logged yet today." : future ? "Nothing planned." : "Nothing logged this day."), addPast);
   }
   const planBySlot = new Map(list.rows.filter((r) => r.state !== "extra").map((r) => [r.slot, r]));
   const rows = list.rows.map((r) => dayMealRow(list, r, planBySlot));
@@ -804,7 +862,7 @@ export function dayMealList(list, { title = null } = {}) {
         el("span", {}, "Eaten"),
         el("span", {}, el("b", {}, `${fmt(list.eaten.kcal)} kcal`), ` · P ${fmt(list.eaten.proteinG)} · C ${fmt(list.eaten.carbsG)} · F ${fmt(list.eaten.fatG)} g`))
     : null;
-  return el("div", { class: "day-meals" }, head, el("ul", { class: "dm-list" }, ...rows), foot);
+  return el("div", { class: "day-meals" }, head, el("ul", { class: "dm-list" }, ...rows), foot, addPast);
 }
 
 function dayMealRow(list, r, planBySlot) {
@@ -886,11 +944,13 @@ async function afterChange(msg) {
 async function ateThis(btn, date, slot) {
   btn.disabled = true;
   try {
-    await d.api(`/diet/days/${date}/${slot}/eat`, { method: "POST", body: "{}" });
+    await d.api(`/diet/days/${date}/${slot}/eat`, { method: "POST", body: JSON.stringify(btn.dataset.early ? { early: true } : {}) });
     await afterChange("Logged as planned.");
   } catch (err) {
     btn.disabled = false;
     if (err.code === "already_logged") return afterChange();
+    // More than an hour before the meal: ask once, the next tap logs it.
+    if (err.code === "too_early") { btn.dataset.early = "1"; btn.textContent = "Yes, I've eaten it"; }
     d.toast(err.message);
   }
 }

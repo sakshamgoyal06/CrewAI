@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 
-import { eatingOutPlan, planEatingOut, RESERVE_MAX, RESERVE_MIN } from "./eatingOut.js";
+import { eatingOutPlan, ORDER_TIPS, planEatingOut, RESERVE_MAX, RESERVE_MIN } from "./eatingOut.js";
 
 const base = { date: "2026-11-04", meal: "dinner" as const, calorieTarget: 2200, caloriesEaten: 600, proteinTarget: 140, proteinEaten: 40 };
 
@@ -49,5 +49,25 @@ describe("planEatingOut", () => {
     expect(r.card).toMatchObject({ type: "eating_out", meal: "lunch", date: "2026-11-04" });
     expect(r.text).toBe("Eating out at lunch: keep about 1000 kcal for it and 600 kcal for the rest of the day.");
     expect(recordTurn).toHaveBeenCalledWith("u1", "Eating out at lunch", r.text, [r.card]);
+  });
+});
+
+describe("eating out for their diet", () => {
+  const base = { date: "2026-11-06", meal: "dinner" as const, calorieTarget: 2200, caloriesEaten: 600, proteinTarget: 150, proteinEaten: 40 };
+  it("a veg period: no eggs, chicken or tandoori meat in the advice", () => {
+    const c = eatingOutPlan({ ...base, diet: "vegetarian" });
+    const all = [...c.lines, ...c.tips].join(" ");
+    expect(all).not.toMatch(/\beggs?\b|chicken/i);
+    expect(c.tips[0]).toContain("Paneer or soya tikka");
+    expect(c.lines.join(" ")).toContain("curd, dal, paneer, sprouts or a shake");
+  });
+  it("vegan: no dairy; and the avoid list drops a food", () => {
+    const v = eatingOutPlan({ ...base, diet: "vegan" });
+    expect([...v.lines, ...v.tips].join(" ")).not.toMatch(/paneer|curd|raita/i);
+    const noPaneer = eatingOutPlan({ ...base, diet: "vegetarian", allows: (t) => !/paneer/i.test(t) });
+    expect(noPaneer.lines.join(" ")).not.toMatch(/paneer/i);
+  });
+  it("no diet given keeps the usual advice", () => {
+    expect(eatingOutPlan(base).tips[0]).toBe(ORDER_TIPS[0]);
   });
 });

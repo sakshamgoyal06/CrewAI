@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { spreadCarry } from "./carry.js";
 import { composeOptions } from "./compose.js";
-import { dayCloseCard, dayCloseDue, dueMeals, rebalanceCard } from "./rhythm.js";
+import { dayCloseCard, dayCloseDue, dayGapSummary, dueMeals, rebalanceCard, slotList, unloggedMeals } from "./rhythm.js";
 import { DEFAULT_SHARES, macroTargets, mealBudgets } from "./targets.js";
 
 const BUDGETS = mealBudgets(macroTargets({ calories: 2100, proteinG: 150, weightKg: 80 }), DEFAULT_SHARES);
@@ -107,5 +107,31 @@ describe("plan adherence", async () => {
     const a = adherenceOf([row("2026-11-01", "lunch", "logged", true), row("2026-11-02", "lunch", "planned"), row("2026-11-03", "lunch", "logged")]);
     expect(a.slipping).toBeNull();
     expect(adherenceLine(a)).toBe("1 of 3 planned meals eaten from the plan.");
+  });
+});
+
+describe("is the day logged in full", () => {
+  const plan = [
+    { slot: "breakfast", status: "logged" },
+    { slot: "lunch", status: "planned" },
+    { slot: "snack", status: "planned" },
+    { slot: "dinner", status: "planned" },
+  ];
+  it("lists planned main meals with nothing logged; snacks don't count", () => {
+    expect(unloggedMeals(plan, new Set(["breakfast"]))).toEqual(["lunch", "dinner"]);
+    expect(unloggedMeals(plan, new Set(["breakfast", "lunch", "dinner"]))).toEqual([]);
+    // A meal logged for the slot (their own food) covers it even while the plan row is still planned.
+    expect(unloggedMeals(plan, new Set(["breakfast", "lunch"]))).toEqual(["dinner"]);
+  });
+  it("says what's missing and never calls a gap a low day", () => {
+    expect(slotList(["lunch", "dinner"])).toBe("Lunch and dinner");
+    expect(dayGapSummary(["dinner"], 2)).toMatch(/^Dinner isn't logged, so I haven't changed the next days yet\./);
+    expect(dayGapSummary(["dinner"], 2)).toContain("That was everything");
+    expect(dayGapSummary([], 0)).toMatch(/not counting it as a low day/);
+  });
+  it("puts the missing meals on the card", () => {
+    const { card } = dayCloseCard({ date: "2026-11-09", summary: "x", next: { date: "2026-11-10", meals: [] }, missing: ["dinner"] });
+    expect(card.missing).toEqual(["dinner"]);
+    expect(dayCloseCard({ date: "2026-11-09", summary: "x", next: { date: "2026-11-10", meals: [] } }).card.missing).toBeUndefined();
   });
 });

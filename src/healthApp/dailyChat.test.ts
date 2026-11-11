@@ -172,9 +172,24 @@ describe("the day's plan", () => {
       yesterday: "2 of 3 checks. Open: protein (90 / 150 g).",
       week: "3 of the last 7 days on track (aim: 5)",
     });
-    expect(card.focus).toContain("Protein slipped on 3 of the last 6 days");
+    expect(card.focus).toContain("Protein slipped again yesterday, 3 of the last 6 days");
     expect(text.split("\n")[0]).toBe("Good morning, Saksham. Today's plan for Wed 4 Nov.");
     expect(text).toContain("Today: Morning walk 7:00 am · Gym 6:30 pm.");
+  });
+
+  it("says nothing extra after an on-track day, even with older misses", () => {
+    const s = snap();
+    const y = s.northStar.days.at(-2)!;
+    s.northStar.days[s.northStar.days.length - 2] = { ...y, onTrack: true, checks: y.checks.map((c) => ({ ...c, met: true })) };
+    s.today.sleepMinutes = null;
+    expect(buildDayPlan({ snapshot: s, name: null, localHour: 7, intervention: null }).card.focus ?? null).toBeNull();
+  });
+
+  it("calls out an unlogged yesterday instead of listing missed checks", () => {
+    const s = snap();
+    const y = s.northStar.days.at(-2)!;
+    s.northStar.days[s.northStar.days.length - 2] = { ...y, onTrack: false, unlogged: true, checks: [{ id: "meals_logged", label: "Meals logged", met: false, progress: 0, detail: "Nothing logged" }] };
+    expect(buildDayPlan({ snapshot: s, name: null, localHour: 7, intervention: null }).card.yesterday).toMatch(/^Nothing was logged yesterday\. You can't improve what you don't track/);
   });
 
   it("puts an open plan-change offer first, then a due weigh-in", () => {
@@ -185,6 +200,10 @@ describe("the day's plan", () => {
     const s = snap();
     s.goal!.checkinDue = true;
     expect(buildDayPlan({ snapshot: s, name: null, localHour: 9, intervention: null }).card.focus).toMatch(/^Weekly weigh-in today/);
+    s.targets.weighInDay = null;
+    expect(buildDayPlan({ snapshot: s, name: null, localHour: 9, intervention: null }).card.focus).toMatch(/Pick a fixed weigh-in day in You/);
+    s.targets.weighInDay = 3;
+    expect(buildDayPlan({ snapshot: s, name: null, localHour: 9, intervention: null }).card.focus).not.toMatch(/Pick a fixed/);
   });
 
   it("says rest day without a routine, and greets by time of day", () => {

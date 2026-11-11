@@ -98,3 +98,71 @@ export async function applyCarries(userProfileId: string, budgets: MealBudget[],
   }
   return changed;
 }
+
+/** Per target day: how much the carry from one source day moves (new minus old). Pure. */
+export function carryDiff(old: Array<{ date: string; kcalDelta: number }>, next: Array<{ date: string; kcalDelta: number }>): Array<{ date: string; from: number; to: number }> {
+  const dates = [...new Set([...old.map((c) => c.date), ...next.map((c) => c.date)])].sort();
+  return dates
+    .map((date) => ({ date, from: old.find((c) => c.date === date)?.kcalDelta ?? 0, to: next.find((c) => c.date === date)?.kcalDelta ?? 0 }))
+    .filter((d) => d.from !== d.to);
+}
+
+/**
+ * A closed day changed after its carry was saved (a double count removed, a late log): the
+ * carry rows take the new numbers, and planned meals (from `today` on) that already took the old
+ * carry are resized by the difference. Meals that haven't taken it yet get the new number from
+ * applyCarries. Returns true when anything moved.
+ */
+export async function reviseCarry(userProfileId: string, budgets: MealBudget[], sourceDate: string, next: Array<{ date: string; kcalDelta: number }>, today: string): Promise<boolean> {
+  const { data: rows, error } = await supabase
+    .from("health_diet_adjustments")
+    .select("local_date, kcal_delta")
+    .eq("user_profile_id", userProfileId)
+    .eq("source_date", sourceDate);
+  if (error) throw new Error(error.message);
+  const old = (rows ?? []).map((r) => ({ date: String(r.local_date), kcalDelta: Number(r.kcal_delta) || 0 }));
+  const diff = carryDiff(old, next);
+  if (!diff.length) return false;
+
+  for (const d of diff) {
+    const w = d.to === 0
+      ? await supabase.from("health_diet_adjustments").delete().eq("user_profile_id", userProfileId).eq("source_date", sourceDate).eq("local_date", d.date)
+      : await supabase.from("health_diet_adjustments").upsert(
+          { user_profile_id: userProfileId, local_date: d.date, kcal_delta: d.to, source_date: sourceDate, reason: "day_close" },
+          { onConflict: "user_profile_id,local_date,source_date" },
+        );
+    if (w.error) throw new Error(w.error.message);
+    if (d.date < today) continue;
+    const { data: entries, error: e2 } = await supabase
+      .from("meal_plan_entries")
+      .select("id, local_date, meal_slot, metadata")
+      .eq("user_profile_id", userProfileId)
+      .eq("source", "plan")
+      .eq("status", "planned")
+      .eq("local_date", d.date);
+    if (e2) throw new Error(e2.message);
+    const took = ((entries ?? []) as Row[]).filter((e) => e.metadata?.kind !== "eat_out" && ((e.metadata?.carry_from as string[] | undefined) ?? []).includes(sourceDate));
+    if (!took.length) continue;
+    const meals = took.map((e) => ({ slot: e.meal_slot, items: (e.metadata?.items as PlanItem[]) ?? [], totals: (e.metadata?.totals as Totals) ?? sumTotals([]) }));
+    const resized = spreadCarry(meals, d.to - d.from, budgets);
+    for (let i = 0; i < took.length; i++) {
+      const e = took[i]!;
+      const m = resized[i]!;
+      const { error: e3 } = await supabase
+        .from("meal_plan_entries")
+        .update({
+          metadata: { ...(e.metadata ?? {}), items: m.items, totals: m.totals },
+          estimated_calories: m.totals.kcal,
+          estimated_protein_g: m.totals.proteinG,
+          estimated_carbs_g: m.totals.carbsG,
+          estimated_fat_g: m.totals.fatG,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", e.id)
+        .eq("status", "planned");
+      if (e3) throw new Error(e3.message);
+    }
+  }
+  logger.info({ userProfileId, sourceDate, diff }, "carry revised after a closed day changed");
+  return true;
+}

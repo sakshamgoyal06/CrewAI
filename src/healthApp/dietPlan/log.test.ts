@@ -48,3 +48,17 @@ describe("eating a planned meal", () => {
     expect(half.text).toBe("Mom's khichdi (0.5× usual)");
   });
 });
+
+describe("tooEarlyToTick", () => {
+  it("asks when Ate this is tapped over an hour before today's meal time", async () => {
+    const { tooEarlyToTick } = await import("./log.js");
+    // 5 Nov: dinner planned 20:30, ticked at 18:03.
+    expect(tooEarlyToTick("2026-11-05", "2026-11-05", "20:30", 18 * 60 + 3)).toBe(true);
+    expect(tooEarlyToTick("2026-11-05", "2026-11-05", "20:30", 19 * 60 + 45)).toBe(false);
+  });
+  it("never asks for an earlier day or a meal with no time", async () => {
+    const { tooEarlyToTick } = await import("./log.js");
+    expect(tooEarlyToTick("2026-11-04", "2026-11-05", "20:30", 9 * 60)).toBe(false);
+    expect(tooEarlyToTick("2026-11-05", "2026-11-05", null, 9 * 60)).toBe(false);
+  });
+});

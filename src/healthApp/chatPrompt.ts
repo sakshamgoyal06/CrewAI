@@ -51,9 +51,10 @@ They have an outcome goal (target weight, body fat % or muscle mass by a deadlin
 - Training (Hevy): get_training_analysis for what's progressing, stalled or going backwards; get_routines for the plan. To change Hevy, find ids with search_exercises, then the matching propose_* tool; nothing changes until they apply the card. A lift stalled 3+ weeks gets a rep-range change or a close variation, not a new program. Keep other exercises as they are.
 - Routine: set_daily_routine replaces the whole routine, so include items they didn't mention, with their ids. "gym" is lifting in Hevy. No meal times on the routine. If the result says lifting.short, say in one sentence the plan needs lifting.need strength sessions a week.
 - A sport on a training day counts as training only if it burned about what their gym session does; the card says. Three strength sessions a week is the floor (fewer if they train fewer days); if sport is eating into that, say so.
-- Don't repeat advice you gave in the last few days; refer back to it instead. Don't restate what they just told you.
+- Don't repeat advice you gave in the last few days; refer back to it instead. Don't restate what they said.
+- On track and logging: raise nothing. Unlogged isn't a miss; ask what they ate.
 - Plan changes: the app spots patterns (an item that keeps slipping, a calorie target crossed most days, weight stalled while logging) and offers a smaller change on a card. A chosen change runs as a trial; their agreed plan only changes when they say yes after the check. If they answer a plan-change card in words, call respond_to_intervention with its id; don't re-offer what they declined. Treat the plan as what didn't fit, never them: no "missed again", no "discipline", no "cheat". Every change you suggest says what it does to the goal date; if no easier change keeps the date, say plainly that the current plan is what gets there on time.
-- Open loops in the context block are things in motion. When it fits the conversation, ask how an experiment they're trying is going. If the same thing keeps getting skipped for the same reason, name the pattern once, kindly, and offer one small change (a time, a shorter session, a swap); never scold.
+- Open loops in the context block are things in motion. Ask how a running experiment goes when it fits. If the same miss keeps coming back, name the pattern once, kindly, what's behind it from their numbers, and offer one small change they can keep (a time, a shorter session, a swap); never scold.
 
 # Memory
 - The context block lists what you've been asked to remember. Use it without announcing it, and never contradict it (a remembered injury or schedule beats a generic suggestion).
@@ -129,7 +130,21 @@ export type TurnLoops = {
   experiment?: { text: string; startedAt: string | null } | null;
   /** Plan changes in motion: open offers, trials, "make it your plan?" questions. */
   interventions?: Intervention[];
+  /** Their Magnus plan, when billing is on: so the coach never offers what their plan lacks. */
+  plan?: { tier: "trial" | "pro" | "free"; trialEndsAt: string | null; features: Record<"digest" | "rca" | "photo", boolean> };
 };
+
+/** "Magnus plan: free trial until 12 Nov." / "Magnus plan: free (no nightly note or off-track analysis)." */
+export function planLine(plan: TurnLoops["plan"], timezone: string): string | null {
+  if (!plan) return null;
+  if (plan.tier === "pro") return null;
+  if (plan.tier === "trial") {
+    const until = plan.trialEndsAt ? localDateKey(new Date(plan.trialEndsAt), timezone) : null;
+    return `Magnus plan: free trial${until ? ` until ${until}` : ""} (everything included).`;
+  }
+  const missing = [!plan.features.digest && "nightly note", !plan.features.rca && "off-track analysis"].filter(Boolean);
+  return `Magnus plan: free${missing.length ? `; not included: ${missing.join(", ")} (Pro brings them back; mention only if they ask for one)` : ""}.`;
+}
 
 const MAX_SKIPS = 5;
 
@@ -181,7 +196,7 @@ export function buildTurnContext(
   const room = t.calorieTarget != null ? t.calorieTarget - s.today.calories : null;
   const todayChecks = s.today.checks.map((c) => `${c.label}: ${c.met ? "met" : c.detail}`).join("; ");
   lines.push(
-    `Today: ${s.today.calories} kcal eaten${room != null ? ` (${room >= 0 ? `${room} left` : `${-room} over`})` : ""}, ${Math.round(s.today.proteinG)} g protein, ${s.today.steps} steps${s.today.stepsFromPhone ? " (synced from their phone; never ask them for steps)" : ""}, ${s.meals.length} meal${s.meals.length === 1 ? "" : "s"} logged${s.today.isTrainingDay ? ", training day" : ""}. Checks: ${todayChecks}.`,
+    `Today: ${s.today.calories} kcal eaten${room != null ? ` (${room >= 0 ? `${room} left` : `${-room} over`})` : ""}, ${Math.round(s.today.proteinG)} g protein, ${s.today.steps} steps${s.today.stepsFromPhone ? ` (synced from their phone${phoneSync(s, now)}; never ask them for steps)` : ""}, ${s.meals.length} meal${s.meals.length === 1 ? "" : "s"} logged${s.today.isTrainingDay ? ", training day" : ""}. Checks: ${todayChecks}.`,
   );
   if (s.today.routine.length) {
     lines.push(`Routine today: ${s.today.routine.map((r) => `${r.label} ${r.state}${r.detail ? ` (${r.detail})` : ""}`).join("; ")}.`);
@@ -193,7 +208,10 @@ export function buildTurnContext(
   const last = [...s.checkins].reverse().find((c) => c.weight_kg != null);
   if (last) lines.push(`Last weigh-in: ${last.weight_kg} kg on ${last.localDate}${last.body_fat_pct != null ? `, ${last.body_fat_pct}% body fat` : ""}.`);
 
-  const openGym = s.workoutChecks.filter((c) => c.status === "missing").map((c) => c.localDate);
+  // Only today's and yesterday's: an older unanswered gym check has closed with its day (cardDay.ts),
+  // and asking about last Tuesday's gym reads as nagging.
+  const yesterday = localDateKey(new Date(now.getTime() - DAY_MS), s.timezone);
+  const openGym = s.workoutChecks.filter((c) => c.status === "missing" && c.localDate >= yesterday).map((c) => c.localDate);
   // A routine item is "open" once its slot has passed with nothing logged; before that it's just upcoming.
   // h23 (via localClock): hour12:false can print midnight as "24:00", which sorts after every slot.
   const { hhmm } = localClock(now, s.timezone);
@@ -203,6 +221,8 @@ export function buildTurnContext(
   }
   const loopsLine = openLoopsLine(s, loops);
   if (loopsLine) lines.push(loopsLine);
+  const plan = planLine(loops.plan, s.timezone);
+  if (plan) lines.push(plan);
   if (s.hevyConnected) {
     const w = s.workouts[0];
     if (w) lines.push(`Last Hevy workout: ${w.title} on ${w.localDate}.`);
@@ -210,6 +230,14 @@ export function buildTurnContext(
     lines.push("Hevy: not connected (they paste their Hevy Pro API key from https://hevy.com/settings?developer in You → Food, connections & account).");
   }
   return lines.join("\n");
+}
+
+/** " at 15:10", plus "; may be behind" when that's over 2 hours ago; "" when nothing synced today. */
+function phoneSync(s: HealthSnapshot, now: Date): string {
+  const at = s.today.phoneSyncedAt ? new Date(s.today.phoneSyncedAt) : null;
+  if (!at || Number.isNaN(at.getTime())) return "";
+  const stale = now.getTime() - at.getTime() > 2 * 60 * 60 * 1000;
+  return ` at ${localClock(at, s.timezone).hhmm}${stale ? "; may be behind" : ""}`;
 }
 
 /** The old one-line context, kept for `MAGNUS_CHAT_PROMPT=legacy`. */

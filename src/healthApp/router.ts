@@ -62,7 +62,7 @@ import { alertOwnerCoachOffline, COACH_OFFLINE_MESSAGE, isCoachOffline } from ".
 import { hydrateCard, loadCardStates, mealDaysOf } from "./chatCards.js";
 import { cardAt } from "./cardDay.js";
 import { isDateKey, listChatDays, localDayRange, tryDayPlan } from "./dailyChat.js";
-import { editLine, forgetLine, loadCoachMemory, MEMORY_MAX_CHARS, MEMORY_MAX_LINES, memoryToday, rememberLine } from "./coachMemory.js";
+import { editLine, forgetLine, loadCoachMemory, MEMORY_MAX_CHARS, MEMORY_MAX_LINES, memoryToday, rememberLine, ruleKind } from "./coachMemory.js";
 import {
   activityDraftInput,
   activitySaveInput,
@@ -77,11 +77,12 @@ import { draftMealFromPhoto } from "./mealCards.js";
 import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
 import { loadWeeklyReview } from "./weeklyReview.js";
 import { editInput, editPick, restrictionsFor, searchMealFoods } from "./dietPlan/edit.js";
-import { eatInput, eatPlanned, undoPlanned, unlinkDeletedMeal } from "./dietPlan/log.js";
+import { eatInput, eatPlanned, undoPlanned } from "./dietPlan/log.js";
 import { editReceipt, getLoggedMeal, mealReplaceInput, receiptEditInput, replaceLoggedMeal, undoReceipt } from "./logEdits.js";
 import { logSupplements, undoSupplements } from "./dietPlan/supplementLog.js";
-import { rebalanceToday, setMealPlanRole } from "./dietPlan/rhythm.js";
-import { FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
+import { confirmDayComplete, rebalanceToday, setMealPlanRole } from "./dietPlan/rhythm.js";
+import { GAP_CHOICES } from "./dietPlan/proteinGap.js";
+import { acceptPlanGaps, answerProteinGap, FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, planGapLine, prefsChangeReason, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
 import { replanForGoal } from "./replan.js";
 import { getActiveGoal } from "./bodyStore.js";
 import { PLAN_SLOTS } from "./dietPlan/targets.js";
@@ -135,6 +136,8 @@ import { loadCalorieReview } from "./calorieTarget.js";
 import { cardFromIntervention, checkNewGoal, recordManualPlan, respond as respondToIntervention, revertToVersion } from "./interventions/engine.js";
 import { listVersions } from "./interventions/plan.js";
 import { listInterventions } from "./interventions/store.js";
+import { activeBreaks, breakInput, endBreakEarly, previewBreak, startBreak, loadBreaks, BREAK_REASONS } from "./breaks.js";
+import { keepDateAccept, keepDatePreview, pendingResume, resumeMoveDate, resumeState } from "./resume.js";
 
 const chatInput = z.object({ text: z.string().trim().min(1).max(2000), turnId: z.string().uuid().optional() });
 
@@ -387,18 +390,19 @@ export function createHealthAppRouter(): express.Router {
   router.put(
     "/diet/prefs",
     route("diet-prefs-save", async (ctx, req) => {
+      const before = await loadDietPrefs(ctx.userProfileId);
       const prefs = await saveDietPrefs(ctx.userProfileId, req.body);
-      const r = await rebuildPlan(ctx, "prefs_changed");
+      const r = await rebuildPlan(ctx, before.saved ? prefsChangeReason(before.prefs, prefs) : "prefs_changed");
       // Saved without targets: the answers are kept and the plan builds once targets are set.
       if (!r.ok && r.error === "no_targets") return { body: { ok: true, prefs, version: null, needsTargets: true } };
-      return r.ok ? { body: { ok: true, prefs, version: r.plan.version } } : { status: 409, body: r };
+      return r.ok ? { body: { ok: true, prefs, version: r.plan.version, proteinGap: await planGapLine(ctx) } } : { status: 409, body: r };
     }),
   );
   router.post(
     "/diet/plan/rebuild",
     route("diet-rebuild", async (ctx) => {
       const r = await rebuildPlan(ctx, "rebuild");
-      return r.ok ? { body: { ok: true, version: r.plan.version } } : { status: 409, body: r };
+      return r.ok ? { body: { ok: true, version: r.plan.version, proteinGap: await planGapLine(ctx) } } : { status: 409, body: r };
     }),
   );
   router.post(
@@ -466,7 +470,7 @@ export function createHealthAppRouter(): express.Router {
       const r = await eatPlanned(ctx, date, slot, eatInput.parse(req.body ?? {}));
       // Ate more or less than planned: the rest of today follows (before the reply, so the tab shows it).
       if (r.ok && r.status === "partial") await rebalanceToday(ctx).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance failed"));
-      return r.ok ? { body: r } : { status: r.error === "already_logged" ? 409 : 400, body: r };
+      return r.ok ? { body: r } : { status: r.error === "already_logged" || r.error === "too_early" ? 409 : 400, body: r };
     }),
   );
   /** "Took my supplements": logs the day's supplements from the plan setup (idempotent). */
@@ -502,6 +506,100 @@ export function createHealthAppRouter(): express.Router {
       const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
       const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
       const r = await undoPlanned(ctx, date, slot);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+
+  /** The plan can't reach their protein target under their rules: accept, supplement, or loosen a rule. */
+  router.post(
+    "/diet/protein-gap",
+    route("diet-protein-gap", async (ctx, req) => {
+      const { choice } = z.object({ choice: z.enum(GAP_CHOICES) }).parse(req.body ?? {});
+      const r = await answerProteinGap(ctx, choice);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  /** Pauses (breaks.ts): what's running or coming up, and a whole-plan pause waiting for its restart choice. */
+  router.get(
+    "/breaks",
+    route("breaks", async (ctx) => {
+      const today = localDateKey(new Date(), ctx.timezone);
+      const all = await loadBreaks(ctx.userProfileId, today);
+      return { body: { ok: true, breaks: all.filter((b) => b.endDate >= today), resume: pendingResume(all, today)?.id ?? null, reasons: BREAK_REASONS } };
+    }),
+  );
+  router.post(
+    "/breaks/preview",
+    route("breaks-preview", async (ctx, req) => {
+      const input = breakInput.pick({ scope: true, reason: true, itemId: true }).parse(req.body ?? {});
+      const r = await previewBreak(ctx, input);
+      return "ok" in r ? { status: 400, body: r } : { body: { ok: true, ...r } };
+    }),
+  );
+  router.post(
+    "/breaks",
+    route("breaks-start", async (ctx, req) => {
+      const r = await startBreak(ctx, breakInput.parse(req.body ?? {}));
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  router.post(
+    "/breaks/:id/end",
+    route("breaks-end", async (ctx, req) => {
+      const id = z.string().uuid().parse(req.params.id);
+      const r = await endBreakEarly(ctx.userProfileId, id, localDateKey(new Date(), ctx.timezone));
+      return r.ok ? { body: { ...r, active: await activeBreaks(ctx) } } : { status: 400, body: r };
+    }),
+  );
+  /** The way back from a whole-plan pause (resume.ts). */
+  router.get(
+    "/resume",
+    route("resume", async (ctx, req) => {
+      const id = typeof req.query.id === "string" ? z.string().uuid().parse(req.query.id) : undefined;
+      const r = await resumeState(ctx, id);
+      return r.ok ? { body: r } : { status: 404, body: r };
+    }),
+  );
+  router.post(
+    "/resume/:id/move-date",
+    route("resume-move-date", async (ctx, req) => {
+      const id = z.string().uuid().parse(req.params.id);
+      const r = await resumeMoveDate(ctx, id, async (t) => (await setTargets(ctx, t)).ok);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  router.post(
+    "/resume/:id/keep-date/preview",
+    route("resume-keep-preview", async (ctx, req) => {
+      const id = z.string().uuid().parse(req.params.id);
+      const { weightKg } = z.object({ weightKg: z.coerce.number().min(25).max(350).optional() }).parse(req.body ?? {});
+      const r = await keepDatePreview(ctx, id, weightKg);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  router.post(
+    "/resume/:id/keep-date/accept",
+    route("resume-keep-accept", async (ctx, req) => {
+      const id = z.string().uuid().parse(req.params.id);
+      const r = await keepDateAccept(ctx, id);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  /** "Keep this plan": the plan's other gaps (calories, carbs, fat, fibre) accepted until the food rules change. */
+  router.post(
+    "/diet/plan-gaps/accept",
+    route("diet-plan-gaps-accept", async (ctx) => {
+      const r = await acceptPlanGaps(ctx);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+
+  /** "That was everything": a closed day with planned meals unlogged counts as fully logged. */
+  router.post(
+    "/diet/days/:date/complete",
+    route("diet-day-complete", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const r = await confirmDayComplete(ctx, date);
       return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );
@@ -874,9 +972,7 @@ export function createHealthAppRouter(): express.Router {
     "/meals/:id",
     route("meal-delete", async (ctx, req) => {
       const id = String(req.params.id);
-      const r = await removeMeal(ctx, id);
-      if (r.ok) await unlinkDeletedMeal(ctx.userProfileId, id);
-      return fromResult(r);
+      return fromResult(await removeMeal(ctx, id));
     }),
   );
 
@@ -955,7 +1051,7 @@ export function createHealthAppRouter(): express.Router {
       const r = await setGoal(ctx, input);
       if (!r.ok) return fromResult(r);
       // New date or target: recompute the calorie target and meal plan, and say what moved.
-      const replan = await replanForGoal(ctx, before, async (kcal) => (await setTargets(ctx, { calorieTarget: kcal })).ok);
+      const replan = await replanForGoal(ctx, before, async (t) => (await setTargets(ctx, t)).ok);
       void recordManualPlan(ctx.userProfileId, "You set a new goal");
       void checkNewGoal(ctx.userProfileId);
       return fromResult({ ...r, replan });
@@ -1143,7 +1239,11 @@ export function createHealthAppRouter(): express.Router {
   });
   router.get(
     "/memory",
-    route("memory", async (ctx) => ({ body: { ok: true, lines: await loadCoachMemory(ctx.userProfileId, memoryToday(ctx.timezone)), max: MEMORY_MAX_LINES } })),
+    route("memory", async (ctx) => {
+      const lines = await loadCoachMemory(ctx.userProfileId, memoryToday(ctx.timezone));
+      // A line that is really a rule (diet, no gym) reaches chat only: the You tab marks it and offers to apply it.
+      return { body: { ok: true, lines: lines.map((l) => ({ ...l, rule: ruleKind(l.text) })), max: MEMORY_MAX_LINES } };
+    }),
   );
   router.post(
     "/memory",

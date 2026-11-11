@@ -58,15 +58,46 @@ describe("dueNudges", () => {
     expect(dueNudges(snap(), ist("14:40"), prefs).map((x) => x.dedupeKey)).toEqual(["meal_reminder:lunch:2026-11-02"]);
   });
 
+  it("with a meal plan: reminds 2 h after the plan's own meal time, only for meals they plan", () => {
+    const plan = { meals: [{ slot: "breakfast", time: "08:00" }, { slot: "dinner", time: "20:00" }], planPushOn: false };
+    expect(dueNudges(snap(), ist("10:05"), prefs, plan).map((x) => x.dedupeKey)).toEqual([]);
+    expect(dueNudges(snap(), ist("14:40"), prefs, plan)).toEqual([]);
+    expect(dueNudges(snap({ meals: [] }), ist("10:05"), prefs, plan).map((x) => x.dedupeKey)).toEqual(["meal_reminder:breakfast:2026-11-02"]);
+    expect(dueNudges(snap(), ist("22:05"), prefs, plan).map((x) => x.kind)).toContain("meal_reminder");
+  });
+
+  it("with the plan's meal-time push on, sends no second reminder", () => {
+    const plan = { meals: [{ slot: "lunch", time: "13:00" }], planPushOn: true };
+    expect(dueNudges(snap(), ist("15:05"), prefs, plan)).toEqual([]);
+  });
+
   it("nudges step pace with the walk needed", () => {
     const n = dueNudges(snap(), ist("17:05"), prefs);
     expect(n[0]).toMatchObject({ kind: "step_pace", body: "2,400 of 8,000. A 55-minute walk closes it." });
+  });
+
+  it("skips the step nudge when the phone's steps haven't synced in 2 hours", () => {
+    const today = snap().today;
+    const phone = (syncedAt: string | null) => snap({ today: { ...today, stepsFromPhone: true, phoneSyncedAt: syncedAt } });
+    expect(dueNudges(phone(ist("16:30").toISOString()), ist("17:05"), prefs).map((x) => x.kind)).toEqual(["step_pace"]);
+    expect(dueNudges(phone(ist("14:30").toISOString()), ist("17:05"), prefs)).toEqual([]);
+    expect(dueNudges(phone(null), ist("17:05"), prefs)).toEqual([]);
   });
 
   it("wraps up the evening with what's open", () => {
     const n = dueNudges(snap(), ist("21:35"), prefs);
     expect(n.map((x) => x.kind)).toEqual(["meal_reminder", "evening_wrap"]);
     expect(n[1]!.body).toContain("Protein (60 / 150 g)");
+  });
+
+  it("makes the evening wrap a reminder when meal cards are still unconfirmed", () => {
+    const n = dueNudges(snap(), ist("21:35"), prefs, null, ["2 roti and a dal katori"]);
+    const wrap = n.find((x) => x.kind === "evening_wrap")!;
+    expect(wrap).toMatchObject({ title: "A meal isn't logged yet", url: "/app/#coach" });
+    expect(wrap.body).toBe('"2 roti and a dal katori" is waiting in chat. Tap Confirm & log, or it closes unlogged overnight.');
+    const three = dueNudges(snap(), ist("21:35"), prefs, null, ["poha", "chai", "dal rice"]).find((x) => x.kind === "evening_wrap")!;
+    expect(three.title).toBe("3 meals aren't logged yet");
+    expect(three.body).toContain('"poha" and "chai" and 1 more are waiting');
   });
 
   it("respects quiet hours, turned-off kinds and the 90-minute window", () => {

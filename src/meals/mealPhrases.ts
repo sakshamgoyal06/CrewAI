@@ -50,8 +50,9 @@ const SLOT_WORDS: Record<string, "breakfast" | "lunch" | "dinner" | "snack"> = {
  * breakfast; "dal rice at lunch today" → "dal rice", slot lunch. The food parser only knows food
  * names, so without this "poha for breakfast" finds nothing.
  */
-export function mealContext(raw: string): { text: string; slot?: "breakfast" | "lunch" | "dinner" | "snack"; extra?: true } {
+export function mealContext(raw: string): { text: string; slot?: "breakfast" | "lunch" | "dinner" | "snack"; extra?: true; yesterday?: true } {
   let t = raw.trim();
+  const yesterday = /\b(?:yesterday|last\s+night)\b/i.test(t);
   let slot: "breakfast" | "lunch" | "dinner" | "snack" | undefined;
   // "Add a tea in today's breakfast", "also had a banana", "an extra roti": on top of the meal.
   const extra = /^\s*(?:please\s+)?(?:add|also|plus)\b|\b(?:extra|on\s+top|as\s+well|also\s+had)\b/i.test(t);
@@ -62,13 +63,15 @@ export function mealContext(raw: string): { text: string; slot?: "breakfast" | "
     t = t.replace(slotRe, " ");
   }
   t = t
+    .replace(/\b(?:today|tonight|this\s+(?:morning|afternoon|evening)|in\s+the\s+(?:morning|afternoon|evening)|yesterday|last\s+night|just\s+now|as\s+well|on\s+top)\b/gi, " ")
     .replace(/^\s*(?:please\s+)?(?:add|also|plus)\s+/i, "")
     .replace(/^\s*(?:log\s+)?(?:i\s+)?(?:also\s+)?(?:just\s+)?(?:have\s+|had\s+|ate\s+|eaten\s+|drank\s+|have\s+had\s+|had\s+eaten\s+)+/i, "")
-    .replace(/\b(?:today|tonight|this\s+(?:morning|afternoon|evening)|in\s+the\s+(?:morning|afternoon|evening)|yesterday|just\s+now|as\s+well|on\s+top)\b/gi, " ")
     .replace(/\s+([,.;!])/g, "$1")
     .replace(/[\s.!]+$/, "")
     .replace(/\s+/g, " ")
     .trim();
-  const tail = { ...(slot ? { slot } : {}), ...(extra ? { extra: true as const } : {}) };
+  // "Last night" names the meal too: dinner, unless they said another one.
+  if (!slot && /\blast\s+night\b/i.test(raw)) slot = "dinner";
+  const tail = { ...(slot ? { slot } : {}), ...(extra ? { extra: true as const } : {}), ...(yesterday ? { yesterday: true as const } : {}) };
   return t.length >= 2 ? { text: t, ...tail } : { text: raw.trim(), ...tail };
 }

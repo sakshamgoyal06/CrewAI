@@ -173,6 +173,8 @@ function yesterdayLine(s: HealthSnapshot): string | null {
   const y = s.northStar.days.at(-2);
   if (!y || !y.checks.length) return null;
   if (y.onTrack) return "On track. Every check was done.";
+  // Nothing logged: say so plainly, and that it can still be filled in (11 Nov rule).
+  if (y.unlogged) return "Nothing was logged yesterday. You can't improve what you don't track: tell me roughly what you ate and I'll fill the day in.";
   const open = y.checks.filter((c) => !c.met);
   const met = y.checks.length - open.length;
   return `${met} of ${y.checks.length} checks. Open: ${open.map((c) => `${c.label.toLowerCase()} (${c.detail})`).join(", ")}.`;
@@ -199,11 +201,17 @@ function carriedLine(c: CarriedCheck): string {
 function focusLine(s: HealthSnapshot, intervention: Intervention | null, planNote: string | null, carried: CarriedCheck | null = null): string | null {
   if (intervention) return `One thing to decide: ${intervention.title}. The options are below.`;
   if (carried) return carriedLine(carried);
-  if (s.goal?.checkinDue) return "Weekly weigh-in today: step on the scale before breakfast and tell me the number.";
+  if (s.goal?.checkinDue) {
+    return s.targets.weighInDay == null
+      ? "Weekly weigh-in today: step on the scale before breakfast and tell me the number. Pick a fixed weigh-in day in You so it lands the same day each week."
+      : "Weekly weigh-in today: step on the scale before breakfast and tell me the number.";
+  }
   if (planNote) return planNote;
   const missed = s.northStar.mostMissed;
-  if (missed && missed.missedDays >= 2) {
-    return `${missed.label} slipped on ${missed.missedDays} of the last 6 days. ${LEAD[missed.id]}`;
+  // Raised as it happens, not as an issue of the day: only when yesterday missed it again.
+  const y = s.northStar.days.at(-2);
+  if (missed && missed.missedDays >= 2 && y && !y.onTrack && y.checks.some((c) => c.id === missed.id && !c.met)) {
+    return `${missed.label} slipped again yesterday, ${missed.missedDays} of the last 6 days. ${LEAD[missed.id]}`;
   }
   if (s.today.sleepMinutes != null && s.today.sleepMinutes < 6 * 60) {
     const h = Math.floor(s.today.sleepMinutes / 60);

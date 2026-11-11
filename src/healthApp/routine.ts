@@ -48,13 +48,38 @@ export type RoutineItem = {
   swap?: RoutineSwap | null;
   /** Set on the item as planned for a date while a swap runs: the label it stands in for. */
   swappedFrom?: string;
+  /** Pauses that cover this item (its own, or a whole-plan pause), from breaks.ts; local dates, both included. */
+  pauses?: Array<{ from: string; until: string }>;
+  /** Set on the item as planned for a date it's paused: it isn't planned that day at all (days is empty). */
+  pausedOn?: string;
 };
 
 /** What a routine item becomes from `from` to `until` (local dates, both included). */
 export type RoutineSwap = { activityKey: string; label: string; durationMin: number; startTime: string | null; from: string; until: string; reason: string | null };
 
+/**
+ * A training day on `date`: one of their training weekdays, unless every gym item planned that day
+ * is swapped for something else ("no gym till the 25th: a walk instead"). Then the morning
+ * message, the nightly note and the coach call it a rest day, as the gym check already does.
+ */
+export function trainingDayOn(date: string, trainingDays: number[], routine: RoutineItem[] | null | undefined): boolean {
+  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+  if (!trainingDays.includes(weekday)) return false;
+  const gyms = (routine ?? []).filter((i) => isGym(i) && i.days.includes(weekday));
+  if (!gyms.length) return true;
+  return gyms.some((i) => {
+    const x = onDate(i, date);
+    return isGym(x) && !x.pausedOn;
+  });
+}
+
+/** The item is paused on `date` (breaks.ts). Pure. */
+export const isPausedOn = (i: Pick<RoutineItem, "pauses">, date: string): boolean => !!i.pauses?.some((p) => date >= p.from && date <= p.until);
+
 /** The item as planned on `date`: while a swap runs, the stand-in takes its place (and its gym check). */
 export function onDate(i: RoutineItem, date: string): RoutineItem {
+  // Paused that day: not planned at all, so no reminder, no check and no score for it.
+  if (isPausedOn(i, date)) return { ...i, days: [], pausedOn: date };
   const s = i.swap;
   if (!s || date < s.from || date > s.until) return i;
   return { ...i, activityKey: s.activityKey, label: s.label, durationMin: s.durationMin, startTime: s.startTime ?? i.startTime, swappedFrom: i.label };

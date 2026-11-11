@@ -110,3 +110,22 @@ describe("food rule from 2026-11-05: calories and macros, not meal count", () =>
     expect(check(old, "macros")).toBeUndefined();
   });
 });
+
+describe("an unlogged day is not a missed day", () => {
+  const t: HealthTargets = { calorieTarget: 2000, proteinTarget: 150, stepTarget: 8000, trainingDays: [], minMealSessions: 3, weightKg: 80 };
+  const blank = day({ date: "2026-11-10", weekday: 2, mealSessions: 0, calories: 0, proteinG: 0, steps: 4800 });
+  it("replaces the food checks with one Meals logged check", () => {
+    const s = scoreDay(blank, t);
+    expect(s.unlogged).toBe(true);
+    expect(s.checks.map((c) => c.id)).toEqual(["meals_logged", "steps"]);
+    expect(s.checks[0]).toMatchObject({ met: false, detail: "Nothing logged" });
+    expect(scoreDay({ ...blank, mealSessions: 1, calories: 400 }, t).unlogged).toBeUndefined();
+  });
+  it("counts unlogged past days, never as calorie or protein misses", () => {
+    const today = day({ date: "2026-11-11", weekday: 3, mealSessions: 0, calories: 0, proteinG: 0 });
+    const ns = computeNorthStar([scoreDay(blank, t), scoreDay({ ...blank, date: "2026-11-09" }, t), scoreDay(today, t)]);
+    expect(ns.unloggedDays).toBe(2);
+    expect(ns.mostMissed?.id).not.toBe("protein");
+    expect(ns.mostMissed?.id).not.toBe("calories");
+  });
+});

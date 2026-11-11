@@ -8,6 +8,7 @@ import { foodPrefsEditor } from "./foodprefs.js";
 import { fromServer, routineEditor, toPayload } from "./routine.js";
 import { dayMealList, initMeals, loadPlan, mealScreen, mealsTitles, openPlannedMeal, renderMeals, setupScreen } from "./meals.js";
 import { mealBuilder, fixedItem } from "./mealbuilder.js";
+import { initPause, loadPauses, openResume, pauseAlt, pauseDone, pauseLength, pauseTitles, pauseWhat, pauseWhy, resumeKeep, resumeStart, resumeWeigh, startPause } from "./pause.js";
 import { dayTone } from "./dayTone.js";
 import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
@@ -181,6 +182,7 @@ function friendlyError(code) {
     option_not_found: "That option isn't in your plan any more.",
     meal_not_planned: "That meal isn't planned any more.",
     already_logged: "Already logged.",
+    too_early: "That meal is planned for later. Tap Ate this again if you've already eaten it.",
     nothing_to_log: "Add at least one item.",
     nothing_to_undo: "Nothing to undo.",
     not_allowed: "That food is outside your diet or foods to avoid.",
@@ -422,6 +424,7 @@ async function refresh() {
     if (state.trainingLoaded) loadDays();
     state.snapshot = await api("/today");
     renderSnapshot(state.snapshot);
+    loadPauses().then((p) => { if (p.resume && location.hash === "#resume") openResume(p.resume); });
     store.set(SNAPSHOT_CACHE_KEY, state.snapshot);
     // Targets may have just been set from the Meals tab's first step.
     if (currentView() === "meals") renderMeals();
@@ -808,7 +811,9 @@ function renderFuel(d, t) {
       ? []
       : d.meals.length
         ? d.meals.map((m) => mealRow(m, d))
-        : [el("li", { class: "none" }, d.date === todayKey() ? "Nothing logged yet today." : "No meals logged this day.")]),
+        : [el("li", { class: "none" }, d.date === todayKey() ? "Nothing logged yet today." : "Nothing logged this day.")]),
+    // An earlier day without a meal plan: still fillable from here.
+    ...(!ml && d.date < todayKey() ? [el("li", { class: "add-past" }, el("button", { class: "btn small", type: "button", onclick: () => { state.mealSlot = null; state.mealDate = d.date; openSheet("meal"); } }, "Add a meal to this day"))] : []),
   );
   renderWater(d);
 }
@@ -1094,6 +1099,7 @@ function skipSheet() {
       ...SKIP_REASONS.map((reason) => el("button", { class: "chip", type: "button", onclick: () => pick(reason) }, reason))),
     el("form", { class: "reason-other", onsubmit: (e) => { e.preventDefault(); pick(otherReason.value.trim() || undefined); } },
       otherReason, el("button", { class: "btn", type: "submit" }, "Save")),
+    el("button", { class: "link small", type: "button", onclick: () => { state.skipItem = null; closeSheet(); afterClose(() => startPause({ id: r.itemId, label: r.label })); } }, "Need more than a day? Pause it for a while"),
   );
   return box;
 }
@@ -1961,6 +1967,7 @@ function baseSummary(c) {
     case "rca": return c.hypothesis;
     case "hevy_proposal": return "Hevy change";
     case "calorie_review": return "Calorie review";
+    case "pause_resume": return { text: "Restart after your pause", open: true };
     case "log_receipt": return { text: join(receiptLine(c), c.state === "undone" ? "undone" : null), done: c.state !== "undone" };
     default: return "Card";
   }
@@ -2394,6 +2401,7 @@ function appendCard(c, into = $("thread")) {
   else if (c.type === "plan_meal") into.append(planMealCard(c));
   else if (c.type === "plan_adjust") into.append(planAdjustCard(c));
   else if (c.type === "log_receipt") into.append(logReceiptCard(c));
+  else if (c.type === "pause_resume") into.append(el("div", { class: "draft" }, el("button", { class: "btn primary block", type: "button", onclick: () => openResume(c.breakId) }, "Plan my restart")));
 }
 
 // ---------- what the coach logged straight from chat ----------
@@ -2581,7 +2589,7 @@ function planMealCard(c) {
     ate.addEventListener("click", async () => {
       ate.disabled = change.disabled = true;
       try {
-        const r = await api(`/diet/days/${cur.date}/${cur.slot}/eat`, { method: "POST", body: "{}" });
+        const r = await api(`/diet/days/${cur.date}/${cur.slot}/eat`, { method: "POST", body: JSON.stringify(ate.dataset.early ? { early: true } : {}) });
         c.status = "logged";
         if (r.mealSessionId) c.loggedSessionId = r.mealSessionId;
         render(c);
@@ -2591,6 +2599,8 @@ function planMealCard(c) {
       } catch (err) {
         if (err.code === "already_logged") { c.status = "logged"; render(c); return; }
         ate.disabled = change.disabled = false;
+        // More than an hour before the meal: ask once, the next tap logs it.
+        if (err.code === "too_early") { ate.dataset.early = "1"; ate.textContent = "Yes, I've eaten it"; }
         toast(err.message);
       }
     });
@@ -2615,7 +2625,25 @@ function planAdjustCard(c) {
         el("span", {}, m.title, el("small", {}, ` · ${fmt(m.kcal)} kcal`))))),
       el("button", { class: "link", type: "button", onclick: () => setView("meals") }, "See tomorrow's meals")) : null,
     close && meals.length ? null : el("button", { class: "link", type: "button", onclick: () => setView("meals") }, close ? "See tomorrow's meals" : "See today's meals"),
+    close && c.missing?.length ? dayCompleteButton(c.date) : null,
   );
+}
+
+/** Day close with meals unlogged: "That was everything" lets the day count as logged in full. */
+function dayCompleteButton(date) {
+  const b = el("button", { class: "btn", type: "button" }, "That was everything");
+  b.addEventListener("click", async () => {
+    b.disabled = true;
+    try {
+      await api(`/diet/days/${date}/complete`, { method: "POST" });
+      b.replaceWith(el("p", { class: "hint" }, "Counted as the whole day."));
+      refresh();
+    } catch (err) {
+      b.disabled = false;
+      toast(err.message);
+    }
+  });
+  return b;
 }
 
 /** The plan around a meal out: what to keep for it, what's left before, and how to order. */
@@ -3120,6 +3148,15 @@ function memorySection() {
       } catch (err) { toast(err.message); }
     } }, "Remove");
     li.append(text, el("span", { class: "memory-actions" }, edit, remove));
+    if (line.rule) {
+      // Memory reaches chat only; the plan, reminders and gym checks follow their own settings.
+      const what = line.rule === "food" ? "your meal plan" : "your routine and gym reminders";
+      const apply = el("button", { class: "link small", type: "button", onclick: () => {
+        closeSheet();
+        afterClose(() => { setView("coach"); $("input").value = `Apply this to my plan: ${line.text}`; autosize(); $("input").focus(); });
+      } }, "Apply to plan");
+      li.append(el("p", { class: "memory-rule hint" }, `Chat only: not in ${what} yet. `, apply));
+    }
     return li;
   }
 
@@ -4211,7 +4248,9 @@ function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
 
   const original = JSON.stringify(draft.items);
   const items = draft.items.length ? draft.items.map((i) => ({ ...i })) : [{ name: draft.text, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }];
-  let slot = SLOTS.some(([k]) => k === draft.slot) ? draft.slot : "snack";
+  // No meal named ("I had 2 roti and dal today"): nothing is picked until they choose one.
+  const unsure = !!draft.slotUnsure;
+  let slot = unsure ? null : SLOTS.some(([k]) => k === draft.slot) ? draft.slot : "snack";
   let changed = false;
 
   const kcal = el("div", { class: "draft-kcal" });
@@ -4222,17 +4261,27 @@ function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
   // slot it was worked out for; picking another meal hides it (the server decides on confirm).
   const planNote = el("div", { class: "plan-role" });
   function renderPlanNote() {
-    const p = draft.plan;
+    const p = unsure ? draft.planBySlot?.[slot] : draft.plan;
     const name = SLOT_LABEL[slot]?.toLowerCase() || "meal";
     const extra = draft.extra || p?.role === "extra";
-    planNote.hidden = slot !== draft.slot || !(p || draft.extra);
+    planNote.hidden = !slot || (!unsure && slot !== draft.slot) || !(p || draft.extra);
     if (planNote.hidden) return;
     planNote.className = `plan-role ${extra ? "extra" : "instead"}`;
     planNote.replaceChildren(el("span", {}, extra
       ? `+ Extra, on top of your ${name}${p?.alreadyEaten ? ` (${p.alreadyEaten})` : ""}`
       : `⇄ Replaces your planned ${name} (${p.insteadOf})`));
   }
-  const seg = el("select", { class: "slot-pick", "aria-label": "Meal", onchange: (e) => { slot = e.target.value; renderPlanNote(); } });
+  const seg = el("select", { class: "slot-pick", "aria-label": "Meal", onchange: (e) => { slot = e.target.value; renderPlanNote(); totals(); } });
+  // The quick pick: four buttons, shown until a meal is chosen.
+  const ask = el("div", { class: "slot-ask" });
+  function renderAsk() {
+    ask.hidden = !unsure || !!slot;
+    seg.hidden = unsure && !slot;
+    if (ask.hidden) return;
+    ask.replaceChildren(el("p", { class: "slot-ask-q" }, "Which meal was this?"),
+      el("div", { class: "chips-row", role: "radiogroup", "aria-label": "Which meal" },
+        ...SLOTS.map(([k, label]) => el("button", { type: "button", class: "chip", role: "radio", "aria-checked": "false", onclick: () => { slot = k; renderSeg(); renderAsk(); renderPlanNote(); totals(); } }, label))));
+  }
   const confirm = el("button", { class: "btn primary", type: "button" }, "Confirm & log");
   const missing = el("p", { class: "draft-note" }, "No numbers for this yet. Tap Edit to pick it from the food list, search for it, or type the numbers.");
 
@@ -4246,7 +4295,7 @@ function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
     );
     // A line nothing was found for must get its numbers before the meal is logged (never a silent 0).
     const blank = items.filter((i) => i.missing && !(+i.calories > 0));
-    confirm.disabled = !items.length || items.some((i) => !i.name.trim()) || t.c <= 0 || blank.length > 0;
+    confirm.disabled = !slot || !items.length || items.some((i) => !i.name.trim()) || t.c <= 0 || blank.length > 0;
     missing.hidden = t.c > 0 && !blank.length;
     if (blank.length && t.c > 0) missing.textContent = `No numbers for ${blank.map((i) => i.name).join(", ")} yet. Tap Edit to pick it from the food list, search for it, or type the numbers.`;
   }
@@ -4282,11 +4331,11 @@ function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
         slot,
         source: draft.source,
         items: items.map((i) => ({ name: i.name.trim(), calories: +i.calories || 0, protein_g: +i.protein_g || 0, carbs_g: +i.carbs_g || 0, fat_g: +i.fat_g || 0 })),
-        edited: changed || JSON.stringify(items) !== original || slot !== draft.slot,
+        edited: changed || JSON.stringify(items) !== original || (!unsure && slot !== draft.slot),
         // Logged for a planned meal on another day (yesterday's dinner): that day, not today.
         ...(draft.date ? { date: draft.date } : {}),
         // "Add a tea to breakfast": stays an extra even while breakfast is still planned.
-        ...(draft.extra && slot === draft.slot ? { extra: true } : {}),
+        ...(draft.extra && (unsure || slot === draft.slot) ? { extra: true } : {}),
       };
       const r = await api("/meals/confirm", { method: "POST", body: JSON.stringify(body) });
       const done = { state: "logged", calories: r.totals.calories, ...(r.plan ? { plan: { slot, canCount: false, ...r.plan } } : {}) };
@@ -4306,6 +4355,7 @@ function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
 
   card.append(...[
     el("div", { class: "draft-top" }, seg, edit),
+    ask,
     kcal, macros,
     missing,
     draft.servingAssumption ? assumptionNote(draft.servingAssumption) : null,
@@ -4315,6 +4365,7 @@ function mealDraftCard(draft, { onDone, saved, onEdit } = {}) {
   ].filter(Boolean));
   renderPlanNote();
   renderSeg();
+  renderAsk();
   renderItems();
   totals();
   return card;
@@ -4499,7 +4550,7 @@ function openSheet(kind, { fromHistory = false } = {}) {
   const body = $("sheet-body");
   state.sheetCleanup?.();
   state.sheetCleanup = null;
-  const titles = { activity: "Swim, run or sport", meal: "Log a meal", mealEdit: "Edit meal", mealFind: "Search for a food", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", replan: "Your updated plan", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", dayPlan: "Day plan", skip: "Skip it", ...mealsTitles };
+  const titles = { activity: "Swim, run or sport", meal: "Log a meal", mealEdit: "Edit meal", mealFind: "Search for a food", steps: "Steps & walks", checkin: "Weigh-in", settings: "Goal & targets", replan: "Your updated plan", routine: "Your routine", quick: "Log", scan: "Scan a packet", review: "Your week", notifications: "Notifications", memory: "Coach memory", plan: "Plan history", account: "Food, connections & account", plans: "Magnus Pro", checkout: "Review and pay", payResult: "Payment", managePlan: "Your plan", pastDays: "Past days", chatDay: "", dayPlan: "Day plan", skip: "Skip it", ...mealsTitles, ...pauseTitles };
   const screen = !SHEET_ONLY.has(kind);
   const sheet = $("sheet");
   sheet.classList.toggle("screen", screen);
@@ -4542,6 +4593,7 @@ const num = (v) => (v === "" || v == null ? undefined : Number(v));
 
 const SHEETS = {
   skip: skipSheet,
+  pauseWhat, pauseWhy, pauseAlt, pauseLength, pauseDone, resumeStart, resumeWeigh, resumeKeep,
   plans: plansScreen,
   checkout: checkoutScreen,
   payResult: payResultScreen,
@@ -4663,7 +4715,8 @@ const SHEETS = {
     };
     function paint() {
       if (b.mode === "review" && b.draft) {
-        const d = state.mealDate ? { ...b.draft, date: state.mealDate } : b.draft;
+        // An earlier day with no meal picked: the card asks which one rather than guessing from the clock.
+        const d = state.mealDate ? { ...b.draft, date: state.mealDate, ...(state.mealSlot ? {} : { slotUnsure: true }) } : b.draft;
         holder.replaceChildren(mealDraftCard(d, { onDone: () => setTimeout(closeSheet, 700), onEdit: backToBuild }));
         return;
       }
@@ -5153,6 +5206,8 @@ async function ensureOnboarded() {
   store.set(ONBOARDED_KEY, true);
   return true;
 }
+
+initPause({ api, el, toast, openSheet, closeSheet, backSheet, refresh, send: (t) => { setView("coach"); return send(t); }, snapshot: () => state.snapshot, todayKey: () => todayKey() || localToday() });
 
 initMeals({ api, el, svg, toast,
   findFood: (q, onAdd) => { state.mealBuild = { items: [], seed: q, onAdd }; openSheet("mealFind"); }, logOwn: (slot, date) => { state.mealSlot = slot || null; state.mealDate = date && date !== (todayKey() || localToday()) ? date : null; openSheet("meal"); }, openSheet, closeSheet, backSheet, setView, fmt, todayKey: () => todayKey() || localToday(), refresh });

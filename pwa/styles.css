@@ -305,6 +305,9 @@ body.composing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 
 .closed-card .closed-title { margin: 0 0 4px; font-size: 0.9rem; color: var(--muted); overflow-wrap: anywhere; }
 .closed-card .closed-label { margin: 0; font-size: 0.8rem; color: var(--faint); }
 .draft-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.slot-ask { margin: 8px 0 4px; }
+.slot-ask-q { margin: 0 0 6px; font-weight: 600; }
+.slot-ask .chips-row { margin-bottom: 0; }
 .draft-kcal { font-family: var(--serif); font-size: 1.9rem; line-height: 1; font-variant-numeric: tabular-nums;  font-weight: var(--num-w);}
 .draft-kcal small { font-family: var(--sans); font-size: 0.8rem; color: var(--muted); margin-left: 4px; }
 .macros { display: flex; gap: 14px; color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; margin: 6px 0 12px; }
@@ -903,10 +906,11 @@ body.screen-open { overflow: hidden; }
 .sheet.screen .choice { padding: 11px 14px; }
 
 /* Coach memory screen */
-.memory-list li.memory-line { align-items: flex-start; }
+.memory-list li.memory-line { align-items: flex-start; flex-wrap: wrap; }
 .memory-list .main { flex: 1; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
 .memory-actions { display: flex; gap: 14px; flex-shrink: 0; padding-top: 2px; }
 .memory-until { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.memory-rule { flex-basis: 100%; margin: 4px 0 0; font-size: 12px; }
 .memory-list li .field { flex: 1; }
 .memory-add { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
 .memory-add .field { flex: 1; min-width: 0; }
@@ -1435,3 +1439,14 @@ body.screen-open { overflow: hidden; }
 .plan-role.extra span { color: var(--warn); }
 .plan-role .link { font-size: 0.85rem; }
 .done-line.instead { color: var(--accent); }
+
+/* Plan vs targets: the gaps the planned meals can't close, one per line. */
+.gap-list { list-style: none; margin: 6px 0 8px; padding: 0; display: grid; gap: 4px; }
+.gap-list li { display: flex; gap: 6px; align-items: baseline; font-size: 14px; }
+.gap-list small { color: var(--muted, #8a8090); }
+
+/* Pause and resume screens (pause.js). */
+.pause-flow .pa-head { font-size: 17px; line-height: 1.4; }
+.pause-min { margin: 4px 0 8px; padding-left: 18px; display: grid; gap: 6px; font-size: 15px; }
+.pause-flow input[type="range"] { width: 100%; margin-top: 8px; }
+.pause-banner { display: flex; justify-content: space-between; align-items: center; gap: 12px; }

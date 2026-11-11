@@ -173,3 +173,20 @@ describe("coach memory", () => {
     expect(memoryContextLine([{ text: "Travelling", expiresOn: "2026-11-08" }])).toContain("Travelling (until 2026-11-08).");
   });
 });
+
+describe("ruleKind", () => {
+  it("spots food rules and training breaks that belong in the plan, not memory", async () => {
+    const { ruleKind } = await import("./coachMemory.js");
+    expect(ruleKind("Vegetarian only until 25 Nov")).toBe("food");
+    expect(ruleKind("No eggs")).toBe("food");
+    expect(ruleKind("Allergic to peanuts")).toBe("food");
+    expect(ruleKind("No gym till 25 Nov")).toBe("training");
+    expect(ruleKind("Taking a gym break this month")).toBe("training");
+  });
+  it("leaves facts, likes and dislikes alone", async () => {
+    const { ruleKind } = await import("./coachMemory.js");
+    expect(ruleKind("Hates karela")).toBeNull();
+    expect(ruleKind("Travels Mon-Wed most weeks")).toBeNull();
+    expect(ruleKind("Knee hurts on stairs")).toBeNull();
+  });
+});

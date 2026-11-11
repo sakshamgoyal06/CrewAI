@@ -24,6 +24,8 @@ export type DailyActivity = {
   totalKcal?: number | null;
   hrvMs?: number | null;
   source: ActivitySource;
+  /** When the row was last written (reads only): how fresh a phone's synced steps are. */
+  updatedAt?: string | null;
 };
 
 /** Columns added by later migrations: a database without them still takes the steps. */
@@ -88,6 +90,7 @@ export async function getActivityRange(
       totalKcal: r.total_kcal == null ? null : Number(r.total_kcal),
       hrvMs: r.hrv_ms == null ? null : Number(r.hrv_ms),
       source: r.source as ActivitySource,
+      updatedAt: r.updated_at == null ? null : String(r.updated_at),
     });
   }
   return out;

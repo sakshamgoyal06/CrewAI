@@ -230,6 +230,7 @@ export async function answerRoutineCheck(
   if (!found) return { ok: false, error: "routine_item_not_found" };
   // A swapped gym day ("an evening walk instead") is answered like the walk it became.
   const item = onDate(found, date);
+  if (item.pausedOn) return { ok: false, error: "item_paused" };
   if (isGym(item)) return { ok: false, error: "gym_uses_workout_check" };
   const base = { itemId: item.id, localDate: date, label: item.label };
 
