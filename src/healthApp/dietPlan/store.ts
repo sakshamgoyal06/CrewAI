@@ -10,7 +10,7 @@ import { loggableError } from "../../util/loggableError.js";
 import { addDays } from "../../util/time.js";
 import type { ActionContext } from "../actions.js";
 import { getBodyCheckins, updateDailyTargets } from "../bodyStore.js";
-import { acceptedTarget, gapCause, gapLine, plannedProtein, proteinGapOf, rulesKey, type GapChoice, type ProteinGap } from "./proteinGap.js";
+import { acceptedTarget, gapCause, gapsLine, openGaps, planGapsOf, plannedAverages, plannedProtein, proteinGapOf, rulesKey, type GapChoice, type GapKey, type NutrientGap, type ProteinGap } from "./proteinGap.js";
 import { FREQUENT_WINDOW_DAYS, loadLoggedSessions, rankUsualMeals } from "../frequentMeals.js";
 import { cleanAvoidList, loadFoodPrefs, saveFoodAvoid } from "../onboarding.js";
 import { loadHealthProfile } from "../snapshot.js";
@@ -52,7 +52,7 @@ export async function saveDietPrefs(userProfileId: string, input: DietPrefsInput
   // The setup screen doesn't send these: saving its answers must not wipe a running temporary diet,
   // what they never cook, or the skipped-today list.
   const raw = (input ?? {}) as Record<string, unknown>;
-  const missing = ["dietOverride", "habits", "unavailable", "proteinGap"].filter((k) => !(k in raw));
+  const missing = ["dietOverride", "habits", "unavailable", "proteinGap", "planGapsOk"].filter((k) => !(k in raw));
   let prefs = parsed;
   if (missing.length) {
     const old = await loadDietPrefs(userProfileId);
@@ -499,6 +499,12 @@ export type PlanView = {
   lists?: DayMeals[];
   /** The planned meals can't reach the protein target under their rules (proteinGap.ts). */
   proteinGap?: ProteinGap | null;
+  /** Every target the planned meals miss (protein included), shown together at build. */
+  planGaps?: NutrientGap[];
+  /** What limits the plan, in words, for the gaps card. */
+  gapCause?: string;
+  /** The gaps as one line for the coach and every plan-build reply. */
+  gapsLine?: string | null;
 };
 
 /**
@@ -561,8 +567,18 @@ export async function loadPlanView(ctx: ActionContext, now = new Date(), opts: {
     await restoreProteinTarget(ctx, prefs.prefs, t.proteinTarget ?? null).catch((err) => logger.warn({ err: loggableError(err) }, "protein target restore failed"));
     return loadPlanView(ctx, now, { ...opts, afterRestore: true });
   }
-  const proteinGap = proteinGapOf({ plannedG: plannedProtein(accounts), targetG: plan.targets.proteinG, stored, key, cause: gapCause(rules, prefs.prefs) });
-  return { ok: true, setup: true, plan: rest, days, accounts, lists, proteinGap, ...base };
+  const cause = gapCause(rules, prefs.prefs);
+  const proteinGap = proteinGapOf({ plannedG: plannedProtein(accounts), targetG: plan.targets.proteinG, stored, key, cause });
+  // Every other target too (Saksham, 11 Nov): calories, carbs, fat, fibre, flagged together at build.
+  const fibre = new Map<string, number>();
+  for (const m of days) if (m.kind !== "eat_out") fibre.set(m.date, (fibre.get(m.date) ?? 0) + (m.totals?.fiberG ?? 0));
+  const averages = plannedAverages(accounts.map((a) => ({ planned: { ...a.planned, fiberG: fibre.get(a.date) ?? 0 }, allowances: a.allowances })));
+  const t4 = plan.targets as typeof plan.targets & { fiberG?: number };
+  const allGaps = planGapsOf(averages, { kcal: t4.calories, proteinG: t4.proteinG, carbsG: t4.carbsG, fatG: t4.fatG, fiberG: t4.fiberG ?? null }, proteinGap);
+  const planGaps = openGaps(allGaps, prefs.prefs.planGapsOk, key);
+  const kept = allGaps.filter((g) => !planGaps.includes(g)).map((g) => g.label.toLowerCase());
+  const line = [gapsLine(planGaps, proteinGap, cause), kept.length ? `They kept ${kept.join(", ")} as the plan has it: don't flag ${kept.length === 1 ? "it" : "those"}.` : null].filter(Boolean).join(" ") || null;
+  return { ok: true, setup: true, plan: rest, days, accounts, lists, proteinGap, planGaps, gapCause: cause, gapsLine: line, ...base };
 }
 
 // ---------- food rules changed from chat ----------
@@ -607,7 +623,7 @@ async function replanAfter(ctx: ActionContext, reason: string, now: Date): Promi
     keptEdits: planned.filter((r) => !badIds.has(r.id) && custom(r)).map((r) => ({ date: r.local_date, slot: r.meal_slot })),
     meals: view.days.map((d) => ({ date: d.date, slot: d.slot, meal: d.kind === "eat_out" ? d.title : d.items.map((i) => i.text).join(", "), status: d.status })),
     violations: view.days.filter((d) => d.status === "planned" && d.kind !== "eat_out" && !itemsAllowedOn(rules, d.date, d.items)).length,
-    proteinGap: view.proteinGap ? gapLine(view.proteinGap) : null,
+    proteinGap: view.gapsLine ?? null,
   };
 }
 
@@ -723,7 +739,22 @@ export async function mealFeedback(
  */
 export async function planGapLine(ctx: ActionContext, now = new Date()): Promise<string | null> {
   const view = await loadPlanView(ctx, now).catch(() => null);
-  return view && view.ok && "days" in view && view.proteinGap ? gapLine(view.proteinGap) : null;
+  return view && view.ok && "days" in view ? view.gapsLine ?? null : null;
+}
+
+/** "Keep this plan": the non-protein gaps it has now are accepted until their food rules change. */
+export async function acceptPlanGaps(ctx: ActionContext, now = new Date()): Promise<{ ok: true; accepted: GapKey[] } | { ok: false; error: string }> {
+  const view = await loadPlanView(ctx, now);
+  if (!view.ok || !("days" in view)) return { ok: false, error: "no_plan" };
+  const keys = (view.planGaps ?? []).filter((g) => g.key !== "proteinG").map((g) => g.key);
+  if (!keys.length) return { ok: false, error: "no_gap" };
+  const today = localDateKey(now, ctx.timezone);
+  const prefs = await loadDietPrefs(ctx.userProfileId);
+  const rules = await rulesFor(ctx.userProfileId, prefs.prefs, today);
+  const key = rulesKey(rules, prefs.prefs);
+  const before = prefs.prefs.planGapsOk?.rulesKey === key ? prefs.prefs.planGapsOk.keys : [];
+  await saveDietPrefs(ctx.userProfileId, { ...prefs.prefs, planGapsOk: { keys: [...new Set([...before, ...keys])], rulesKey: key, at: now.toISOString() } });
+  return { ok: true, accepted: keys };
 }
 
 async function restoreProteinTarget(ctx: ActionContext, prefs: DietPrefs, current: number | null): Promise<void> {

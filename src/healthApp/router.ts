@@ -82,7 +82,7 @@ import { editReceipt, getLoggedMeal, mealReplaceInput, receiptEditInput, replace
 import { logSupplements, undoSupplements } from "./dietPlan/supplementLog.js";
 import { confirmDayComplete, rebalanceToday, setMealPlanRole } from "./dietPlan/rhythm.js";
 import { GAP_CHOICES } from "./dietPlan/proteinGap.js";
-import { answerProteinGap, FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, planGapLine, prefsChangeReason, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
+import { acceptPlanGaps, answerProteinGap, FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, planGapLine, prefsChangeReason, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
 import { replanForGoal } from "./replan.js";
 import { getActiveGoal } from "./bodyStore.js";
 import { PLAN_SLOTS } from "./dietPlan/targets.js";
@@ -514,6 +514,14 @@ export function createHealthAppRouter(): express.Router {
     route("diet-protein-gap", async (ctx, req) => {
       const { choice } = z.object({ choice: z.enum(GAP_CHOICES) }).parse(req.body ?? {});
       const r = await answerProteinGap(ctx, choice);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  /** "Keep this plan": the plan's other gaps (calories, carbs, fat, fibre) accepted until the food rules change. */
+  router.post(
+    "/diet/plan-gaps/accept",
+    route("diet-plan-gaps-accept", async (ctx) => {
+      const r = await acceptPlanGaps(ctx);
       return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );

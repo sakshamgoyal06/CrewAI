@@ -38,3 +38,24 @@ describe("protein the plan can't reach", () => {
     expect(acceptedTarget(12)).toBe(40);
   });
 });
+
+describe("every plan gap", () => {
+  it("flags each target the plan misses, protein included, and hides accepted ones for the same rules", async () => {
+    const { planGapsOf, openGaps, plannedAverages, gapsLine } = await import("./proteinGap.js");
+    const avg = plannedAverages([{ planned: { kcal: 2150, proteinG: 110, carbsG: 330, fatG: 50, fiberG: 18 }, allowances: [] }, { planned: { kcal: 9999, proteinG: 0, carbsG: 0, fatG: 0 }, allowances: [{}] }]);
+    expect(avg).toEqual({ kcal: 2150, proteinG: 110, carbsG: 330, fatG: 50, fiberG: 18 });
+    const protein = { plannedG: 110, targetG: 165, cause: "your veg period", answered: null };
+    const gaps = planGapsOf(avg, { kcal: 2200, proteinG: 165, carbsG: 250, fatG: 70, fiberG: 30 }, protein);
+    expect(gaps.map((g) => `${g.key}:${g.direction}`)).toEqual(["proteinG:under", "carbsG:over", "fatG:under", "fiberG:under"]);
+    expect(openGaps(gaps, { keys: ["carbsG", "fatG"], rulesKey: "k", at: "" }, "k").map((g) => g.key)).toEqual(["proteinG", "fiberG"]);
+    expect(openGaps(gaps, { keys: ["carbsG"], rulesKey: "old", at: "" }, "k")).toHaveLength(4);
+    const line = gapsLine(gaps, protein, "your veg period")!;
+    expect(line).toMatch(/Not decided yet/);
+    expect(line).toMatch(/carbs about 330 of 250 g/);
+  });
+
+  it("skips a target the plan doesn't have (older plans have no fibre)", async () => {
+    const { planGapsOf } = await import("./proteinGap.js");
+    expect(planGapsOf({ kcal: 2000, proteinG: 150, carbsG: 250, fatG: 60, fiberG: 0 }, { kcal: 2000, proteinG: 150, carbsG: 250, fatG: 60, fiberG: null }, null)).toEqual([]);
+  });
+});
