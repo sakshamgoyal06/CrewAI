@@ -16,7 +16,7 @@ import { logCheckin, logSteps } from "./actions.js";
 import { upsertBodyCheckin } from "./bodyStore.js";
 import { logWater } from "./water.js";
 import type { PlanItem } from "./dietPlan/compose.js";
-import { afterMealLogged, rebalanceToday } from "./dietPlan/rhythm.js";
+import { afterMealLogged, rebalanceToday, redoCarry } from "./dietPlan/rhythm.js";
 
 // ---------- logged meals ----------
 
@@ -164,6 +164,9 @@ export async function replaceLoggedMeal(
     if (date === localDateKey(ctx.now ?? new Date(), ctx.timezone)) {
       await rebalanceToday(ctx).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance after meal edit failed"));
     }
+  }
+  if (date !== localDateKey(ctx.now ?? new Date(), ctx.timezone)) {
+    await redoCarry(ctx, date).catch((err) => logger.warn({ err: loggableError(err) }, "carry redo after meal edit failed"));
   }
   const totals = input.items.reduce((a, i) => ({ calories: a.calories + Math.round(i.calories), protein_g: r1(a.protein_g + i.protein_g) }), { calories: 0, protein_g: 0 });
   return { ok: true, date, totals };

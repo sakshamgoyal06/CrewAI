@@ -10,7 +10,7 @@ import { localDateKey } from "../nutrition/localDate.js";
 import { logger } from "../logger.js";
 import { loggableError } from "../util/loggableError.js";
 import { ACTIVITY_SOURCES, upsertDailyActivity } from "./activityStore.js";
-import { afterMealLogged, previewPlanRole, rebalanceToday } from "./dietPlan/rhythm.js";
+import { afterMealLogged, previewPlanRole, rebalanceToday, redoCarry } from "./dietPlan/rhythm.js";
 import { unlinkDeletedMeal } from "./dietPlan/log.js";
 import { setActiveGoal, updateDailyTargets, upsertBodyCheckin } from "./bodyStore.js";
 import { isOwnerProfile } from "./accounts.js";
@@ -282,6 +282,9 @@ export async function removeMeal(
   await unlinkDeletedMeal(ctx.userProfileId, mealSessionId).catch((err) => logger.warn({ err: loggableError(err) }, "unlink after meal delete failed"));
   if (r.localDate === localDateKey(ctx.now ?? new Date(), ctx.timezone)) {
     await rebalanceToday(ctx).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance after meal delete failed"));
+  } else {
+    // A closed day lost a meal (a double count removed): its carry is worked out again.
+    await redoCarry(ctx, r.localDate).catch((err) => logger.warn({ err: loggableError(err) }, "carry redo after meal delete failed"));
   }
   return { ok: true, date: r.localDate };
 }

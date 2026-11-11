@@ -14,7 +14,7 @@ import { addDays, localClock } from "../../util/time.js";
 import type { ActionContext } from "../actions.js";
 import { getPrefs, isQuiet, sendNotification } from "../push.js";
 import { closeDay, rebalanceDay } from "./adjust.js";
-import { saveCarry } from "./carry.js";
+import { reviseCarry, saveCarry } from "./carry.js";
 import { undoPlanned } from "./log.js";
 import { sumTotals, type MealOption, type PlanItem, type Totals } from "./compose.js";
 import { loadPlanView, type PlannedMeal, type PlanView } from "./store.js";
@@ -201,6 +201,8 @@ export async function afterMealLogged(ctx: ActionContext, input: { date: string;
     : await linkToPlan(ctx.userProfileId, input.date, input.slot, input.mealSessionId);
   if (input.date === localDateKey(now, ctx.timezone)) {
     void rebalanceToday(ctx, now).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance after a meal failed"));
+  } else {
+    void redoCarry(ctx, input.date, now).catch((err) => logger.warn({ err: loggableError(err) }, "carry redo after a late meal failed"));
   }
   return role;
 }
@@ -429,6 +431,21 @@ export function dayCloseCard(input: { date: string; summary: string; next: { dat
     text: [input.summary, meals.length ? "Tomorrow:" : null, ...lines].filter(Boolean).join("\n"),
     card: { type: "plan_adjust", kind: "day_close", date: input.date, headline: input.summary, lines: [], next: { date: input.next.date, meals } },
   };
+}
+
+/**
+ * After a meal on an earlier, already closed day is logged, edited or removed: work that day's
+ * carry out again from what's logged now, and move the next days' meals by the difference.
+ * Nothing for today (it isn't closed yet) or a day the close never ran for.
+ */
+export async function redoCarry(ctx: ActionContext, date: string, now = new Date()): Promise<boolean> {
+  if (date >= localDateKey(now, ctx.timezone)) return false;
+  if (!(await exists(ctx.userProfileId, stableTurnId(`magnus-day-close:${ctx.userProfileId}:${date}`)))) return false;
+  const view = await planViewOrNull(ctx, now);
+  if (!view?.plan) return false;
+  const { totals, slots } = await eatenOn(ctx.userProfileId, date);
+  const carry = slots.size >= DAY_CLOSE_MIN_MEALS ? closeDay({ date, target: view.plan.targets, eaten: totals, floorKcal: FLOOR_KCAL }).carry : [];
+  return reviseCarry(ctx.userProfileId, view.plan.budgets, date, carry, localDateKey(now, ctx.timezone));
 }
 
 /** Closes today once, at night: spreads a miss over the next days and shows tomorrow's meals. */

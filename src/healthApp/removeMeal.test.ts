@@ -6,7 +6,8 @@ vi.mock("./meals.js", async (orig) => ({ ...(await orig<typeof import("./meals.j
 const unlink = vi.fn(async () => {});
 vi.mock("./dietPlan/log.js", () => ({ unlinkDeletedMeal: (...a: unknown[]) => unlink(...a) }));
 const rebalance = vi.fn(async () => true);
-vi.mock("./dietPlan/rhythm.js", () => ({ rebalanceToday: (...a: unknown[]) => rebalance(...a), afterMealLogged: vi.fn(), previewPlanRole: vi.fn() }));
+vi.mock("./dietPlan/rhythm.js", () => ({ rebalanceToday: (...a: unknown[]) => rebalance(...a), redoCarry: (...a: unknown[]) => redo(...a), afterMealLogged: vi.fn(), previewPlanRole: vi.fn() }));
+const redo = vi.fn(async () => false);
 
 import { removeMeal } from "./actions.js";
 
@@ -26,5 +27,7 @@ describe("removeMeal", () => {
     deleteMeal.mockResolvedValueOnce({ ok: true, localDate: "2026-11-08" });
     await removeMeal(ctx as never, sid);
     expect(rebalance).not.toHaveBeenCalled();
+    // An earlier day is closed: its carry is worked out again instead.
+    expect(redo).toHaveBeenCalledWith(ctx, "2026-11-08");
   });
 });
