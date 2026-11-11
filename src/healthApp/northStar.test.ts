@@ -129,3 +129,30 @@ describe("an unlogged day is not a missed day", () => {
     expect(ns.mostMissed?.id).not.toBe("calories");
   });
 });
+
+describe("logging state (11 Nov rule)", () => {
+  const t = { calorieTarget: 2200, proteinTarget: 165, stepTarget: 8000, trainingDays: [], minMealSessions: 3 };
+  const base = { date: "2026-11-09", weekday: 1, mealSessions: 1, calories: 120, proteinG: 24, carbsG: 2, fatG: 2, steps: 9000, workoutsLogged: 0 };
+
+  it("a day with a snack logged is partly logged, not a calorie or protein miss", () => {
+    const d = scoreDay(base, t);
+    expect(d.partial).toBe(true);
+    expect(d.unlogged).toBeUndefined();
+    expect(d.checks.find((c) => c.id === "protein")!.detail).toMatch(/partly logged/);
+    const ns = computeNorthStar([d, d, scoreDay({ ...base, date: "2026-11-11" }, t)]);
+    expect(ns.mostMissed).toEqual({ id: "meals_logged", label: "Meals logged", missedDays: 2 });
+    expect(ns.partialDays).toBe(2);
+  });
+
+  it("skipped meals are a logged zero, not an unlogged day", () => {
+    const d = scoreDay({ ...base, mealSessions: 0, calories: 0, proteinG: 0, carbsG: 0, fatG: 0, mealsSkipped: 3 }, t);
+    expect(d.unlogged).toBeUndefined();
+    expect(d.partial).toBeUndefined();
+    expect(d.checks.find((c) => c.id === "calories")!.met).toBe(false);
+  });
+
+  it("plan accounting decides when given: every meal accounted for is a full day even if light", () => {
+    expect(scoreDay({ ...base, loggedInFull: true }, t).partial).toBeUndefined();
+    expect(scoreDay({ ...base, calories: 1900, mealSessions: 3, loggedInFull: false }, t).partial).toBe(true);
+  });
+});

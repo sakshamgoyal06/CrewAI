@@ -31,6 +31,7 @@ import {
   type NorthStar,
 } from "./northStar.js";
 import { DAY_MS } from "../util/time.js";
+import { loadDayAccounting, loadLastLogDate, loggingSummary, type LoggingStatus } from "./loggingStatus.js";
 
 const WINDOW_DAYS = 7;
 
@@ -91,6 +92,8 @@ export type HealthSnapshot = {
   }>;
   /** Today's one meal list (dayMeals.ts): planned meals with their state, plus extras. */
   mealList?: DayMeals;
+  /** Logging as a habit: days logged, days since the last log (loggingStatus.ts). */
+  logging?: LoggingStatus;
 };
 
 const CHECKIN_HISTORY_DAYS = 180;
@@ -189,7 +192,7 @@ export async function loadHealthProfile(
   };
 }
 
-type MealDay = { sessions: Set<string>; calories: number; proteinG: number; carbsG: number; fatG: number };
+type MealDay = { sessions: Set<string>; slots: Set<string>; calories: number; proteinG: number; carbsG: number; fatG: number };
 
 export async function loadMealDays(
   userProfileId: string,
@@ -198,7 +201,7 @@ export async function loadMealDays(
 ): Promise<Map<string, MealDay>> {
   const { data, error } = await supabase
     .from("meal_logs")
-    .select("local_date, meal_session_id, calories, protein_g, carbs_g, fat_g")
+    .select("local_date, meal_session_id, meal_slot, calories, protein_g, carbs_g, fat_g")
     .eq("user_profile_id", userProfileId)
     .is("deleted_at", null)
     .gte("local_date", fromDate)
@@ -209,10 +212,11 @@ export async function loadMealDays(
   }
   for (const r of data) {
     const key = String(r.local_date);
-    const day = out.get(key) ?? { sessions: new Set<string>(), calories: 0, proteinG: 0, carbsG: 0, fatG: 0 };
+    const day = out.get(key) ?? { sessions: new Set<string>(), slots: new Set<string>(), calories: 0, proteinG: 0, carbsG: 0, fatG: 0 };
     if (r.meal_session_id) {
       day.sessions.add(String(r.meal_session_id));
     }
+    if (r.meal_slot) day.slots.add(String(r.meal_slot));
     day.calories += Number(r.calories) || 0;
     day.proteinG += Number(r.protein_g) || 0;
     day.carbsG += Number(r.carbs_g) || 0;
@@ -300,7 +304,11 @@ export async function buildHealthSnapshot(
     getActivities(userProfileId, from, to),
     routine?.length ? getRoutineChecks(userProfileId, from, to) : Promise.resolve(new Map()),
   ]);
-  const mealList = await loadDayMeals(userProfileId, to, to).catch(() => undefined);
+  const [mealList, lastLogDate, accounting] = await Promise.all([
+    loadDayMeals(userProfileId, to, to).catch(() => undefined),
+    loadLastLogDate(userProfileId, to).catch(() => undefined),
+    loadDayAccounting(userProfileId, from, to, new Map([...meals].map(([d, m]) => [d, m.slots]))).catch(() => new Map<string, { skipped: number; loggedInFull?: boolean }>()),
+  ]);
   const kg = [...checkins].reverse().find((c) => c.weight_kg != null)?.weight_kg ?? FALLBACK_WEIGHT_KG;
   const typicalBurn = typicalTrainingBurn(hevy.workouts.map((w) => w.durationMin ?? 0), kg);
 
@@ -341,6 +349,9 @@ export async function buildHealthSnapshot(
         date,
         weekday: weekdayOfDate(date),
         mealSessions: m?.sessions.size ?? 0,
+        mealsSkipped: accounting.get(date)?.skipped ?? 0,
+        // Today isn't over, so it's never "partly logged"; earlier days go by the plan when there is one.
+        loggedInFull: date === to ? true : accounting.get(date)?.loggedInFull,
         calories: m?.calories ?? 0,
         proteinG: m?.proteinG ?? 0,
         carbsG: m?.carbsG ?? 0,
@@ -395,5 +406,6 @@ export async function buildHealthSnapshot(
       loggedAt: m.loggedAt,
     })),
     ...(mealList ? { mealList } : {}),
+    ...(lastLogDate !== undefined ? { logging: loggingSummary(to, lastLogDate, days) } : {}),
   };
 }

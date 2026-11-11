@@ -27,6 +27,17 @@ export type DayInputs = {
    * they replace the workout check with one "Routine" check that needs every item done.
    */
   routine?: Array<{ label: string; state: "done" | "skipped" | "pending" }> | null;
+  /**
+   * Planned meals marked skipped that day. Only an explicit skip counts as eating nothing (11 Nov
+   * rule): a day with skips and no logs is a logged 0, not an unlogged day.
+   */
+  mealsSkipped?: number;
+  /**
+   * Whether every meal of the day is accounted for (each planned main meal eaten, changed or
+   * skipped, or "That was everything"). When not given, a day with food logged counts as partly
+   * logged below PARTIAL_KCAL_SHARE of the calorie target.
+   */
+  loggedInFull?: boolean;
 };
 
 export type HealthTargets = {
@@ -62,6 +73,11 @@ export type DayScore = {
    * check, so a blank day reads as unlogged, never as missed calories or protein (11 Nov rule).
    */
   unlogged?: true;
+  /**
+   * Some food logged but the day isn't accounted for in full. The food checks stay (with "partly
+   * logged" in their detail), but they are counted as a logging gap, not as eating too little.
+   */
+  partial?: true;
   /** 0–100, mean progress across applicable checks. */
   score: number;
 };
@@ -80,6 +96,19 @@ const CALORIE_FLOOR_RATIO = 0.6;
  */
 export const FOOD_RULE_FROM = "2026-11-05";
 export const FOOD_BAND = { kcalLow: 0.85, kcalHigh: 1.05, protein: 0.9, macro: 0.25 } as const;
+/** Without plan data, a day with less than this share of the calorie target logged reads as partly logged. */
+export const PARTIAL_KCAL_SHARE = 0.5;
+const FOOD_CHECKS: CheckId[] = ["calories", "protein", "macros"];
+
+/** Is the food side of this day logged in full, partly, or not at all? Pure. */
+export function foodLogState(day: DayInputs, targets: HealthTargets): "full" | "partial" | "none" {
+  const skipped = day.mealsSkipped ?? 0;
+  if (day.mealSessions === 0 && day.calories <= 0) return skipped > 0 ? "full" : "none";
+  if (day.loggedInFull !== undefined) return day.loggedInFull ? "full" : "partial";
+  const t = targets.calorieTarget;
+  if (skipped === 0 && t && t > 0 && day.calories < t * PARTIAL_KCAL_SHARE) return "partial";
+  return "full";
+}
 
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) {
@@ -168,10 +197,15 @@ function foodChecks(day: DayInputs, targets: HealthTargets, checks: DayCheck[]):
 export function scoreDay(day: DayInputs, targets: HealthTargets): DayScore {
   const checks: DayCheck[] = [];
 
-  const unlogged = day.date >= FOOD_RULE_FROM && day.mealSessions === 0 && day.calories <= 0;
+  const state = day.date >= FOOD_RULE_FROM ? foodLogState(day, targets) : "full";
+  const unlogged = state === "none";
+  const partial = state === "partial";
   if (unlogged) checks.push({ id: "meals_logged", label: "Meals logged", met: false, progress: 0, detail: "Nothing logged" });
   else if (day.date >= FOOD_RULE_FROM) foodChecks(day, targets, checks);
   else legacyFoodChecks(day, targets, checks);
+  if (partial) {
+    for (const c of checks) if (!c.met && FOOD_CHECKS.includes(c.id)) c.detail = `${c.detail}, partly logged`;
+  }
 
   checks.push({
     id: "steps",
@@ -205,13 +239,15 @@ export function scoreDay(day: DayInputs, targets: HealthTargets): DayScore {
   const score = Math.round(
     (checks.reduce((s, c) => s + c.progress, 0) / checks.length) * 100,
   );
-  return { date: day.date, checks, onTrack: checks.every((c) => c.met), score, ...(unlogged ? { unlogged: true as const } : {}) };
+  return { date: day.date, checks, onTrack: checks.every((c) => c.met), score, ...(unlogged ? { unlogged: true as const } : {}), ...(partial ? { partial: true as const } : {}) };
 }
 
 export type NorthStar = {
   onTrackDays: number;
   /** Past days in the window with nothing logged (today isn't counted until it's over). */
   unloggedDays: number;
+  /** Past days in the window with food logged only in part. */
+  partialDays: number;
   windowDays: number;
   goal: number;
   days: DayScore[];
@@ -227,11 +263,16 @@ export function computeNorthStar(days: DayScore[], goal = WEEKLY_ON_TRACK_GOAL):
   const onTrackDays = days.filter((d) => d.onTrack).length;
   const missed = new Map<CheckId, { label: string; count: number }>();
   for (const d of days.slice(0, -1)) {
+    // A partly logged day's food misses are a logging gap, not low calories or protein.
+    const ids = new Map<CheckId, string>();
     for (const c of d.checks) {
-      if (!c.met) {
-        const prev = missed.get(c.id);
-        missed.set(c.id, { label: c.label, count: (prev?.count ?? 0) + 1 });
-      }
+      if (c.met) continue;
+      if (d.partial && FOOD_CHECKS.includes(c.id)) ids.set("meals_logged", "Meals logged");
+      else ids.set(c.id, c.label);
+    }
+    for (const [id, label] of ids) {
+      const prev = missed.get(id);
+      missed.set(id, { label, count: (prev?.count ?? 0) + 1 });
     }
   }
   let mostMissed: NorthStar["mostMissed"] = null;
@@ -241,5 +282,6 @@ export function computeNorthStar(days: DayScore[], goal = WEEKLY_ON_TRACK_GOAL):
     }
   }
   const unloggedDays = days.slice(0, -1).filter((d) => d.unlogged).length;
-  return { onTrackDays, unloggedDays, windowDays: days.length, goal, days, mostMissed };
+  const partialDays = days.slice(0, -1).filter((d) => d.partial).length;
+  return { onTrackDays, unloggedDays, partialDays, windowDays: days.length, goal, days, mostMissed };
 }

@@ -77,10 +77,10 @@ import { draftMealFromPhoto } from "./mealCards.js";
 import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
 import { loadWeeklyReview } from "./weeklyReview.js";
 import { editInput, editPick, restrictionsFor, searchMealFoods } from "./dietPlan/edit.js";
-import { eatInput, eatPlanned, undoPlanned } from "./dietPlan/log.js";
+import { eatInput, eatPlanned, skipPlanned, undoPlanned } from "./dietPlan/log.js";
 import { editReceipt, getLoggedMeal, mealReplaceInput, receiptEditInput, replaceLoggedMeal, undoReceipt } from "./logEdits.js";
 import { logSupplements, undoSupplements } from "./dietPlan/supplementLog.js";
-import { confirmDayComplete, rebalanceToday, setMealPlanRole } from "./dietPlan/rhythm.js";
+import { confirmDayComplete, rebalanceToday, redoCarry, setMealPlanRole } from "./dietPlan/rhythm.js";
 import { FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, prefsChangeReason, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
 import { replanForGoal } from "./replan.js";
 import { getActiveGoal } from "./bodyStore.js";
@@ -504,6 +504,22 @@ export function createHealthAppRouter(): express.Router {
       const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
       const r = await undoPlanned(ctx, date, slot);
       return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+
+  /** "Skipped it": they didn't eat this planned meal; it counts as a logged 0. Undo is the route above. */
+  router.post(
+    "/diet/days/:date/:slot/skip",
+    route("diet-skip", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const slot = z.enum(PLAN_SLOTS).parse(req.params.slot);
+      const r = await skipPlanned(ctx, date, slot);
+      if (r.ok) {
+        // Today the rest of the day follows; an earlier, closed day redoes its carry.
+        if (date === localDateKey(new Date(), ctx.timezone)) await rebalanceToday(ctx).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance after skip failed"));
+        else await redoCarry(ctx, date).catch((err) => logger.warn({ err: loggableError(err) }, "carry redo after skip failed"));
+      }
+      return r.ok ? { body: r } : { status: r.error === "already_logged" ? 409 : 400, body: r };
     }),
   );
 

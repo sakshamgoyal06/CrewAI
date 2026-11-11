@@ -356,7 +356,8 @@ async function loadEntries(userProfileId: string, from: string, to: string): Pro
     .eq("user_profile_id", userProfileId)
     .gte("local_date", from)
     .lte("local_date", to)
-    .in("status", ["planned", "logged", "partial"]);
+    // Skipped meals hold their slot, so the plan never refills a meal they said they skipped.
+    .in("status", ["planned", "logged", "partial", "skipped"]);
   if (error) throw new Error(error.message);
   return (data ?? []) as EntryRow[];
 }
