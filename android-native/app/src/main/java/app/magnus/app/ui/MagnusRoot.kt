@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +34,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
@@ -81,9 +83,8 @@ fun MagnusRoot(graph: AppGraph) {
 @Composable
 private fun SignedIn(graph: AppGraph) {
     val c = Magnus.colors
-    var tab by rememberSaveable { mutableStateOf(Tab.Coach) }
-    // Back from any tab returns to Coach; back on Coach leaves the app (the PWA's rule, PR #149).
-    BackHandler(enabled = tab != Tab.Coach) { tab = Tab.Coach }
+    val nav = remember { Navigator() }
+    BackHandler(enabled = nav.logSheet || nav.stack.isNotEmpty() || nav.tab != Tab.Coach) { nav.back() }
 
     // Whose account this is: an uninvited Google account is refused here (403 signup_closed),
     // the same rule as the PWA, and goes back to sign-in with the reason.
@@ -104,27 +105,60 @@ private fun SignedIn(graph: AppGraph) {
         }
     }
 
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            when (tab) {
-                Tab.Coach -> CoachScreen(graph)
-                Tab.Today -> TodayScreen(graph)
-                Tab.Meals -> EmptyNote("Meals", "The meal plan arrives in a later Beta build. Use the main Magnus app for it until then.")
-                Tab.Progress -> EmptyNote("Progress", "Trends and the goal chart arrive in a later Beta build.")
-                Tab.You -> YouScreen(graph)
+    CompositionLocalProvider(LocalNav provides nav) {
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().statusBarsPadding()) {
+                val top = nav.stack.lastOrNull()
+                if (top != null) {
+                    when (top) {
+                        Screen.LogMeal -> LogMealScreen(graph)
+                        Screen.WeighIn -> WeighInScreen(graph)
+                        Screen.Steps -> StepsScreen(graph)
+                    }
+                } else {
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        when (nav.tab) {
+                            Tab.Coach -> CoachScreen(graph)
+                            Tab.Today -> TodayScreen(graph)
+                            Tab.Meals -> EmptyNote("Meals", "The meal plan arrives in a later Beta build. Use the main Magnus app for it until then.")
+                            Tab.Progress -> EmptyNote("Progress", "Trends and the goal chart arrive in a later Beta build.")
+                            Tab.You -> YouScreen(graph)
+                        }
+                    }
+                    // The tab bar steps aside while the keyboard is up, so nothing crowds the composer.
+                    if (!WindowInsets.isImeVisible) {
+                        HorizontalDivider(color = c.hair)
+                        Row(
+                            Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding().height(64.dp),
+                            horizontalArrangement = Arrangement.SpaceAround,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            for (t in Tab.entries) TabButton(t, selected = t == nav.tab) { nav.tab = t }
+                        }
+                    }
+                }
             }
+            if (nav.logSheet) LogSheet(graph)
+            Toast(nav)
         }
-        // The tab bar steps aside while the keyboard is up, so nothing crowds the composer.
-        if (!WindowInsets.isImeVisible) {
-            HorizontalDivider(color = c.hair)
-            Row(
-                Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding().height(64.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                for (t in Tab.entries) TabButton(t, selected = t == tab) { tab = t }
-            }
-        }
+    }
+}
+
+/** A short line at the top (never over the composer), gone after a few seconds. */
+@Composable
+private fun Toast(nav: Navigator) {
+    val c = Magnus.colors
+    val text = nav.toast ?: return
+    LaunchedEffect(text) {
+        kotlinx.coroutines.delay(2800)
+        nav.toast = null
+    }
+    Box(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 8.dp), contentAlignment = Alignment.TopCenter) {
+        Text(
+            text, style = MaterialTheme.typography.bodyMedium, color = c.text,
+            modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(c.raised)
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+        )
     }
 }
 

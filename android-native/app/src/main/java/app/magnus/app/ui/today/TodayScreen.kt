@@ -2,6 +2,7 @@ package app.magnus.app.ui.today
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +17,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -34,6 +37,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.magnus.app.AppGraph
+import app.magnus.app.data.ApiException
+import app.magnus.app.ui.LocalNav
 import app.magnus.app.data.DayCheck
 import app.magnus.app.data.DayMealRow
 import app.magnus.app.data.ScoreDay
@@ -54,6 +59,7 @@ import kotlin.math.roundToInt
 
 private val dayTitle = DateTimeFormatter.ofPattern("EEEE, d MMM", Locale.ENGLISH)
 private val clock = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
+private val PLAN_SLOTS = setOf("breakfast", "lunch", "snack", "dinner")
 private val nf = NumberFormat.getIntegerInstance(Locale("en", "IN"))
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,11 +84,50 @@ fun TodayScreen(graph: AppGraph) {
         }
     }
     LaunchedEffect(Unit) { refresh() }
+    val nav = LocalNav.current
+    // "Ate this" more than an hour before the meal's time asks once (the server's too_early rule).
+    var early by remember { mutableStateOf<DayMealRow?>(null) }
+    early?.let { row ->
+        AlertDialog(
+            onDismissRequest = { early = null },
+            title = { Text("Already ate your ${row.slot}?") },
+            text = { Text("It's planned for later. Log it now anyway?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    early = null
+                    scope.launch {
+                        runCatching { graph.api.send("POST", "/diet/days/${loaded?.snapshot?.today?.date}/${row.slot}/eat", "{\"early\":true}") }
+                            .onSuccess { nav.say("Logged your ${row.slot}.") }
+                            .onFailure { nav.say("Couldn't save that. Try again.") }
+                        refresh()
+                    }
+                }) { Text("Log it") }
+            },
+            dismissButton = { TextButton(onClick = { early = null }) { Text("Not yet") } },
+        )
+    }
 
     PullToRefreshBox(isRefreshing = refreshing, onRefresh = { scope.launch { refresh() } }, modifier = Modifier.fillMaxSize()) {
         val l = loaded
         when {
-            l != null -> TodayContent(l, offline = failed)
+            l != null -> TodayContent(l, offline = failed, onMeal = { row, action ->
+                scope.launch {
+                    val path = "/diet/days/${l.snapshot.today.date}/${row.slot}/$action"
+                    try {
+                        graph.api.send("POST", path, "{}")
+                        nav.say(if (action == "eat") "Logged your ${row.slot}." else "Marked ${row.slot} as skipped.")
+                    } catch (e: ApiException) {
+                        if (e.code == "too_early") {
+                            early = row
+                        } else {
+                            nav.say(if (e.code == "already_logged") "Already logged." else "Couldn't save that. Try again.")
+                        }
+                    } catch (_: Exception) {
+                        nav.say("No connection. Try again when you're online.")
+                    }
+                    refresh()
+                }
+            })
             failed -> Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 EmptyNote("Can't reach Magnus", "Check your connection, then pull down to try again.")
             }
@@ -92,7 +137,7 @@ fun TodayScreen(graph: AppGraph) {
 }
 
 @Composable
-private fun TodayContent(l: TodayRepository.Loaded, offline: Boolean) {
+private fun TodayContent(l: TodayRepository.Loaded, offline: Boolean, onMeal: (DayMealRow, String) -> Unit) {
     val c = Magnus.colors
     val s = l.snapshot
     Column(
@@ -101,7 +146,14 @@ private fun TodayContent(l: TodayRepository.Loaded, offline: Boolean) {
     ) {
         val date = runCatching { LocalDate.parse(s.today.date) }.getOrNull() ?: LocalDate.now()
         Column {
-            Text(dayTitle.format(date), style = MaterialTheme.typography.headlineSmall, color = c.text)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(dayTitle.format(date), style = MaterialTheme.typography.headlineSmall, color = c.text, modifier = Modifier.weight(1f))
+                val nav = LocalNav.current
+                Text(
+                    "+ Log", style = MaterialTheme.typography.labelLarge, color = c.accent,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).clickable { nav.logSheet = true }.padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
             if (offline) {
                 val at = clock.format(Instant.ofEpochMilli(l.savedAt).atZone(ZoneId.systemDefault()))
                 Text("Offline · showing $at", style = MaterialTheme.typography.bodySmall, color = c.warn)
@@ -109,7 +161,7 @@ private fun TodayContent(l: TodayRepository.Loaded, offline: Boolean) {
         }
         Scorecard(s)
         Checks(s.today.checks)
-        Food(s)
+        Food(s, onMeal)
         Movement(s)
     }
 }
@@ -175,7 +227,7 @@ private fun Checks(checks: List<DayCheck>) {
 }
 
 @Composable
-private fun Food(s: TodaySnapshot) {
+private fun Food(s: TodaySnapshot, onMeal: (DayMealRow, String) -> Unit) {
     val c = Magnus.colors
     val meals = s.mealList
     val eaten = meals?.eaten?.kcal ?: s.today.calories
@@ -198,13 +250,13 @@ private fun Food(s: TodaySnapshot) {
         if (rows.isEmpty()) {
             Text("Nothing planned or logged yet.", style = MaterialTheme.typography.bodySmall, color = c.faint)
         } else {
-            for (r in rows) MealLine(r)
+            for (r in rows) MealLine(r, onMeal)
         }
     }
 }
 
 @Composable
-private fun MealLine(r: DayMealRow) {
+private fun MealLine(r: DayMealRow, onMeal: (DayMealRow, String) -> Unit) {
     val c = Magnus.colors
     val (mark, color) = when (r.state) {
         "eaten", "instead" -> "Eaten" to c.good
@@ -221,6 +273,20 @@ private fun MealLine(r: DayMealRow) {
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 12.dp)) {
             Text(mark, style = MaterialTheme.typography.labelMedium, color = color)
             if (r.totals.kcal > 0) Text("${r.totals.kcal.roundToInt()} kcal", style = MaterialTheme.typography.bodySmall, color = c.faint)
+        }
+    }
+    // A planned meal still to eat: one strong action and a quiet skip (the Clean UI rule, #245).
+    if ((r.state == "todo" || r.state == "missed") && r.slot in PLAN_SLOTS && !r.eatOut) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Skipped it", style = MaterialTheme.typography.labelMedium, color = c.faint,
+                modifier = Modifier.clickable { onMeal(r, "skip") }.padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+            Text(
+                "Ate this", style = MaterialTheme.typography.labelLarge, color = c.accentInk,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(c.accent).clickable { onMeal(r, "eat") }
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            )
         }
     }
 }

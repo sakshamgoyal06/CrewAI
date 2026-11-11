@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.magnus.app.AppGraph
 import app.magnus.app.data.ChatRow
+import app.magnus.app.ui.LocalNav
 import app.magnus.app.ui.MagnusIcons
 import app.magnus.app.ui.theme.Magnus
 
@@ -45,6 +46,7 @@ import app.magnus.app.ui.theme.Magnus
 fun CoachScreen(graph: AppGraph) {
     val c = Magnus.colors
     val ui by graph.chat.ui.collectAsStateWithLifecycle()
+    val nav = LocalNav.current
     var draft by rememberSaveable { mutableStateOf("") }
     val list = rememberLazyListState()
     LaunchedEffect(Unit) { graph.chat.refresh() }
@@ -94,6 +96,7 @@ fun CoachScreen(graph: AppGraph) {
                 draft = ""
             },
             onStop = { graph.chat.stop() },
+            onLog = { nav.logSheet = true },
         )
     }
 }
@@ -131,13 +134,18 @@ private fun Live(progress: String?, text: String?) {
 }
 
 @Composable
-private fun Composer(text: String, onText: (String) -> Unit, sending: Boolean, onSend: () -> Unit, onStop: () -> Unit) {
+private fun Composer(text: String, onText: (String) -> Unit, sending: Boolean, onSend: () -> Unit, onStop: () -> Unit, onLog: () -> Unit) {
     val c = Magnus.colors
     Row(
         Modifier.fillMaxWidth().background(c.bg).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // + Log: the quick picker (meal, steps, weigh-in, water).
+        Box(
+            Modifier.size(48.dp).clip(CircleShape).background(c.surface).clickable(onClick = onLog),
+            contentAlignment = Alignment.Center,
+        ) { Icon(MagnusIcons.Plus, contentDescription = "Log", tint = c.accent) }
         Box(
             Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(c.surface).padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
