@@ -34,8 +34,33 @@ const at = (hhmm: string) => {
   return h * 60 + m;
 };
 
-export function digestDue(minutes: number): boolean {
-  return minutes >= at(DIGEST_AT) && minutes < at(DIGEST_AT) + DIGEST_WINDOW_MIN;
+/** With a meal plan the note waits for the day close (from 21:45, or an hour after a late last meal), up to this. */
+const DIGEST_LATEST = "23:50";
+
+export function digestDue(minutes: number, opts: { waitsForDayClose?: boolean } = {}): boolean {
+  const end = opts.waitsForDayClose ? at(DIGEST_LATEST) : at(DIGEST_AT) + DIGEST_WINDOW_MIN;
+  return minutes >= at(DIGEST_AT) && minutes < end;
+}
+
+/**
+ * The day close and the note are one evening: with a meal plan, the note comes after the day
+ * close and knows what it set for tomorrow (the carry and tomorrow's meals), so its tip never
+ * contradicts the plan. Before the close has posted the note waits; if it never does by 23:50,
+ * the note goes out on its own.
+ */
+export type DayCloseState = { hasPlan: boolean; text: string | null };
+
+async function loadDayClose(userProfileId: string, date: string): Promise<DayCloseState> {
+  const { data: prefs } = await supabase.from("health_diet_preferences").select("user_profile_id").eq("user_profile_id", userProfileId).maybeSingle();
+  if (!prefs) return { hasPlan: false, text: null };
+  const { data } = await supabase
+    .from("health_chat_messages")
+    .select("content")
+    .eq("user_profile_id", userProfileId)
+    .eq("turn_id", stableTurnId(`magnus-day-close:${userProfileId}:${date}`))
+    .limit(1);
+  const row = (data ?? [])[0] as { content?: string } | undefined;
+  return { hasPlan: true, text: row?.content ?? null };
 }
 
 /** The day as plain facts for the model (and the fallback). */
@@ -81,6 +106,7 @@ Write 2 or 3 short sentences, second person, plain words, no lists, no emoji, no
 1. How the day went, quoting the numbers that matter most (good or bad).
 2. ONE specific thing to do tomorrow (a food, a time, an amount), chosen to fix today's biggest gap or keep a good streak. Use what tomorrow is (training or rest day).
 Never invent numbers. Under 400 characters.
+If the facts include dayClose, tomorrow's meals and calories are already set there (the person just read it): don't repeat its numbers or suggest a different food for tomorrow; make your one thing about something else (steps, sleep, training, timing) or simply sticking to tomorrow's plan.
 If the facts include foodRules, they are hard rules: any food you name must obey them (never name a meat, fish, egg or food they rule out). A TEMPORARY RULE overrides their usual diet: while it runs, foods the usual diet allows but the temporary rule rules out are out.`;
 
 type Create = (p: Record<string, unknown>) => Promise<Anthropic.Message>;
@@ -156,7 +182,7 @@ export async function loadDigestFoodRules(userProfileId: string, today: string, 
 
 const nextDate = (date: string) => new Date(Date.parse(`${date}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 
-export type DigestDeps = { snapshot: typeof buildHealthSnapshot; write: typeof writeDigest; foodRules?: typeof loadDigestFoodRules };
+export type DigestDeps = { snapshot: typeof buildHealthSnapshot; write: typeof writeDigest; foodRules?: typeof loadDigestFoodRules; dayClose?: typeof loadDayClose };
 
 export async function runNightlyDigest(
   userProfileId: string,
@@ -166,7 +192,10 @@ export async function runNightlyDigest(
   if (process.env.MAGNUS_DIGEST === "off") return "off";
   const s = await deps.snapshot(userProfileId, now);
   const { minutes, weekday, hhmm } = localClock(now, s.timezone);
-  if (!digestDue(minutes)) return "not_yet";
+  if (!digestDue(minutes, { waitsForDayClose: true })) return "not_yet";
+  const close = await (deps.dayClose ?? loadDayClose)(userProfileId, s.today.date).catch((): DayCloseState => ({ hasPlan: false, text: null }));
+  if (!digestDue(minutes, { waitsForDayClose: close.hasPlan })) return "not_yet";
+  if (close.hasPlan && !close.text && minutes < at(DIGEST_LATEST) - 10) return "not_yet";
   const turnId = stableTurnId(`magnus-digest:${userProfileId}:${s.today.date}`);
   if (await alreadyPosted(userProfileId, turnId)) return "exists";
   // Without a single meal there is nothing to review; the plain evening push still goes out.
@@ -176,7 +205,7 @@ export async function runNightlyDigest(
 
   const rules = await (deps.foodRules ?? loadDigestFoodRules)(userProfileId, s.today.date, nextDate(s.today.date));
   const fallback = fallbackDigest(s);
-  const written = await deps.write({ ...digestFacts(s, weekday), ...(rules.line ? { foodRules: rules.line } : {}) }, fallback);
+  const written = await deps.write({ ...digestFacts(s, weekday), ...(rules.line ? { foodRules: rules.line } : {}), ...(close.text ? { dayClose: close.text.slice(0, 500) } : {}) }, fallback);
   // The model was told the rules; a note that still names a food they ruled out never goes out.
   const broke = written.source === "model" && !rules.allows(written.text);
   if (broke) logger.warn({ userProfileId }, "nightly digest named a food outside their rules; using the fallback");
