@@ -28,6 +28,10 @@ describe("splitMealPhrases", () => {
 });
 
 describe("mealContext", () => {
+  it("notices an earlier day: yesterday, and last night as dinner", () => {
+    expect(mealContext("yesterday I had 2 roti and dal for lunch")).toEqual({ text: "2 roti and dal", slot: "lunch", yesterday: true });
+    expect(mealContext("had paneer tikka last night")).toEqual({ text: "paneer tikka", slot: "dinner", yesterday: true });
+  });
   it("takes the slot and filler words out of a typed meal", () => {
     expect(mealContext("poha for breakfast")).toEqual({ text: "poha", slot: "breakfast" });
     expect(mealContext("I had 2 roti and dal for lunch today")).toEqual({ text: "2 roti and dal", slot: "lunch" });

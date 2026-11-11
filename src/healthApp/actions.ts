@@ -7,6 +7,7 @@ import { z } from "zod";
 import { mealContext } from "../meals/mealPhrases.js";
 
 import { localDateKey } from "../nutrition/localDate.js";
+import { addDays } from "../util/time.js";
 import { logger } from "../logger.js";
 import { loggableError } from "../util/loggableError.js";
 import { ACTIVITY_SOURCES, upsertDailyActivity } from "./activityStore.js";
@@ -104,7 +105,18 @@ export const mealDraftInput = z.object({
     .min(1)
     .max(12)
     .optional(),
+  /** An earlier day they're telling us about ("yesterday's dinner"), YYYY-MM-DD; default today. */
+  date: DATE.optional(),
 });
+
+/** How far back a meal can be filled in from chat. */
+export const BACKFILL_DAYS = 30;
+
+/** The day a drafted meal is for: the date given, "yesterday" in the text, else today. Never ahead of today or past the backfill window. */
+export function draftDayFor(input: { date?: string; yesterday?: boolean }, today: string): string {
+  const want = input.date ?? (input.yesterday ? addDays(today, -1) : today);
+  return want > today || want < addDays(today, -BACKFILL_DAYS) ? today : want;
+}
 
 const mealItem = z.object({
   name: z.string().trim().min(1).max(200),
@@ -229,8 +241,8 @@ export async function startMealDraft(
   const extra = input.extra === true || typed.extra === true;
   if (extra) draft.extra = true;
   // Say on the card, before it's logged, whether it replaces the planned meal or sits on top.
-  const day = localDateKey(ctx.now ?? new Date(), ctx.timezone);
-  draft.date ??= day;
+  const day = draftDayFor({ date: input.date, yesterday: typed.yesterday }, localDateKey(ctx.now ?? new Date(), ctx.timezone));
+  draft.date = day;
   const preview = (slot: typeof draft.slot) =>
     previewPlanRole(ctx.userProfileId, day, slot, { extra }).catch((err) => {
       logger.warn({ err: loggableError(err) }, "meal draft plan preview failed");

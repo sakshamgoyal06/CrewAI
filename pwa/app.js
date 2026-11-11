@@ -809,7 +809,9 @@ function renderFuel(d, t) {
       ? []
       : d.meals.length
         ? d.meals.map((m) => mealRow(m, d))
-        : [el("li", { class: "none" }, d.date === todayKey() ? "Nothing logged yet today." : "No meals logged this day.")]),
+        : [el("li", { class: "none" }, d.date === todayKey() ? "Nothing logged yet today." : "Nothing logged this day.")]),
+    // An earlier day without a meal plan: still fillable from here.
+    ...(!ml && d.date < todayKey() ? [el("li", { class: "add-past" }, el("button", { class: "btn small", type: "button", onclick: () => { state.mealSlot = null; state.mealDate = d.date; openSheet("meal"); } }, "Add a meal to this day"))] : []),
   );
   renderWater(d);
 }
@@ -4707,7 +4709,8 @@ const SHEETS = {
     };
     function paint() {
       if (b.mode === "review" && b.draft) {
-        const d = state.mealDate ? { ...b.draft, date: state.mealDate } : b.draft;
+        // An earlier day with no meal picked: the card asks which one rather than guessing from the clock.
+        const d = state.mealDate ? { ...b.draft, date: state.mealDate, ...(state.mealSlot ? {} : { slotUnsure: true }) } : b.draft;
         holder.replaceChildren(mealDraftCard(d, { onDone: () => setTimeout(closeSheet, 700), onEdit: backToBuild }));
         return;
       }

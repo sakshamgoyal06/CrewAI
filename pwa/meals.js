@@ -795,8 +795,12 @@ export function dayMealList(list, { title = null } = {}) {
     el("span", { class: "dm-tags" },
       list.planned ? el("span", { class: `tag ${list.done === list.planned ? "good" : ""}` }, `${list.done} of ${list.planned} done`) : null,
       list.extras ? el("span", { class: "tag extra" }, `${list.extras} extra`) : null));
+  // An earlier day can still be filled in: whatever is added there counts on that day everywhere.
+  const addPast = !isToday && !future
+    ? el("button", { class: "btn small", type: "button", onclick: () => d.logOwn(null, list.date) }, "Add a meal to this day")
+    : null;
   if (!list.rows.length) {
-    return el("div", { class: "day-meals" }, head, el("p", { class: "none" }, isToday ? "Nothing logged yet today." : future ? "Nothing planned." : "No meals logged this day."));
+    return el("div", { class: "day-meals" }, head, el("p", { class: "none" }, isToday ? "Nothing logged yet today." : future ? "Nothing planned." : "Nothing logged this day."), addPast);
   }
   const planBySlot = new Map(list.rows.filter((r) => r.state !== "extra").map((r) => [r.slot, r]));
   const rows = list.rows.map((r) => dayMealRow(list, r, planBySlot));
@@ -805,7 +809,7 @@ export function dayMealList(list, { title = null } = {}) {
         el("span", {}, "Eaten"),
         el("span", {}, el("b", {}, `${fmt(list.eaten.kcal)} kcal`), ` · P ${fmt(list.eaten.proteinG)} · C ${fmt(list.eaten.carbsG)} · F ${fmt(list.eaten.fatG)} g`))
     : null;
-  return el("div", { class: "day-meals" }, head, el("ul", { class: "dm-list" }, ...rows), foot);
+  return el("div", { class: "day-meals" }, head, el("ul", { class: "dm-list" }, ...rows), foot, addPast);
 }
 
 function dayMealRow(list, r, planBySlot) {
