@@ -18,7 +18,7 @@ import { checkTime, DEFAULT_CHECK_DELAY_MIN } from "./gymSlot.js";
 import { listMealsForDate } from "./meals.js";
 import type { DayMeals } from "./dayMeals.js";
 import { loadDayMeals } from "./dayMealsStore.js";
-import { routineDayStatus, trainingDaysOf, type RoutineItem, type RoutineItemStatus } from "./routine.js";
+import { routineDayStatus, trainingDayOn, trainingDaysOf, type RoutineItem, type RoutineItemStatus } from "./routine.js";
 import { checksOn, getRoutineChecks, loadRoutine } from "./routineStore.js";
 import { getWorkoutChecks, type WorkoutCheck } from "./workoutCheckStore.js";
 import {
@@ -372,7 +372,7 @@ export async function buildHealthSnapshot(
       restingHr: todayActivity?.restingHr ?? null,
       totalKcal: todayActivity?.totalKcal ?? null,
       hrvMs: todayActivity?.hrvMs ?? null,
-      isTrainingDay: targets.trainingDays.includes(weekdayOfDate(to)),
+      isTrainingDay: trainingDayOn(to, targets.trainingDays, routine),
       routine: routineByDate.get(to) ?? [],
     },
     routine: routine ?? [],

@@ -22,6 +22,7 @@ import { planRules } from "./dietPlan/rules.js";
 import { foodPrefsLine, loadFoodPrefs, planRulesLine, type FoodPrefs } from "./onboarding.js";
 import { getPrefs, isQuiet, sendNotification } from "./push.js";
 import { buildHealthSnapshot, type HealthSnapshot } from "./snapshot.js";
+import { trainingDayOn } from "./routine.js";
 
 export const DIGEST_AT = "21:30";
 const DIGEST_WINDOW_MIN = 90;
@@ -78,7 +79,7 @@ export function digestFacts(s: HealthSnapshot, weekday: number): Record<string, 
     checks: s.today.checks.map((c) => `${c.label}: ${c.met ? "done" : "missed"} (${c.detail})`),
     onTrackToday: s.today.onTrack,
     weekOnTrack: `${s.northStar.onTrackDays} of 7 days`,
-    tomorrow: `${WEEKDAYS[tomorrow]}, ${t.trainingDays.includes(tomorrow) ? "training day" : "rest day"}`,
+    tomorrow: `${WEEKDAYS[tomorrow]}, ${trainingDayOn(nextDate(s.today.date), t.trainingDays, s.routine) ? "training day" : "rest day"}`,
     sleepLastNight: s.today.sleepMinutes ? `${(s.today.sleepMinutes / 60).toFixed(1)} h` : null,
     goal: s.goal
       ? s.goal.metrics.map((m) => `${m.label} ${m.latest ?? "?"} → ${m.target} ${m.unit}, pace ${m.pace}`).join("; ") + `; ${s.goal.weeksLeft} weeks left`

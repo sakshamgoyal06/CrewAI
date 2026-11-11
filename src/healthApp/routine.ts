@@ -53,6 +53,19 @@ export type RoutineItem = {
 /** What a routine item becomes from `from` to `until` (local dates, both included). */
 export type RoutineSwap = { activityKey: string; label: string; durationMin: number; startTime: string | null; from: string; until: string; reason: string | null };
 
+/**
+ * A training day on `date`: one of their training weekdays, unless every gym item planned that day
+ * is swapped for something else ("no gym till the 25th: a walk instead"). Then the morning
+ * message, the nightly note and the coach call it a rest day, as the gym check already does.
+ */
+export function trainingDayOn(date: string, trainingDays: number[], routine: RoutineItem[] | null | undefined): boolean {
+  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+  if (!trainingDays.includes(weekday)) return false;
+  const gyms = (routine ?? []).filter((i) => isGym(i) && i.days.includes(weekday));
+  if (!gyms.length) return true;
+  return gyms.some((i) => isGym(onDate(i, date)));
+}
+
 /** The item as planned on `date`: while a swap runs, the stand-in takes its place (and its gym check). */
 export function onDate(i: RoutineItem, date: string): RoutineItem {
   const s = i.swap;
