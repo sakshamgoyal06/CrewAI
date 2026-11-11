@@ -55,3 +55,14 @@ describe("additions after 'and', and milk in a black drink", () => {
     expect(glass).toContain("250 ml");
   });
 });
+
+describe("two names for one food", () => {
+  it("'1 scoop (33 g) whey protein powder (MuscleBlaze)' is one scoop, not two", async () => {
+    const r = await estimateWithFoodDb("1 scoop (33 g) whey protein powder (MuscleBlaze)", null);
+    expect(r?.items?.map((i) => i.name)).toEqual(["Whey protein · 1 scoop · 30 g"]);
+  });
+
+  it("still splits two different foods typed together", async () => {
+    expect((await names("fish curry roti"))?.length).toBe(2);
+  });
+});

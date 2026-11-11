@@ -229,7 +229,13 @@ function splitJoined(c: FoodComponent, cat: Catalog): FoodComponent[] | null {
     const b = words.slice(i).join(" ");
     const first: FoodComponent = { ...c, phrase: a, name: a, foodKey: foodKeyFor(a) };
     const second: FoodComponent = { phrase: b, name: b, foodKey: foodKeyFor(b), quantity: 1, unit: "serving", assumedQuantity: true };
-    if (resolveCatalogItem(first, cat) && resolveCatalogItem(second, cat)) return [first, second];
+    const fa = resolveCatalogItem(first, cat);
+    const fb = resolveCatalogItem(second, cat);
+    if (!fa || !fb) continue;
+    // "whey protein powder" = "whey" + "protein powder": two names for one food, so one item
+    // (the 6 Nov label photo logged two scoops).
+    if (fa.entry.key === fb.entry.key) return [{ ...c, foodKey: fa.entry.key }];
+    return [first, second];
   }
   return null;
 }
