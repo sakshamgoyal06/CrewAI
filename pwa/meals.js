@@ -117,10 +117,45 @@ function paint() {
   const order = SLOT_ORDER.filter((s) => v.prefs.meals.some((m) => m.slot === s));
   const list = dayMealList(listFor(ms.date), { title: isToday ? "Meals today" : `Meals · ${dayLabel(ms.date)}` })
     || el("ul", { class: "list meal-plan" }, ...order.map((slot) => mealCard(ms.date, slot)).filter(Boolean));
-  host.replaceChildren(...[strip, summary, list,
+  host.replaceChildren(...[gapCard(v.proteinGap), strip, summary, list,
     el("div", { class: "fresh-plan" },
       el("button", { class: "btn block", type: "button", onclick: rebuild }, "Make me a fresh plan"),
       el("p", { class: "hint" }, "New options from your current food settings. Meals you've already eaten stay."))].filter(Boolean));
+}
+
+/**
+ * The plan can't reach the protein target under their own rules (a veg period, the avoid list):
+ * said once, plainly, with the three ways on. Answered: one quiet line until the rules change.
+ */
+function gapCard(g) {
+  const { el } = d;
+  if (!g) return null;
+  if (g.answered?.choice === "accept") {
+    return el("p", { class: "hint gap-note" }, `Protein target is ${Math.round(g.plannedG / 5) * 5} g while ${g.cause} limits the plan. It goes back to ${g.targetG} g when that ends.`);
+  }
+  const answer = async (btn, choice) => {
+    if (choice === "loosen") return d.openSheet("dietSetup");
+    btn.disabled = true;
+    try {
+      const r = await d.api("/diet/protein-gap", { method: "POST", body: JSON.stringify({ choice }) });
+      d.toast(choice === "accept" ? `Protein target set to ${r.proteinTarget} g for now.` : `Added ${r.supplement} to your supplements.`);
+      await loadPlan(true);
+      d.refresh?.();
+      paint();
+    } catch (err) {
+      btn.disabled = false;
+      d.toast(err.message);
+    }
+  };
+  const again = g.answered?.choice === "supplement";
+  return el("div", { class: "draft gap-card" },
+    el("p", { class: "eyebrow" }, "Protein"),
+    el("p", { class: "pa-head" }, `${again ? "Even with the supplement, your" : "Your"} planned meals reach about ${g.plannedG} g of protein, not ${g.targetG} g. ${g.cause[0].toUpperCase()}${g.cause.slice(1)} limits what fits.`),
+    el("p", { class: "hint" }, "That gap is the plan's, not yours. Pick how to handle it:"),
+    el("div", { class: "stack" },
+      el("button", { class: "btn primary block", type: "button", onclick: (e) => answer(e.currentTarget, "accept") }, `Aim for ${Math.round(g.plannedG / 5) * 5} g for now`),
+      again ? null : el("button", { class: "btn block", type: "button", onclick: (e) => answer(e.currentTarget, "supplement") }, "Add a protein supplement"),
+      el("button", { class: "btn block", type: "button", onclick: (e) => answer(e.currentTarget, "loosen") }, "Loosen a food rule")));
 }
 
 /**

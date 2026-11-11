@@ -9,7 +9,8 @@ import { supabase } from "../../tools/clients.js";
 import { loggableError } from "../../util/loggableError.js";
 import { addDays } from "../../util/time.js";
 import type { ActionContext } from "../actions.js";
-import { getBodyCheckins } from "../bodyStore.js";
+import { getBodyCheckins, updateDailyTargets } from "../bodyStore.js";
+import { acceptedTarget, gapCause, gapLine, plannedProtein, proteinGapOf, rulesKey, type GapChoice, type ProteinGap } from "./proteinGap.js";
 import { FREQUENT_WINDOW_DAYS, loadLoggedSessions, rankUsualMeals } from "../frequentMeals.js";
 import { cleanAvoidList, loadFoodPrefs, saveFoodAvoid } from "../onboarding.js";
 import { loadHealthProfile } from "../snapshot.js";
@@ -51,7 +52,7 @@ export async function saveDietPrefs(userProfileId: string, input: DietPrefsInput
   // The setup screen doesn't send these: saving its answers must not wipe a running temporary diet,
   // what they never cook, or the skipped-today list.
   const raw = (input ?? {}) as Record<string, unknown>;
-  const missing = ["dietOverride", "habits", "unavailable"].filter((k) => !(k in raw));
+  const missing = ["dietOverride", "habits", "unavailable", "proteinGap"].filter((k) => !(k in raw));
   let prefs = parsed;
   if (missing.length) {
     const old = await loadDietPrefs(userProfileId);
@@ -497,13 +498,15 @@ export type PlanView = {
   accounts?: DayAccount[];
   /** Each planned day's one meal list (dayMeals.ts): the same rows the Today tab shows. */
   lists?: DayMeals[];
+  /** The planned meals can't reach the protein target under their rules (proteinGap.ts). */
+  proteinGap?: ProteinGap | null;
 };
 
 /**
  * What the Meals tab shows. Builds the plan on first open after setup, and rebuilds it when the
  * profile's calorie or protein target has moved since (onboarding, review, intervention).
  */
-export async function loadPlanView(ctx: ActionContext, now = new Date(), opts: { afterRetarget?: boolean } = {}): Promise<PlanView | { ok: false; error: string }> {
+export async function loadPlanView(ctx: ActionContext, now = new Date(), opts: { afterRetarget?: boolean; afterRestore?: boolean } = {}): Promise<PlanView | { ok: false; error: string }> {
   const today = localDateKey(now, ctx.timezone);
   const [prefs, profile] = await Promise.all([loadDietPrefs(ctx.userProfileId), loadHealthProfile(ctx.userProfileId)]);
   const t = profile.targets;
@@ -535,7 +538,7 @@ export async function loadPlanView(ctx: ActionContext, now = new Date(), opts: {
     if (plan && !opts.afterRetarget) {
       const { rebalanceToday } = await import("./rhythm.js");
       await rebalanceToday(ctx, now).catch((err) => logger.warn({ err }, "rebalance after a target change failed"));
-      return loadPlanView(ctx, now, { afterRetarget: true });
+      return loadPlanView(ctx, now, { ...opts, afterRetarget: true });
     }
     plan = r.plan;
   }
@@ -551,7 +554,16 @@ export async function loadPlanView(ctx: ActionContext, now = new Date(), opts: {
   for (const m of prefs.prefs.meals) if (m.time) times[m.slot as PlanSlot] = m.time;
   const lists = dates.map((date) => buildDayMeals({ date, today, plan: days.filter((x) => x.date === date).map(plannedLite), logs: date === today ? logs : [], times }));
   const accounts = dates.map((date, k) => accountDay({ date, targets: plan!.targets, meals: days.filter((x) => x.date === date), supplements: [], list: lists[k] }));
-  return { ok: true, setup: true, plan: rest, days, accounts, lists, ...base };
+  // Protein the plan can't reach: shown with the choice, on every way the plan is opened or rebuilt.
+  const key = rulesKey(rules, prefs.prefs);
+  const stored = prefs.prefs.proteinGap ?? null;
+  if (stored?.choice === "accept" && stored.rulesKey !== key && !opts.afterRestore) {
+    // The rules behind an accepted gap changed (a veg period ended): the old target comes back.
+    await restoreProteinTarget(ctx, prefs.prefs, t.proteinTarget ?? null).catch((err) => logger.warn({ err: loggableError(err) }, "protein target restore failed"));
+    return loadPlanView(ctx, now, { ...opts, afterRestore: true });
+  }
+  const proteinGap = proteinGapOf({ plannedG: plannedProtein(accounts), targetG: plan.targets.proteinG, stored, key, cause: gapCause(rules, prefs.prefs) });
+  return { ok: true, setup: true, plan: rest, days, accounts, lists, proteinGap, ...base };
 }
 
 // ---------- food rules changed from chat ----------
@@ -565,6 +577,8 @@ export type ReplanReport = {
   meals: Array<{ date: string; slot: PlanSlot; meal: string; status: string }>;
   /** Planned meals that still break a rule: expected 0. */
   violations: number;
+  /** The new rules leave the plan short of protein: say so and offer the choice (proteinGap.ts). */
+  proteinGap?: string | null;
 };
 
 export type DietPeriodResult =
@@ -594,6 +608,7 @@ async function replanAfter(ctx: ActionContext, reason: string, now: Date): Promi
     keptEdits: planned.filter((r) => !badIds.has(r.id) && custom(r)).map((r) => ({ date: r.local_date, slot: r.meal_slot })),
     meals: view.days.map((d) => ({ date: d.date, slot: d.slot, meal: d.kind === "eat_out" ? d.title : d.items.map((i) => i.text).join(", "), status: d.status })),
     violations: view.days.filter((d) => d.status === "planned" && d.kind !== "eat_out" && !itemsAllowedOn(rules, d.date, d.items)).length,
+    proteinGap: view.proteinGap ? gapLine(view.proteinGap) : null,
   };
 }
 
@@ -699,4 +714,67 @@ export async function mealFeedback(
     await supabase.from("meal_plan_entries").delete().eq("id", entry.id).eq("status", "planned");
   }
   return { ok: true, remembered };
+}
+
+// ---------- protein the plan can't reach ----------
+
+/**
+ * The plan's protein gap as one line, for every way a plan gets built (setup, fresh plan, goal
+ * change, food settings, chat): null when the plan reaches the target or there's no plan.
+ */
+export async function planGapLine(ctx: ActionContext, now = new Date()): Promise<string | null> {
+  const view = await loadPlanView(ctx, now).catch(() => null);
+  return view && view.ok && "days" in view && view.proteinGap ? gapLine(view.proteinGap) : null;
+}
+
+async function restoreProteinTarget(ctx: ActionContext, prefs: DietPrefs, current: number | null): Promise<void> {
+  const g = prefs.proteinGap;
+  if (!g) return;
+  // Only when the target is still the one the gap set: a target they changed since stays theirs.
+  if (current === acceptedTarget(g.plannedG)) await updateDailyTargets(ctx.userProfileId, { proteinTarget: g.originalTargetG });
+  await saveDietPrefs(ctx.userProfileId, { ...prefs, proteinGap: null });
+}
+
+/** The protein supplement offered for a gap: whey if their diet allows it, else the strongest one that fits. */
+function gapSupplement(allows: (name: string) => boolean): string | null {
+  const choices = supplementChoices().filter((c) => c.proteinG >= 15 && allows(c.name));
+  return (choices.find((c) => /whey/i.test(c.name)) ?? [...choices].sort((a, b) => b.proteinG - a.proteinG)[0])?.name ?? null;
+}
+
+/**
+ * Their answer to "the plan reaches X g of Y g": accept lowers the protein target to what the
+ * plan reaches until their rules change; supplement adds a serving of a protein supplement and
+ * rebuilds. Loosening a rule happens in plan setup, so nothing is stored for it.
+ */
+export async function answerProteinGap(ctx: ActionContext, choice: GapChoice, now = new Date()): Promise<{ ok: true; gap: ProteinGap | null; proteinTarget?: number; supplement?: string } | { ok: false; error: string }> {
+  const view = await loadPlanView(ctx, now);
+  if (!view.ok || !("days" in view) || !view.plan) return { ok: false, error: "no_plan" };
+  const gap = view.proteinGap;
+  if (!gap) return { ok: false, error: "no_gap" };
+  if (choice === "loosen") return { ok: true, gap };
+  const today = localDateKey(now, ctx.timezone);
+  const prefs = await loadDietPrefs(ctx.userProfileId);
+  const rules = await rulesFor(ctx.userProfileId, prefs.prefs, today);
+  const at = now.toISOString();
+  if (choice === "accept") {
+    const target = acceptedTarget(gap.plannedG);
+    await saveDietPrefs(ctx.userProfileId, { ...prefs.prefs, proteinGap: { choice, plannedG: gap.plannedG, originalTargetG: gap.targetG, rulesKey: rulesKey(rules, prefs.prefs), at } });
+    const saved = await updateDailyTargets(ctx.userProfileId, { proteinTarget: target });
+    if (!saved.ok) return { ok: false, error: "target_not_saved" };
+    const after = await loadPlanView(ctx, now);
+    return { ok: true, gap: after.ok && "days" in after ? after.proteinGap ?? null : null, proteinTarget: target };
+  }
+  const ok = checkOn(rules, today);
+  const name = gapSupplement((n) => ok({ key: null, name: n }));
+  if (!name) return { ok: false, error: "no_supplement_fits" };
+  const has = prefs.prefs.supplements.find((x) => x.name.toLowerCase() === name.toLowerCase());
+  const supplements = has
+    ? prefs.prefs.supplements.map((x) => (x === has ? { ...x, servings: Math.min(4, x.servings + 1) } : x))
+    : [...prefs.prefs.supplements, { name, servings: 1, slot: null }];
+  const next = { ...prefs.prefs, supplements };
+  await saveDietPrefs(ctx.userProfileId, { ...next, proteinGap: { choice, plannedG: gap.plannedG, originalTargetG: gap.targetG, rulesKey: rulesKey(rules, next), at } });
+  const built = await rebuildPlan(ctx, "supplements", now);
+  if (!built.ok) return built;
+  const after = await loadPlanView(ctx, now);
+  return { ok: true, gap: after.ok && "days" in after ? after.proteinGap ?? null : null, supplement: name };
 }

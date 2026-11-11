@@ -81,7 +81,8 @@ import { eatInput, eatPlanned, skipPlanned, undoPlanned } from "./dietPlan/log.j
 import { editReceipt, getLoggedMeal, mealReplaceInput, receiptEditInput, replaceLoggedMeal, undoReceipt } from "./logEdits.js";
 import { logSupplements, undoSupplements } from "./dietPlan/supplementLog.js";
 import { confirmDayComplete, rebalanceToday, redoCarry, setMealPlanRole } from "./dietPlan/rhythm.js";
-import { FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, prefsChangeReason, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
+import { GAP_CHOICES } from "./dietPlan/proteinGap.js";
+import { answerProteinGap, FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, planGapLine, prefsChangeReason, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
 import { replanForGoal } from "./replan.js";
 import { getActiveGoal } from "./bodyStore.js";
 import { PLAN_SLOTS } from "./dietPlan/targets.js";
@@ -392,14 +393,14 @@ export function createHealthAppRouter(): express.Router {
       const r = await rebuildPlan(ctx, before.saved ? prefsChangeReason(before.prefs, prefs) : "prefs_changed");
       // Saved without targets: the answers are kept and the plan builds once targets are set.
       if (!r.ok && r.error === "no_targets") return { body: { ok: true, prefs, version: null, needsTargets: true } };
-      return r.ok ? { body: { ok: true, prefs, version: r.plan.version } } : { status: 409, body: r };
+      return r.ok ? { body: { ok: true, prefs, version: r.plan.version, proteinGap: await planGapLine(ctx) } } : { status: 409, body: r };
     }),
   );
   router.post(
     "/diet/plan/rebuild",
     route("diet-rebuild", async (ctx) => {
       const r = await rebuildPlan(ctx, "rebuild");
-      return r.ok ? { body: { ok: true, version: r.plan.version } } : { status: 409, body: r };
+      return r.ok ? { body: { ok: true, version: r.plan.version, proteinGap: await planGapLine(ctx) } } : { status: 409, body: r };
     }),
   );
   router.post(
@@ -520,6 +521,16 @@ export function createHealthAppRouter(): express.Router {
         else await redoCarry(ctx, date).catch((err) => logger.warn({ err: loggableError(err) }, "carry redo after skip failed"));
       }
       return r.ok ? { body: r } : { status: r.error === "already_logged" ? 409 : 400, body: r };
+    }),
+  );
+
+  /** The plan can't reach their protein target under their rules: accept, supplement, or loosen a rule. */
+  router.post(
+    "/diet/protein-gap",
+    route("diet-protein-gap", async (ctx, req) => {
+      const { choice } = z.object({ choice: z.enum(GAP_CHOICES) }).parse(req.body ?? {});
+      const r = await answerProteinGap(ctx, choice);
+      return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );
 

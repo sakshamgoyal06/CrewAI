@@ -220,8 +220,10 @@ function focusLine(s: HealthSnapshot, intervention: Intervention | null, planNot
   }
   if (planNote) return planNote;
   const missed = s.northStar.mostMissed;
-  if (missed && missed.missedDays >= 2) {
-    return `${missed.label} slipped on ${missed.missedDays} of the last 6 days. ${LEAD[missed.id]}`;
+  // Raised as it happens, not as an issue of the day: only when yesterday missed it again.
+  const y = s.northStar.days.at(-2);
+  if (missed && missed.missedDays >= 2 && y && !y.onTrack && y.checks.some((c) => c.id === missed.id && !c.met)) {
+    return `${missed.label} slipped again yesterday, ${missed.missedDays} of the last 6 days. ${LEAD[missed.id]}`;
   }
   if (s.today.sleepMinutes != null && s.today.sleepMinutes < 6 * 60) {
     const h = Math.floor(s.today.sleepMinutes / 60);

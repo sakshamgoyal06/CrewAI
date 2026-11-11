@@ -77,6 +77,15 @@ describe("nightly digest", () => {
     expect(f).toMatchObject({ today: "Monday", calories: "1,900 of 2,200 kcal", protein: "60 of 150 g", trainedToday: true, tomorrow: "Tuesday, rest day", sleepLastNight: "7.0 h" });
   });
 
+  it("names a miss that keeps coming back as a pattern, leaving unlogged days out", () => {
+    const s = snap();
+    expect(digestFacts(s, 1).pattern).toBeUndefined();
+    const miss = (date: string) => ({ date, onTrack: false, score: 50, checks: [{ id: "protein" as const, label: "Protein", met: false, progress: 0.5, detail: "" }] });
+    const blank = (date: string) => ({ date, onTrack: false, score: 0, unlogged: true as const, checks: [{ id: "meals_logged" as const, label: "Meals logged", met: false, progress: 0, detail: "Nothing logged" }] });
+    s.northStar.days = [miss("2026-11-04"), blank("2026-11-05"), miss("2026-11-06"), miss("2026-11-07"), { ...miss("2026-11-08") }];
+    expect(digestFacts(s, 1).pattern).toBe("Protein missed today and on 3 of the 3 days before");
+  });
+
   it("falls back to the first missed check and its fix", () => {
     expect(fallbackDigest(snap())).toBe("Today: protein missed (60 / 150 g). Tomorrow, put 30 g of protein into breakfast so the evening isn't a catch-up.");
   });

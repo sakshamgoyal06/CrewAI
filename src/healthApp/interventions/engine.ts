@@ -11,6 +11,7 @@
  * A trial never changes the agreed plan; only the person's yes after a successful check does.
  */
 import { logger } from "../../logger.js";
+import { focusWeight, loadFocusContext, NO_FOCUS_CONTEXT, type FocusContext } from "../focus.js";
 import { localDateKey } from "../../nutrition/localDate.js";
 import { supabase } from "../../tools/clients.js";
 import { loggableError } from "../../util/loggableError.js";
@@ -52,7 +53,10 @@ const POST_UNTIL_HOUR = 21;
 // ---------- choosing what to offer ----------
 
 /** The one finding to offer today, after cooldowns and caps. Pure. */
-export function selectFinding(findings: Finding[], history: Intervention[], today: string): Finding | null {
+/** The check a finding is about, for the shared ranking (focus.ts). */
+const FINDING_CHECK: Partial<Record<string, string>> = { protein_short: "protein", calories_over: "calories", rebound: "calories" };
+
+export function selectFinding(findings: Finding[], history: Intervention[], today: string, ctx: FocusContext = NO_FOCUS_CONTEXT): Finding | null {
   const ageDays = (i: Intervention) => dayN(today) - dayN(i.localDate);
   const counted = history.filter((h) => h.status !== "info" || ageDays(h) === 0);
   const postedToday = counted.some((h) => ageDays(h) === 0);
@@ -67,7 +71,8 @@ export function selectFinding(findings: Finding[], history: Intervention[], toda
     if (f.pattern !== "safety" && thisWeek >= CAPS.perWeek) return false;
     return true;
   });
-  return ok.sort((a, b) => b.weight - a.weight)[0] ?? null;
+  const w = (f: Finding) => (f.pattern === "safety" ? Number.MAX_SAFE_INTEGER : focusWeight(FINDING_CHECK[f.pattern], f.weight, ctx));
+  return ok.filter((f) => w(f) > 0 || f.weight <= 0).sort((a, b) => w(b) - w(a))[0] ?? null;
 }
 
 // ---------- measuring a trial ----------
@@ -287,7 +292,8 @@ export async function runInterventionTick(userProfileId: string, now = new Date(
   const history = await listInterventions(userProfileId);
   await reviewDue(userProfileId, input, history);
   const fresh = await listInterventions(userProfileId);
-  const pick = selectFinding(detectAll(input), fresh, input.today);
+  const ctx = await loadFocusContext(userProfileId, tz, now, input.goal).catch(() => NO_FOCUS_CONTEXT);
+  const pick = selectFinding(detectAll(input), fresh, input.today, ctx);
   return pick ? offer(userProfileId, pick, input, now) : null;
 }
 
