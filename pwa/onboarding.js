@@ -19,7 +19,7 @@ export function runOnboarding(root, { api, el, toast }) {
   const a = {
     sex: null, birthYear: "", heightCm: "", weightKg: "", bodyFatPct: "",
     goalType: "lose", targetWeightKg: "", targetBodyFatPct: "", deadline: plusMonths(4),
-    activity: "desk", diet: null, dietNote: "", foodAvoid: [],
+    activity: "desk", weighInDay: new Date().getDay(), diet: null, dietNote: "", foodAvoid: [],
     // Starts as an evening gym on Mon/Wed/Fri; they add walks, swims or sports, or change it.
     routine: [{ ...structuredClone(ROUTINE_PRESETS[1].item), label: "" }],
   };
@@ -31,7 +31,7 @@ export function runOnboarding(root, { api, el, toast }) {
     bodyFatPct: num(a.bodyFatPct), goalType: a.goalType,
     targetWeightKg: a.goalType === "recomp" ? undefined : num(a.targetWeightKg),
     targetBodyFatPct: num(a.targetBodyFatPct), deadline: a.deadline, activity: a.activity,
-    trainingDays: routineSummary(a.routine).trainingDays, routine: toPayload(a.routine).items, diet: a.diet,
+    trainingDays: routineSummary(a.routine).trainingDays, routine: toPayload(a.routine).items, weighInDay: a.weighInDay, diet: a.diet,
     dietNote: a.diet === "custom" ? a.dietNote.trim() : undefined, foodAvoid: a.foodAvoid,
   });
 
@@ -93,6 +93,11 @@ export function runOnboarding(root, { api, el, toast }) {
         el("p", { class: "section-label" }, "Your routine"),
         routineEditor(el, a.routine),
         el("p", { class: "hint" }, "Gym sessions come from Hevy (connect it in Settings after this). Walks, swims and sports are picked up from Health Connect or logged in a tap."),
+        el("p", { class: "section-label" }, "Weekly weigh-in"),
+        el("div", { class: "chips-row", role: "radiogroup", "aria-label": "Weigh-in day" },
+          ...["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) =>
+            el("button", { type: "button", class: `chip${a.weighInDay === i ? " on" : ""}`, role: "radio", "aria-checked": String(a.weighInDay === i), onclick: () => { a.weighInDay = i; render(); } }, d))),
+        el("p", { class: "hint" }, "Same day each week, before breakfast. A smart scale synced through Health Connect counts."),
       ],
       valid: () => (a.routine.some((i) => !i.days.length) ? "Each activity needs at least one day." : a.routine.some((i) => i.activity === "other" && !i.label.trim()) ? "Name the activity marked 'Something else'." : null),
     },

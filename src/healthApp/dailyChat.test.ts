@@ -185,6 +185,10 @@ describe("the day's plan", () => {
     const s = snap();
     s.goal!.checkinDue = true;
     expect(buildDayPlan({ snapshot: s, name: null, localHour: 9, intervention: null }).card.focus).toMatch(/^Weekly weigh-in today/);
+    s.targets.weighInDay = null;
+    expect(buildDayPlan({ snapshot: s, name: null, localHour: 9, intervention: null }).card.focus).toMatch(/Pick a fixed weigh-in day in You/);
+    s.targets.weighInDay = 3;
+    expect(buildDayPlan({ snapshot: s, name: null, localHour: 9, intervention: null }).card.focus).not.toMatch(/Pick a fixed/);
   });
 
   it("says rest day without a routine, and greets by time of day", () => {
