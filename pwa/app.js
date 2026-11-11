@@ -723,7 +723,7 @@ function snapshotDay() {
     calories: s.today.calories, proteinG: s.today.proteinG, carbsG: null, fatG: null,
     meals: (s.meals || []).map((m) => ({ ...m, proteinG: m.proteinG, carbsG: null, fatG: null, items: [] })).reverse(),
     mealList: s.mealList || null,
-    steps: s.today.steps, walkMinutes: s.today.walkMinutes, burn: null, workouts: [], activities: [], sportCounted: null, trainedUnlogged: false, routine: s.today.routine || [], partial: true,
+    steps: s.today.steps, walkMinutes: s.today.walkMinutes, burn: null, totalBurn: null, workouts: [], activities: [], sportCounted: null, trainedUnlogged: false, routine: s.today.routine || [], partial: true,
   };
 }
 
@@ -901,7 +901,7 @@ function renderMove(d, t, isToday) {
   const s = state.snapshot;
   const stepT = t.stepTarget || 8000;
   foldKey("move-meta", fmt(d.steps), " steps today",
-    d.burn ? `${fmt(d.burn.kcal)} kcal burned` : isToday && d.isTrainingDay && s?.gym?.time ? `Gym ${clock(s.gym.time)}` : d.isTrainingDay ? "Training day" : "Rest day");
+    d.totalBurn ? `${fmt(d.totalBurn.kcal)} kcal burned` : d.burn ? `${fmt(d.burn.kcal)} kcal burned` : isToday && d.isTrainingDay && s?.gym?.time ? `Gym ${clock(s.gym.time)}` : d.isTrainingDay ? "Training day" : "Rest day");
   // Routine folds like the rest: done count big, the next item still to do under it.
   const items = d.routine || [];
   const next = items.find((r) => r.state === "pending");
@@ -919,7 +919,7 @@ function renderMove(d, t, isToday) {
     );
   $("move-tiles").replaceChildren(
     tile("Steps today", fmt(d.steps), null, `of ${fmt(stepT)}`, d.steps / stepT),
-    tile("Burned today", d.burn ? fmt(d.burn.kcal) : "–", d.burn ? "kcal" : null, d.burn ? (d.burn.source === "estimate" ? "estimated" : "from phone") : "no data yet", null),
+    burnTile(d, tile),
     tile("Workout", d.workouts.length ? fmt(mins) : d.trainedUnlogged || d.sportCounted ? "✓" : "–", d.workouts.length ? "min" : null,
       d.workouts.length ? `${fmt(d.workouts.reduce((a, w) => a + w.volumeKg, 0))} kg lifted` : d.trainedUnlogged ? (hevy === "not_connected" ? "marked done" : "not in Hevy") : d.sportCounted ? d.sportCounted.split(" · ")[0] : d.isTrainingDay ? "none logged" : "rest", null),
   );
@@ -984,7 +984,22 @@ function trainedToggle(d) {
   return el("li", { class: "row-actions" }, btn);
 }
 
-/** Sleep and resting heart rate from Health Connect, when the phone has them. */
+/**
+ * Total burn: resting (BMR) + active, or the phone's total. Without a BMR (no height, birth year
+ * or weigh-in) it falls back to active burn alone, as before.
+ */
+function burnTile(d, tile) {
+  const t = d.totalBurn;
+  if (t) {
+    const sub = t.source === "phone"
+      ? `from phone${t.activeKcal ? ` · ${fmt(t.activeKcal)} active` : ""}`
+      : `${fmt(t.restingKcal)} resting + ${fmt(t.activeKcal)} active`;
+    return tile(t.soFar ? "Burned so far" : "Burned", fmt(t.kcal), "kcal", sub, null);
+  }
+  return tile("Burned today", d.burn ? fmt(d.burn.kcal) : "–", d.burn ? "kcal" : null, d.burn ? `active only${d.burn.source === "estimate" ? ", estimated" : ""}` : "no data yet", null);
+}
+
+/** Sleep and resting heart rate from Health Connect, when the phone has them; BMR when known. */
 function renderRecovery(d) {
   const line = $("recovery");
   if (!line) return;
@@ -994,8 +1009,8 @@ function renderRecovery(d) {
   if (d.sleepMinutes != null) parts.push(stat("Sleep", `${Math.floor(d.sleepMinutes / 60)}:${String(d.sleepMinutes % 60).padStart(2, "0")}`, "h"));
   if (d.restingHr != null) parts.push(stat("Resting HR", fmt(d.restingHr), "bpm"));
   if (d.hrvMs != null) parts.push(stat("HRV", fmt(d.hrvMs), "ms"));
-  // Health Connect's total includes resting metabolism; "Burned" above is activity only.
-  if (d.totalKcal != null) parts.push(stat("Total burn today", fmt(d.totalKcal), "kcal"));
+  // Resting burn for a whole day; "Burned" above already adds it (or uses the phone's total).
+  if (state.history?.bmrKcal) parts.push(stat("BMR", fmt(state.history.bmrKcal), "kcal/day"));
   line.hidden = !parts.length;
   line.replaceChildren(...parts);
 }
@@ -1120,7 +1135,7 @@ function renderBurnBreakdown(d) {
   const shown = parts.filter(([, v]) => v !== 0);
   if (shown.length < 2) { box.hidden = true; return; }
   box.hidden = false;
-  box.replaceChildren(...shown.flatMap(([k, v], i) => [i ? " · " : "", `${k} `, v == null ? "" : el("b", {}, fmt(v))]), ` = ${fmt(b.kcal)} kcal`);
+  box.replaceChildren(...shown.flatMap(([k, v], i) => [i ? " · " : "", `${k} `, v == null ? "" : el("b", {}, fmt(v))]), ` = ${fmt(b.kcal)} kcal active`);
 }
 
 const ACT_SRC = { health_connect: "Health Connect", chat: "chat", quick_add: "added" };
@@ -3318,7 +3333,7 @@ function plansScreen() {
   const paint = (b) => {
     if (!b) { box.replaceChildren(el("p", { class: "hint" }, "Loading…")); return; }
     const e = shownEntitlement(b);
-    const a = b.amounts || { monthly: 649, yearly: 6999 };
+    const a = b.amounts || { monthly: 999, yearly: 8999 };
     const save = Math.max(0, Math.round((1 - a.yearly / (a.monthly * 12)) * 100));
     const card = (id, title, price, sub, tag) => el("button", {
       class: `plan-card${pay.planId === id ? " on" : ""}`, type: "button", role: "radio", "aria-checked": String(pay.planId === id),
@@ -3363,7 +3378,7 @@ function previewSwitch(b, repaint) {
 function checkoutScreen() {
   const b = billingNow();
   if (!b) return el("p", { class: "hint" }, "Loading…");
-  const a = b.amounts || { monthly: 649, yearly: 6999 };
+  const a = b.amounts || { monthly: 999, yearly: 8999 };
   const amount = a[pay.planId];
   const e = shownEntitlement(b);
   // During the trial the first charge waits for its end (the server sets Razorpay's start_at).

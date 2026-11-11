@@ -13,11 +13,10 @@
 import { logger } from "../../logger.js";
 import { focusWeight, loadFocusContext, NO_FOCUS_CONTEXT, type FocusContext } from "../focus.js";
 import { localDateKey } from "../../nutrition/localDate.js";
-import { supabase } from "../../tools/clients.js";
 import { loggableError } from "../../util/loggableError.js";
 import type { ActionContext } from "../actions.js";
 import { getActivities } from "../activityLog.js";
-import { getActiveGoal, getBodyCheckins } from "../bodyStore.js";
+import { getActiveGoal, getBodyCheckins, loadBodyBasics } from "../bodyStore.js";
 import { loadCalorieReview, type CalorieReview } from "../calorieTarget.js";
 import { rememberLine } from "../coachMemory.js";
 import { computeGoalProgress } from "../goalProgress.js";
@@ -41,6 +40,7 @@ import {
   type ReasonChoice,
 } from "./types.js";
 import { DAY_MS, dateOf, localClock, localHourOf } from "../../util/time.js";
+import { bmrOf } from "../energy.js";
 
 const dayN = (d: string) => Math.round(Date.parse(`${d}T00:00:00Z`) / DAY_MS);
 const pct = (r: number | null) => (r === null ? "?" : `${Math.round(r * 100)}%`);
@@ -107,17 +107,11 @@ export function measure(i: Pick<Intervention, "pattern" | "itemId" | "area">, in
 
 export type Loaded = { input: DetectInput; timezone: string; review: CalorieReview | null };
 
-async function bodyBasics(userProfileId: string): Promise<{ sex: string | null; birthYear: number | null; heightCm: number | null }> {
-  const { data } = await supabase.from("user_health_profile").select("sex, birth_year, height_cm").eq("user_profile_id", userProfileId).maybeSingle();
-  const d = (data ?? {}) as Record<string, unknown>;
-  return { sex: d.sex ? String(d.sex) : null, birthYear: d.birth_year ? Number(d.birth_year) : null, heightCm: d.height_cm ? Number(d.height_cm) : null };
-}
 
 /** Higher of 1,200 kcal and Mifflin-St Jeor BMR (the onboarding formula). Pure. */
 export function calorieFloor(b: { sex: string | null; birthYear: number | null; heightCm: number | null }, weightKg: number | null, today: string): { floor: number; bmr: number | null } {
-  if (!b.sex || !b.birthYear || !b.heightCm || !weightKg) return { floor: 1200, bmr: null };
-  const age = Number(today.slice(0, 4)) - b.birthYear;
-  const bmr = Math.round(10 * weightKg + 6.25 * b.heightCm - 5 * age + (b.sex === "male" ? 5 : -161));
+  const bmr = bmrOf(b, weightKg, today);
+  if (bmr == null) return { floor: 1200, bmr: null };
   return { floor: Math.max(1200, Math.ceil(bmr / 50) * 50), bmr };
 }
 
@@ -136,7 +130,7 @@ export async function loadDetectInput(userProfileId: string, now: Date): Promise
     getActiveGoal(userProfileId),
     getBodyCheckins(userProfileId, dateOf(dayN(today) - 180)),
     loadCalorieReview(userProfileId, now).catch(() => null),
-    bodyBasics(userProfileId),
+    loadBodyBasics(userProfileId),
     liveSnapshot(userProfileId).then((s) => s.routine),
   ]);
   const lastWeight = [...checkins].reverse().find((c) => c.weight_kg !== null)?.weight_kg ?? null;

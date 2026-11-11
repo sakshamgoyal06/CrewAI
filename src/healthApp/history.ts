@@ -9,7 +9,8 @@ import type { HevyWorkout } from "../pillars/health/workouts/hevy/index.js";
 import { supabase } from "../tools/clients.js";
 import { burnForDay, trainingActivity, typicalTrainingBurn, type Activity, type Burn, type NotCounted, type StepBucket, type TimedWorkout } from "./activities.js";
 import { FALLBACK_WEIGHT_KG, getActivities } from "./activityLog.js";
-import { getBodyCheckins } from "./bodyStore.js";
+import { getBodyCheckins, loadBodyBasics } from "./bodyStore.js";
+import { bmrOf, totalBurnForDay, type TotalBurn } from "./energy.js";
 import { hevyHistoryCached, withinAnalysisWindow } from "./hevyHistory.js";
 import { getWaterByDate, waterTargetMl } from "./water.js";
 import { scoreDay, type DayCheck, type HealthTargets } from "./northStar.js";
@@ -17,7 +18,7 @@ import { loadHealthProfile, weekdayOfDate, windowDates } from "./snapshot.js";
 import { getWorkoutChecks } from "./workoutCheckStore.js";
 import { routineDayStatus, type RoutineItemStatus } from "./routine.js";
 import { checksOn, getRoutineChecks } from "./routineStore.js";
-import { DAY_MS } from "../util/time.js";
+import { DAY_MS, localClock } from "../util/time.js";
 import { buildDayMeals, groupMeals, type DayMeals, type MealRow } from "./dayMeals.js";
 export { groupMeals } from "./dayMeals.js";
 import { loadPlanEntries } from "./dayMealsStore.js";
@@ -85,6 +86,8 @@ export type HistoryDay = {
   restingHr: number | null;
   /** Health Connect's total calories burned (resting metabolism included) and average HRV. */
   totalKcal: number | null;
+  /** Resting (BMR) + active burn, or the phone's total when it has one; null without either. */
+  totalBurn: TotalBurn | null;
   hrvMs: number | null;
   burn: Burn | null;
   workouts: HistoryWorkout[];
@@ -107,6 +110,8 @@ export type HealthHistory = {
   today: string;
   targets: HealthTargets;
   bodyWeightKg: number | null;
+  /** Mifflin-St Jeor BMR at the latest weigh-in; null without sex, birth year, height or a weigh-in. */
+  bmrKcal: number | null;
   hevy: "connected" | "not_connected" | "unavailable";
   /** Daily water goal in ml (from body weight). */
   waterTargetMl: number;
@@ -202,6 +207,7 @@ export async function buildHealthHistory(
     routine?.length ? getRoutineChecks(userProfileId, from, to) : Promise.resolve(new Map()),
     getWaterByDate(userProfileId, from, to).catch(() => new Map<string, number>()),
   ]);
+  const basics = await loadBodyBasics(userProfileId).catch(() => ({ sex: null, birthYear: null, heightCm: null }));
   const planned = await loadPlanEntries(userProfileId, from, to).catch(() => null);
   const actsByDate = new Map<string, Activity[]>();
   for (const a of activities) actsByDate.set(a.localDate, [...(actsByDate.get(a.localDate) ?? []), a]);
@@ -238,6 +244,9 @@ export async function buildHealthHistory(
     ? withinAnalysisWindow(hevy.workouts, now).map((w) => (w.start_time && w.end_time ? Math.round((Date.parse(w.end_time) - Date.parse(w.start_time)) / 60_000) : 0))
     : [];
   const typicalBurn = typicalTrainingBurn(allMinutes, kg);
+  // BMR at the latest weigh-in (no fallback weight: a guessed BMR would read as their own).
+  const bmrKcal = bmrOf(basics, weightKg, to);
+  const dayShare = localClock(now, timezone).minutes / 1440;
 
   const days: HistoryDay[] = dates.map((date) => {
     const dayMeals = meals.get(date) ?? [];
@@ -315,6 +324,7 @@ export async function buildHealthHistory(
       sleepMinutes: nOrNull(a?.sleep_minutes),
       restingHr: nOrNull(a?.resting_hr),
       totalKcal: nOrNull(a?.total_kcal),
+      totalBurn: totalBurnForDay({ bmr: bmrKcal, activeKcal: burn?.kcal ?? null, phoneTotalKcal: nOrNull(a?.total_kcal), isToday: date === to, dayShare }),
       hrvMs: nOrNull(a?.hrv_ms),
       burn,
       workouts: dayWorkouts,
@@ -332,6 +342,7 @@ export async function buildHealthHistory(
     today: to,
     targets,
     bodyWeightKg: weightKg,
+    bmrKcal,
     hevy: !hevy.connected ? "not_connected" : hevy.ok ? "connected" : "unavailable",
     waterTargetMl: waterTargetMl(weightKg),
     days,
