@@ -58,13 +58,10 @@ export function maxDays(scope: Break["scope"], reason: BreakReason): number {
 /** Days from `from` to `until`, both included. Pure. */
 export const lengthOf = (from: string, until: string): number => dayNumber(until) - dayNumber(from) + 1;
 
-/** A pause that covers `date`: started, not past its end, and not ended early before that day. Pure. */
-export function covers(b: Pick<Break, "startDate" | "endDate" | "endedAt">, date: string, endedOn?: string | null): boolean {
-  if (date < b.startDate || date > b.endDate) return false;
-  return !(b.endedAt && endedOn != null && date >= endedOn);
-}
+/** A pause covers `date` from its first to its last day (an early end moves the last day). Pure. */
+export const covers = (b: Pick<Break, "startDate" | "endDate">, date: string): boolean => date >= b.startDate && date <= b.endDate;
 
-/** The local date an early end took effect: from the day after it was ended. Stored as endDate. */
+/** The whole-plan pause on `date`, if any. Pure. */
 export function planBreakOn(breaks: Break[], date: string): Break | null {
   return breaks.find((b) => b.scope === "plan" && date >= b.startDate && date <= b.endDate) ?? null;
 }
@@ -176,4 +173,61 @@ export async function endBreakEarly(userProfileId: string, id: string, today: st
   const last = addDays(today, -1);
   const up = await supabase.from("health_breaks").update({ end_date: last, ended_at: now }).eq("user_profile_id", userProfileId).eq("id", id);
   return up.error ? { ok: false, error: up.error.message } : { ok: true, unusedDays: lengthOf(today, b.endDate), scope: b.scope };
+}
+
+// ---------- the way back ----------
+
+/** The message the evening before a pause ends: a short one for one item, the resume screen for the plan. Pure. */
+export function pauseEndMessage(b: Pick<Break, "id" | "scope" | "reason">, itemLabel: string | null, tomorrow: string): { title: string; text: string; url: string; card: Record<string, unknown> | null } {
+  if (b.scope === "item") {
+    const what = itemLabel ?? "Your paused item";
+    const gentle = b.reason === "sick" || b.reason === "injured" ? " Ease in: a shorter, lighter first week, and stop if anything hurts." : " The first week back is a little lighter.";
+    return { title: `${what} is back tomorrow`, text: `${what} is back on your routine from tomorrow.${gentle}`, url: "/app/#today", card: null };
+  }
+  return {
+    title: "Your pause ends tomorrow",
+    text: "Your pause ends tomorrow. Take a minute to see where you stand and choose how to restart: keep your goal date or move it.",
+    url: "/app/#resume",
+    card: { type: "pause_resume", breakId: b.id, from: tomorrow },
+  };
+}
+
+// ---------- starting and ending (chat tool and the pause screen) ----------
+
+export type BreakPreview = { max: number; alternative: string | null; minimums: string[]; reply: string; itemLabel: string | null };
+
+async function routineItem(userProfileId: string, itemId: string | undefined) {
+  if (!itemId) return null;
+  const { loadRoutine } = await import("./routineStore.js");
+  return ((await loadRoutine(userProfileId)) ?? []).find((i) => i.id === itemId) ?? null;
+}
+
+/** What the pause screen and the coach show before a pause starts: the limit, an alternative, the minimums. */
+export async function previewBreak(ctx: { userProfileId: string }, input: Pick<BreakInput, "scope" | "reason" | "itemId">): Promise<BreakPreview | { ok: false; error: string }> {
+  const item = input.scope === "item" ? await routineItem(ctx.userProfileId, input.itemId) : null;
+  if (input.scope === "item" && !item) return { ok: false, error: "item_not_found" };
+  const { isGym } = await import("./routine.js");
+  const gym = !!item && isGym(item);
+  return { max: maxDays(input.scope, input.reason), alternative: alternativeFor(input.scope, input.reason, gym), minimums: minimumsFor(input.scope, gym), reply: replyFor(input.reason), itemLabel: item?.label ?? null };
+}
+
+/** Starts a pause after the limits are checked. The goal date doesn't move now: that's chosen at resume. */
+export async function startBreak(ctx: { userProfileId: string; timezone: string; now?: Date }, input: BreakInput): Promise<({ ok: true; break: Break } & BreakPreview) | { ok: false; error: string; max?: number }> {
+  const { localDateKey } = await import("../nutrition/localDate.js");
+  const today = localDateKey(ctx.now ?? new Date(), ctx.timezone);
+  const preview = await previewBreak(ctx, input);
+  if ("ok" in preview) return preview;
+  const existing = await loadBreaks(ctx.userProfileId, today);
+  const check = checkBreak(input, today, existing);
+  if (!check.ok) return check;
+  const saved = await saveBreak(ctx.userProfileId, { scope: input.scope, itemId: input.scope === "item" ? input.itemId! : null, reason: input.reason, note: input.note ?? null, startDate: check.from, endDate: check.until });
+  if (!saved.ok) return saved;
+  return { ok: true, break: { id: saved.id, scope: input.scope, itemId: input.itemId ?? null, reason: input.reason, note: input.note ?? null, startDate: check.from, endDate: check.until, endedAt: null }, ...preview };
+}
+
+/** Pauses running today or still to come, for the coach, Today's banner and You. */
+export async function activeBreaks(ctx: { userProfileId: string; timezone: string; now?: Date }): Promise<Break[]> {
+  const { localDateKey } = await import("../nutrition/localDate.js");
+  const today = localDateKey(ctx.now ?? new Date(), ctx.timezone);
+  return (await loadBreaks(ctx.userProfileId, today)).filter((b) => b.endDate >= today);
 }

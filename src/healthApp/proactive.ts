@@ -21,7 +21,9 @@ import { runNightlyDigest } from "./nightlyDigest.js";
 import { hasFeature } from "./billing.js";
 import { isAccountDisabled } from "./accountStatus.js";
 import { postCoachMessage } from "./workoutCheckStore.js";
-import { DAY_MS, localClock } from "../util/time.js";
+import { DAY_MS, localClock, addDays } from "../util/time.js";
+import { loadBreaks, planBreakOn, pauseEndMessage, type Break } from "./breaks.js";
+import { stableTurnId } from "../util/stableId.js";
 
 /** A nudge only fires within this long after its time, so a late restart doesn't send stale ones. */
 const NUDGE_WINDOW_MIN = 90;
@@ -185,7 +187,7 @@ export async function loadPendingDrafts(userProfileId: string, date: string, tim
   return drafts.filter((d) => !sessions.has(d.draftId!) && !slots.has(d.slot ?? "")).map((d) => d.text ?? "a meal");
 }
 
-async function runNudges(userProfileId: string, now: Date): Promise<number> {
+async function runNudges(userProfileId: string, now: Date, only?: ReadonlySet<Notification["kind"]>): Promise<number> {
   const [snapshot, prefs, plan] = await Promise.all([buildHealthSnapshot(userProfileId, now), getPrefs(userProfileId), loadMealPlanTimes(userProfileId)]);
   // Only read at the evening wrap, the one time the reminder can go out.
   const { minutes } = localClock(now, snapshot.timezone);
@@ -194,6 +196,7 @@ async function runNudges(userProfileId: string, now: Date): Promise<number> {
     : [];
   let sent = 0;
   for (const n of dueNudges(snapshot, now, prefs, plan ? { ...plan, planPushOn: !prefs.off.includes("plan_meal") } : null, pending)) {
+    if (only && !only.has(n.kind)) continue;
     if ((await sendNotification(userProfileId, n)).sent) sent += 1;
   }
   return sent;
@@ -264,10 +267,46 @@ async function maybeRunRca(userProfileId: string, now: Date): Promise<void> {
   }
 }
 
+/** The evening before a pause ends (from 18:00): one message and push to plan the way back. */
+export const PAUSE_END_FROM_MIN = 18 * 60;
+
+async function maybePauseEnd(userProfileId: string, now: Date, timezone: string, breaks: Break[]): Promise<void> {
+  const today = localDateKey(now, timezone);
+  const { minutes, hhmm } = localClock(now, timezone);
+  if (minutes < PAUSE_END_FROM_MIN) return;
+  const ending = breaks.filter((b) => b.endDate === today && !b.endedAt);
+  if (!ending.length) return;
+  const routine = (await loadHealthProfile(userProfileId)).routine ?? [];
+  for (const b of ending) {
+    const turnId = stableTurnId(`magnus-break-end:${b.id}`);
+    const label = b.itemId ? routine.find((i) => i.id === b.itemId)?.label ?? null : null;
+    const msg = pauseEndMessage(b, label, addDays(today, 1));
+    const { error } = await supabase
+      .from("health_chat_messages")
+      .insert({ user_profile_id: userProfileId, role: "assistant", content: msg.text, cards: msg.card ? [msg.card] : [], turn_id: turnId, status: "ok" });
+    if (error) continue; // 23505: already posted
+    const prefs = await getPrefs(userProfileId);
+    if (!isQuiet(hhmm, prefs)) await sendNotification(userProfileId, { kind: "pause_end", dedupeKey: `pause_end:${b.id}`, title: msg.title, body: msg.text, url: msg.url });
+  }
+}
+
 /** One pass of everything proactive. Each part fails on its own without stopping the others. */
 export async function proactiveTick(userProfileId: string, now = new Date()): Promise<void> {
   // A paused account gets no pushes, digests or analyses (and costs nothing) until it's re-enabled.
   if (await isAccountDisabled(userProfileId)) return;
+  // A paused plan (breaks.ts): only the weekly weigh-in and the end-of-pause message (Saksham, 11 Nov).
+  const { timezone } = await loadHealthProfile(userProfileId);
+  const today = localDateKey(now, timezone);
+  const breaks = await loadBreaks(userProfileId, today).catch(() => [] as Break[]);
+  try {
+    await maybePauseEnd(userProfileId, now, timezone, breaks);
+  } catch (err) {
+    logger.warn({ err: loggableError(err), part: "pause end" }, "proactive tick part failed");
+  }
+  if (planBreakOn(breaks, today)) {
+    await runNudges(userProfileId, now, new Set(["weigh_in"])).catch((err) => logger.warn({ err: loggableError(err), part: "nudges" }, "proactive tick part failed"));
+    return;
+  }
   for (const [name, fn] of [
     // First, so the day's thread opens with the plan before any check lands in it.
     ["day plan", () => loadHealthProfile(userProfileId).then(({ timezone }) => ensureDayPlan(userProfileId, timezone, now)).then(() => undefined)],

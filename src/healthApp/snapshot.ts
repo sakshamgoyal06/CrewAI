@@ -3,6 +3,7 @@
  * workouts. Reads the same tables and Hevy client the Telegram bot uses.
  */
 import { localDateKey, resolveTimezone } from "../nutrition/localDate.js";
+import { loadBreaks, planBreakOn, type Break } from "./breaks.js";
 import {
   fetchHevyWorkoutsPage,
   hevyApiKeyForUser,
@@ -45,6 +46,8 @@ export type WorkoutSummary = {
 
 export type HealthSnapshot = {
   timezone: string;
+  /** Pauses running today or still to come (breaks.ts); optional for older fixtures. */
+  breaks?: Break[];
   today: DayScore & {
     calories: number;
     proteinG: number;
@@ -300,6 +303,8 @@ export async function buildHealthSnapshot(
     getActivities(userProfileId, from, to),
     routine?.length ? getRoutineChecks(userProfileId, from, to) : Promise.resolve(new Map()),
   ]);
+  const breaks = await loadBreaks(userProfileId, from).catch(() => []);
+  const planPaused = (date: string) => !!planBreakOn(breaks, date);
   const mealList = await loadDayMeals(userProfileId, to, to).catch(() => undefined);
   const kg = [...checkins].reverse().find((c) => c.weight_kg != null)?.weight_kg ?? FALLBACK_WEIGHT_KG;
   const typicalBurn = typicalTrainingBurn(hevy.workouts.map((w) => w.durationMin ?? 0), kg);
@@ -349,6 +354,7 @@ export async function buildHealthSnapshot(
         workoutsLogged: logged,
         sportLabel: sport ? `${sport.label} · ${sport.durationMin} min` : null,
         routine: dayRoutine,
+        paused: planPaused(date),
       },
       { ...targets, weightKg: kg },
     );
@@ -383,6 +389,7 @@ export async function buildHealthSnapshot(
     gym: { ...gym, checkAt: checkTime(gym) },
     workoutChecks: [...workoutChecks.values()].sort((a, b) => b.localDate.localeCompare(a.localDate)),
     recentSkips: recentSkips(routineByDate, [...workoutChecks.values()]),
+    breaks: breaks.filter((b) => b.endDate >= to),
     goal: goal ? computeGoalProgress(goal, checkins, to, targets.weighInDay) : null,
     checkins,
     activities,
