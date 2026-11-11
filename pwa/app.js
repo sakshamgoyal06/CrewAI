@@ -685,18 +685,20 @@ function renderStrip(scrollToEnd = false) {
   const days = state.history?.days || [];
   strip.replaceChildren(
     ...days.map((d) => {
-      const logged = d.meals.length || d.steps || d.workouts.length;
+      // Three day marks: filled = on track, ring = logged but missed, faint dash = food not logged
+      // (an unlogged day isn't a missed one, same as northStar.ts).
+      const mark = d.onTrack ? "on" : d.unlogged || !d.meals.length ? "none" : "some";
       const b = el("button", {
         type: "button", role: "tab",
         class: ["day-pill", d.date === state.selectedDate && "sel", d.date === todayKey() && "today"].filter(Boolean).join(" "),
         "aria-selected": String(d.date === state.selectedDate),
-        "aria-label": `${shortDate(d.date)}${d.onTrack ? ", on track" : ""}${d.workouts.length ? ", workout" : ""}`,
+        "aria-label": `${shortDate(d.date)}${mark === "on" ? ", on track" : mark === "some" ? ", missed" : ", not logged"}${d.workouts.length ? ", workout" : ""}`,
         onclick: () => selectDay(d.date),
       },
         el("span", { class: "wd" }, WD[d.weekday]),
         el("span", { class: "dn" }, String(dateOf(d.date).getUTCDate())),
         el("span", { class: "marks" },
-          el("i", { class: `mark ${d.onTrack ? "on" : logged ? "some" : ""}` }),
+          el("i", { class: `mark ${mark}` }),
           d.workouts.length || d.trainedUnlogged || d.sportCounted ? el("i", { class: "lift", title: "Trained" }) : null),
       );
       return b;
@@ -2331,8 +2333,14 @@ function weeklyReviewView(r) {
   const t = r.targets;
   const out = [
     el("p", { class: "review-headline" }, r.headline),
-    el("div", { class: "review-days" }, ...r.days.map((d) => el("span", { class: `review-day${d.onTrack ? " on" : ""}`, title: d.date },
-      el("i", {}), el("small", {}, WEEKDAY_LETTERS[d.weekday])))),
+    // Same three states as Today's day strip: on track (gold), missed (filled to the day's score),
+    // not logged (dashed outline, never counted as missed).
+    el("div", { class: "review-days" }, ...r.days.map((d) => {
+      const st = d.onTrack ? "on" : d.unlogged ? "none" : "some";
+      const score = Math.max(0, Math.min(100, Math.round(d.score || 0)));
+      return el("span", { class: `review-day ${st}`, title: `${d.date}${st === "none" ? ", not logged" : st === "on" ? ", on track" : `, ${score}%`}` },
+        el("i", st === "some" ? { style: `--fill:${score}%` } : {}), el("small", {}, WEEKDAY_LETTERS[d.weekday]));
+    })),
     el("div", { class: "review-grid" },
       stat("On-track days", `${w.onTrackDays} / 7`, `goal ${r.onTrackGoal}`, p ? delta(w.onTrackDays, p.onTrackDays) : null),
       stat("Avg calories", w.avgCalories == null ? "–" : fmt(w.avgCalories), t.calorieTarget ? `target ${fmt(t.calorieTarget)}` : null, `${w.daysLogged} of 7 days logged`),
@@ -2946,7 +2954,7 @@ function reviewPanel(r, rerender) {
       toast(err.message);
     }
   });
-  const keep = el("button", { class: "btn", type: "button", onclick: () => {
+  const keep = el("button", { class: "link quiet", type: "button", onclick: () => {
     const all = store.get(REVIEW_KEY, {});
     all[reviewId(r)] = "kept";
     store.set(REVIEW_KEY, all);
@@ -2964,8 +2972,9 @@ function reviewPanel(r, rerender) {
       el("span", {}, el("b", {}, fmt(r.avgIntakeKcal)), " avg logged"),
       el("span", {}, el("b", {}, signed(r.actualKgPerWeek)), " kg/wk now"),
     ),
-    el("p", { class: "review-line" }, r.summary),
-    offer ? el("div", { class: "draft-actions" }, keep, apply)
+    // The reasoning is a tap away: the number, the pace and one button carry the card.
+    el("details", { class: "review-why" }, el("summary", {}, "How this was worked out", el("i", { class: "chev" })), el("p", { class: "review-line" }, r.summary)),
+    offer ? el("div", { class: "draft-actions split" }, keep, apply)
       : el("p", { class: "rca-status trying" }, applied ? `✓ Target is ${fmt(r.suggestedTarget)} kcal` : kept ? `Kept ${fmt(current)} kcal` : "✓ Your target is on pace"),
   );
 }

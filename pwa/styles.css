@@ -601,6 +601,8 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
   margin: 0 -20px 12px; padding: 2px 20px 8px; scroll-padding: 0 20px; scroll-margin-top: 12px;
 }
 .days-strip::-webkit-scrollbar { display: none; }
+/* Older days fade out at the left edge instead of being cut off by it. */
+.days-strip { -webkit-mask-image: linear-gradient(to right, transparent 0, #000 36px); mask-image: linear-gradient(to right, transparent 0, #000 36px); }
 .day-pill {
   flex: none; width: 44px; padding: 8px 0 7px; border-radius: 16px; scroll-snap-align: end;
   display: grid; justify-items: center; gap: 2px;
@@ -609,11 +611,12 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 }
 .day-pill .wd { font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; }
 .day-pill .dn { font-size: 1.02rem; color: var(--text); font-variant-numeric: tabular-nums; }
-/* One dot per day: filled = on track, ring = logged but missed. A short dash under it = trained. */
+/* One mark per day: filled = on track, ring = logged but missed, faint dash = not logged. A short bar under it = trained. */
 .day-pill .marks { display: grid; justify-items: center; gap: 2px; height: 11px; margin-top: 2px; }
 .day-pill .mark { width: 6px; height: 6px; border-radius: 50%; box-shadow: inset 0 0 0 1px transparent; }
 .day-pill .mark.some { box-shadow: inset 0 0 0 1.5px var(--faint); }
 .day-pill .mark.on { background: var(--accent); }
+.day-pill .mark.none { width: 6px; height: 1.5px; border-radius: 1px; margin-top: 2px; background: var(--faint); opacity: 0.6; }
 .day-pill .lift { width: 8px; height: 2px; border-radius: 2px; background: var(--muted); }
 .day-pill.today .wd { color: var(--text); font-weight: 700; }
 .day-pill.sel { background: var(--accent-soft); border-color: var(--accent); }
@@ -793,6 +796,8 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .review-day { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--muted); }
 .review-day i { width: 100%; height: 28px; border-radius: 8px; background: var(--raised); }
 .review-day.on i { background: var(--accent); }
+.review-day.some i { background: linear-gradient(to top, var(--accent-soft) var(--fill, 0%), var(--raised) var(--fill, 0%)); }
+.review-day.none i { background: none; border: 1px dashed var(--hair-strong); }
 .review-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .review-stat { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 14px; background: var(--accent-soft); }
 .review-stat small { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -1476,3 +1481,7 @@ body.screen-open { overflow: hidden; }
 .gap-screen .pa-head { font-size: 1rem; }
 .day-meals.compact .dm-all { justify-self: start; margin-top: 2px; }
 .danger-label { color: var(--bad); margin-top: 18px; }
+
+.review-why > summary { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; font-size: 0.85rem; color: var(--muted); padding: 4px 0; }
+.review-why > summary::-webkit-details-marker { display: none; }
+.review-why[open] > summary .chev { transform: rotate(-135deg) translate(-2px, -2px); }
