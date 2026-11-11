@@ -67,6 +67,8 @@ export function publicAuthConfig(env: NodeJS.ProcessEnv = process.env): {
   supabaseUrl: string | null;
   supabaseKey: string | null;
   google: boolean;
+  /** Google's web client ID, for the native app's one-tap sign-in (its ID token is minted for it). */
+  googleClientId?: string;
 } {
   const supabaseUrl = env.SUPABASE_URL?.trim() || null;
   const supabaseKey =
@@ -74,7 +76,9 @@ export function publicAuthConfig(env: NodeJS.ProcessEnv = process.env): {
     (supabaseUrl?.includes(LIVE_PROJECT_REF) ? LIVE_PUBLISHABLE_KEY : null) ||
     env.SUPABASE_ANON_KEY?.trim() ||
     null;
-  return { supabaseUrl, supabaseKey, google: !!supabaseUrl && !!supabaseKey && env.MAGNUS_GOOGLE_SIGNIN !== "off" };
+  const google = !!supabaseUrl && !!supabaseKey && env.MAGNUS_GOOGLE_SIGNIN !== "off";
+  const googleClientId = env.MAGNUS_GOOGLE_WEB_CLIENT_ID?.trim();
+  return { supabaseUrl, supabaseKey, google, ...(google && googleClientId ? { googleClientId } : {}) };
 }
 
 // ---------- token caches ----------
