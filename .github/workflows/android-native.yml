@@ -15,6 +15,11 @@ jobs:
       contents: write # to refresh the android-beta release on main
     env:
       KEYSTORE_B64: ${{ secrets.MAGNUS_KEYSTORE_B64 }}
+      # Firebase (push). Unset means the APK builds without push.
+      MAGNUS_FIREBASE_APP_ID: ${{ secrets.MAGNUS_FIREBASE_APP_ID }}
+      MAGNUS_FIREBASE_API_KEY: ${{ secrets.MAGNUS_FIREBASE_API_KEY }}
+      MAGNUS_FIREBASE_PROJECT_ID: ${{ secrets.MAGNUS_FIREBASE_PROJECT_ID }}
+      MAGNUS_FIREBASE_SENDER_ID: ${{ secrets.MAGNUS_FIREBASE_SENDER_ID }}
       # Every build installs over the last one.
       VERSION_CODE: ${{ github.run_number }}
     steps:
