@@ -361,6 +361,9 @@ body.composing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 
 .card { background: var(--surface); border: 1px solid var(--hair); border-radius: var(--radius); padding: 18px; margin-bottom: 12px; }
 .block-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 16px; margin-top: 16px; }
 .link.quiet { color: var(--muted); font-weight: 500; }
+.link.center { justify-self: center; padding: 6px 0; }
+.add-link { justify-self: start; padding: 4px 0; font-size: 0.92rem; }
+.add-link:disabled { color: var(--faint); }
 .btn.small { padding: 9px 16px; font-size: 0.9rem; }
 .hero { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 20px; align-items: center; padding: 4px 0 28px; }
 .hero-ring { position: relative; width: 140px; height: 140px; }
@@ -504,13 +507,15 @@ body.composing .tabbar { display: none; }
 .hint a { color: var(--muted); }
 
 /* Log sheet */
-.log-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+/* Two rows of five round icons: the sheet stays a small pick list (about a quarter of the screen). */
+.log-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px 2px; }
 .log-tile {
-  display: grid; justify-items: center; gap: 6px; padding: 12px 6px 10px; border-radius: 16px;
-  background: var(--surface); border: 1px solid var(--hair); color: var(--text); font-size: 0.86rem; font-weight: 500;
+  display: grid; justify-items: center; gap: 6px; padding: 0; border: 0; background: none;
+  color: var(--text); font-size: 0.74rem; font-weight: 500; min-width: 0;
 }
-.log-tile span { white-space: nowrap; }
-.log-tile svg { width: 24px; height: 24px; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.log-tile span { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.log-tile i { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--hair); }
+.log-tile svg { width: 22px; height: 22px; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -596,6 +601,8 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
   margin: 0 -20px 12px; padding: 2px 20px 8px; scroll-padding: 0 20px; scroll-margin-top: 12px;
 }
 .days-strip::-webkit-scrollbar { display: none; }
+/* Older days fade out at the left edge instead of being cut off by it. */
+.days-strip { -webkit-mask-image: linear-gradient(to right, transparent 0, #000 36px); mask-image: linear-gradient(to right, transparent 0, #000 36px); }
 .day-pill {
   flex: none; width: 44px; padding: 8px 0 7px; border-radius: 16px; scroll-snap-align: end;
   display: grid; justify-items: center; gap: 2px;
@@ -604,11 +611,12 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 }
 .day-pill .wd { font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; }
 .day-pill .dn { font-size: 1.02rem; color: var(--text); font-variant-numeric: tabular-nums; }
-/* One dot per day: filled = on track, ring = logged but missed. A short dash under it = trained. */
+/* One mark per day: filled = on track, ring = logged but missed, faint dash = not logged. A short bar under it = trained. */
 .day-pill .marks { display: grid; justify-items: center; gap: 2px; height: 11px; margin-top: 2px; }
 .day-pill .mark { width: 6px; height: 6px; border-radius: 50%; box-shadow: inset 0 0 0 1px transparent; }
 .day-pill .mark.some { box-shadow: inset 0 0 0 1.5px var(--faint); }
 .day-pill .mark.on { background: var(--accent); }
+.day-pill .mark.none { width: 6px; height: 1.5px; border-radius: 1px; margin-top: 2px; background: var(--faint); opacity: 0.6; }
 .day-pill .lift { width: 8px; height: 2px; border-radius: 2px; background: var(--muted); }
 .day-pill.today .wd { color: var(--text); font-weight: 700; }
 .day-pill.sel { background: var(--accent-soft); border-color: var(--accent); }
@@ -788,6 +796,8 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .review-day { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--muted); }
 .review-day i { width: 100%; height: 28px; border-radius: 8px; background: var(--raised); }
 .review-day.on i { background: var(--accent); }
+.review-day.some i { background: linear-gradient(to top, var(--accent-soft) var(--fill, 0%), var(--raised) var(--fill, 0%)); }
+.review-day.none i { background: none; border: 1px dashed var(--hair-strong); }
 .review-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .review-stat { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 14px; background: var(--accent-soft); }
 .review-stat small { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -1101,6 +1111,8 @@ body.screen-open { overflow: hidden; }
 .draft-actions.split { align-items: center; justify-content: space-between; }
 .draft-actions.split .link { flex: none; padding: 8px 4px; }
 .draft-actions.split .btn { flex: 0 1 60%; }
+.draft-actions.meal-acts { gap: 14px; }
+.draft-actions.meal-acts .btn { flex: 0 1 46%; }
 
 /* Trends: four main charts plus "More"; bars that missed the target are muted. */
 .trend-tabs { overflow: visible; }
@@ -1115,6 +1127,11 @@ body.screen-open { overflow: hidden; }
 .settings-form .section-label:not(:first-child) { margin-top: 12px; }
 .date-line { margin: -4px 0 4px; }
 .field.date { color-scheme: inherit; }
+.date-field { position: relative; display: flex; align-items: center; min-height: 44px; }
+.date-field .date-when small { color: var(--muted); }
+.date-field::after { content: ""; margin-left: auto; width: 8px; height: 8px; border-right: 1.5px solid var(--faint); border-top: 1.5px solid var(--faint); transform: rotate(45deg); }
+.date-field .date-hit { position: absolute; inset: 0; border: 0; background: none; cursor: pointer; }
+.date-native { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .field.date::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: pointer; filter: invert(0.7) sepia(0.4) hue-rotate(230deg); }
 :root[data-theme="light"] .field.date::-webkit-calendar-picker-indicator { filter: none; }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .field.date::-webkit-calendar-picker-indicator { filter: none; } }
@@ -1422,10 +1439,12 @@ body.screen-open { overflow: hidden; }
 .dm-row.instead .dm-note { color: var(--accent); }
 .dm-row.todo .dm-text, .dm-row.missed .dm-text, .dm-row.skipped .dm-text { color: var(--muted); }
 .dm-row.skipped .dm-text { text-decoration: line-through; }
-.dm-kcal { font-size: 0.92rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.dm-kcal { font-size: 0.92rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; display: inline-flex; align-items: baseline; gap: 3px; }
+.dm-kcal .chev-r { align-self: center; margin-left: 10px; }
 .dm-kcal small { font-weight: 400; color: var(--faint); font-size: 0.72rem; }
 .dm-row.todo .dm-kcal, .dm-row.missed .dm-kcal { color: var(--muted); font-weight: 400; }
-.dm-acts { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 14px 12px 46px; }
+.dm-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 0 14px 12px 46px; }
+.dm-acts .link { font-size: 0.85rem; color: var(--muted); }
 .dm-acts .btn.small { padding: 6px 12px; font-size: 0.82rem; }
 .dm-body:empty { display: none; }
 .dm-body { padding: 0 14px 12px 46px; display: grid; gap: 8px; min-width: 0; }
@@ -1452,3 +1471,17 @@ body.screen-open { overflow: hidden; }
 .pause-min { margin: 4px 0 8px; padding-left: 18px; display: grid; gap: 6px; font-size: 15px; }
 .pause-flow input[type="range"] { width: 100%; margin-top: 8px; }
 .pause-banner { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+
+/* Plan gaps: one line on Meals, the choices on their own screen. */
+.gap-banner { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; width: 100%; padding: 12px 14px; border: 1px solid var(--hair); border-radius: 14px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.gap-banner .gap-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+.gap-banner .gap-text { font-size: 0.9rem; min-width: 0; line-height: 1.35; }
+.gap-banner .gap-text small { color: var(--muted); }
+.gap-banner .gap-cta { font-size: 0.85rem; font-weight: 700; color: var(--accent); }
+.gap-screen .pa-head { font-size: 1rem; }
+.day-meals.compact .dm-all { justify-self: start; margin-top: 2px; }
+.danger-label { color: var(--bad); margin-top: 18px; }
+
+.review-why > summary { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; font-size: 0.85rem; color: var(--muted); padding: 4px 0; }
+.review-why > summary::-webkit-details-marker { display: none; }
+.review-why[open] > summary .chev { transform: rotate(-135deg) translate(-2px, -2px); }

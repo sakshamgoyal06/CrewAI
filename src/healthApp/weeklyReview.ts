@@ -34,7 +34,7 @@ export type WeeklyReview = {
   previous: WeekStats | null;
   targets: Pick<HealthTargets, "calorieTarget" | "proteinTarget" | "stepTarget">;
   onTrackGoal: number;
-  days: Array<{ date: string; weekday: number; onTrack: boolean; score: number }>;
+  days: Array<{ date: string; weekday: number; onTrack: boolean; score: number; unlogged: boolean }>;
   bestDay: { date: string; score: number } | null;
   mostMissed: { id: CheckId; label: string; missedDays: number } | null;
   goal: {
@@ -164,7 +164,7 @@ export function summarizeWeek(
     previous: prev ? weekStats(prev, targets.trainingDays) : null,
     targets: { calorieTarget: targets.calorieTarget, proteinTarget: targets.proteinTarget, stepTarget: targets.stepTarget },
     onTrackGoal,
-    days: week.map((d) => ({ date: d.date, weekday: d.weekday, onTrack: d.onTrack, score: d.score })),
+    days: week.map((d) => ({ date: d.date, weekday: d.weekday, onTrack: d.onTrack, score: d.score, unlogged: !!d.unlogged })),
     bestDay: best && best.score > 0 ? { date: best.date, score: best.score } : null,
     mostMissed,
     goal: goal
