@@ -1048,15 +1048,13 @@ function renderRoutineToday(d) {
         catch (err) { second.disabled = false; toast(err.message); }
       });
     }
-    const edit = el("button", { class: "link small quiet", type: "button", "aria-label": `Edit ${r.label}` }, "Edit");
-    edit.addEventListener("click", () => openSheet("routine"));
+    // No Edit on each row: every one opened the same routine screen, and "Edit routine" sits under the list.
     const open = !today || d.date <= today;
     return el("li", { class: r.state },
       el("span", { class: "mark", "aria-hidden": "true" }, mark),
       el("span", { class: "main" }, el("span", { class: "title" }, r.label), el("span", { class: "sub" }, sub)),
       open ? action : null,
-      open ? second : null,
-      edit);
+      open ? second : null);
   }));
 }
 
@@ -2585,8 +2583,9 @@ function planMealCard(c) {
       return;
     }
     const ate = el("button", { class: "btn primary small", type: "button" }, "Ate this");
-    const change = el("button", { class: "btn small", type: "button", onclick: () => openPlannedMeal(cur.date, cur.slot) }, "Edit or swap");
-    const own = el("button", { class: "btn small", type: "button", onclick: () => { state.mealSlot = cur.slot; state.mealDate = cur.date !== (todayKey() || localToday()) ? cur.date : null; openSheet("meal"); } }, "Log your own");
+    // One button and two quiet links, like the meal rows on Today and Meals.
+    const change = el("button", { class: "link small", type: "button", onclick: () => openPlannedMeal(cur.date, cur.slot) }, "Edit or swap");
+    const own = el("button", { class: "link small quiet", type: "button", onclick: () => { state.mealSlot = cur.slot; state.mealDate = cur.date !== (todayKey() || localToday()) ? cur.date : null; openSheet("meal"); } }, "Log your own");
     ate.addEventListener("click", async () => {
       ate.disabled = change.disabled = true;
       try {
@@ -2605,7 +2604,7 @@ function planMealCard(c) {
         toast(err.message);
       }
     });
-    card.replaceChildren(...body, el("div", { class: "draft-actions" }, ate, change, own));
+    card.replaceChildren(...body, el("div", { class: "draft-actions split meal-acts" }, ate, change, own));
   }
   render(c);
   return card;

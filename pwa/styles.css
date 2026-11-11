@@ -361,6 +361,9 @@ body.composing .view.coach { padding-bottom: calc(env(safe-area-inset-bottom) + 
 .card { background: var(--surface); border: 1px solid var(--hair); border-radius: var(--radius); padding: 18px; margin-bottom: 12px; }
 .block-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 16px; margin-top: 16px; }
 .link.quiet { color: var(--muted); font-weight: 500; }
+.link.center { justify-self: center; padding: 6px 0; }
+.add-link { justify-self: start; padding: 4px 0; font-size: 0.92rem; }
+.add-link:disabled { color: var(--faint); }
 .btn.small { padding: 9px 16px; font-size: 0.9rem; }
 .hero { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 20px; align-items: center; padding: 4px 0 28px; }
 .hero-ring { position: relative; width: 140px; height: 140px; }
@@ -1101,6 +1104,8 @@ body.screen-open { overflow: hidden; }
 .draft-actions.split { align-items: center; justify-content: space-between; }
 .draft-actions.split .link { flex: none; padding: 8px 4px; }
 .draft-actions.split .btn { flex: 0 1 60%; }
+.draft-actions.meal-acts { gap: 14px; }
+.draft-actions.meal-acts .btn { flex: 0 1 46%; }
 
 /* Trends: four main charts plus "More"; bars that missed the target are muted. */
 .trend-tabs { overflow: visible; }
@@ -1422,10 +1427,12 @@ body.screen-open { overflow: hidden; }
 .dm-row.instead .dm-note { color: var(--accent); }
 .dm-row.todo .dm-text, .dm-row.missed .dm-text, .dm-row.skipped .dm-text { color: var(--muted); }
 .dm-row.skipped .dm-text { text-decoration: line-through; }
-.dm-kcal { font-size: 0.92rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.dm-kcal { font-size: 0.92rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; display: inline-flex; align-items: baseline; gap: 3px; }
+.dm-kcal .chev-r { align-self: center; margin-left: 10px; }
 .dm-kcal small { font-weight: 400; color: var(--faint); font-size: 0.72rem; }
 .dm-row.todo .dm-kcal, .dm-row.missed .dm-kcal { color: var(--muted); font-weight: 400; }
-.dm-acts { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 14px 12px 46px; }
+.dm-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 0 14px 12px 46px; }
+.dm-acts .link { font-size: 0.85rem; color: var(--muted); }
 .dm-acts .btn.small { padding: 6px 12px; font-size: 0.82rem; }
 .dm-body:empty { display: none; }
 .dm-body { padding: 0 14px 12px 46px; display: grid; gap: 8px; min-width: 0; }

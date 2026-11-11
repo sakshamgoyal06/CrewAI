@@ -472,8 +472,9 @@ export function mealScreen() {
       kids.push(el("button", { class: "btn primary block", type: "button", disabled: !e.rows.length, onclick: (ev) => save(ev, false) }, "Save changes"));
       kids.push(el("button", { class: "link quiet", type: "button", onclick: () => { startEdit(date, slot, p.items); paintAdd(); repaint(); } }, "Discard changes"));
     } else if (canEat) {
+      // One strong button; logging something else is a quiet link under it.
       kids.push(el("button", { class: "btn primary block", type: "button", onclick: (ev) => save(ev, true) }, "Ate this"),
-        el("button", { class: "btn block", type: "button", onclick: () => d.logOwn(slot, date) }, "Log my own instead"));
+        el("button", { class: "link quiet center", type: "button", onclick: () => d.logOwn(slot, date) }, "Log my own instead"));
     } else {
       kids.push(el("p", { class: "hint" }, "Change it any time before the day. You can log it on the day."));
     }
@@ -527,7 +528,7 @@ export function mealScreen() {
   };
   const paintAdd = () => {
     if (!e.adding) {
-      addBox.replaceChildren(el("button", { class: "btn block add-btn", type: "button", disabled: e.rows.length >= 12, onclick: () => { e.adding = true; e.hits = null; paintAdd(); search(); } }, "+ Add a food"));
+      addBox.replaceChildren(el("button", { class: "link add-link", type: "button", disabled: e.rows.length >= 12, onclick: () => { e.adding = true; e.hits = null; paintAdd(); search(); } }, "+ Add a food"));
       return;
     }
     const input = el("input", { class: "field", type: "search", placeholder: "Search foods: paneer, curd, apple…", value: e.q, "aria-label": "Search foods", enterkeyhint: "search" });
@@ -886,7 +887,9 @@ function dayMealRow(list, r, planBySlot) {
       label ? el("span", { class: "dm-slot" }, label) : null,
       el("span", { class: "dm-text" }, r.text, r.state === "extra" ? el("span", { class: "tag extra" }, "Extra") : null),
       note ? el("span", { class: "dm-note" }, note) : null),
-    el("span", { class: "dm-kcal" }, kcalText(r), el("small", {}, planned ? " planned" : " kcal")));
+    el("span", { class: "dm-kcal" }, kcalText(r), el("small", {}, planned ? " planned" : " kcal"),
+      // A planned meal opens its editor on tap (portions, swap, log your own): the chevron says so.
+      planned ? el("i", { class: "chev-r", "aria-hidden": "true" }) : null));
   const body = el("div", { class: "dm-body" });
   const fill = () => body.replaceChildren(...(openRows.has(key) ? detail(list, r, planBySlot) : []));
   main.addEventListener("click", () => {
@@ -898,15 +901,15 @@ function dayMealRow(list, r, planBySlot) {
   });
   fill();
   li.append(main);
-  // A planned meal of today or a past day: one tap logs it as planned.
+  // A planned meal of today or a past day: one tap logs it as planned. Editing or swapping is a tap
+  // on the row itself, so each row carries two answers, not three buttons.
   if (planned && date <= todayKey()) {
     li.append(el("div", { class: "dm-acts" },
       r.eatOut
         ? el("button", { class: "btn small", type: "button", onclick: () => d.logOwn(r.slot, date) }, "Log what I had")
         : el("button", { class: "btn small primary", type: "button", onclick: (ev) => ateThis(ev.currentTarget, date, r.slot) }, "Ate this"),
-      el("button", { class: "btn small", type: "button", onclick: () => openPlannedMeal(date, r.slot) }, r.eatOut ? "Plan it" : "Edit or swap"),
       // Only a skip counts as eating nothing; a meal left blank stays "not logged".
-      el("button", { class: "btn small", type: "button", onclick: (ev) => skipMeal(ev.currentTarget, date, r.slot) }, "Skipped it")));
+      el("button", { class: "link", type: "button", onclick: (ev) => skipMeal(ev.currentTarget, date, r.slot) }, "Skipped it")));
   }
   li.append(body);
   return li;
