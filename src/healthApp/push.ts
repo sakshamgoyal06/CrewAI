@@ -10,6 +10,7 @@ import { z } from "zod";
 import { logger } from "../logger.js";
 import { supabase } from "../tools/clients.js";
 import { loggableError } from "../util/loggableError.js";
+import { FCM_PREFIX, fcmConfig, fcmSender, isFcmEndpoint } from "./fcm.js";
 
 export type PushConfig = { publicKey: string; privateKey: string; subject: string };
 
@@ -136,6 +137,11 @@ export async function saveSubscription(
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
+/** The native app's FCM token, kept beside the web push subscriptions (see fcm.ts). */
+export async function saveFcmToken(userProfileId: string, token: string, userAgent: string | undefined): Promise<{ ok: boolean; error?: string }> {
+  return saveSubscription(userProfileId, { endpoint: `${FCM_PREFIX}${token}`, keys: { p256dh: "fcm", auth: "fcm" } }, userAgent);
+}
+
 export async function deleteSubscription(userProfileId: string, endpoint: string): Promise<{ ok: boolean }> {
   await supabase.from("health_push_subscriptions").delete().eq("user_profile_id", userProfileId).eq("endpoint", endpoint);
   return { ok: true };
@@ -195,7 +201,22 @@ export async function sendNotification(
   send: SendFn | null = null,
 ): Promise<{ sent: boolean; delivered: number; reason?: string }> {
   const cfg = pushConfig();
-  const sender = send ?? (cfg ? webPushSender(cfg) : null);
+  const web = send ?? (cfg ? webPushSender(cfg) : null);
+  // The native app's installs (endpoint "fcm:<token>") go through Firebase instead of web push.
+  const fcm = fcmConfig();
+  const native = fcm ? fcmSender(fcm) : null;
+  const sender: SendFn | null =
+    web || native
+      ? async (sub, payload) => {
+          if (isFcmEndpoint(sub.endpoint)) {
+            if (send) return send(sub, payload);
+            if (!native) throw Object.assign(new Error("fcm_not_configured"), { statusCode: 503 });
+            return native(sub.endpoint, payload);
+          }
+          if (!web) throw Object.assign(new Error("web_push_not_configured"), { statusCode: 503 });
+          return web(sub, payload);
+        }
+      : null;
   if (!sender) return { sent: false, delivered: 0, reason: "push_not_configured" };
   const subs = await listSubscriptions(userProfileId);
   if (!subs.length) return { sent: false, delivered: 0, reason: "no_devices" };

@@ -114,6 +114,14 @@ describe("sign-up rules", () => {
       supabaseKey: "sb_publishable_1",
       google: true,
     });
+    // The native app needs Google's web client ID to ask Android for an ID token.
+    expect(
+      publicAuthConfig({
+        SUPABASE_URL: "https://x.supabase.co",
+        SUPABASE_PUBLISHABLE_KEY: "sb_publishable_1",
+        MAGNUS_GOOGLE_WEB_CLIENT_ID: "123-abc.apps.googleusercontent.com",
+      }).googleClientId,
+    ).toBe("123-abc.apps.googleusercontent.com");
   });
 
   it("accepts only real IANA timezones", () => {
