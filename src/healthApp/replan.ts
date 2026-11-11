@@ -19,8 +19,20 @@ import type { HealthGoal } from "./goalProgress.js";
 import { humanDate, startingPlan, type OnboardingInput } from "./onboarding.js";
 import { loadHealthProfile } from "./snapshot.js";
 
-/** Smaller calorie moves than this are left alone. */
+/** Smaller calorie and protein moves than these are left alone. */
 const MIN_APPLY_KCAL = 50;
+const MIN_APPLY_PROTEIN_G = 5;
+
+type GoalType = OnboardingInput["goalType"];
+const GOAL_TYPE_LABEL: Record<GoalType, string> = { lose: "Lose fat", gain: "Gain", recomp: "Recomp" };
+
+/** Gain when the goal weight is over half a kilo above today's, lose when below, recomp in between. Pure. */
+export function goalTypeFor(prev: GoalType, currentKg: number, targetKg: number | null): GoalType {
+  if (targetKg === null) return prev;
+  if (targetKg > currentKg + 0.5) return "gain";
+  if (targetKg < currentKg - 0.5) return "lose";
+  return "recomp";
+}
 
 export type ReplanChange = { label: string; from: string | null; to: string | null };
 
@@ -133,7 +145,7 @@ async function formulaInput(ctx: ActionContext): Promise<OnboardingInput | null>
 export async function replanForGoal(
   ctx: ActionContext,
   before: HealthGoal | null,
-  setTargets: (kcal: number) => Promise<boolean>,
+  setTargets: (t: { calorieTarget?: number; proteinTarget?: number }) => Promise<boolean>,
   now = new Date(),
 ): Promise<ReplanResult | null> {
   try {
@@ -144,6 +156,18 @@ export async function replanForGoal(
     const weeksLeft = Math.max(0, (dayNumber(goal.deadline) - dayNumber(today)) / 7);
     const profile = await loadHealthProfile(ctx.userProfileId);
     const from = profile.targets.calorieTarget;
+
+    // A weight target above today's weight is a gain goal, below it a loss: the formula, the protein
+    // basis and the coach all read the goal type, so it moves with the goal. A body-fat-only goal
+    // keeps the type they chose.
+    const pre = await formulaInput(ctx);
+    if (pre) {
+      const type = goalTypeFor(pre.goalType, pre.weightKg, pre.targetWeightKg ?? null);
+      if (type !== pre.goalType) {
+        const { error } = await supabase.from("user_health_profile").update({ goal_type: type }).eq("user_profile_id", ctx.userProfileId);
+        if (!error) changes.push({ label: "Goal type", from: GOAL_TYPE_LABEL[pre.goalType], to: GOAL_TYPE_LABEL[type] });
+      }
+    }
 
     let to: number | null = null;
     let planned: number | null = null;
@@ -171,9 +195,16 @@ export async function replanForGoal(
       source = "formula";
     }
 
-    if (from === null || Math.abs(to - from) >= MIN_APPLY_KCAL) {
-      if (!(await setTargets(to))) return null;
-      changes.push({ label: "Daily calories", from: from === null ? null : kcal(from), to: kcal(to) });
+    // Protein follows the goal too (gain: per kg now; loss: per kg of the leaner of now and target).
+    const input = await formulaInput(ctx);
+    const proteinFrom = profile.targets.proteinTarget;
+    const proteinTo = input ? startingPlan(input, today).proteinTarget : null;
+    const moveKcal = from === null || Math.abs(to - from) >= MIN_APPLY_KCAL;
+    const moveProtein = proteinTo !== null && (proteinFrom === null || Math.abs(proteinTo - proteinFrom) >= MIN_APPLY_PROTEIN_G);
+    if (moveKcal || moveProtein) {
+      if (!(await setTargets({ ...(moveKcal ? { calorieTarget: to } : {}), ...(moveProtein ? { proteinTarget: proteinTo! } : {}) }))) return null;
+      if (moveKcal) changes.push({ label: "Daily calories", from: from === null ? null : kcal(from), to: kcal(to) });
+      if (moveProtein) changes.push({ label: "Daily protein", from: proteinFrom === null ? null : `${proteinFrom} g`, to: `${proteinTo} g` });
     }
 
     const rebuilt = changes.length > 0 ? (await rebuildPlan(ctx, "Goal date changed", now).catch(() => ({ ok: false as const }))).ok : false;

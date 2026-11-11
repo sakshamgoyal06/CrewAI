@@ -954,7 +954,7 @@ export function createHealthAppRouter(): express.Router {
       const r = await setGoal(ctx, input);
       if (!r.ok) return fromResult(r);
       // New date or target: recompute the calorie target and meal plan, and say what moved.
-      const replan = await replanForGoal(ctx, before, async (kcal) => (await setTargets(ctx, { calorieTarget: kcal })).ok);
+      const replan = await replanForGoal(ctx, before, async (t) => (await setTargets(ctx, t)).ok);
       void recordManualPlan(ctx.userProfileId, "You set a new goal");
       void checkNewGoal(ctx.userProfileId);
       return fromResult({ ...r, replan });

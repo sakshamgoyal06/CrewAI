@@ -77,6 +77,8 @@ async function getLoggedMealSafe(userProfileId: string, sessionId: string) {
 }
 import { eatingOutInput, planEatingOut, type EatingOutCard } from "./eatingOut.js";
 import { billingMode, experienceFor, loadEntitlement } from "./billing.js";
+import { getActiveGoal } from "./bodyStore.js";
+import { replanForGoal } from "./replan.js";
 import { checkNewGoal, openInterventions, recordManualPlan, respond as respondToIntervention } from "./interventions/engine.js";
 import type { InterventionCard } from "./interventions/types.js";
 import { chatFastModel, chatModel } from "../models.js";
@@ -416,7 +418,7 @@ const toolDefinitions: Anthropic.Tool[] = [
   {
     name: "set_goal",
     description:
-      "Set the outcome goal (replaces the current one): any of target weight, body fat %, muscle mass, plus a deadline.",
+      "Set the outcome goal (replaces the current one): any of target weight, body fat %, muscle mass, plus a deadline. Re-plans calories, protein and the meal plan; say only what replan.changes lists.",
     input_schema: {
       type: "object",
       properties: {
@@ -898,12 +900,15 @@ export async function runTool(
     case "set_goal": {
       const p = goalInput.safeParse(input);
       if (!p.success) return invalid(p.error);
+      const before = await getActiveGoal(ctx.userProfileId).catch(() => null);
       const r = await setGoal(ctx, p.data);
-      if (r.ok) {
-        void recordManualPlan(ctx.userProfileId, "You set a new goal");
-        void checkNewGoal(ctx.userProfileId, ctx.now ? new Date(ctx.now) : new Date());
-      }
-      return { result: r, changed: r.ok };
+      if (!r.ok) return { result: r, changed: false };
+      // The same re-plan as the Goal screen: new calories, protein and meal plan for the new goal.
+      // Its changes and lines are what the coach reports, so it never claims a move that didn't happen.
+      const replan = await replanForGoal(ctx, before, async (t) => (await setTargets(ctx, t)).ok, ctx.now ? new Date(ctx.now) : new Date());
+      void recordManualPlan(ctx.userProfileId, "You set a new goal");
+      void checkNewGoal(ctx.userProfileId, ctx.now ? new Date(ctx.now) : new Date());
+      return { result: { ...r, replan: replan ? { changes: replan.changes, lines: replan.lines } : null }, changed: true };
     }
     case "decline_off_topic": {
       const count = recordDecline(ctx, String((input as { kind?: unknown } | null)?.kind ?? "off_topic"));

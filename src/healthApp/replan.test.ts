@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { goalChanges, replanLines } from "./replan.js";
+import { goalChanges, goalTypeFor, replanLines } from "./replan.js";
 
 const goal = (deadline: string, w = 70) => ({ id: "g", startDate: "2026-11-01", deadline, targets: { weight_kg: w } });
 
@@ -28,5 +28,18 @@ describe("replanLines", () => {
   });
   it("leaves a target that still fits", () => {
     expect(replanLines({ ...base, to: 2020 })[1]).toContain("still fits");
+  });
+});
+
+describe("goalTypeFor", () => {
+  it("follows the weight target: above today's weight is gain, below is lose", () => {
+    // Saksham's 8 Nov goal: 113 kg from about 118 kg.
+    expect(goalTypeFor("gain", 118, 113)).toBe("lose");
+    expect(goalTypeFor("lose", 70, 76)).toBe("gain");
+  });
+  it("is recomp within half a kilo, and keeps the chosen type with no weight target", () => {
+    expect(goalTypeFor("lose", 80, 80.3)).toBe("recomp");
+    expect(goalTypeFor("recomp", 80, null)).toBe("recomp");
+    expect(goalTypeFor("gain", 80, null)).toBe("gain");
   });
 });
