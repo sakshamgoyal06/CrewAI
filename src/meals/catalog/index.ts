@@ -168,7 +168,7 @@ function pickServing(entry: CatalogEntry, unit: ServingUnit, size: ServingSize |
   );
 }
 
-function defaultServing(entry: CatalogEntry): Serving {
+export function defaultServing(entry: CatalogEntry): Serving {
   return entry.servings.find((s) => s.default) ?? entry.servings[0]!;
 }
 

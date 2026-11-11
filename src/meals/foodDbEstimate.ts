@@ -25,7 +25,7 @@ import {
 import type { Breakdown, BreakdownIngredient, BreakdownRequestItem } from "./providers/webBreakdown.js";
 import { logger } from "../logger.js";
 import { CONFIRMED_SOURCE, PENDING_SOURCE, splitPending, type FoodContributor } from "./foodTrust.js";
-import { catalog as defaultCatalog, resolveCatalogItem, type Catalog, type CatalogMatch } from "./catalog/index.js";
+import { catalog as defaultCatalog, defaultServing, resolveCatalogItem, type Catalog, type CatalogEntry, type CatalogMatch } from "./catalog/index.js";
 import { popularityScore, searchCatalog } from "./catalog/search.js";
 import { recordFoodGaps } from "./foodGaps.js";
 import type { MealItemLine, MealNutritionEstimate } from "./types.js";
@@ -234,28 +234,78 @@ function splitJoined(c: FoodComponent, cat: Catalog): FoodComponent[] | null {
   return null;
 }
 
+/** A splash of milk in a cup of black coffee or tea, not a glass of it. */
+const MILK_SPLASH_ML = 30;
+
+/**
+ * An addition named after a drink or dish ("with milk", "and sugar") with no amount of its own:
+ * dropped when the base already has it (chai has milk and sugar), a splash when it's milk in a
+ * plain cup drink (black coffee, black tea), kept when it's a spoonful (sugar, honey). null = a
+ * food of its own ("biscuit"), which the caller keeps as typed and which ends the additions.
+ */
+function asAddition(p: FoodComponent, base: CatalogEntry, cat: Catalog): { keep: FoodComponent | null } | null {
+  if (!p.assumedQuantity) return null;
+  const e = resolveCatalogItem(p, cat)?.entry;
+  if (!e) return null;
+  if (base.contains.includes(e.key)) return { keep: null };
+  const cupDrink = base.category === "drink" && base.basis === "100ml" && defaultServing(base).unit === "cup";
+  if (cupDrink && e.category === "dairy" && e.basis === "100ml") {
+    return { keep: { ...p, quantity: MILK_SPLASH_ML, unit: "per_100ml", assumedQuantity: false } };
+  }
+  // Sugar, honey, ghee: a spoonful of its own, and more additions may follow it.
+  const unit = defaultServing(e).unit;
+  if (unit === "tsp" || unit === "tbsp") return { keep: p };
+  return null;
+}
+
 /**
  * "aloo paratha with curd" → aloo paratha + curd, but only when the whole phrase isn't a catalog
- * food and every part is ("coffee with milk" stays one item if it's known as a whole).
+ * food and every part is ("coffee with milk" stays one item if it's known as a whole). The list
+ * is split on "and" before this runs, so "tea with milk and sugar" arrives as "tea with milk" +
+ * "sugar": additions right after a "with" item are read against the same drink.
  */
 export function splitWithParts(comps: FoodComponent[], cat: Catalog): FoodComponent[] {
-  return comps.flatMap((c) => {
-    if (!/\swith\s/i.test(c.phrase)) return splitJoined(c, cat) ?? [c];
-    if (resolveCatalogItem(c, cat)) return [c];
+  const out: FoodComponent[] = [];
+  /** The drink or dish the last "with" phrase was about, while its additions continue. */
+  let base: CatalogEntry | null = null;
+  for (const c of comps) {
+    if (!/\swith\s/i.test(c.phrase)) {
+      const add = base ? asAddition(c, base, cat) : null;
+      if (add) {
+        if (add.keep) out.push(add.keep);
+        continue;
+      }
+      base = null;
+      out.push(...(splitJoined(c, cat) ?? [c]));
+      continue;
+    }
+    base = null;
+    if (resolveCatalogItem(c, cat)) {
+      out.push(c);
+      continue;
+    }
     const [first, ...rest] = c.phrase.split(/\s+with\s+/i);
     const parts = [first!, ...rest].map(parseFoodPhrase);
-    if (parts.some((p) => !p) || parts.some((p) => !resolveCatalogItem(p!, cat))) return [c];
+    if (parts.some((p) => !p) || parts.some((p) => !resolveCatalogItem(p!, cat))) {
+      out.push(c);
+      continue;
+    }
     // "tea with milk", "chai with sugar": the drink already has them. Only an amount of its own
     // ("coffee with 1 glass milk") makes it a second item; otherwise the 6 Nov tea card added a
     // whole glass of milk the person never had.
-    const base = resolveCatalogItem(parts[0]!, cat)!.entry;
-    const kept = parts.filter((p, i) => {
-      if (i === 0 || !p!.assumedQuantity) return true;
-      const e = resolveCatalogItem(p!, cat)!.entry;
-      return !base.contains.includes(e.key);
-    });
-    return kept as FoodComponent[];
-  });
+    base = resolveCatalogItem(parts[0]!, cat)!.entry;
+    out.push(parts[0]!);
+    const additions: CatalogEntry = base;
+    for (const p of parts.slice(1)) {
+      const add = asAddition(p!, additions, cat);
+      if (add?.keep) out.push(add.keep);
+      if (add) continue;
+      out.push(p!);
+      // A food of its own ("chai with biscuit") ends the drink's additions.
+      base = null;
+    }
+  }
+  return out;
 }
 
 export type BreakdownFn = (mealText: string, items: BreakdownRequestItem[], known: string[]) => Promise<Breakdown | null>;
