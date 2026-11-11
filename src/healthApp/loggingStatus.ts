@@ -18,7 +18,7 @@ export type LoggingStatus = {
   lastLogDate: string | null;
   /** Whole days since that date (0 = something logged today). null when they never logged. */
   daysSinceLog: number | null;
-  /** Finished days in a row with nothing logged, ending yesterday (0 when yesterday was logged). */
+  /** Finished days in a row with nothing logged, ending yesterday (0 when yesterday was logged, or they never logged). */
   blankDays: number;
   /** Finished days in the 7-day window with something logged. */
   loggedDays: number;
@@ -54,7 +54,8 @@ export function plannedMealsAccountedFor(planned: Array<{ slot: string; status: 
 export function loggingSummary(today: string, lastLogDate: string | null, days: DayScore[]): LoggingStatus {
   const past = days.filter((d) => d.date < today);
   const daysSinceLog = lastLogDate ? Math.max(0, dayNum(today) - dayNum(lastLogDate)) : null;
-  const blankDays = lastLogDate === null ? past.length : Math.max(0, (daysSinceLog ?? 0) - 1);
+  // Someone who never logged hasn't lapsed: the ladder and the returning phase are for a habit that stopped.
+  const blankDays = lastLogDate === null ? 0 : Math.max(0, (daysSinceLog ?? 0) - 1);
   let streak = 0;
   for (const d of [...past].reverse()) {
     if (d.unlogged || d.partial) break;

@@ -17,7 +17,7 @@ describe("loggingSummary", () => {
   });
 
   it("someone who never logged has no last date", () => {
-    expect(loggingSummary("2026-11-11", null, [day("2026-11-10", { unlogged: true }), day("2026-11-11")])).toMatchObject({ daysSinceLog: null, blankDays: 1 });
+    expect(loggingSummary("2026-11-11", null, [day("2026-11-10", { unlogged: true }), day("2026-11-11")])).toMatchObject({ daysSinceLog: null, blankDays: 0 });
   });
 });
 
