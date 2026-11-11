@@ -227,3 +227,27 @@ export function memoryContextLine(lines: Array<Pick<MemoryLine, "text" | "expire
 export function neutralizeAppTags(text: string): string {
   return text.replace(/<\s*(\/?)\s*context\b[^>]*>/gi, (_m, slash: string) => (slash ? "[end context]" : "[context]"));
 }
+
+/**
+ * Forgets the time-bound lines that restate a rule of this kind ("Vegetarian only for 20 days").
+ * Called when the structured rule ends or is replaced, so the coach never keeps the old copy
+ * (5 Nov audit, finding 12). Lasting lines ("allergic to peanuts") stay. Returns how many went.
+ */
+export async function forgetTimedRuleLines(userProfileId: string, kind: RuleKind, today: string = memoryToday()): Promise<number> {
+  const lines = await loadCoachMemory(userProfileId, today);
+  const ids = timedRuleLines(lines, kind).map((l) => l.id);
+  if (!ids.length) return 0;
+  const stamp = new Date().toISOString();
+  const { error } = await supabase
+    .from("health_coach_memory")
+    .update({ forgotten_at: stamp, updated_at: stamp })
+    .eq("user_profile_id", userProfileId)
+    .in("id", ids);
+  if (error) throw new Error(`coach memory forget failed: ${error.message}`);
+  return ids.length;
+}
+
+/** The lines `forgetTimedRuleLines` removes. Pure. */
+export function timedRuleLines(lines: MemoryLine[], kind: RuleKind): MemoryLine[] {
+  return lines.filter((l) => !!l.expiresOn && ruleKind(l.text) === kind);
+}
