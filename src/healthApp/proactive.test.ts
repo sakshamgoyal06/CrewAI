@@ -58,6 +58,19 @@ describe("dueNudges", () => {
     expect(dueNudges(snap(), ist("14:40"), prefs).map((x) => x.dedupeKey)).toEqual(["meal_reminder:lunch:2026-11-02"]);
   });
 
+  it("with a meal plan: reminds 2 h after the plan's own meal time, only for meals they plan", () => {
+    const plan = { meals: [{ slot: "breakfast", time: "08:00" }, { slot: "dinner", time: "20:00" }], planPushOn: false };
+    expect(dueNudges(snap(), ist("10:05"), prefs, plan).map((x) => x.dedupeKey)).toEqual([]);
+    expect(dueNudges(snap(), ist("14:40"), prefs, plan)).toEqual([]);
+    expect(dueNudges(snap({ meals: [] }), ist("10:05"), prefs, plan).map((x) => x.dedupeKey)).toEqual(["meal_reminder:breakfast:2026-11-02"]);
+    expect(dueNudges(snap(), ist("22:05"), prefs, plan).map((x) => x.kind)).toContain("meal_reminder");
+  });
+
+  it("with the plan's meal-time push on, sends no second reminder", () => {
+    const plan = { meals: [{ slot: "lunch", time: "13:00" }], planPushOn: true };
+    expect(dueNudges(snap(), ist("15:05"), prefs, plan)).toEqual([]);
+  });
+
   it("nudges step pace with the walk needed", () => {
     const n = dueNudges(snap(), ist("17:05"), prefs);
     expect(n[0]).toMatchObject({ kind: "step_pace", body: "2,400 of 8,000. A 55-minute walk closes it." });

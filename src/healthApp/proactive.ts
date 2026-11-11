@@ -36,11 +36,40 @@ const at = (hhmm: string) => {
   return h * 60 + m;
 };
 
+/** Their meal plan's meals and times (plan setup), for meal reminders. */
+export type MealPlanTimes = { meals: Array<{ slot: string; time: string | null }>; planPushOn: boolean };
+
+const SLOT_LABELS: Record<string, string> = { breakfast: "Breakfast", lunch: "Lunch", snack: "Snack", dinner: "Dinner" };
+const DEFAULT_REMINDERS: Array<{ slot: string; time: string }> = [
+  { slot: "breakfast", time: "10:30" },
+  { slot: "lunch", time: "14:30" },
+  { slot: "dinner", time: "21:15" },
+];
+/** A planned meal not logged this long after its time gets a reminder. */
+const AFTER_PLANNED_MIN = 120;
+
+/**
+ * When to remind about an unlogged meal. Without a plan: fixed times for the three main meals.
+ * With one: only the meals they plan, two hours after each meal's time, and none at all while
+ * the plan's own meal-time push is on (that card already asked; a second push is a repeat).
+ */
+export function mealReminderTimes(plan: MealPlanTimes | null): Array<{ slot: string; time: string; label: string }> {
+  const label = (slot: string) => SLOT_LABELS[slot] ?? slot;
+  if (!plan) return DEFAULT_REMINDERS.map((r) => ({ ...r, label: label(r.slot) }));
+  if (plan.planPushOn) return [];
+  return plan.meals.flatMap((m) => {
+    const base = m.time ?? DEFAULT_REMINDERS.find((d) => d.slot === m.slot)?.time;
+    if (!base) return [];
+    const t = Math.min(at(base) + AFTER_PLANNED_MIN, 23 * 60 + 30);
+    return [{ slot: m.slot, time: `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`, label: label(m.slot) }];
+  });
+}
+
 /**
  * The nudges due at `now`, given today's snapshot. Pure. Each has a per-day dedupe key; the
  * sender drops any already sent.
  */
-export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs): Notification[] {
+export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs, plan: MealPlanTimes | null = null): Notification[] {
   const { hhmm, minutes } = localClock(now, s.timezone);
   if (isQuiet(hhmm, prefs)) return [];
   const date = s.today.date;
@@ -71,13 +100,9 @@ export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs
   }
 
   const logged = new Set(s.meals.map((m) => m.slot));
-  for (const [slot, time, label] of [
-    ["breakfast", "10:30", "Breakfast"],
-    ["lunch", "14:30", "Lunch"],
-    ["dinner", "21:15", "Dinner"],
-  ] as const) {
-    if (!logged.has(slot) && inWindow(time)) {
-      out.push({ kind: "meal_reminder", dedupeKey: `meal_reminder:${slot}:${date}`, title: `${label} not logged`, body: "Tell me what you had in a line and I'll estimate it.", url: "/app/#coach" });
+  for (const r of mealReminderTimes(plan)) {
+    if (!logged.has(r.slot) && inWindow(r.time)) {
+      out.push({ kind: "meal_reminder", dedupeKey: `meal_reminder:${r.slot}:${date}`, title: `${r.label} not logged`, body: "Tell me what you had in a line and I'll estimate it.", url: "/app/#coach" });
     }
   }
 
@@ -112,10 +137,18 @@ export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs
   return out.filter((n) => !prefs.off.includes(n.kind));
 }
 
+/** The plan setup's meals and times; null when they have no meal plan set up. */
+async function loadMealPlanTimes(userProfileId: string): Promise<Omit<MealPlanTimes, "planPushOn"> | null> {
+  const { data } = await supabase.from("health_diet_preferences").select("prefs").eq("user_profile_id", userProfileId).maybeSingle();
+  const meals = (data?.prefs as { meals?: Array<{ slot?: unknown; time?: unknown }> } | null)?.meals;
+  if (!Array.isArray(meals) || !meals.length) return null;
+  return { meals: meals.filter((m) => typeof m.slot === "string").map((m) => ({ slot: String(m.slot), time: typeof m.time === "string" ? m.time : null })) };
+}
+
 async function runNudges(userProfileId: string, now: Date): Promise<number> {
-  const [snapshot, prefs] = await Promise.all([buildHealthSnapshot(userProfileId, now), getPrefs(userProfileId)]);
+  const [snapshot, prefs, plan] = await Promise.all([buildHealthSnapshot(userProfileId, now), getPrefs(userProfileId), loadMealPlanTimes(userProfileId)]);
   let sent = 0;
-  for (const n of dueNudges(snapshot, now, prefs)) {
+  for (const n of dueNudges(snapshot, now, prefs, plan ? { ...plan, planPushOn: !prefs.off.includes("plan_meal") } : null)) {
     if ((await sendNotification(userProfileId, n)).sent) sent += 1;
   }
   return sent;
