@@ -106,6 +106,8 @@ export function stubTools(snapshot: HealthSnapshot | null, options: { failing?: 
       case "delete_meal":
       case "delete_activity":
         return { result: { ok: true, ...input }, changed: true };
+      case "set_goal_why":
+        return { result: { ok: true, saved: String(input.why ?? "") }, changed: true };
       case "remember":
         return { result: { ok: true, remembered: String(input.text ?? ""), alreadyKnown: false, lines: 1 } };
       case "respond_to_intervention":

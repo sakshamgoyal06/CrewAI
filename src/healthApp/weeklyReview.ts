@@ -40,7 +40,7 @@ export type WeeklyReview = {
   goal: {
     deadline: string;
     weeksLeft: number;
-    metrics: Array<Pick<MetricProgress, "label" | "unit" | "latest" | "target" | "requiredPerWeek" | "actualPerWeek" | "pace" | "projectedDate" | "progress">>;
+    metrics: Array<Pick<MetricProgress, "label" | "unit" | "latest" | "target" | "requiredPerWeek" | "actualPerWeek" | "pace" | "projectedDate" | "progress" | "checkpoint">>;
     checkinDue: boolean;
   } | null;
   headline: string;
@@ -51,7 +51,39 @@ export type WeeklyReview = {
   activityLine: string | null;
   /** How the meal plan went: meals eaten from it, and the meal that slips most; null without a plan. */
   mealPlanLine?: string | null;
+  /** What the scale is and isn't saying this week (early water drop, normal swings); null when it says nothing new. */
+  scaleLine?: string | null;
 };
+
+/** Days kept out of 7 at which a flat scale is noise, not a plan problem. */
+const NOISE_KEPT_DAYS = 4;
+
+/**
+ * The scale note (12 Nov plan, item 4). Weeks 1–2: a fast early drop is mostly water and gut
+ * content, so the slower weeks after it aren't a stall. Later, a flat or rising week while most
+ * days were kept is day-to-day swing, judged on the 4-week trend. Weight behind pace on few kept
+ * days is a real gap and gets no excuse here. Pure.
+ */
+export function scaleLine(input: {
+  weight: Pick<MetricProgress, "start" | "latest" | "target" | "actualPerWeek" | "pace"> | null;
+  goalStartDate: string | null;
+  weekEnd: string;
+  keptDays: number;
+}): string | null {
+  const w = input.weight;
+  if (!w || w.latest === null || w.start === null || !input.goalStartDate || w.pace === "reached") return null;
+  const losing = w.target < w.start;
+  const weeksIn = Math.floor((Date.parse(`${input.weekEnd}T00:00:00Z`) - Date.parse(`${input.goalStartDate}T00:00:00Z`)) / (7 * 86_400_000)) + 1;
+  const drop = w.start - w.latest;
+  if (losing && weeksIn <= 2 && drop >= w.start * 0.01) {
+    return "Most of the early drop is water and food in the gut, not fat. Expect the scale to slow from week 3. That's normal, not a stall, so keep the same days going.";
+  }
+  const stalled = w.actualPerWeek === null || (losing ? w.actualPerWeek >= -0.1 : w.actualPerWeek <= 0.05);
+  if (weeksIn >= 2 && stalled && input.keptDays >= NOISE_KEPT_DAYS) {
+    return `Weight can swing 0.5 to 1.5 kg day to day with salt, carbs, water and training. With ${input.keptDays} days kept, the change is still happening under that noise. Judge it on the 4-week trend, not one weigh-in.`;
+  }
+  return null;
+}
 
 const avg = (xs: number[]): number | null => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
 
@@ -182,6 +214,7 @@ export function summarizeWeek(
             pace: m.pace,
             projectedDate: m.projectedDate,
             progress: m.progress,
+            checkpoint: m.checkpoint ?? null,
           })),
         }
       : null,
@@ -189,6 +222,12 @@ export function summarizeWeek(
     focus,
     loggingLine: loggingLine(week),
     activityLine: activityLine(stats, week, targets.trainingDays),
+    scaleLine: scaleLine({
+      weight: goal?.metrics.find((m) => m.metric === "weight_kg") ?? null,
+      goalStartDate: goal?.goal.startDate ?? null,
+      weekEnd: stats.to,
+      keptDays: stats.onTrackDays,
+    }),
   };
 }
 

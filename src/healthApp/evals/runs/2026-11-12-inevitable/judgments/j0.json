@@ -1,0 +1,7 @@
+{
+  "why-save": { "must": [true, true], "mustNot": [false, false], "note": "Saved in their words; tied to the 31 Jan date and today's protein.", "tone": 3 },
+  "why-use-miss": { "must": [true, true], "mustNot": [false, false], "note": "Wedding mentioned once, as the reward, not pressure.", "tone": 3 },
+  "why-not-on-log": { "must": [true], "mustNot": [false], "note": "Fixed draft line; no why question." },
+  "checkpoint-far": { "must": [true, true, false], "mustNot": [false, false], "note": "Checkpoint framing is right, but 'keep the same kind of days' is vague: no concrete action named.", "tone": 3 },
+  "kept-steps-short": { "must": [true, true], "mustNot": [false, false], "note": "Leads with the day counting; steps offered as an optional easy win.", "tone": 3 }
+}

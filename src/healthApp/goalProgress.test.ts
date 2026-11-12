@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeGoalProgress, slopePerDay, weighInDue, type BodyCheckin, type HealthGoal } from "./goalProgress.js";
+import { computeGoalProgress, nextCheckpoint, slopePerDay, weighInDue, type BodyCheckin, type HealthGoal } from "./goalProgress.js";
 
 const goal: HealthGoal = {
   id: "g1",
@@ -119,5 +119,31 @@ describe("weighInDue", () => {
     const g: HealthGoal = { id: "g", targets: { weight_kg: 80 }, deadline: "2027-01-01", startedOn: "2026-10-01" } as HealthGoal;
     expect(computeGoalProgress(g, [c("2026-11-03", 84)], "2026-11-08", 0).checkinDue).toBe(true);
     expect(computeGoalProgress(g, [c("2026-11-03", 84)], "2026-11-08").checkinDue).toBe(false);
+  });
+});
+
+describe("nextCheckpoint", () => {
+  const base = { start: 90, target: 80, startDate: "2026-11-01", deadline: "2027-01-24" }; // 84 days → 3 checkpoints
+
+  it("puts the first checkpoint 4 weeks out on the line to the goal", () => {
+    const c = nextCheckpoint({ ...base, latest: 89, today: "2026-11-05" })!;
+    expect(c).toMatchObject({ index: 1, total: 3, date: "2026-11-29", value: 86.7, reached: false, previous: null });
+    expect(c.progress).toBeCloseTo(0.303, 2);
+  });
+
+  it("moves to the next checkpoint once the date passes, and says whether the last one was hit", () => {
+    const c = nextCheckpoint({ ...base, latest: 86.2, today: "2026-12-01" })!;
+    expect(c).toMatchObject({ index: 2, date: "2026-12-27", value: 83.3 });
+    expect(c.previous).toMatchObject({ index: 1, reached: true });
+  });
+
+  it("works for gaining too, and ends at the deadline", () => {
+    const c = nextCheckpoint({ start: 60, target: 64, startDate: "2026-11-01", deadline: "2026-12-10", latest: 61, today: "2026-12-05" })!;
+    expect(c).toMatchObject({ index: 2, total: 2, date: "2026-12-10", value: 64 });
+  });
+
+  it("is null without a start or a real distance", () => {
+    expect(nextCheckpoint({ ...base, start: null, latest: 85, today: "2026-11-05" })).toBeNull();
+    expect(nextCheckpoint({ ...base, start: 80, latest: 80, today: "2026-11-05" })).toBeNull();
   });
 });

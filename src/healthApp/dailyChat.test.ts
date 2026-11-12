@@ -249,6 +249,13 @@ describe("the day's plan", () => {
     expect(buildDayPlan({ snapshot: s, name: null, localHour: 7, intervention: null }).card.motivation).toBe("3 days on track in a row. Keep the chain going today.");
   });
 
+  it("uses their own why after a day that wasn't kept", () => {
+    const s = snap();
+    s.goalWhy = "Sister's wedding in Feb";
+    s.northStar.days = [day("a", true), day("b", false), day("2026-11-04", false)];
+    expect(buildDayPlan({ snapshot: s, name: null, localHour: 7, intervention: null }).card.motivation).toBe("Remember why you started: Sister's wedding in Feb");
+  });
+
   it("never uses guilt words", () => {
     for (const line of MOTIVATION) expect(line, line).not.toMatch(BANNED);
   });

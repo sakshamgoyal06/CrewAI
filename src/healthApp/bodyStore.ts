@@ -152,3 +152,35 @@ export async function loadBodyBasics(userProfileId: string): Promise<BodyBasics>
   const d = (data ?? {}) as Record<string, unknown>;
   return { sex: d.sex ? String(d.sex) : null, birthYear: d.birth_year ? Number(d.birth_year) : null, heightCm: d.height_cm ? Number(d.height_cm) : null };
 }
+
+/** Most a stored "why" can hold. */
+export const GOAL_WHY_MAX = 300;
+
+/**
+ * Why the goal matters, in their words (12 Nov plan, item 11). Kept on the health profile, not the
+ * goal row, so it survives a goal being replaced (resume, plan changes). Null when not asked yet
+ * or when the column isn't there (migration 20261112160000).
+ */
+export async function loadGoalWhy(userProfileId: string): Promise<string | null> {
+  try {
+    const r = await supabase.from("user_health_profile").select("goal_why").eq("user_profile_id", userProfileId).maybeSingle();
+    if (r.error) return null;
+    const v = (r.data as { goal_why?: unknown } | null)?.goal_why;
+    return typeof v === "string" && v.trim() ? v.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One line, trimmed, at most GOAL_WHY_MAX characters; null for empty. Pure. */
+export function cleanGoalWhy(text: unknown): string | null {
+  if (typeof text !== "string") return null;
+  const t = text.replace(/\s+/g, " ").trim();
+  return t ? t.slice(0, GOAL_WHY_MAX) : null;
+}
+
+export async function saveGoalWhy(userProfileId: string, text: unknown): Promise<{ ok: true; why: string | null } | { ok: false; error: string }> {
+  const why = cleanGoalWhy(text);
+  const { error } = await supabase.from("user_health_profile").update({ goal_why: why }).eq("user_profile_id", userProfileId);
+  return error ? { ok: false, error: error.message } : { ok: true, why };
+}

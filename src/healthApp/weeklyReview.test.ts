@@ -5,7 +5,7 @@ vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 import type { HistoryDay } from "./history.js";
 import type { HealthTargets } from "./northStar.js";
 import { summarizeWeek } from "./weeklyReview.js";
-import { loggingLine } from "./weeklyReview.js";
+import { loggingLine, scaleLine } from "./weeklyReview.js";
 
 const targets: HealthTargets = { calorieTarget: 2000, proteinTarget: 140, stepTarget: 8000, trainingDays: [1, 3, 5], minMealSessions: 3 };
 
@@ -77,5 +77,23 @@ describe("logging line (lapsed logging)", () => {
     expect(loggingLine(week(5, 2))).toBe("Logged 5 of 7 days (2 only partly). Next week, aim to log 6 days, even roughly.");
     expect(loggingLine(week(6))).toMatch(/^Logged 6 of 7 days\. Keep logging/);
     expect(loggingLine(week(7))).toBeNull();
+  });
+});
+
+describe("scaleLine", () => {
+  const w = { start: 90, latest: 88.6, target: 80, actualPerWeek: -1.4, pace: "ahead" as const };
+
+  it("explains the early water drop in weeks 1-2", () => {
+    expect(scaleLine({ weight: w, goalStartDate: "2026-11-01", weekEnd: "2026-11-10", keptDays: 5 })).toMatch(/water/);
+  });
+
+  it("calls a flat week with most days kept noise", () => {
+    const flat = { ...w, latest: 88.4, actualPerWeek: 0.1, pace: "behind" as const };
+    expect(scaleLine({ weight: flat, goalStartDate: "2026-10-01", weekEnd: "2026-11-10", keptDays: 5 })).toMatch(/With 5 days kept/);
+  });
+
+  it("gives no excuse when few days were kept", () => {
+    const flat = { ...w, latest: 88.4, actualPerWeek: 0.1, pace: "behind" as const };
+    expect(scaleLine({ weight: flat, goalStartDate: "2026-10-01", weekEnd: "2026-11-10", keptDays: 2 })).toBeNull();
   });
 });

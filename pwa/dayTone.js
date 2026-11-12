@@ -2,7 +2,7 @@
 //
 //   gray   nothing to judge yet: no meal logged and no routine item done (steps alone don't count,
 //          the phone syncs them on its own), or the day has no checks.
-//   green  every check met, or the score is 80% or more with nothing gone wrong so far.
+//   green  every check met, the day kept (its core checks met, northStar.ts), or the score is 80% or more with nothing gone wrong so far.
 //   red    only from 2 pm (or on a past day), and only when calories AND the routine are both off.
 //   yellow everything else: partly there.
 //
@@ -55,7 +55,10 @@ export function dayTone(day, target, nowMin) {
   if (!day.checks?.length || !logged) return { tone: "gray", label: nowMin === null ? "Nothing logged" : "Nothing logged yet" };
   const kcal = caloriesOff(day, target, nowMin);
   const routine = routineOff(day, nowMin);
-  if (day.onTrack || (day.score >= GREEN_SCORE && !kcal && !routine)) return { tone: "green", label: day.onTrack ? "All checks met" : "Going well" };
+  if (day.onTrack || (day.score >= GREEN_SCORE && !kcal && !routine)) {
+    const all = day.checks.every((c) => c.met);
+    return { tone: "green", label: all ? "All checks met" : day.onTrack ? "Day kept" : "Going well" };
+  }
   const late = nowMin === null || nowMin >= RED_FROM_MIN;
   if (late && kcal && routine) return { tone: "red", label: "Calories and routine off" };
   return { tone: "yellow", label: kcal ? "Calories off so far" : routine ? "Routine behind" : "Partly there" };

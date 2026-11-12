@@ -173,7 +173,11 @@ function goalLine(s: HealthSnapshot): string | null {
 function yesterdayLine(s: HealthSnapshot): string | null {
   const y = s.northStar.days.at(-2);
   if (!y || !y.checks.length) return null;
-  if (y.onTrack) return "On track. Every check was done.";
+  if (y.onTrack) {
+    const extra = y.checks.filter((c) => !c.met);
+    if (!extra.length) return "On track. Every check was done.";
+    return `Day kept: ${y.checks.filter((c) => c.core).map((c) => c.label.toLowerCase()).join(" and ")} on target. ${extra.map((c) => c.label).join(" and ")} still open, so that's the easy win today.`;
+  }
   // Nothing logged: say so plainly, and that it can still be filled in (11 Nov rule).
   if (y.unlogged) {
     const n = s.logging?.blankDays ?? 1;
@@ -272,6 +276,9 @@ function motivationFor(date: string, s: HealthSnapshot): string {
     return n;
   })();
   if (streak >= 3) return `${streak} days on track in a row. Keep the chain going today.`;
+  // After a day that wasn't kept, their own reason beats a stock line (12 Nov plan, item 11).
+  const y = s.northStar.days.at(-2);
+  if (s.goalWhy && y && !y.onTrack && !y.paused) return `Remember why you started: ${s.goalWhy}`;
   const day = Math.floor(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
   return MOTIVATION[day % MOTIVATION.length]!;
 }

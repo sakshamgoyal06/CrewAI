@@ -53,6 +53,8 @@ export type HealthTargets = {
   weighInDay?: number | null;
   /** Latest weight, for the fat floor in the carb and fat targets. */
   weightKg?: number | null;
+  /** The active goal's start date (YYYY-MM-DD), for the week-one ramp. */
+  planStartDate?: string | null;
 };
 
 export type CheckId = "meals_logged" | "calories" | "protein" | "macros" | "steps" | "workout" | "routine";
@@ -64,6 +66,8 @@ export type DayCheck = {
   /** 0–1 progress toward the check, for the today view. */
   progress: number;
   detail: string;
+  /** From KEPT_RULE_FROM: this check decides whether the day is kept. The rest add to the score. */
+  core?: boolean;
 };
 
 export type DayScore = {
@@ -103,6 +107,33 @@ export const FOOD_BAND = { kcalLow: 0.85, kcalHigh: 1.05, protein: 0.9, macro: 0
 /** Without plan data, a day with less than this share of the calorie target logged reads as partly logged. */
 export const PARTIAL_KCAL_SHARE = 0.5;
 const FOOD_CHECKS: CheckId[] = ["calories", "protein", "macros"];
+
+/**
+ * The kept-day rule from this date (12 Nov plan, item 2): calories and protein decide whether a
+ * day is kept; carbs and fat, steps and the routine add to the day's score but can't lose it. One
+ * missed walk no longer turns a good eating day into a miss, so small steps show. Earlier days keep
+ * the every-check rule, so past weeks don't change under people.
+ */
+export const KEPT_RULE_FROM = "2026-11-13";
+/**
+ * Week-one ramp (item 10): on the first RAMP_DAYS days of a goal, logging the food and the protein
+ * decide the day. Calories join on day RAMP_DAYS + 1. Days are counted from the goal's start date.
+ */
+export const RAMP_DAYS = 3;
+
+/** 1-based day of the goal, or null without a start date or before it. Pure. */
+export function goalDayNumber(date: string, planStartDate: string | null | undefined): number | null {
+  if (!planStartDate || !/^\d{4}-\d{2}-\d{2}$/.test(planStartDate)) return null;
+  const n = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${planStartDate}T00:00:00Z`)) / 86_400_000) + 1;
+  return Number.isFinite(n) && n >= 1 ? n : null;
+}
+
+/** Which checks decide the day under the kept-day rule. */
+function coreIds(date: string, targets: HealthTargets): CheckId[] {
+  const n = goalDayNumber(date, targets.planStartDate);
+  if (n !== null && n <= RAMP_DAYS) return ["meals_logged", "protein"];
+  return ["meals_logged", "calories", "protein"];
+}
 
 /** Is the food side of this day logged in full, partly, or not at all? Pure. */
 export function foodLogState(day: DayInputs, targets: HealthTargets): "full" | "partial" | "none" {
@@ -244,7 +275,17 @@ export function scoreDay(day: DayInputs, targets: HealthTargets): DayScore {
   const score = Math.round(
     (checks.reduce((s, c) => s + c.progress, 0) / checks.length) * 100,
   );
-  return { date: day.date, checks, onTrack: checks.every((c) => c.met), score, ...(unlogged ? { unlogged: true as const } : {}), ...(partial ? { partial: true as const } : {}) };
+  let onTrack = checks.every((c) => c.met);
+  if (day.date >= KEPT_RULE_FROM) {
+    const core = coreIds(day.date, targets);
+    const decisive = checks.filter((c) => core.includes(c.id));
+    // Without calorie or protein targets there is nothing to decide by, so every check counts.
+    if (decisive.length) {
+      for (const c of decisive) c.core = true;
+      onTrack = decisive.every((c) => c.met);
+    }
+  }
+  return { date: day.date, checks, onTrack, score, ...(unlogged ? { unlogged: true as const } : {}), ...(partial ? { partial: true as const } : {}) };
 }
 
 export type NorthStar = {
