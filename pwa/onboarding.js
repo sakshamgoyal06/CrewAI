@@ -18,7 +18,7 @@ function plusMonths(months) {
 export function runOnboarding(root, { api, el, toast }) {
   const a = {
     sex: null, birthYear: "", heightCm: "", weightKg: "", bodyFatPct: "",
-    goalType: "lose", targetWeightKg: "", targetBodyFatPct: "", deadline: plusMonths(4),
+    goalType: "lose", targetWeightKg: "", targetBodyFatPct: "", deadline: plusMonths(4), goalWhy: "",
     activity: "desk", weighInDay: new Date().getDay(), diet: null, dietNote: "", foodAvoid: [],
     // Starts as an evening gym on Mon/Wed/Fri; they add walks, swims or sports, or change it.
     routine: [{ ...structuredClone(ROUTINE_PRESETS[1].item), label: "" }],
@@ -33,6 +33,7 @@ export function runOnboarding(root, { api, el, toast }) {
     targetBodyFatPct: num(a.targetBodyFatPct), deadline: a.deadline, activity: a.activity,
     trainingDays: routineSummary(a.routine).trainingDays, routine: toPayload(a.routine).items, weighInDay: a.weighInDay, diet: a.diet,
     dietNote: a.diet === "custom" ? a.dietNote.trim() : undefined, foodAvoid: a.foodAvoid,
+    goalWhy: a.goalWhy.trim() || undefined,
   });
 
   const choice = (options, key, onPick) =>
@@ -75,6 +76,9 @@ export function runOnboarding(root, { api, el, toast }) {
         el("label", {}, "By", el("input", { class: "field", type: "date", value: a.deadline, min: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10), oninput: (e) => { a.deadline = e.target.value; } })),
         el("div", { class: "chips-row" }, ...[[3, "3 months"], [6, "6 months"], [12, "1 year"]].map(([m, label]) =>
           el("button", { type: "button", class: "chip", onclick: () => { a.deadline = plusMonths(m); render(); } }, label))),
+        el("label", {}, "Why this, and why by then?",
+          el("textarea", { id: "onb-goal-why", class: "field", rows: "2", maxlength: "300", placeholder: "My sister's wedding in February. I want to feel good in the photos.", oninput: (e) => { a.goalWhy = e.target.value; } }, a.goalWhy || "")),
+        el("p", { class: "hint" }, "Optional. On a hard day I'll remind you of this, in your words."),
       ],
       valid: () => {
         if (!a.deadline) return "Pick a date.";

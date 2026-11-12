@@ -39,7 +39,69 @@ export type MetricProgress = {
   pace: MetricPace;
   /** Date the current trend reaches the target, if it is heading there. */
   projectedDate: string | null;
+  /** The next near target on the straight line from start to goal (12 Nov plan, item 3). */
+  checkpoint?: Checkpoint | null;
 };
+
+/**
+ * A near target, every CHECKPOINT_DAYS from the goal's start, on the straight line from the start
+ * value to the target at the deadline. A 12-week goal feels far; "77.5 kg by 2 Dec" doesn't.
+ */
+export type Checkpoint = {
+  /** 1-based, and how many the goal has (the last one is the deadline). */
+  index: number;
+  total: number;
+  date: string;
+  value: number;
+  /** 0–1 from the previous checkpoint (or the start) to this one, from the latest reading. */
+  progress: number;
+  /** The latest reading already passes this checkpoint. */
+  reached: boolean;
+  /** The checkpoint before this one and whether the latest reading passes it, for "Checkpoint 1 hit". */
+  previous: { index: number; date: string; value: number; reached: boolean } | null;
+};
+
+export const CHECKPOINT_DAYS = 28;
+
+/** The checkpoint to show today: the first one dated today or later. Pure. */
+export function nextCheckpoint(input: {
+  start: number | null;
+  latest: number | null;
+  target: number;
+  startDate: string;
+  deadline: string;
+  today: string;
+}): Checkpoint | null {
+  const { start, latest, target } = input;
+  if (start === null || start === target) return null;
+  const s = dayNumber(input.startDate);
+  const e = dayNumber(input.deadline);
+  if (e <= s) return null;
+  const total = Math.max(1, Math.ceil((e - s) / CHECKPOINT_DAYS));
+  const at = (i: number) => {
+    const day = Math.min(e, s + i * CHECKPOINT_DAYS);
+    return { day, value: round(start + ((target - start) * (day - s)) / (e - s), 1) };
+  };
+  const t = dayNumber(input.today);
+  let index = 1;
+  while (index < total && at(index).day < t) index += 1;
+  const cp = at(index);
+  const from = index === 1 ? start : at(index - 1).value;
+  const dir = Math.sign(target - start);
+  const passes = (v: number) => latest !== null && (dir > 0 ? latest >= v : latest <= v);
+  const span = cp.value - from;
+  const progress = latest === null || span === 0 ? 0 : Math.max(0, Math.min(1, (latest - from) / span));
+  const prev = index > 1 ? at(index - 1) : null;
+  return {
+    index,
+    total,
+    date: dateFromDayNumber(cp.day),
+    value: cp.value,
+    progress: round(progress, 3),
+    reached: passes(cp.value),
+    previous: prev ? { index: index - 1, date: dateFromDayNumber(prev.day), value: prev.value, reached: passes(prev.value) } : null,
+  };
+}
 
 export type GoalProgress = {
   goal: HealthGoal;
@@ -181,6 +243,7 @@ function metricProgress(
     actualPerWeek,
     pace,
     projectedDate,
+    checkpoint: nextCheckpoint({ start, latest, target, startDate: goal.startDate, deadline: goal.deadline, today }),
   };
 }
 

@@ -276,6 +276,9 @@ function motivationFor(date: string, s: HealthSnapshot): string {
     return n;
   })();
   if (streak >= 3) return `${streak} days on track in a row. Keep the chain going today.`;
+  // After a day that wasn't kept, their own reason beats a stock line (12 Nov plan, item 11).
+  const y = s.northStar.days.at(-2);
+  if (s.goalWhy && y && !y.onTrack && !y.paused) return `Remember why you started: ${s.goalWhy}`;
   const day = Math.floor(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
   return MOTIVATION[day % MOTIVATION.length]!;
 }

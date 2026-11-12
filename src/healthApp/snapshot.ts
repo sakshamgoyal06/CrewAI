@@ -13,7 +13,7 @@ import { supabase } from "../tools/clients.js";
 import { trainingActivity, typicalTrainingBurn, type Activity } from "./activities.js";
 import { FALLBACK_WEIGHT_KG, getActivities } from "./activityLog.js";
 import { getActivityRange, type DailyActivity } from "./activityStore.js";
-import { getActiveGoal, getBodyCheckins } from "./bodyStore.js";
+import { getActiveGoal, getBodyCheckins, loadGoalWhy } from "./bodyStore.js";
 import { computeGoalProgress, type BodyCheckin, type GoalProgress } from "./goalProgress.js";
 import { checkTime, DEFAULT_CHECK_DELAY_MIN } from "./gymSlot.js";
 import { listMealsForDate } from "./meals.js";
@@ -97,6 +97,8 @@ export type HealthSnapshot = {
   mealList?: DayMeals;
   /** Logging as a habit: days logged, days since the last log (loggingStatus.ts). */
   logging?: LoggingStatus;
+  /** Why the goal matters, in their words; null when not asked yet (bodyStore.ts loadGoalWhy). */
+  goalWhy?: string | null;
 };
 
 const CHECKIN_HISTORY_DAYS = 180;
@@ -309,10 +311,11 @@ export async function buildHealthSnapshot(
   ]);
   const breaks = await loadBreaks(userProfileId, from).catch(() => []);
   const planPaused = (date: string) => !!planBreakOn(breaks, date);
-  const [mealList, lastLogDate, accounting] = await Promise.all([
+  const [mealList, lastLogDate, accounting, goalWhy] = await Promise.all([
     loadDayMeals(userProfileId, to, to).catch(() => undefined),
     loadLastLogDate(userProfileId, to).catch(() => undefined),
     loadDayAccounting(userProfileId, from, to, new Map([...meals].map(([d, m]) => [d, m.slots]))).catch(() => new Map<string, { skipped: number; loggedInFull?: boolean }>()),
+    loadGoalWhy(userProfileId),
   ]);
   const kg = [...checkins].reverse().find((c) => c.weight_kg != null)?.weight_kg ?? FALLBACK_WEIGHT_KG;
   const typicalBurn = typicalTrainingBurn(hevy.workouts.map((w) => w.durationMin ?? 0), kg);
@@ -414,5 +417,6 @@ export async function buildHealthSnapshot(
     })),
     ...(mealList ? { mealList } : {}),
     ...(lastLogDate !== undefined ? { logging: loggingSummary(to, lastLogDate, days, planPaused) } : {}),
+    goalWhy,
   };
 }

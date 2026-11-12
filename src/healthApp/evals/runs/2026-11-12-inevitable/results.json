@@ -1,0 +1,133 @@
+[
+  {
+    "id": "why-save",
+    "category": "inevitable",
+    "title": "Tells the coach why the goal matters",
+    "message": "honestly I want to lose this before my sister's wedding in Feb, I want to look good in the photos",
+    "routedModel": "claude-haiku-5-5",
+    "reply": "That's a great reason, and I've saved it. Your plan already lands you at 74 kg by 31 Jan, just before February, so keep doing what you're doing and the photos are covered. Today that means getting protein up at lunch and dinner.",
+    "cards": [],
+    "tools": [
+      {
+        "name": "set_goal_why",
+        "input": {
+          "why": "Sister's wedding in Feb; wants to look good in the photos."
+        }
+      }
+    ],
+    "codeReasons": [],
+    "judged": true,
+    "rubricItems": 4,
+    "rubricMet": 4,
+    "failedMust": [],
+    "brokeMustNot": [],
+    "note": "Saved in their words; tied to the 31 Jan date and today's protein.",
+    "tone": 3,
+    "toneNote": null,
+    "pass": true
+  },
+  {
+    "id": "why-use-miss",
+    "category": "inevitable",
+    "title": "A bad day, with their why on file",
+    "message": "ugh yesterday was a mess, ate out twice and skipped the walk",
+    "routedModel": "claude-sonnet-5-5",
+    "reply": "One messy day happens to everyone and changes almost nothing on the scale. Today, just get back to your plan: a protein-heavy lunch and the evening gym. Every normal day from here is a day closer to feeling good in those wedding photos.",
+    "cards": [],
+    "tools": [],
+    "codeReasons": [],
+    "judged": true,
+    "rubricItems": 4,
+    "rubricMet": 4,
+    "failedMust": [],
+    "brokeMustNot": [],
+    "note": "Wedding mentioned once, as the reward, not pressure.",
+    "tone": 3,
+    "toneNote": null,
+    "pass": true
+  },
+  {
+    "id": "why-not-on-log",
+    "category": "inevitable",
+    "title": "A plain meal log doesn't trigger the why question",
+    "message": "had 2 idli and sambar for breakfast",
+    "routedModel": "claude-haiku-5-5",
+    "reply": "That comes to about 520 kcal and 22 g protein for breakfast. Check the card, fix anything that's off, then tap Confirm & log.",
+    "cards": [
+      "meal_draft"
+    ],
+    "tools": [
+      {
+        "name": "draft_meal",
+        "input": {
+          "text": "2 idli and sambar",
+          "items": [
+            {
+              "food": "idli",
+              "quantity": 2,
+              "unit": "piece"
+            },
+            {
+              "food": "sambar",
+              "quantity": 1,
+              "unit": "bowl"
+            }
+          ],
+          "slot": "breakfast"
+        }
+      }
+    ],
+    "codeReasons": [],
+    "judged": true,
+    "rubricItems": 2,
+    "rubricMet": 2,
+    "failedMust": [],
+    "brokeMustNot": [],
+    "note": "Fixed draft line; no why question.",
+    "tone": null,
+    "toneNote": null,
+    "pass": true
+  },
+  {
+    "id": "checkpoint-far",
+    "category": "inevitable",
+    "title": "The goal feels too far",
+    "message": "84 to 74 feels so far away, honestly feels impossible",
+    "routedModel": "claude-sonnet-5-5",
+    "reply": "It does feel far when you look at all 10 kg at once, so don't. You already hit your first checkpoint at 81.8 kg, and the next one is 79.4 kg by 1 Dec, about 2 kg in 4 weeks. Keep the same kind of days you've had this month and that one comes on its own.",
+    "cards": [],
+    "tools": [],
+    "codeReasons": [],
+    "judged": true,
+    "rubricItems": 5,
+    "rubricMet": 4,
+    "failedMust": [
+      "One concrete thing to keep doing"
+    ],
+    "brokeMustNot": [],
+    "note": "Checkpoint framing is right, but 'keep the same kind of days' is vague: no concrete action named.",
+    "tone": 3,
+    "toneNote": null,
+    "pass": false
+  },
+  {
+    "id": "kept-steps-short",
+    "category": "inevitable",
+    "title": "Day kept with steps short",
+    "message": "how did today go?",
+    "routedModel": "claude-sonnet-5-5",
+    "reply": "Today counts. Calories at 1,720 and protein at 116 g are both on target, and you trained. Steps are at 3,100, so a 20-minute walk after dinner is the easy win if you feel like it.",
+    "cards": [],
+    "tools": [],
+    "codeReasons": [],
+    "judged": true,
+    "rubricItems": 4,
+    "rubricMet": 4,
+    "failedMust": [],
+    "brokeMustNot": [],
+    "note": "Leads with the day counting; steps offered as an optional easy win.",
+    "tone": 3,
+    "toneNote": null,
+    "pass": true
+  }
+]

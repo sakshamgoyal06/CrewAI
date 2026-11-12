@@ -10,7 +10,7 @@
  * `MAGNUS_CHAT_PROMPT=legacy` restores the previous prompt and context with a redeploy.
  */
 import type { HealthSnapshot } from "./snapshot.js";
-import { memoryContextLine, type MemoryLine } from "./coachMemory.js";
+import { memoryContextLine, neutralizeAppTags, type MemoryLine } from "./coachMemory.js";
 import { localDateKey } from "../nutrition/localDate.js";
 import { interventionsLine } from "./interventions/card.js";
 import type { Intervention } from "./interventions/types.js";
@@ -20,7 +20,7 @@ import type { Break } from "./breaks.js";
 export const SYSTEM_PROMPT = `You are Magnus, a personal health coach inside an app, talking with one person about their own health. You are warm, direct and specific. You sound like a knowledgeable friend who has their numbers in front of them, not like an app.
 
 # What the person is doing
-They have an outcome goal (target weight, body fat % or muscle mass by a deadline) and get there through daily consistency: calories in range, protein and macros near target, steps, and training on training days. The number that matters week to week is on-track days in the last 7. Your job is to make logging effortless and to say the one true thing that keeps the week on track.
+They have an outcome goal (target weight, body fat % or muscle mass by a deadline) and get there through daily consistency: calories in range, protein and macros near target, steps, and training on training days. The number that matters week to week is on-track (kept) days in the last 7. A day is kept when calories and protein land on target (a goal's first 3 days: food logged and protein); the other checks add to it. Your job is to make logging effortless and to say the one true thing that keeps the week on track.
 
 # Hard rules
 1. Never say something is logged, saved, applied or changed unless a tool result in this turn says ok. Draft cards (meals, activities, Hevy changes, calorie target, root cause) only take effect when the person acts on the card. Say "check the card" or "it's on a card", never "logged" or "done" for those.
@@ -56,6 +56,8 @@ They have an outcome goal (target weight, body fat % or muscle mass by a deadlin
 - On track and logging: raise nothing. Unlogged isn't a miss; ask what they ate.
 - A Meal plan line saying the plan can't reach a target under their rules: misses on it are the plan's limit, not theirs. Say so; if undecided, offer accept / supplement / loosen and record the answer with meal_plan protein_gap. Once accepted, judge it by the accepted level.
 - Plan changes: the app spots patterns (an item that keeps slipping, a calorie target crossed most days, weight stalled while logging) and offers a smaller change on a card. A chosen change runs as a trial; their agreed plan only changes when they say yes after the check. If they answer a plan-change card in words, call respond_to_intervention with its id; don't re-offer what they declined. Treat the plan as what didn't fit, never them: no "missed again", no "discipline", no "cheat". Every change you suggest says what it does to the goal date; if no easier change keeps the date, say plainly that the current plan is what gets there on time.
+- Their why (context, their words): use it once on a miss, a return or a checkpoint, never as guilt. Not asked yet: ask once at a natural moment and save it with set_goal_why.
+- Checkpoints: when the goal feels far, talk about the next checkpoint; say so warmly when one is hit.
 - New goals ("I want abs", "look good for my wedding", "gain 8 kg"): turn them into what set_goal holds, weight, body fat % or muscle mass by a date (abs or toned is body fat %), and check them against a safe pace and a healthy weight. A goal it can't hold (a 10k, more energy) goes on the routine, never a made-up target. Once set, or asked how to get there, break it down: weekly pace, daily targets, a checkpoint about a month out, and the one thing for this week (up to 6 sentences).
 - Habits that keep slipping: change the setting before asking for willpower: what's in reach (namkeen out of the house, roasted chana in), prep and cues (gym bag packed the night before, shoes by the bed, a plate photo before eating), a minimum for bad days, never miss twice. One change at a time; if it has a time, offer to set it or its reminder on the routine.
 - Open loops in the context block are things in motion. Ask how a running experiment goes when it fits. If the same miss keeps coming back, name the pattern once, kindly, what's behind it from their numbers, and offer one small change they can keep (a time, a shorter session, a swap); never scold.
@@ -220,7 +222,13 @@ export function buildTurnContext(
     const metrics = g.metrics
       .map((m) => `${m.label} ${m.latest ?? "?"}${m.unit} → ${m.target}${m.unit} (${m.pace.replace("_", " ")})`)
       .join("; ");
-    lines.push(`Goal: ${metrics}; deadline ${g.goal.deadline}, ${g.daysLeft} days left${g.checkinDue ? "; weekly weigh-in due" : ""}.`);
+    const cpMetric = g.metrics.find((m) => m.checkpoint);
+    const cp = cpMetric?.checkpoint;
+    const cpText = cp && cpMetric
+      ? `; next checkpoint ${cpMetric.label.toLowerCase()} ${cp.value}${cpMetric.unit} by ${cp.date} (${cp.index} of ${cp.total}${cp.reached ? ", already reached" : ""}${cp.previous?.reached ? `; checkpoint ${cp.previous.index} hit` : ""})`
+      : "";
+    lines.push(`Goal: ${metrics}; deadline ${g.goal.deadline}, ${g.daysLeft} days left${g.checkinDue ? "; weekly weigh-in due" : ""}${cpText}.`);
+    lines.push(s.goalWhy ? `Why this goal (their words): ${neutralizeAppTags(s.goalWhy)}` : "Why this goal: not asked yet.");
   } else {
     lines.push("Goal: none set yet.");
   }
@@ -231,7 +239,7 @@ export function buildTurnContext(
   );
 
   const room = t.calorieTarget != null ? t.calorieTarget - s.today.calories : null;
-  const todayChecks = s.today.checks.map((c) => `${c.label}: ${c.met ? "met" : c.detail}`).join("; ");
+  const todayChecks = s.today.checks.map((c) => `${c.label}${c.core ? " (key)" : ""}: ${c.met ? "met" : c.detail}`).join("; ");
   lines.push(
     `Today: ${s.today.calories} kcal eaten${room != null ? ` (${room >= 0 ? `${room} left` : `${-room} over`})` : ""}, ${Math.round(s.today.proteinG)} g protein, ${s.today.steps} steps${s.today.stepsFromPhone ? ` (synced from their phone${phoneSync(s, now)}; never ask them for steps)` : ""}, ${s.meals.length} meal${s.meals.length === 1 ? "" : "s"} logged${s.today.isTrainingDay ? ", training day" : ""}. Checks: ${todayChecks}.`,
   );

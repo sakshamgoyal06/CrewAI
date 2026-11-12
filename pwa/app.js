@@ -563,10 +563,29 @@ function renderGoal(s) {
           el("span", {}, `Trend ${signed(m.actualPerWeek)} ${m.unit}/wk`),
           m.projectedDate ? el("span", {}, `Lands ${dateOf(m.projectedDate).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}`) : null,
         ),
+        checkpointRow(m),
         series.length ? goalChart(series, m, g.goal) : null,
       );
     }),
   );
+}
+
+/** The near target (goalProgress.ts nextCheckpoint): "Checkpoint 1 of 3 · 77.5 kg by 2 Dec". */
+function checkpointRow(m) {
+  const c = m.checkpoint;
+  if (!c || m.pace === "reached") return null;
+  const day = (d) => dateOf(d).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+  const last = c.index === c.total;
+  return el("div", { class: `checkpoint${c.reached ? " reached" : ""}` },
+    el("div", { class: "row-between" },
+      el("span", { class: "checkpoint-name" }, last ? "Final stretch" : `Checkpoint ${c.index} of ${c.total}`),
+      el("span", { class: "checkpoint-val" }, `${fmt(c.value, 1)} ${m.unit} by ${day(c.date)}`)),
+    el("div", { class: "bar" }, el("i", { style: `width:${Math.round(c.progress * 100)}%` })),
+    c.reached
+      ? el("span", { class: "hint" }, "Already there. Keep the same days going.")
+      : c.previous?.reached
+        ? el("span", { class: "hint" }, `Checkpoint ${c.previous.index} hit. Next one is the same steps again.`)
+        : null);
 }
 
 /**
@@ -2378,8 +2397,10 @@ function weeklyReviewView(r) {
       const per = (v) => (v == null ? "–" : `${v > 0 ? "+" : ""}${Math.round(v * 100) / 100} ${m.unit}/wk`);
       out.push(el("div", { class: `review-goal ${m.pace}` },
         el("div", { class: "row-between" }, el("strong", {}, `${m.label}: ${m.latest ?? "–"} → ${m.target} ${m.unit}`), el("span", { class: "tag" }, pace)),
-        el("span", { class: "hint" }, `Needed ${per(m.requiredPerWeek)} · actual ${per(m.actualPerWeek)}${m.projectedDate ? ` · on this trend you get there ${new Date(m.projectedDate).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}` : ""}`)));
+        el("span", { class: "hint" }, `Needed ${per(m.requiredPerWeek)} · actual ${per(m.actualPerWeek)}${m.projectedDate ? ` · on this trend you get there ${new Date(m.projectedDate).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}` : ""}`),
+        checkpointRow(m)));
     }
+    if (r.scaleLine) out.push(el("p", { class: "hint scale-note" }, r.scaleLine));
     if (r.goal.checkinDue) out.push(el("button", { class: "btn block", type: "button", onclick: () => openSheet("checkin") }, "Log this week's weigh-in"));
   }
   out.push(

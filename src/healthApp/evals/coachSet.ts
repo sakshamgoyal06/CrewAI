@@ -32,7 +32,8 @@ export type CoachCategory =
   | "account"
   | "ambiguous"
   | "goal_journey"
-  | "habits";
+  | "habits"
+  | "inevitable";
 
 export type PersonaId =
   | "base"
@@ -53,7 +54,10 @@ export type PersonaId =
   | "no_hevy"
   | "free_plan"
   | "trial"
-  | "lean_no_goal";
+  | "lean_no_goal"
+  | "why_set"
+  | "checkpoint"
+  | "kept_steps_short";
 
 export type CoachCase = Omit<EvalCase, "category" | "memory"> & {
   category: CoachCategory;
@@ -264,6 +268,42 @@ export function persona(id: PersonaId = "base"): Persona {
       return { ...base, loops: { plan: { tier: "free", trialEndsAt: "2026-10-31T18:30:00Z", features: { digest: false, rca: false, photo: true } } } };
     case "trial":
       return { ...base, loops: { plan: { tier: "trial", trialEndsAt: "2026-11-07T10:00:00Z", features: { digest: true, rca: true, photo: true } } } };
+    case "why_set":
+      return { ...base, snapshot: { ...s, goalWhy: "Sister's wedding on 14 Feb; wants to feel good in the photos." } };
+    case "checkpoint": {
+      const m = s.goal!.metrics[0]!;
+      return {
+        ...base,
+        snapshot: {
+          ...s,
+          goal: {
+            ...s.goal!,
+            metrics: [{ ...m, latest: 81.6, checkpoint: { index: 2, total: 5, date: "2026-12-01", value: 79.4, progress: 0.09, reached: false, previous: { index: 1, date: "2026-11-03", value: 81.8, reached: true } } }],
+          },
+        },
+      };
+    }
+    case "kept_steps_short":
+      return {
+        ...base,
+        now: IST("2026-11-03T21:30:00"),
+        snapshot: {
+          ...s,
+          today: {
+            ...s.today,
+            calories: 1720,
+            proteinG: 116,
+            steps: 3100,
+            checks: [
+              { id: "calories" as never, label: "Calories in range", met: true, progress: 1, detail: "1720 / 1800 kcal", core: true },
+              { id: "protein" as never, label: "Protein", met: true, progress: 1, detail: "116 / 120 g", core: true },
+              { id: "steps" as never, label: "Steps", met: false, progress: 0.39, detail: "3,100 / 8,000" },
+              { id: "workout" as never, label: "Workout", met: true, progress: 1, detail: "Logged in Hevy" },
+            ],
+            onTrack: true,
+          },
+        },
+      };
     case "lean_no_goal": {
       const g = fixtureSnapshot({ goal: null, logging: logging({}) });
       return { ...base, details: "male, born 2001, 178 cm, student/day, vegetarian, goal type: gain_muscle", snapshot: { ...g, checkins: [{ localDate: "2026-11-02", weight_kg: 58, body_fat_pct: null, muscle_mass_kg: null }] } };
@@ -1616,6 +1656,66 @@ export const COACH_CASES: CoachCase[] = [
     rubric: {
       must: ["A cue-based tip: a bottle on the desk, a glass with each meal or after each loo break", "Offers to log water"],
       mustNot: ["Specific litres invented as their target"],
+    },
+  },
+
+  // ===================== inevitable: kept days, their why, checkpoints (12 Nov plan) =====================
+  {
+    id: "why-save",
+    category: "inevitable",
+    title: "Tells the coach why the goal matters",
+    message: "honestly I want to lose this before my sister's wedding in Feb, I want to look good in the photos",
+    expect: { tools: [{ name: "set_goal_why", input: (i) => /wedding|sister/i.test(String(i.why)) }], forbid: [SHAME] },
+    rubric: {
+      must: ["Saves their reason in their words", "Ties it to the plan they already have (date or next step), warmly"],
+      mustNot: ["Changes the goal or deadline unasked", "A long lecture"],
+    },
+  },
+  {
+    id: "why-use-miss",
+    category: "inevitable",
+    persona: "why_set",
+    title: "A bad day, with their why on file",
+    message: "ugh yesterday was a mess, ate out twice and skipped the walk",
+    expect: { forbid: [SHAME], notTools: ["set_goal_why"] },
+    rubric: {
+      must: ["Treats one bad day as normal and gives the smallest next step for today", "Uses their reason (the wedding) once, kindly"],
+      mustNot: ["Uses the wedding as pressure or guilt", "Repeats the wedding more than once"],
+    },
+  },
+  {
+    id: "why-not-on-log",
+    category: "inevitable",
+    title: "A plain meal log doesn't trigger the why question",
+    message: "had 2 idli and sambar for breakfast",
+    expect: { tools: [{ name: "draft_meal" }], notTools: ["set_goal_why"], forbid: [/why (this|your) goal|what made you|why does .* matter/i] },
+    rubric: {
+      must: ["Logs the meal"],
+      mustNot: ["Asks why the goal matters"],
+    },
+  },
+  {
+    id: "checkpoint-far",
+    category: "inevitable",
+    persona: "checkpoint",
+    title: "The goal feels too far",
+    message: "84 to 74 feels so far away, honestly feels impossible",
+    expect: { forbid: [SHAME], require: [/79\.4|checkpoint/i] },
+    rubric: {
+      must: ["Points to the next checkpoint (79.4 kg by 1 Dec), not the full distance", "Says checkpoint 1 was already hit (81.8)", "One concrete thing to keep doing"],
+      mustNot: ["Dismisses the feeling", "Lists many tips"],
+    },
+  },
+  {
+    id: "kept-steps-short",
+    category: "inevitable",
+    persona: "kept_steps_short",
+    title: "Day kept with steps short",
+    message: "how did today go?",
+    expect: { forbid: [SHAME, /off track|missed the day|failed/i] },
+    rubric: {
+      must: ["Says the day counts / is kept because calories and protein are on target", "Mentions steps as the easy add (a short walk), not as a miss"],
+      mustNot: ["Calls the day off track", "Leads with the steps shortfall"],
     },
   },
 ];

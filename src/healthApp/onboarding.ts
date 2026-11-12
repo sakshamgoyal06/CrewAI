@@ -18,6 +18,7 @@ import { logger } from "../logger.js";
 import { localDateKey } from "../nutrition/localDate.js";
 import { supabase } from "../tools/clients.js";
 import { logCheckin, setGoal, setTargets, type ActionContext } from "./actions.js";
+import { saveGoalWhy } from "./bodyStore.js";
 import { KCAL_PER_KG } from "./calorieTarget.js";
 import { allowedMeats } from "./dietPlan/compose.js";
 import { postCoachMessage } from "./workoutCheckStore.js";
@@ -81,6 +82,7 @@ export const onboardingInput = z
     targetWeightKg: z.coerce.number().min(30).max(300).optional(),
     targetBodyFatPct: z.coerce.number().min(3).max(60).optional(),
     deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    goalWhy: z.string().trim().max(300).optional().nullable(),
     activity: z.enum(["desk", "light", "active"]),
     trainingDays: z.array(z.coerce.number().int().min(0).max(6)).max(7).default([]),
     gymTime: z
@@ -347,6 +349,11 @@ export async function completeOnboarding(
     startDate: today,
   });
   if (!goal.ok) return { ok: false, error: goal.error ?? "goal_failed" };
+  if (input.goalWhy?.trim()) {
+    // Optional, and its column comes with its own migration: never block sign-up on it.
+    const why = await saveGoalWhy(ctx.userProfileId, input.goalWhy);
+    if (!why.ok) logger.warn({ err: why.error }, "goal why not saved");
+  }
 
   const week = weekFrom(input);
   const targets = await setTargets(ctx, {
