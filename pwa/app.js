@@ -563,11 +563,27 @@ function renderGoal(s) {
           el("span", {}, `Trend ${signed(m.actualPerWeek)} ${m.unit}/wk`),
           m.projectedDate ? el("span", {}, `Lands ${dateOf(m.projectedDate).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}`) : null,
         ),
+        m.metric === "weight_kg" ? energyPaceRow(m) : null,
         checkpointRow(m),
         series.length ? goalChart(series, m, g.goal) : null,
       );
     }),
   );
+}
+
+/**
+ * The daily read (goalProgress.ts energyPace): from the last fully logged days, intake against burn,
+ * where the weight lands. It moves with every logged day; the weigh-in trend above stays the judge.
+ */
+function energyPaceRow(m) {
+  const p = state.history?.energyPace;
+  if (!p || m.pace === "reached") return null;
+  const per = `${p.kgPerWeek > 0 ? "+" : p.kgPerWeek < 0 ? "−" : ""}${fmt(Math.abs(p.kgPerWeek), 2)} kg/wk`;
+  const lands = p.landsOn ? dateOf(p.landsOn).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : null;
+  const late = p.landsOn && state.snapshot?.goal?.goal?.deadline && p.landsOn > state.snapshot.goal.goal.deadline;
+  return el("p", { class: `energy-pace${late ? " late" : ""}` },
+    el("span", { class: "ep-label" }, `Your last ${p.daysUsed} logged days`),
+    lands ? ` point to ${per}, landing ${lands}.` : ` point to ${per}, which isn't heading to your target yet.`);
 }
 
 /** The near target (goalProgress.ts nextCheckpoint): "Checkpoint 1 of 3 · 77.5 kg by 2 Dec". */
@@ -657,6 +673,8 @@ async function loadDays() {
     // Something may have been logged: the 12-week view refetches in the background next time.
     if (state.longHistory) state.longHistory.at = 0;
     renderDays();
+    // The daily "lands on" line lives on the goal card and comes with the days.
+    if (state.snapshot) { try { renderGoal(state.snapshot); } catch { /* the card keeps its last state */ } }
   } catch (err) {
     if (!state.history) $("fuel-body").replaceChildren(el("p", { class: "none" }, "Couldn't load your days. Pull down or reopen to retry."));
   } finally {
@@ -4763,11 +4781,33 @@ const SHEETS = {
       const h = new Date().getHours();
       return h < 11 ? "breakfast" : h < 16 ? "lunch" : h < 18 ? "snack" : "dinner";
     };
-    const review = (draft) => {
+    const review = (draft, saved = null) => {
       b.mode = "review";
       b.draft = draft;
+      b.saved = saved;
       paint();
     };
+    // A usual meal or yesterday's: their own numbers, so it logs on the tap and the card shows
+    // Edit and Undo (12 Nov plan, item 5). A failed save falls back to the card to confirm.
+    const logNow = async (draft) => {
+      try {
+        const r = await api("/meals/confirm", { method: "POST", body: JSON.stringify({ draftId: draft.draftId, text: draft.text.slice(0, 500), slot: draft.slot, source: draft.source, items: draft.items.map((i) => ({ name: i.name, calories: +i.calories || 0, protein_g: +i.protein_g || 0, carbs_g: +i.carbs_g || 0, fat_g: +i.fat_g || 0 })), edited: false, ...(state.mealDate ? { date: state.mealDate } : {}) }) });
+        const done = { state: "logged", calories: r.totals.calories };
+        markDraft(draft.draftId, done);
+        toast(`Logged ${fmt(r.totals.calories)} kcal. Edit or Undo on the card if it's off.`);
+        refresh();
+        review(draft, done);
+      } catch (err) {
+        toast(err.message);
+        review(draft);
+      }
+    };
+    // "Same as yesterday": yesterday's meal at this slot, fetched once per open.
+    if (b.yesterdayFor !== slotNow() && !state.mealDate) {
+      b.yesterdayFor = slotNow();
+      b.yesterday = null;
+      api(`/meals/yesterday?slot=${slotNow()}`).then((r) => { b.yesterday = r.meal || null; if (b.mode !== "review") paint(); }).catch(() => {});
+    }
     // Edit on the card goes back to the builder with the lines as they are now.
     const backToBuild = (cardItems) => {
       if (!b.fromBuilder) b.items = cardItems.map((i) => fixedItem(i, b.draft?.source === "web_research" ? "web" : "own"));
@@ -4779,14 +4819,20 @@ const SHEETS = {
       if (b.mode === "review" && b.draft) {
         // An earlier day with no meal picked: the card asks which one rather than guessing from the clock.
         const d = state.mealDate ? { ...b.draft, date: state.mealDate, ...(state.mealSlot ? {} : { slotUnsure: true }) } : b.draft;
-        holder.replaceChildren(mealDraftCard(d, { onDone: () => setTimeout(closeSheet, 700), onEdit: backToBuild }));
+        holder.replaceChildren(mealDraftCard(d, { saved: b.saved || undefined, onDone: () => setTimeout(closeSheet, 700), onEdit: backToBuild }));
         return;
       }
+      const y = !b.items.length && b.yesterday && !state.mealDate ? b.yesterday : null;
+      const sameAsYesterday = y
+        ? el("button", { class: "usual-row same-yesterday", type: "button", onclick: () => { b.fromBuilder = false; logNow({ draftId: crypto.randomUUID(), text: y.text, slot: slotNow(), source: y.source, items: y.items.map((i) => ({ ...i })), totals: y.totals, estimated: true, servingAssumption: null }); } },
+            el("span", {}, `Same as yesterday's ${slotNow()}`, el("small", { class: "muted" }, ` · ${short(y.text, 40)}`)),
+            el("small", {}, `${fmt(y.totals.calories)} kcal`))
+        : null;
       const usual = !b.items.length && (state.usual || []).length
         ? el("div", { class: "usual-list" },
             el("p", { class: "section-label" }, "Your usual"),
             ...state.usual.slice(0, 3).map((m) =>
-              el("button", { class: "usual-row", type: "button", onclick: () => { b.fromBuilder = false; review({ ...usualDraft(m), slot: state.mealSlot || usualDraft(m).slot }); } },
+              el("button", { class: "usual-row", type: "button", onclick: () => { b.fromBuilder = false; logNow({ ...usualDraft(m), slot: state.mealSlot || usualDraft(m).slot }); } },
                 el("span", {}, m.text),
                 el("small", {}, `${fmt(m.totals.calories)} kcal · ${m.count}×`))))
         : null;
@@ -4802,6 +4848,7 @@ const SHEETS = {
       });
       holder.replaceChildren(...[
         el("h3", { class: "mb-title" }, "Make your meal"),
+        sameAsYesterday,
         usual,
         builder,
         el("div", { class: "mb-alt" },
@@ -4975,6 +5022,11 @@ const SHEETS = {
         saved.push("Goal");
         replan = res?.replan?.changed ? res.replan : null;
       }
+      // The why saves on its own: changing it must never restart the goal (a new goal resets its start date).
+      if (changed(["why"])) {
+        await api("/goal/why", { method: "POST", body: JSON.stringify({ why: String(fd.get("why") ?? "").trim() }) });
+        if (!saved.length) saved.push("Why");
+      }
       if (changed(targetFields)) {
         replan = null; // typed targets win over the recomputed one
         await api("/targets", { method: "POST", body: JSON.stringify({ calorieTarget: num(fd.get("kcal")), proteinTarget: num(fd.get("prot")), stepTarget: num(fd.get("steps")) }) });
@@ -4993,6 +5045,9 @@ const SHEETS = {
         el("label", {}, "Muscle kg", el("input", { class: "field", name: "tmm", type: "number", step: "0.1", inputmode: "decimal", value: g?.targets.muscle_mass_kg ?? null })),
       ),
       el("label", {}, "Deadline", dateButton),
+      el("label", {}, "Why this goal",
+        el("textarea", { id: "settings-goal-why", class: "field", name: "why", rows: "2", maxlength: "300", placeholder: "My sister's wedding in February. I want to feel good in the photos." }, s?.goalWhy ?? "")),
+      el("p", { class: "hint" }, "In your words. On a hard day, Magnus reminds you of this."),
       el("p", { class: "section-label" }, "Daily targets"),
       el("div", { class: "grid3" },
         el("label", {}, "Calories", el("input", { class: "field", name: "kcal", type: "number", inputmode: "numeric", value: t.calorieTarget ?? null })),
@@ -5003,7 +5058,7 @@ const SHEETS = {
     );
     function snapshotForm() {
       const fd = new FormData(form);
-      return Object.fromEntries([...goalFields, ...targetFields].map((n) => [n, fd.get(n) ?? ""]));
+      return Object.fromEntries([...goalFields, ...targetFields, "why"].map((n) => [n, fd.get(n) ?? ""]));
     }
     function sync() {
       const now = snapshotForm();

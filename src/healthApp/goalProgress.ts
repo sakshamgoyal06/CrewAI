@@ -272,3 +272,51 @@ export function computeGoalProgress(
     checkinDue: weighInDue(lastCheckinDate, today, weighInDay),
   };
 }
+
+/** kcal in a kg of body weight change, as calorieTarget.ts uses. */
+const KCAL_PER_KG_BODY = 7700;
+/** Fully logged past days the daily estimate looks back over, and the fewest it needs. */
+export const ENERGY_PACE_DAYS = 14;
+export const ENERGY_PACE_MIN_DAYS = 3;
+
+export type EnergyPace = {
+  /** Weight change a week implied by logged intake against burn (negative = losing). */
+  kgPerWeek: number;
+  /** When the latest weight reaches the target at that pace; null when it's heading the other way or the target is reached. */
+  landsOn: string | null;
+  daysUsed: number;
+  avgIntake: number;
+  avgBurn: number;
+};
+
+/**
+ * The daily "lands on" date (12 Nov plan, item 1). Weigh-ins need about 4 weeks to show a trend, so
+ * today's step can't visibly move the goal date. This estimate does: average (burn - intake) over
+ * the last fully logged days, as kg a week, carried from the latest weight to the target. Only days
+ * logged in full with a known burn count, so a blank or half-logged day never reads as a deficit.
+ * The weigh-in trend stays the judge; this is the day-to-day read. Pure.
+ */
+export function energyPace(input: {
+  days: Array<{ date: string; calories: number; burnKcal: number | null; full: boolean }>;
+  today: string;
+  latestWeightKg: number | null;
+  targetWeightKg: number | null;
+}): EnergyPace | null {
+  const used = input.days
+    .filter((d) => d.date < input.today && d.full && d.burnKcal !== null && d.burnKcal > 0 && d.calories > 0)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, ENERGY_PACE_DAYS);
+  if (used.length < ENERGY_PACE_MIN_DAYS) return null;
+  const avgIntake = used.reduce((t, d) => t + d.calories, 0) / used.length;
+  const avgBurn = used.reduce((t, d) => t + (d.burnKcal ?? 0), 0) / used.length;
+  const kgPerWeek = round(((avgIntake - avgBurn) * 7) / KCAL_PER_KG_BODY);
+  let landsOn: string | null = null;
+  const w = input.latestWeightKg;
+  const t = input.targetWeightKg;
+  if (w !== null && t !== null && w !== t && kgPerWeek !== 0 && Math.sign(t - w) === Math.sign(kgPerWeek)) {
+    const days = Math.ceil((Math.abs(t - w) / Math.abs(kgPerWeek)) * 7);
+    // Past five years it isn't a date anyone can plan around.
+    if (days <= 5 * 365) landsOn = dateFromDayNumber(dayNumber(input.today) + days);
+  }
+  return { kgPerWeek, landsOn, daysUsed: used.length, avgIntake: Math.round(avgIntake), avgBurn: Math.round(avgBurn) };
+}

@@ -26,6 +26,7 @@ import {
   type MealTotals,
 } from "./meals.js";
 import { DAY_MS } from "../util/time.js";
+import { logDraftNow, quickLogOn } from "./quickLog.js";
 
 export const FREQUENT_WINDOW_DAYS = 60;
 export const MIN_REPEATS = 2;
@@ -182,25 +183,48 @@ export function draftFromUsual(meal: UsualMeal, slot: Exclude<AppMealSlot, "unsp
   };
 }
 
-export function repeatReplyText(meal: UsualMeal): string {
-  return `Same as last time: about ${meal.totals.calories} kcal and ${Math.round(meal.totals.protein_g)} g protein. Change the portion on the card if it's different today, then tap Confirm & log.`;
+export function repeatReplyText(meal: UsualMeal, logged = false): string {
+  return logged
+    ? `Logged, same as last time: about ${meal.totals.calories} kcal and ${Math.round(meal.totals.protein_g)} g protein. If the portion was different today, tap Edit on the card, or Undo.`
+    : `Same as last time: about ${meal.totals.calories} kcal and ${Math.round(meal.totals.protein_g)} g protein. Change the portion on the card if it's different today, then tap Confirm & log.`;
 }
 
 export type RepeatResult = ({ ok: true } & ChatReply) | { ok: false; error: "meal_not_found" };
 
-/** Puts a usual meal into the chat as a draft card to confirm. */
+/**
+ * One tap on a usual meal logs it straight away (12 Nov plan, item 5): the numbers are their own
+ * from last time, so a confirm step adds nothing but a chance to drop the log. The card shows it as
+ * logged with Edit and Undo. If the save fails, or quick logging is off, it's a draft to confirm.
+ */
 export async function repeatUsualMeal(
   ctx: ActionContext,
   key: string,
-  deps: { usual?: typeof getUsualMeals; record?: typeof recordChatTurn } = {},
+  deps: { usual?: typeof getUsualMeals; record?: typeof recordChatTurn; log?: typeof logDraftNow } = {},
 ): Promise<RepeatResult> {
   const { slot, today } = context(ctx);
   const { meals } = await (deps.usual ?? getUsualMeals)(ctx, 50);
   const meal = meals.find((m) => m.key === key);
   if (!meal) return { ok: false, error: "meal_not_found" };
   const draft: MealDraft = { ...draftFromUsual(meal, slot), date: today };
-  const text = repeatReplyText(meal);
-  const cards = [{ type: "meal_draft" as const, draft }];
+  const logged = quickLogOn() ? await (deps.log ?? logDraftNow)(ctx, draft) : null;
+  const text = repeatReplyText(meal, !!logged);
+  const cards = [logged ?? { type: "meal_draft" as const, draft }];
   await (deps.record ?? recordChatTurn)(ctx.userProfileId, `Usual: ${meal.text}`, text, cards);
-  return { ok: true, text, cards, changed: false };
+  return { ok: true, text, cards, changed: !!logged };
+}
+
+/** What they ate at `slot` on `date`, as one meal to log again (all of that slot's logs merged); null when nothing. Pure. */
+export function slotMealOn(sessions: LoggedSession[], date: string, slot: Exclude<AppMealSlot, "unspecified">): { text: string; source: EstimateSource; items: MealItem[]; totals: MealTotals } | null {
+  const hits = sessions.filter((x) => x.localDate === date && x.slot === slot && x.items.length).sort((a, b) => a.loggedAt.localeCompare(b.loggedAt));
+  if (!hits.length) return null;
+  const items = hits.flatMap((h) => h.items.map((i) => ({ ...i })));
+  const source = (ESTIMATE_SOURCES as readonly string[]).includes(hits[0]!.source) ? (hits[0]!.source as EstimateSource) : "food_db";
+  return { text: hits.map((h) => h.text).filter(Boolean).join(" + ").slice(0, 500) || items.map((i) => i.name).join(", ").slice(0, 500), source, items, totals: sumItems(items) };
+}
+
+/** "Same as yesterday" for a meal: yesterday's log at that slot, ready to log again; null when there was none. */
+export async function yesterdaysMeal(ctx: ActionContext, slot: Exclude<AppMealSlot, "unspecified">): Promise<ReturnType<typeof slotMealOn>> {
+  const { today } = context(ctx);
+  const yesterday = new Date(Date.parse(`${today}T00:00:00Z`) - DAY_MS).toISOString().slice(0, 10);
+  return slotMealOn(await loadLoggedSessions(ctx.userProfileId, yesterday), yesterday, slot);
 }

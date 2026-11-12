@@ -13,7 +13,7 @@ import type { ActionContext } from "../actions.js";
 import { deleteMeal, saveConfirmedMeal } from "../meals.js";
 import { setQty } from "./adjust.js";
 import { sumTotals, type PlanItem } from "./compose.js";
-import type { PlanSlot } from "./targets.js";
+import { PLAN_SLOTS, type PlanSlot } from "./targets.js";
 
 export const eatInput = z.object({
   /** New quantity per item, in the order the plan lists them; 0 leaves an item out. */
@@ -165,4 +165,26 @@ export async function unlinkDeletedMeal(userProfileId: string, mealSessionId: st
   delete meta.eaten_items;
   delete meta.off_plan;
   await supabase.from("meal_plan_entries").update({ status: "planned", metadata: meta, updated_at: new Date().toISOString() }).eq("id", row.id);
+}
+
+/**
+ * "Rest of today as planned" (12 Nov plan, item 5): every meal still planned for the day, and not
+ * more than an hour ahead of its time, logged as planned in one tap. Eating-out slots and meals
+ * already logged, changed or skipped are left as they are. Each logged meal keeps its own Undo.
+ */
+export async function eatRestAsPlanned(
+  ctx: ActionContext,
+  date: string,
+  deps: { eat?: typeof eatPlanned } = {},
+): Promise<{ ok: true; logged: PlanSlot[]; left: PlanSlot[] } | { ok: false; error: "future_date" }> {
+  const today = localDateKey(ctx.now ?? new Date(), ctx.timezone);
+  if (date > today) return { ok: false, error: "future_date" };
+  const logged: PlanSlot[] = [];
+  const left: PlanSlot[] = [];
+  for (const slot of PLAN_SLOTS) {
+    const r = await (deps.eat ?? eatPlanned)(ctx, date, slot, {});
+    if (r.ok) logged.push(slot);
+    else if (r.error === "too_early") left.push(slot);
+  }
+  return { ok: true, logged, left };
 }

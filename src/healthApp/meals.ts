@@ -63,6 +63,8 @@ export type MealDraft = {
   date?: string;
   /** They didn't say which meal: the card asks before it can be logged (`slot` is only a guess). */
   slotUnsure?: boolean;
+  /** Logged at once, without Confirm & log (quickLog.ts); the card shows Edit and Undo. */
+  autoLogged?: boolean;
   /** With slotUnsure: the plan role for each meal they might pick. */
   planBySlot?: Partial<Record<Exclude<AppMealSlot, "unspecified">, MealPlanRole>>;
 };
