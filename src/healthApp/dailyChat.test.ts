@@ -42,6 +42,8 @@ vi.mock("../tools/clients.js", () => {
 const snapshotMock = vi.hoisted(() => ({ build: vi.fn() }));
 vi.mock("./snapshot.js", () => ({ buildHealthSnapshot: snapshotMock.build }));
 vi.mock("./interventions/store.js", () => ({ listInterventions: vi.fn(async () => []) }));
+const breaksMock = vi.hoisted(() => ({ load: vi.fn(async (): Promise<unknown[]> => []) }));
+vi.mock("./breaks.js", async (orig) => ({ ...(await orig<typeof import("./breaks.js")>()), loadBreaks: breaksMock.load }));
 
 import {
   buildDayPlan,
@@ -277,6 +279,12 @@ describe("ensureDayPlan", () => {
     expect(await ensureDayPlan("u1", "Asia/Kolkata", new Date("2026-11-03T21:00:00Z"))).toBe("too_early"); // 02:30 IST
     db.health = { onboarded_at: "2026-11-04T00:20:00Z" };
     expect(await ensureDayPlan("u1", "Asia/Kolkata", morning)).toBe("not_ready");
+    expect(db.messages).toHaveLength(0);
+  });
+
+  it("posts no day plan during a whole-plan pause", async () => {
+    breaksMock.load.mockResolvedValueOnce([{ id: "b1", scope: "plan", itemId: null, reason: "travel", note: null, startDate: "2026-11-03", endDate: "2026-11-09", endedAt: null }]);
+    expect(await ensureDayPlan("u1", "Asia/Kolkata", morning)).toBe("paused");
     expect(db.messages).toHaveLength(0);
   });
 
