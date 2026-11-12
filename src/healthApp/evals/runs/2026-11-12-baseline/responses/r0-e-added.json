@@ -1,0 +1,4 @@
+{
+"pause-gym-today": {"0": {"text": "Yes, today's a training day and Gym is at 6:30. Your week is at 2 of 7 on track, so a session tonight would help; even 45 minutes of your Push day counts."}},
+"coach-rca-card-dinner": {"0": {"tools": [{"name": "root_cause_analysis", "input": {}}]}, "1": {"text": "Protein falls short mostly on days without a planned dinner: it missed on 4 of the last 7 days, and on 3 of those dinner was logged late. The card has a 7-day experiment: a bowl of dal or sprouts with every dinner."}}
+}

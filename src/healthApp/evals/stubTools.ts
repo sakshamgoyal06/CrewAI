@@ -8,12 +8,21 @@ import type { HealthSnapshot } from "../snapshot.js";
 
 export type ToolCall = { name: string; input: Record<string, unknown> };
 
-export function stubTools(snapshot: HealthSnapshot | null, options: { failing?: Set<string> } = {}) {
+/** A case's own result for a tool: a fixed result, or one built from the call's input. */
+export type ToolOverride = ToolOutcome["result"] | ((input: Record<string, unknown>) => ToolOutcome["result"]);
+
+export function stubTools(snapshot: HealthSnapshot | null, options: { failing?: Set<string>; overrides?: Record<string, ToolOverride> } = {}) {
   const calls: ToolCall[] = [];
   const tool = async (name: string, rawInput: unknown): Promise<ToolOutcome> => {
     const input = (rawInput ?? {}) as Record<string, unknown>;
     calls.push({ name, input });
     if (options.failing?.has(name)) throw new Error(`fetch failed: ${name} (eval failure injection)`);
+    const override = options.overrides?.[name];
+    if (override !== undefined) {
+      const result = typeof override === "function" ? override(input) : override;
+      const r = result as Record<string, unknown> | null;
+      return { result, changed: !!r && r.ok === true };
+    }
     switch (name) {
       case "get_status":
         return { result: snapshot ? statusForModel(snapshot) : { ok: false, error: "no_data" } };
@@ -111,6 +120,44 @@ export function stubTools(snapshot: HealthSnapshot | null, options: { failing?: 
         };
       case "decline_off_topic":
         return { result: { ok: true, declinedToday: 1 } };
+      case "log_water":
+        return { result: { ok: true, ml: input.ml, todayMl: Number(input.ml) || 0 }, changed: true };
+      case "plan_eating_out": {
+        const card = { type: "eating_out", meal: input.meal ?? "dinner", keepKcal: 750, beforeKcal: 450, proteinFirstG: 40 } as unknown as ChatCard;
+        return { result: { shownToUserAsCard: true, meal: input.meal ?? "dinner", keepForMealKcal: 750, leftBeforeItKcal: 450, proteinToGetFirstG: 40, rules: ["dal or paneer tikka first", "one roti or half rice, not both", "skip the sweet or share it"] }, card };
+      }
+      case "swap_routine_item":
+        return { result: { ok: true, item: input.item, insteadActivity: input.activity ?? "walking", until: input.until ?? null }, changed: true };
+      case "pause": {
+        const action = String(input.action ?? "");
+        if (action === "list") return { result: { ok: true, pauses: snapshot?.breaks ?? [] } };
+        if (action === "end") return { result: { ok: true, ended: true, resumeScreen: true } };
+        if (!input.reason) return { result: { ok: false, error: "ask_reason_first" } };
+        if (action === "preview")
+          return { result: { ok: true, maxDays: input.reason === "sick" || input.reason === "injured" ? 14 : 10, alternative: input.reason === "travel" ? { kind: "swap", text: "15-min hotel-room workout + daily walk instead of the gym" } : null, minimums: ["log one line a day", "weigh in once a week"] } };
+        if (action === "start") {
+          if (!input.days && !input.until) return { result: { ok: false, error: "ask_length" } };
+          return { result: { ok: true, scope: input.scope, until: input.until ?? "2026-11-07", reply: "Paused. Targets and checks stop until then; your goal date moves by the paused days." }, changed: true };
+        }
+        if (action === "end") return { result: { ok: true, ended: true } };
+        return { result: { ok: false, error: "unknown_action" } };
+      }
+      case "meal_plan": {
+        const action = String(input.action ?? "");
+        const day = [
+          { slot: "breakfast", time: "08:30", status: "eaten", meal: "Poha, chai", kcal: 610, proteinG: 28 },
+          { slot: "lunch", time: "13:30", status: "planned", meal: "2 roti, dal, bhindi sabzi, curd", kcal: 560, proteinG: 24 },
+          { slot: "snack", time: "17:00", status: "planned", meal: "Roasted chana, buttermilk", kcal: 220, proteinG: 12 },
+          { slot: "dinner", time: "20:30", status: "planned", meal: "Paneer bhurji, 2 roti, salad", kcal: 520, proteinG: 30 },
+        ];
+        if (action === "view") return { result: { ok: true, date: input.date ?? "2026-11-03", meals: day } };
+        if (action === "ate" || action === "skip" || action === "ate_rest" || action === "day_complete") return { result: { ok: true, action, date: input.date ?? "2026-11-03", slot: input.slot ?? null, logged: action !== "skip" }, changed: true };
+        if (action === "diet_period" || action === "avoid" || action === "unavoid")
+          return { result: { ok: true, action, replaced: ["Dinner: Paneer bhurji → Soya chunk pulao"], violations: 0, days: day.length ? 3 : 0 }, changed: true };
+        if (action === "protein_gap") return { result: { ok: true, choice: input.choice }, changed: true };
+        if (action === "rebuild") return { result: { ok: true, rebuilt: true }, changed: true };
+        return { result: { ok: true, action }, changed: true };
+      }
       default:
         return { result: { ok: false, error: `unknown tool ${name}` } };
     }
