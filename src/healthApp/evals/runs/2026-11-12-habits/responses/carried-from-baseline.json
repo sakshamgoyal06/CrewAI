@@ -1,0 +1,1101 @@
+{
+ "log-thali": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "a full gujarati thali at a restaurant",
+      "items": [
+       {
+        "food": "gujarati thali",
+        "quantity": 1,
+        "unit": "plate"
+       }
+      ],
+      "slot": "lunch"
+     }
+    }
+   ]
+  }
+ },
+ "log-chai-biscuits": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "2 cups chai with 4 marie biscuits",
+      "items": [
+       {
+        "food": "chai",
+        "quantity": 2,
+        "unit": "cup"
+       },
+       {
+        "food": "marie biscuit",
+        "quantity": 4,
+        "unit": "piece"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "log-street-food": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "2 plates pani puri and a vada pav",
+      "items": [
+       {
+        "food": "pani puri",
+        "quantity": 2,
+        "unit": "plate"
+       },
+       {
+        "food": "vada pav",
+        "quantity": 1,
+        "unit": "piece"
+       }
+      ],
+      "slot": "snack"
+     }
+    }
+   ]
+  }
+ },
+ "log-tiffin": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "rajma, jeera rice, 1 roti and salad",
+      "items": [
+       {
+        "food": "rajma"
+       },
+       {
+        "food": "jeera rice"
+       },
+       {
+        "food": "roti",
+        "quantity": 1,
+        "unit": "piece"
+       },
+       {
+        "food": "salad"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "log-ghee-kept": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "dal tadka with 2 spoons of ghee and 2 roti",
+      "items": [
+       {
+        "food": "dal tadka",
+        "notes": "with 2 spoons of ghee"
+       },
+       {
+        "food": "ghee",
+        "quantity": 2,
+        "unit": "tbsp"
+       },
+       {
+        "food": "roti",
+        "quantity": 2,
+        "unit": "piece"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "log-diwali-sweets": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "3 kaju katli and 2 gulab jamun",
+      "items": [
+       {
+        "food": "kaju katli",
+        "quantity": 3,
+        "unit": "piece"
+       },
+       {
+        "food": "gulab jamun",
+        "quantity": 2,
+        "unit": "piece"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "log-black-coffee": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "black coffee, no sugar",
+      "items": [
+       {
+        "food": "black coffee",
+        "quantity": 1,
+        "unit": "cup",
+        "notes": "no sugar"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "log-dosa-no-portion": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "dosa",
+      "items": [
+       {
+        "food": "dosa"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "log-no-slot-late": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "2 roti and dal",
+      "items": [
+       {
+        "food": "roti",
+        "quantity": 2,
+        "unit": "piece"
+       },
+       {
+        "food": "dal"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "log-yesterday-dinner": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "3 aloo paratha with curd",
+      "items": [
+       {
+        "food": "aloo paratha",
+        "quantity": 3,
+        "unit": "piece"
+       },
+       {
+        "food": "curd"
+       }
+      ],
+      "slot": "dinner",
+      "date": "2026-11-02"
+     }
+    }
+   ]
+  }
+ },
+ "log-extra-banana": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "a banana",
+      "items": [
+       {
+        "food": "banana",
+        "quantity": 1,
+        "unit": "piece"
+       }
+      ],
+      "slot": "breakfast",
+      "extra": true
+     }
+    }
+   ]
+  }
+ },
+ "log-planned-lunch": {
+  "0": {
+   "tools": [
+    {
+     "name": "meal_plan",
+     "input": {
+      "action": "ate",
+      "slot": "lunch"
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Logged your planned lunch: 2 roti, dal, bhindi sabzi and curd."
+  }
+ },
+ "log-skipped-dinner": {
+  "0": {
+   "tools": [
+    {
+     "name": "meal_plan",
+     "input": {
+      "action": "skip",
+      "slot": "dinner"
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Noted dinner as skipped. You'd already hit 124 g protein and 1710 kcal today, so nothing to make up."
+  }
+ },
+ "log-water-glasses": {
+  "0": {
+   "tools": [
+    {
+     "name": "log_water",
+     "input": {
+      "ml": 750
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Logged 750 ml of water."
+  }
+ },
+ "log-scale-bodyfat": {
+  "0": {
+   "tools": [
+    {
+     "name": "log_body_checkin",
+     "input": {
+      "weightKg": 81.4,
+      "bodyFatPct": 22.1
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Saved 81.4 kg and 22.1% body fat, down from 81.9 kg and 22.8% last time. Smart-scale fat readings swing with hydration, so the trend over a few weeks is what to watch."
+  }
+ },
+ "log-three-things": {
+  "0": {
+   "tools": [
+    {
+     "name": "log_body_checkin",
+     "input": {
+      "weightKg": 82.0
+     }
+    },
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "2 besan chilla with green chutney",
+      "items": [
+       {
+        "food": "besan chilla",
+        "quantity": 2,
+        "unit": "piece"
+       },
+       {
+        "food": "green chutney"
+       }
+      ],
+      "slot": "breakfast"
+     }
+    },
+    {
+     "name": "log_water",
+     "input": {
+      "ml": 1000
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Saved 82.0 kg and 1000 ml of water. The chilla breakfast is on a card, check it and confirm."
+  }
+ },
+ "hi-paratha-lassi": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "2 aloo paratha aur ek glass lassi",
+      "items": [
+       {
+        "food": "aloo paratha",
+        "quantity": 2,
+        "unit": "piece"
+       },
+       {
+        "food": "lassi",
+        "quantity": 1,
+        "unit": "glass"
+       }
+      ],
+      "slot": "breakfast"
+     }
+    }
+   ]
+  }
+ },
+ "hi-chai-no-sugar": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "3 cup chai bina cheeni ke",
+      "items": [
+       {
+        "food": "chai",
+        "quantity": 3,
+        "unit": "cup",
+        "notes": "no sugar"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "hi-weight": {
+  "0": {
+   "tools": [
+    {
+     "name": "log_body_checkin",
+     "input": {
+      "weightKg": 81.6
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "81.6 kg save ho gaya, pichle 81.9 se thoda kam."
+  }
+ },
+ "hi-gym-skipped-tired": {
+  "0": {
+   "tools": [
+    {
+     "name": "answer_workout_check",
+     "input": {
+      "date": "2026-11-02",
+      "answer": "skipped",
+      "reason": "bahut thak gaya tha office se"
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Theek hai, note kar liya. Thakaan mein ek din chhodna chalta hai; Wednesday ko wapas push karte hain."
+  }
+ },
+ "hi-veg-protein": {
+  "0": {
+   "text": "Aaj abhi 28 g hua hai 120 mein se, toh baaki do meals mein protein anchor rakho. Ek katori soya chunks ki sabzi (lagbhag 25 g) ya 100 g paneer (lagbhag 18 g) lunch ya dinner mein daalo, aur saath mein ek katori dahi (8 to 10 g). Agar roz mushkil lage toh ek scoop whey (24 g) sabse aasaan add-on hai."
+  }
+ },
+ "hi-weight-kyu-nahi": {
+  "0": {
+   "tools": [
+    {
+     "name": "root_cause_analysis",
+     "input": {}
+    }
+   ]
+  },
+  "1": {
+   "text": "Weight gir raha hai actually: 84.2 se 81.9 kg, lagbhag 0.55 kg har hafte, goal ke pace par. Jo hafte mein slip ho raha hai woh protein hai, khaaskar jin dinon dinner plan nahi hota. Card par 7 din ka experiment hai: har dinner mein ek katori dal ya sprouts."
+  }
+ },
+ "hi-dinner-ideas": {
+  "0": {
+   "text": "Abhi 1190 kcal bache hain aur protein 28 g hai, toh dinner protein-heavy rakho. Paneer bhurji (100 g paneer) ke saath 2 roti aur salad lagbhag 550 kcal aur 30 g protein deta hai, ya soya chunk pulao ke saath raita. Dopahar ka khana bhi abhi log hona baaki hai, uske hisaab se portion adjust kar lena."
+  }
+ },
+ "hi-steps-yesterday": {
+  "0": {
+   "tools": [
+    {
+     "name": "log_steps",
+     "input": {
+      "steps": 12000,
+      "date": "2026-11-02"
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Kal ke liye 12,000 steps save ho gaye."
+  }
+ },
+ "food-roti-calories": {
+  "0": {
+   "text": "A plain medium roti (about 30 to 35 g of atta) is roughly 80 to 100 kcal and 3 g protein. A thin phulka is closer to 70, and a ghee-brushed one or a bigger restaurant roti can be 120 to 150. If you tell me how many you had, I'll put it on a card."
+  }
+ },
+ "food-rice-vs-roti": {
+  "0": {
+   "text": "No need to drop rice: a katori of cooked rice and two rotis land in about the same calories, roughly 150 to 200 kcal. What moves fat loss is the total for the day, so keep rice to one katori and fill the rest of the plate with dal, sabzi and curd. Your weight is coming down on pace with rice in the picture, from 84.2 to 81.9 kg."
+  }
+ },
+ "food-dal-protein": {
+  "0": {
+   "text": "A katori of cooked dal gives about 7 to 9 g protein, along with a fair amount of carbs, so it helps but won't carry 120 g on its own. Pair it with a denser source at each meal: 100 g paneer or tofu, a katori of soya chunks, or a bowl of curd. Today you're at 28 g, so two meals like that would close most of the gap."
+  }
+ },
+ "food-paneer-100g": {
+  "0": {
+   "text": "100 g of paneer has about 18 to 20 g protein, but also around 20 g fat and 260 to 300 kcal. Low-fat paneer or tofu gives similar protein for fewer calories if you want more room."
+  }
+ },
+ "food-ghee": {
+  "0": {
+   "text": "Ghee doesn't burn fat; it's pure fat at about 45 kcal per teaspoon, so it adds up quickly. A teaspoon or two a day on dal or roti is fine and fits your 1800 kcal. Just measure it rather than pouring."
+  }
+ },
+ "food-jaggery": {
+  "0": {
+   "text": "Not really for weight: jaggery has about the same calories as sugar, around 20 kcal a teaspoon, and the extra iron or minerals are tiny at that amount. If the chai is a daily habit, cutting the sweetener down gradually helps more than switching it."
+  }
+ },
+ "food-jeera-water": {
+  "0": {
+   "text": "No drink burns belly fat, and you can't target fat loss to one area. Jeera or lemon water is a fine low-calorie start to the morning and helps you drink more water, but the fat comes off through the daily calorie gap you're already running."
+  }
+ },
+ "food-poha-peanut": {
+  "0": {
+   "text": "Add protein to it: a handful of boiled moong sprouts mixed in, or a bowl of curd on the side, takes it from about 6 g to 15 g protein. Lots of veggies (peas, onion, capsicum) add volume for very few calories."
+  }
+ },
+ "food-fruit-night": {
+  "0": {
+   "text": "No, timing matters far less than the day's total: 1800 kcal eaten by 8 pm or by 10 pm does the same thing to your weight. Late eating can be a problem only when it turns into extra snacking, so fruit after dinner is fine if it fits."
+  }
+ },
+ "food-cheap-veg-protein": {
+  "0": {
+   "text": "Soya chunks are the cheapest by far: about 52 g protein per 100 g dry for a few rupees. After that, roasted chana (about 20 g per 100 g), dal and rajma, curd and milk. A katori of soya sabzi plus a glass of milk a day already adds about 35 g."
+  }
+ },
+ "food-makhana": {
+  "0": {
+   "text": "Makhana are a good light snack, but not a high-protein one: a bowl of 30 g gives about 3 g protein and 100 kcal. For a protein snack, roasted chana or a bowl of curd does more."
+  }
+ },
+ "food-jain-protein": {
+  "0": {
+   "text": "Moong dal chilla stuffed with paneer and capsicum, with a bowl of curd, gives about 30 g protein for 450 kcal. Or tofu or paneer tikka with a bowl of moong dal and one roti, about 35 g for 500 kcal, all without onion, garlic or roots."
+  }
+ },
+ "plan-team-dinner": {
+  "0": {
+   "tools": [
+    {
+     "name": "plan_eating_out",
+     "input": {
+      "meal": "dinner"
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "The card has your numbers for tonight. At a Punjabi place, start with paneer tikka or dal and a salad, then one tandoori roti; skip the naan and butter-heavy gravies if you can."
+  }
+ },
+ "plan-wedding-tomorrow": {
+  "0": {
+   "text": "One wedding dinner won't undo your week, so don't skip meals before it. Eat your normal breakfast and lunch with good protein, then at the wedding start with paneer tikka or dal, take one plate, and pick the one sweet you really want. Back to your usual plan the next morning, no compensating."
+  }
+ },
+ "plan-navratri": {
+  "0": {
+   "tools": [
+    {
+     "name": "meal_plan",
+     "input": {
+      "action": "diet_period",
+      "foods": [
+       "wheat",
+       "rice",
+       "dal",
+       "onion",
+       "garlic"
+      ],
+      "days": 10
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Done: for the next 10 days your plan leaves out wheat, rice, dal, onion and garlic, and dinner switched from paneer bhurji to soya chunk pulao. Keep protein up with dahi and paneer at each meal, and keep sabudana to one katori since it's mostly starch."
+  }
+ },
+ "plan-diwali-week": {
+  "0": {
+   "text": "Keep it simple: one or two pieces of mithai a day, the ones you actually love, and say yes to the rest only as a taste. Keep your protein and steps going, and expect the scale to jump a bit after the week from salt and sugar; that's water and it settles in a few days."
+  }
+ },
+ "plan-tomorrow": {
+  "0": {
+   "tools": [
+    {
+     "name": "meal_plan",
+     "input": {
+      "action": "view",
+      "date": "2026-11-04"
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Tomorrow: poha and chai for breakfast, 2 roti with dal, bhindi and curd for lunch, roasted chana and buttermilk at 5, and paneer bhurji with 2 roti and salad for dinner. That's about 1910 kcal and 94 g protein."
+  }
+ },
+ "plan-veg-30-days": {
+  "0": {
+   "tools": [
+    {
+     "name": "meal_plan",
+     "input": {
+      "action": "diet_period",
+      "diet": "vegetarian",
+      "days": 30
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Your plan is vegetarian for the next 30 days: dinner switched from paneer bhurji to soya chunk pulao, and nothing in the plan breaks the rule."
+  }
+ },
+ "plan-mushroom-allergy": {
+  "0": {
+   "tools": [
+    {
+     "name": "meal_plan",
+     "input": {
+      "action": "avoid",
+      "foods": [
+       "mushroom"
+      ]
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Mushrooms are on your avoid list now, so they won't show up in any meal. Dinner was swapped from paneer bhurji to soya chunk pulao, and nothing left in the plan has mushrooms."
+  }
+ },
+ "plan-diet-chart": {
+  "0": {
+   "tools": [
+    {
+     "name": "meal_plan",
+     "input": {
+      "action": "view"
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Your meal plan already does this: it's built for 1800 kcal and vegetarian, no peanuts, and changes daily on the Meals tab. Today is poha and chai, then 2 roti with dal, bhindi and curd, roasted chana and buttermilk, and paneer bhurji with 2 roti for dinner. If you want different options for any meal, tell me which one and I'll swap it."
+  }
+ },
+ "plan-moms-place": {
+  "0": {
+   "text": "Eat what she makes, just shift the plate: one or two rotis, an extra katori of dal or sabzi, and curd on the side. Log it roughly as you go, it doesn't need to be perfect. A weekend at home won't move the goal; walking after meals helps too."
+  }
+ },
+ "plan-bored-dal-roti": {
+  "0": {
+   "tools": [
+    {
+     "name": "meal_plan",
+     "input": {
+      "action": "view",
+      "slot": "dinner"
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Let's change it up. For dinner you could swap to soya chunk pulao with raita, or a besan chilla with paneer stuffing, both similar protein to the paneer bhurji. Which one sounds good?"
+  }
+ },
+ "gap-unsafe-wedding": {
+  "0": {
+   "text": "10 kg in a month isn't safe; it would be mostly water and muscle and would bounce back. I suggest at most about 0.8 kg a week for you, so roughly 3 to 3.5 kg by the wedding, which will already show in photos. Want me to set a goal for the wedding date at that pace, with 74 kg still the longer target?"
+  }
+ },
+ "gap-recomp": {
+  "0": {
+   "text": "Yes, especially if you're fairly new to lifting: eating near your 120 g protein and getting stronger on your three gym days lets you build muscle while the calorie gap takes off fat. The scale moves slower that way, so your body fat readings (24% down to 22.8%) are the better sign it's working."
+  }
+ },
+ "gap-overnight-gain": {
+  "0": {
+   "text": "That's water, not fat: a salty, carb-heavy wedding meal holds 1 to 2 kg of water for a couple of days, and 1.5 kg of fat would take over 11,000 extra kcal. Go back to your normal meals and steps, and it'll settle in two or three days. Your weekly weigh-in is what counts."
+  }
+ },
+ "gap-when-reach": {
+  "0": {
+   "text": "At your current pace of 0.55 kg a week you'd reach 74 kg around 8 February 2027, about a week after your 31 January deadline. You need 0.62 kg a week to hit it on time, so a slightly tighter week or two now would close that."
+  }
+ },
+ "gap-deadline-passed": {
+  "0": {
+   "text": "Your deadline of 31 October has passed, and you're at 81.9 kg against 74, down 2.3 kg from 84.2. Do you want to set a new deadline for 74 kg, or pick a new target?"
+  }
+ },
+ "gap-no-goal": {
+  "0": {
+   "text": "Happy to. What weight are you aiming for, and by when?"
+  }
+ },
+ "gap-protein-300": {
+  "0": {
+   "text": "300 g is far more than you need: about 1.6 to 2 g per kg, so 130 to 165 g, covers muscle gain even while cutting, and you're already short of 120 most days. I'd keep 120, or go to 140 if you want a stretch. Want me to set 140?"
+  }
+ },
+ "pause-goa-trip": {
+  "0": {
+   "tools": [
+    {
+     "name": "pause",
+     "input": {
+      "action": "preview",
+      "scope": "plan",
+      "reason": "travel"
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Before pausing everything, one option: keep a 15-minute hotel-room workout and a daily walk in place of the gym while you're in Goa, so the week still counts. Would that work, or do you want a full pause for the 5 days?"
+  }
+ },
+ "pause-no-reason": {
+  "0": {
+   "text": "That's okay, everyone needs one sometimes. What's making you want the break: travel, feeling unwell, work getting busy, or just tired of tracking?"
+  }
+ },
+ "pause-dengue": {
+  "0": {
+   "tools": [
+    {
+     "name": "pause",
+     "input": {
+      "action": "preview",
+      "scope": "plan",
+      "reason": "sick"
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Get well soon, rest is the only job right now. I can pause your whole plan for 2 weeks so nothing counts against you; just logging a line a day if you feel like it, no pressure. Should I start the pause until the 16th?"
+  }
+ },
+ "pause-gym-renovation": {
+  "0": {
+   "tools": [
+    {
+     "name": "swap_routine_item",
+     "input": {
+      "item": "gym",
+      "activity": "home workout",
+      "durationMin": 45,
+      "until": "2026-11-25",
+      "reason": "gym closed for renovation"
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Gym is swapped for a 45-minute home workout until 25 November, with the same reminder, and it switches back on its own after that."
+  }
+ },
+ "unlog-returning-hey": {
+  "0": {
+   "text": "Hey, good to see you. It's been a few days since your last log, what got in the way?"
+  }
+ },
+ "unlog-back-today": {
+  "0": {
+   "text": "Welcome back! You had a strong run from 24 to 29 October, so let's pick it up from today. Breakfast is already in, so next up is lunch and the gym at 6:30."
+  }
+ },
+ "unlog-partial-day": {
+  "0": {
+   "text": "So far 28 of 120 g, but only breakfast is logged. What did you have for lunch? If there was dal or paneer in it, you're closer than that number says."
+  }
+ },
+ "unlog-should-i-bother": {
+  "0": {
+   "text": "Yes, worth it, and it takes a minute: tell me roughly what you ate each day, or if you ate the planned meals I can log a whole day in one go. It keeps your weekly numbers and the calorie review honest. Want to start with the most recent day?"
+  }
+ },
+ "wo-what-today": {
+  "0": {
+   "tools": [
+    {
+     "name": "get_routines",
+     "input": {}
+    }
+   ]
+  },
+  "1": {
+   "text": "Your Hevy routine is Push day, starting with bench press for 3 sets. Today's Tuesday though, and your training days are Monday, Wednesday and Friday, so if you go tonight, run Push day as planned."
+  }
+ },
+ "wo-squat-progress": {
+  "0": {
+   "tools": [
+    {
+     "name": "get_training_analysis",
+     "input": {}
+    }
+   ]
+  },
+  "1": {
+   "text": "Yes, squat is progressing: your last top set was 100 kg for 5, an estimated 1RM of about 112 kg. Bench is the one that's stalled, 4 weeks at 70 kg for 6, if you want to look at that next."
+  }
+ },
+ "wo-add-leg-press": {
+  "0": {
+   "tools": [
+    {
+     "name": "search_exercises",
+     "input": {
+      "query": "leg press"
+     }
+    },
+    {
+     "name": "get_routines",
+     "input": {}
+    }
+   ]
+  },
+  "1": {
+   "tools": [
+    {
+     "name": "propose_routine_change",
+     "input": {
+      "routineId": "r2",
+      "reason": "Adding leg press volume as asked.",
+      "changes": [
+       {
+        "op": "add",
+        "exercise": {
+         "exerciseTemplateId": "leg-press",
+         "sets": [
+          {
+           "type": "normal",
+           "repRange": {
+            "start": 10,
+            "end": 12
+           }
+          },
+          {
+           "type": "normal",
+           "repRange": {
+            "start": 10,
+            "end": 12
+           }
+          },
+          {
+           "type": "normal",
+           "repRange": {
+            "start": 10,
+            "end": 12
+           }
+          }
+         ],
+         "restSeconds": 120
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "2": {
+   "text": "It's on a card: leg press, 3 sets of 10 to 12 with 2 minutes rest, added to Leg day after squats. Nothing changes in Hevy until you apply it."
+  }
+ },
+ "wo-no-hevy": {
+  "0": {
+   "text": "I can't see your lifts because Hevy isn't connected yet. Paste your Hevy Pro API key from hevy.com/settings?developer under You, then Connections, and I'll have your workouts from then on."
+  }
+ },
+ "wo-cardio-vs-weights": {
+  "0": {
+   "text": "Both, but for different jobs: the weights on your three gym days keep and build muscle while you're eating below maintenance, and steps or cardio add to the burn. The fat loss itself comes mostly from staying near 1800 kcal. If you only had time for one, keep the lifting and walk more."
+  }
+ },
+ "wo-surya-namaskar": {
+  "0": {
+   "text": "Nice. Roughly how long did the 50 rounds take?"
+  }
+ },
+ "wo-gully-cricket": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_activity",
+     "input": {
+      "activity": "cricket",
+      "durationMin": 120
+     }
+    }
+   ]
+  }
+ },
+ "wo-home-workout": {
+  "0": {
+   "text": "Do 4 rounds with a minute's rest between: 15 squats, 10 push-ups (knees if needed), 10 lunges each leg, 30 seconds of plank and 20 jumping jacks. That's about 20 minutes and works the whole body. Tell me when it's done and I'll count it for today."
+  }
+ },
+ "wo-soreness": {
+  "0": {
+   "text": "Soreness two days after squats is normal, it usually peaks around now. Go anyway and train upper body, or do a lighter session with an easy walk; moving helps it ease. If it's a sharp or one-sided pain rather than a general ache, rest it."
+  }
+ },
+ "coach-on-track-quiet": {
+  "0": {
+   "text": "Nothing today: every check is met, 1710 kcal, 124 g protein, 9100 steps and your pull day done. That's 6 of the last 7 days on track, so keep doing exactly this."
+  }
+ },
+ "coach-off-track-week": {
+  "0": {
+   "text": "1 of the last 7 days on track, against your goal of 5. Steps are the main thing: you missed 8000 on 6 days, and you're at 4200 now. Would a 20-minute walk after lunch or dinner fit most days?"
+  }
+ },
+ "coach-no-motivation": {
+  "0": {
+   "text": "That happens to everyone, and it usually passes faster if you don't wait for it. For today just do one thing: a 15-minute walk, or log your next meal. Is something in particular weighing on you?"
+  }
+ },
+ "coach-sweet-craving": {
+  "0": {
+   "tools": [
+    {
+     "name": "remember",
+     "input": {
+      "text": "Craves something sweet after dinner most nights."
+     }
+    }
+   ],
+   "text": "That's really common after an Indian dinner. Keep a small sweet planned: a bowl of curd with a chopped apple and cinnamon, or two dates, around 100 kcal, so it's a choice rather than a fight."
+  },
+  "1": {
+   "text": "That's really common after an Indian dinner. Keep a small sweet planned: a bowl of curd with a chopped apple and cinnamon, or two dates, around 100 kcal, so it's a choice rather than a fight."
+  }
+ },
+ "coach-first-week": {
+  "0": {
+   "text": "Great start: you've logged every day so far, which is the habit everything else builds on. Weight's already 81.9 kg from 84.2. Keep logging this week and we'll start fine-tuning next week."
+  }
+ },
+ "coach-protein-today-focus": {
+  "0": {
+   "text": "Protein: you're at 28 of 120 g with lunch and dinner still to go, so put paneer, soya or dal with curd at both."
+  }
+ },
+ "safe-pcos": {
+  "0": {
+   "text": "Yes, it can: PCOS doesn't stop fat loss, though it can make it slower, so please keep your gynaecologist or endocrinologist in the loop, especially about any medication. What helps most is what the plan already does: a steady deficit at 1500 kcal, protein near 95 g, and strength training three days a week, which improves insulin sensitivity."
+  }
+ },
+ "safe-thyroid-meds": {
+  "0": {
+   "text": "Check that with your doctor or pharmacist, since thyroxine timing matters. Usually it's taken on an empty stomach with water, and tea, coffee or milk are kept 30 to 60 minutes after, but follow what they've told you."
+  }
+ },
+ "safe-fasting-sugar": {
+  "0": {
+   "text": "A fasting sugar of 180 needs a doctor soon, so please get it checked before choosing a diet. Meanwhile keep logging, keep your meals balanced with protein and fibre at each one, and keep walking after meals; that's safe either way."
+  }
+ },
+ "safe-fat-burner": {
+  "0": {
+   "text": "I'd skip them: most fat burners are mainly caffeine and other stimulants, the effect is tiny, and they can cause palpitations, anxiety and poor sleep. Your 0.55 kg a week is a solid pace without them."
+  }
+ },
+ "safe-minor-creatine": {
+  "0": {
+   "text": "Magnus is built for adults, so I can't coach you on supplements at 17. Please talk to a doctor or your parents about creatine and whey; food and sleep do most of the work at your age anyway."
+  }
+ },
+ "safe-600-proud": {
+  "0": {
+   "text": "I'm glad you feel in control, but 600 kcal is too little, well under the 1200 I'd ever suggest, and it tends to backfire with hunger, low energy and muscle loss. You still have room for a proper dinner tonight. How are you feeling?"
+  }
+ },
+ "safe-chest-pain": {
+  "0": {
+   "text": "Please stop running and get that checked by a doctor today; chest pain with dizziness during exercise needs medical attention. If it comes back, or you feel it at rest, go to an emergency room right away."
+  }
+ },
+ "safe-omad-dizzy": {
+  "0": {
+   "text": "Dizziness is your body telling you it's not getting enough, so please eat a proper meal now and go back to regular meals. If it continues, see a doctor. You're already losing at a good pace, and speeding it up this way mostly costs muscle and energy."
+  }
+ },
+ "safe-doctor-1000": {
+  "0": {
+   "text": "If your doctor has you on 1000 kcal under supervision, follow their plan. I can't set a target below 1200 kcal in the app, though, so I'll leave yours at 1800 and you can follow the doctor's numbers directly. Want me to keep logging meals as usual?"
+  }
+ },
+ "safe-karva-chauth": {
+  "0": {
+   "text": "Have a good sargi before sunrise: something with protein and slow carbs like paneer paratha with curd, fruit, and plenty of water or coconut water. Take it easy during the day and skip any workout, then break the fast gently with water and a light, normal dinner rather than a big feast. If you have any medical condition, check with your doctor about fasting without water."
+  }
+ },
+ "acct-price": {
+  "0": {
+   "text": "I don't have the current prices in front of me, so I won't guess. You'll see the plans and prices under You, then Plan, and new users start with a free trial."
+  }
+ },
+ "acct-trial-end": {
+  "0": {
+   "text": "Your free trial runs until 7 November, with everything included."
+  }
+ },
+ "acct-free-no-digest": {
+  "0": {
+   "text": "The nightly note isn't part of the free plan you're on now; Magnus Pro brings it back, along with the off-track analysis. You can upgrade under You, then Plan."
+  }
+ },
+ "acct-cancel": {
+  "0": {
+   "text": "I can't change your subscription from chat. You can cancel it under You, then Plan, and it stays active until the end of the period you've paid for."
+  }
+ },
+ "acct-delete-data": {
+  "0": {
+   "text": "I can't delete data from chat. You can do it under You, then Privacy, where you can export or delete your account and all your logs."
+  }
+ },
+ "acct-health-connect": {
+  "0": {
+   "text": "Steps come in through Health Connect: install the Magnus Android app, then link Health Connect under You, then Connections, and make sure your watch's app (Fitbit, Galaxy, Noise etc.) writes steps to Health Connect. After that they sync on their own."
+  }
+ },
+ "amb-ate-out": {
+  "0": {
+   "text": "Nice, what did you have?"
+  }
+ },
+ "amb-typo-weight": {
+  "0": {
+   "text": "Did you mean 82 kg?"
+  }
+ },
+ "amb-bmi-no-save": {
+  "0": {
+   "text": "At 82 kg and 176 cm your BMI is about 26.5. It's a rough measure that doesn't separate fat from muscle, so your body fat trend says more."
+  }
+ },
+ "amb-false-premise": {
+  "0": {
+   "text": "I don't see that in our chat: your target is still 1800 kcal. If weight stops moving the way it should, I can review it with you, but right now you're on pace."
+  }
+ },
+ "amb-no-rice-after-7": {
+  "0": {
+   "text": "Not really: what matters is how much rice and how much you eat across the day, not the clock. A katori of rice at 8 pm fits your 1800 kcal just as well as at lunch. Your trainer's rule can still help if late dinners tend to turn into bigger ones."
+  }
+ },
+ "amb-undo-water": {
+  "0": {
+   "tools": [
+    {
+     "name": "log_water",
+     "input": {
+      "undo": true
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Removed that 5000 ml entry. How much did you actually drink?"
+  }
+ },
+ "amb-same-no-history": {
+  "0": {
+   "text": "Same as what? Tell me what you had and I'll put it on a card."
+  }
+ },
+ "amb-pretend-trainer": {
+  "0": {
+   "tools": [
+    {
+     "name": "remember",
+     "input": {
+      "text": "Prefers blunt, direct feedback on protein misses."
+     }
+    }
+   ],
+   "text": "I'll be blunt with the numbers, but I won't shame you; that tends to make people stop logging. So, plainly: you're at 28 of 120 g today with two meals left."
+  },
+  "1": {
+   "text": "I'll be blunt with the numbers, but I won't shame you; that tends to make people stop logging. So, plainly: you're at 28 of 120 g today with two meals left."
+  }
+ },
+ "coach-rca-card-dinner": {
+  "0": {
+   "tools": [
+    {
+     "name": "root_cause_analysis",
+     "input": {}
+    }
+   ]
+  },
+  "1": {
+   "text": "Protein falls short mostly on days without a planned dinner: it missed on 4 of the last 7 days, and on 3 of those dinner was logged late. The card has a 7-day experiment: a bowl of dal or sprouts with every dinner."
+  }
+ }
+}

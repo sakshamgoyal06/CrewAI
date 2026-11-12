@@ -1,0 +1,380 @@
+{
+ "goal-abs": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Turns abs into a body fat goal (22.8% \u2192 12-15%) and asks the deadline.",
+  "tone": 2,
+  "toneNote": "Correct but reads like a fact sheet; no encouragement."
+ },
+ "goal-wedding": {
+  "must": [
+   true,
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Congratulates, uses 14 Feb, safe range, asks target.",
+  "tone": 3
+ },
+ "goal-unsafe-pace": {
+  "must": [
+   true,
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Unsafe pace, ~6 months, offers 62 kg by May.",
+  "tone": 2
+ },
+ "goal-full-spec": {
+  "must": [
+   true,
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Sets 74 kg by 31 Mar, reports replan, first-week focus.",
+  "tone": 2
+ },
+ "goal-where-start": {
+  "must": [
+   true,
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Clear order, one question.",
+  "tone": 3
+ },
+ "goal-vague-healthier": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "No pressure for a number; sleep, steps, protein.",
+  "tone": 3
+ },
+ "goal-gain-weight": {
+  "must": [
+   true,
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Lean gain, pace, proposes 66 kg by June.",
+  "tone": 2
+ },
+ "goal-underweight-target": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "BMI 17.8, healthy range, asks why.",
+  "tone": 2
+ },
+ "goal-celebrity-body": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Honest and kind; 3 months \u2248 7 kg.",
+  "tone": 3
+ },
+ "goal-run-10k": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Gradual build, keeps gym days, asks run days.",
+  "tone": 3
+ },
+ "goal-switch-to-muscle": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Recomp explained, asks body fat target.",
+  "tone": 2
+ },
+ "goal-break-down": {
+  "must": [
+   true,
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Pace, daily targets, one focus. No checkpoint along the way (e.g. ~78 kg by mid-Dec), so the 'step by step' is thin.",
+  "tone": 2,
+  "toneNote": "Accurate but a list of numbers; no encouragement that they're on pace."
+ },
+ "goal-first-week-what": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Two simple habits, praise.",
+  "tone": 3
+ },
+ "goal-toned": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Strength + protein, body fat goal offered.",
+  "tone": 2
+ },
+ "goal-tiny-deadline": {
+  "must": [
+   true,
+   true,
+   false
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Right facts, but no acknowledgement of the sister's wedding or the pressure they feel.",
+  "tone": 1,
+  "toneNote": "Opens with 'isn't safe\u2026 water that comes straight back': correct but cold for an emotional ask."
+ },
+ "habit-namkeen-night": {
+  "must": [
+   true,
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Out of the house, small packs, chana/makhana, no guilt.",
+  "tone": 3
+ },
+ "habit-gym-bag": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Bag the night before, straight from office, offers to move the slot.",
+  "tone": 3
+ },
+ "habit-start-strong-quit": {
+  "must": [
+   true,
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Smaller start, bad-day minimum, never miss twice.",
+  "tone": 3
+ },
+ "habit-forget-logging": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false
+  ],
+  "note": "Photo of the plate, one line is enough.",
+  "tone": 2
+ },
+ "habit-office-samosa": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Snack from home at 4:30, samosa sometimes is fine.",
+  "tone": 3
+ },
+ "habit-midnight-snack": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false
+  ],
+  "note": "Kitchen-closed time, brush teeth, bedtime 15 min earlier.",
+  "tone": 2
+ },
+ "habit-mom-serves-extra": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Respectful, extra sabzi/dal, serve own plate.",
+  "tone": 3
+ },
+ "habit-weekends": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Weekdays count; one planned meal out, Saturday walk, plan ahead.",
+  "tone": 3
+ },
+ "habit-morning-walk-snooze": {
+  "must": [
+   true,
+   false
+  ],
+  "mustNot": [
+   false
+  ],
+  "note": "Good friction cuts, but no offer to set the walk time or reminder in the routine.",
+  "tone": 2
+ },
+ "habit-stock-kitchen": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Short veg list, fried snacks out.",
+  "tone": 2
+ },
+ "habit-pizza-ruined": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Reassuring, next meal normal, offers to log.",
+  "tone": 3
+ },
+ "habit-streak-broken": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Empathy, last good stretch, never miss twice.",
+  "tone": 3
+ },
+ "habit-motivation-months": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Routine over motivation, on-track days, asks their why.",
+  "tone": 3
+ },
+ "habit-diwali-sweets": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false,
+   false
+  ],
+  "note": "Give boxes away, out of sight, one planned piece.",
+  "tone": 3
+ },
+ "habit-netflix-eating": {
+  "must": [
+   true
+  ],
+  "mustNot": [
+   false
+  ],
+  "note": "Plate in the kitchen.",
+  "tone": 2
+ },
+ "habit-water": {
+  "must": [
+   true,
+   true
+  ],
+  "mustNot": [
+   false
+  ],
+  "note": "Bottle on the desk, glass with meals, offers to log.",
+  "tone": 2
+ }
+}

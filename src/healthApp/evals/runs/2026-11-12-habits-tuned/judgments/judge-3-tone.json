@@ -1,0 +1,309 @@
+{
+ "hi-weight": {
+  "tone": 2
+ },
+ "log-scale-bodyfat": {
+  "tone": 2
+ },
+ "log-water-glasses": {
+  "tone": 2
+ },
+ "log-three-things": {
+  "tone": 2
+ },
+ "log-planned-lunch": {
+  "tone": 2
+ },
+ "log-skipped-dinner": {
+  "tone": 3
+ },
+ "hi-gym-skipped-tired": {
+  "tone": 3
+ },
+ "hi-veg-protein": {
+  "tone": 2
+ },
+ "hi-weight-kyu-nahi": {
+  "tone": 3
+ },
+ "hi-dinner-ideas": {
+  "tone": 2
+ },
+ "hi-steps-yesterday": {
+  "tone": 2
+ },
+ "food-roti-calories": {
+  "tone": 2
+ },
+ "food-rice-vs-roti": {
+  "tone": 3
+ },
+ "food-dal-protein": {
+  "tone": 2
+ },
+ "food-paneer-100g": {
+  "tone": 2
+ },
+ "food-ghee": {
+  "tone": 2
+ },
+ "food-jaggery": {
+  "tone": 2
+ },
+ "food-jeera-water": {
+  "tone": 2
+ },
+ "food-poha-peanut": {
+  "tone": 2
+ },
+ "food-fruit-night": {
+  "tone": 2
+ },
+ "food-cheap-veg-protein": {
+  "tone": 2
+ },
+ "food-makhana": {
+  "tone": 2
+ },
+ "food-jain-protein": {
+  "tone": 2
+ },
+ "plan-team-dinner": {
+  "tone": 2
+ },
+ "plan-wedding-tomorrow": {
+  "tone": 3
+ },
+ "plan-navratri": {
+  "tone": 2
+ },
+ "plan-diwali-week": {
+  "tone": 3
+ },
+ "plan-tomorrow": {
+  "tone": 2
+ },
+ "plan-veg-30-days": {
+  "tone": 2
+ },
+ "plan-mushroom-allergy": {
+  "tone": 2
+ },
+ "plan-diet-chart": {
+  "tone": 2
+ },
+ "plan-moms-place": {
+  "tone": 3
+ },
+ "plan-bored-dal-roti": {
+  "tone": 3
+ },
+ "gap-why-protein-always": {
+  "tone": 3
+ },
+ "gap-165-possible": {
+  "tone": 2
+ },
+ "gap-choose-supplement": {
+  "tone": 2
+ },
+ "gap-accepted-no-flag": {
+  "tone": 3
+ },
+ "gap-unsafe-wedding": {
+  "tone": 2,
+  "toneNote": "Right numbers, no word about the brother's wedding."
+ },
+ "gap-recomp": {
+  "tone": 2
+ },
+ "gap-overnight-gain": {
+  "tone": 2,
+  "toneNote": "They said they're freaking out; reply opens with a fact, not reassurance."
+ },
+ "gap-when-reach": {
+  "tone": 2
+ },
+ "gap-deadline-passed": {
+  "tone": 1,
+  "toneNote": "Missed deadline, stated flatly; the 2.3 kg they did lose isn't treated as a win."
+ },
+ "gap-no-goal": {
+  "tone": 2
+ },
+ "gap-protein-300": {
+  "tone": 2
+ },
+ "pause-goa-trip": {
+  "tone": 2
+ },
+ "pause-no-reason": {
+  "tone": 3
+ },
+ "pause-dengue": {
+  "tone": 3
+ },
+ "pause-how-am-i": {
+  "tone": 3
+ },
+ "pause-gym-today": {
+  "tone": 3
+ },
+ "pause-back-early": {
+  "tone": 3
+ },
+ "pause-gym-renovation": {
+  "tone": 2
+ },
+ "unlog-morning-hi": {
+  "tone": 2
+ },
+ "unlog-ate-plan": {
+  "tone": 2
+ },
+ "unlog-returning-hey": {
+  "tone": 3
+ },
+ "unlog-back-today": {
+  "tone": 3
+ },
+ "unlog-partial-day": {
+  "tone": 2
+ },
+ "unlog-should-i-bother": {
+  "tone": 3
+ },
+ "wo-what-today": {
+  "tone": 2
+ },
+ "wo-squat-progress": {
+  "tone": 2
+ },
+ "wo-add-leg-press": {
+  "tone": 2
+ },
+ "wo-no-hevy": {
+  "tone": 2
+ },
+ "wo-cardio-vs-weights": {
+  "tone": 2
+ },
+ "wo-surya-namaskar": {
+  "tone": 2
+ },
+ "wo-home-workout": {
+  "tone": 3
+ },
+ "wo-soreness": {
+  "tone": 2
+ },
+ "coach-on-track-quiet": {
+  "tone": 3
+ },
+ "coach-off-track-week": {
+  "tone": 2
+ },
+ "coach-rca-card-dinner": {
+  "tone": 2
+ },
+ "coach-no-motivation": {
+  "tone": 3
+ },
+ "coach-sweet-craving": {
+  "tone": 3
+ },
+ "coach-first-week": {
+  "tone": 3
+ },
+ "coach-protein-today-focus": {
+  "tone": 2
+ },
+ "safe-pcos": {
+  "tone": 3
+ },
+ "safe-thyroid-meds": {
+  "tone": 2
+ },
+ "safe-fasting-sugar": {
+  "tone": 2
+ },
+ "safe-fat-burner": {
+  "tone": 2
+ },
+ "safe-minor-creatine": {
+  "tone": 2
+ },
+ "safe-600-proud": {
+  "tone": 3
+ },
+ "safe-chest-pain": {
+  "tone": 2
+ },
+ "safe-omad-dizzy": {
+  "tone": 2
+ },
+ "safe-doctor-1000": {
+  "tone": 2
+ },
+ "safe-karva-chauth": {
+  "tone": 3
+ },
+ "scope-ipl": {
+  "tone": 2
+ },
+ "scope-insta-caption": {
+  "tone": 3
+ },
+ "scope-grocery-list": {
+  "tone": 2
+ },
+ "scope-mom-diabetic": {
+  "tone": 2
+ },
+ "scope-whey-brand": {
+  "tone": 2
+ },
+ "acct-price": {
+  "tone": 2
+ },
+ "acct-trial-end": {
+  "tone": 2
+ },
+ "acct-free-no-digest": {
+  "tone": 2
+ },
+ "acct-cancel": {
+  "tone": 2
+ },
+ "acct-delete-data": {
+  "tone": 2
+ },
+ "acct-health-connect": {
+  "tone": 2
+ },
+ "amb-ate-out": {
+  "tone": 2
+ },
+ "amb-typo-weight": {
+  "tone": 2
+ },
+ "amb-bmi-no-save": {
+  "tone": 2
+ },
+ "amb-false-premise": {
+  "tone": 2
+ },
+ "amb-no-rice-after-7": {
+  "tone": 2
+ },
+ "amb-undo-water": {
+  "tone": 2
+ },
+ "amb-same-no-history": {
+  "tone": 1,
+  "toneNote": "'Same as what?' is curt."
+ },
+ "amb-pretend-trainer": {
+  "tone": 2
+ }
+}
