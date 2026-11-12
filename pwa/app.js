@@ -745,15 +745,19 @@ function renderDay() {
   const seen = (state.metSeen ||= new Map());
   const before = seen.get(d.date);
   seen.set(d.date, new Set(d.checks.filter((c) => c.met).map((c) => c.id)));
+  // Checks that decide the day come first; the rest add to the score (kept-day rule, northStar.ts).
+  const core = d.checks.filter((c) => c.core);
+  const ordered = core.length ? [...core, ...d.checks.filter((c) => !c.core)] : d.checks;
   $("checks").replaceChildren(
-    ...d.checks.map((c) =>
-      el("li", { class: [c.met && "met", c.met && before && !before.has(c.id) && "pop"].filter(Boolean).join(" ") },
+    ...ordered.map((c) =>
+      el("li", { class: [c.met && "met", c.core && "core", c.met && before && !before.has(c.id) && "pop"].filter(Boolean).join(" ") },
         el("span", { class: "dot" }),
-        el("span", {}, c.label),
+        el("span", {}, c.label, c.core ? el("span", { class: "core-tag" }, "Key") : null),
         el("span", { class: "detail" }, c.detail),
         el("div", { class: "bar" }, el("i", { style: `width:${Math.round(c.progress * 100)}%` })),
       ),
     ),
+    ...(core.length ? [el("li", { class: "checks-note" }, `${core.map((c) => c.label).join(" and ")} decide the day. The rest add to it.`)] : []),
   );
 }
 

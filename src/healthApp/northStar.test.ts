@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeNorthStar, scoreDay, type DayInputs, type HealthTargets } from "./northStar.js";
+import { computeNorthStar, goalDayNumber, scoreDay, type DayInputs, type HealthTargets } from "./northStar.js";
 
 const targets: HealthTargets = {
   calorieTarget: 2200,
@@ -154,5 +154,40 @@ describe("logging state (11 Nov rule)", () => {
   it("plan accounting decides when given: every meal accounted for is a full day even if light", () => {
     expect(scoreDay({ ...base, loggedInFull: true }, t).partial).toBeUndefined();
     expect(scoreDay({ ...base, calories: 1900, mealSessions: 3, loggedInFull: false }, t).partial).toBe(true);
+  });
+});
+
+describe("kept-day rule (from KEPT_RULE_FROM)", () => {
+  const t = { calorieTarget: 2000, proteinTarget: 150, stepTarget: 8000, trainingDays: [], minMealSessions: 3 };
+  const base = { weekday: 4, mealSessions: 3, calories: 1900, proteinG: 140, steps: 3000, workoutsLogged: 0, loggedInFull: true };
+
+  it("keeps a day when calories and protein are met, even with steps short", () => {
+    const d = scoreDay({ ...base, date: "2026-11-20" }, t);
+    expect(d.onTrack).toBe(true);
+    expect(d.checks.find((c) => c.id === "steps")?.met).toBe(false);
+    expect(d.checks.filter((c) => c.core).map((c) => c.id)).toEqual(["calories", "protein"]);
+  });
+
+  it("loses the day when protein misses", () => {
+    expect(scoreDay({ ...base, date: "2026-11-20", proteinG: 90 }, t).onTrack).toBe(false);
+  });
+
+  it("leaves days before the rule on the every-check rule", () => {
+    expect(scoreDay({ ...base, date: "2026-11-10" }, t).onTrack).toBe(false);
+  });
+
+  it("an unlogged day is never kept", () => {
+    const d = scoreDay({ ...base, date: "2026-11-20", mealSessions: 0, calories: 0, proteinG: 0, steps: 9000 }, t);
+    expect(d.onTrack).toBe(false);
+    expect(d.unlogged).toBe(true);
+  });
+
+  it("week one: logging and protein decide days 1-3, calories join on day 4", () => {
+    const tt = { ...t, planStartDate: "2026-11-20" };
+    const heavy = { ...base, calories: 2600 };
+    expect(scoreDay({ ...heavy, date: "2026-11-22" }, tt).onTrack).toBe(true);
+    expect(scoreDay({ ...heavy, date: "2026-11-23" }, tt).onTrack).toBe(false);
+    expect(goalDayNumber("2026-11-22", "2026-11-20")).toBe(3);
+    expect(goalDayNumber("2026-11-19", "2026-11-20")).toBeNull();
   });
 });

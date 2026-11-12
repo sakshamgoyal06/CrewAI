@@ -9,7 +9,7 @@ import type { HevyWorkout } from "../pillars/health/workouts/hevy/index.js";
 import { supabase } from "../tools/clients.js";
 import { burnForDay, trainingActivity, typicalTrainingBurn, type Activity, type Burn, type NotCounted, type StepBucket, type TimedWorkout } from "./activities.js";
 import { FALLBACK_WEIGHT_KG, getActivities } from "./activityLog.js";
-import { getBodyCheckins, loadBodyBasics } from "./bodyStore.js";
+import { getActiveGoal, getBodyCheckins, loadBodyBasics } from "./bodyStore.js";
 import { bmrOf, totalBurnForDay, type TotalBurn } from "./energy.js";
 import { hevyHistoryCached, withinAnalysisWindow } from "./hevyHistory.js";
 import { getWaterByDate, waterTargetMl } from "./water.js";
@@ -209,6 +209,7 @@ export async function buildHealthHistory(
   ]);
   const basics = await loadBodyBasics(userProfileId).catch(() => ({ sex: null, birthYear: null, heightCm: null }));
   const planned = await loadPlanEntries(userProfileId, from, to).catch(() => null);
+  const planStartDate = (await getActiveGoal(userProfileId).catch(() => null))?.startDate ?? null;
   const actsByDate = new Map<string, Activity[]>();
   for (const a of activities) actsByDate.set(a.localDate, [...(actsByDate.get(a.localDate) ?? []), a]);
   const bucketsByDate = new Map<string, StepBucket[]>();
@@ -301,7 +302,7 @@ export async function buildHealthHistory(
         routine: dayRoutine,
         paused: planPaused(date),
       },
-      { ...targets, weightKg: kg },
+      { ...targets, weightKg: kg, planStartDate },
     );
     return {
       date,

@@ -173,7 +173,11 @@ function goalLine(s: HealthSnapshot): string | null {
 function yesterdayLine(s: HealthSnapshot): string | null {
   const y = s.northStar.days.at(-2);
   if (!y || !y.checks.length) return null;
-  if (y.onTrack) return "On track. Every check was done.";
+  if (y.onTrack) {
+    const extra = y.checks.filter((c) => !c.met);
+    if (!extra.length) return "On track. Every check was done.";
+    return `Day kept: ${y.checks.filter((c) => c.core).map((c) => c.label.toLowerCase()).join(" and ")} on target. ${extra.map((c) => c.label).join(" and ")} still open, so that's the easy win today.`;
+  }
   // Nothing logged: say so plainly, and that it can still be filled in (11 Nov rule).
   if (y.unlogged) {
     const n = s.logging?.blankDays ?? 1;

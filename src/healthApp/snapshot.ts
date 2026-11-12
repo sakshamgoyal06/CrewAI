@@ -367,7 +367,7 @@ export async function buildHealthSnapshot(
         routine: dayRoutine,
         paused: planPaused(date),
       },
-      { ...targets, weightKg: kg },
+      { ...targets, weightKg: kg, planStartDate: goal?.startDate ?? null },
     );
   });
 

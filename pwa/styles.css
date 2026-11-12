@@ -421,6 +421,8 @@ details.stack > summary { cursor: pointer; padding: 4px 0; }
 .checks .bar { grid-column: 2 / -1; margin: 2px 0 0; height: 3px; }
 .checks li:not(.met) .bar > i { background: var(--warn); }
 .checks li.met .bar > i { background: var(--good); }
+.checks .core-tag { margin-left: 6px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--hair-strong); border-radius: 999px; padding: 0 6px; vertical-align: 1px; }
+.checks li.checks-note { display: block; padding: 8px 0 2px; font-size: 12px; color: var(--muted); }
 
 .quick-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 8px; margin-top: 14px; }
 .quick-row.two { grid-template-columns: repeat(2, 1fr); }
