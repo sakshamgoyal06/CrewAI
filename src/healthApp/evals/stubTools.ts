@@ -72,7 +72,34 @@ export function stubTools(snapshot: HealthSnapshot | null, options: { failing?: 
         return { result: { ok: true, date: String(input.date ?? "2026-11-03"), steps: input.steps }, changed: true };
       case "log_body_checkin":
         return { result: { ok: true, date: String(input.date ?? "2026-11-03"), ...input }, changed: true };
-      case "set_goal":
+      case "set_goal": {
+        // What the real replan reports: the pace from the latest weigh-in to the target by the deadline.
+        const latest = snapshot?.checkins?.[0]?.weight_kg ?? 81.9;
+        const target = typeof input.targetWeightKg === "number" ? input.targetWeightKg : null;
+        const weeks = Math.max(1, Math.round((Date.parse(String(input.deadline)) - Date.parse("2026-11-03")) / (7 * 86_400_000)));
+        const perWeek = target !== null ? Math.round(((target - latest) / weeks) * 100) / 100 : null;
+        const kcal = perWeek === null ? 1850 : perWeek < 0 ? Math.max(1500, Math.round((2450 + perWeek * 1100) / 50) * 50) : 2700;
+        const lines = [
+          ...(target !== null ? [`That reaches ${target} kg by ${String(input.deadline)}, about ${weeks} weeks away at ${perWeek} kg a week.`] : []),
+          `Daily calories set to ${kcal} kcal.`,
+          "Daily protein set to 130 g.",
+        ];
+        return {
+          result: {
+            ok: true,
+            goalId: "g-new",
+            replan: {
+              changes: [
+                { label: "Daily calories", from: snapshot?.goal ? "1,800 kcal" : null, to: `${kcal.toLocaleString("en-IN")} kcal` },
+                { label: "Daily protein", from: snapshot?.goal ? "120 g" : null, to: "130 g" },
+                { label: "Meal plan", from: null, to: "Rebuilt for the new target" },
+              ],
+              lines,
+            },
+          },
+          changed: true,
+        };
+      }
       case "set_daily_targets":
       case "answer_routine_check":
       case "answer_workout_check":

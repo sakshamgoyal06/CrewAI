@@ -36,7 +36,8 @@ process.env.MAGNUS_HEALTH_CHAT_ROUTING = "off";
 process.env.LOG_LEVEL ||= "silent";
 
 type Round = { text?: string; tools?: Array<{ name: string; input?: Record<string, unknown> }> };
-type Judgment = { must?: boolean[]; mustNot?: boolean[]; note?: string };
+/** tone: 1 = dry or preachy (facts with no warmth), 2 = fine, 3 = warm, encouraging and specific. */
+type Judgment = { must?: boolean[]; mustNot?: boolean[]; note?: string; tone?: 1 | 2 | 3; toneNote?: string };
 
 class Pending extends Error {}
 
@@ -175,6 +176,8 @@ async function main(): Promise<void> {
         failedMust,
         brokeMustNot,
         note: j?.note ?? null,
+        tone: j?.tone ?? null,
+        toneNote: j?.toneNote ?? null,
         pass: codeReasons.length === 0 && judged && failedMust.length === 0 && brokeMustNot.length === 0,
       });
     } catch (err) {
@@ -202,7 +205,11 @@ async function main(): Promise<void> {
 
 function report(run: string, rows: Array<Record<string, unknown>>, judgments: Record<string, Judgment>, cases: Array<{ id: string; category: string; rubric?: { must: string[]; mustNot: string[] } }>): string {
   const cats = [...new Set(rows.map((r) => String(r.category)))];
-  const lines = [`# Coach eval run: ${run}`, "", "| Category | Pass | Cases | Rubric items met |", "|---|---|---|---|"];
+  const lines = [`# Coach eval run: ${run}`, "", "| Category | Pass | Cases | Rubric items met | Tone (1–3) |", "|---|---|---|---|---|"];
+  const toneOf = (rs: Array<Record<string, unknown>>) => {
+    const t = rs.map((r) => Number(r.tone)).filter((x) => x > 0);
+    return t.length ? (t.reduce((a, b) => a + b, 0) / t.length).toFixed(1) : "–";
+  };
   let tp = 0;
   let tn = 0;
   let rm = 0;
@@ -216,9 +223,15 @@ function report(run: string, rows: Array<Record<string, unknown>>, judgments: Re
     tn += rs.length;
     rm += met;
     ri += items;
-    lines.push(`| ${cat} | ${p} | ${rs.length} | ${items ? `${met}/${items}` : "–"} |`);
+    lines.push(`| ${cat} | ${p} | ${rs.length} | ${items ? `${met}/${items}` : "–"} | ${toneOf(rs)} |`);
   }
-  lines.push(`| **all** | **${tp}** | **${tn}** (${tn ? Math.round((tp / tn) * 100) : 0}%) | ${ri ? `${rm}/${ri} (${Math.round((rm / ri) * 100)}%)` : "–"} |`, "");
+  lines.push(`| **all** | **${tp}** | **${tn}** (${tn ? Math.round((tp / tn) * 100) : 0}%) | ${ri ? `${rm}/${ri} (${Math.round((rm / ri) * 100)}%)` : "–"} | ${toneOf(rows)} |`, "");
+  const flat = rows.filter((r) => Number(r.tone) === 1);
+  if (flat.length) {
+    lines.push(`## Tone: dry or preachy replies (${flat.length})`, "");
+    for (const r of flat) lines.push(`- **${String(r.id)}**: ${String(r.toneNote ?? "")}\n  > ${String(r.reply ?? "").replace(/\n/g, " ")}`);
+    lines.push("");
+  }
   const fails = rows.filter((r) => !r.pass && r.pending === undefined);
   lines.push(`## Failures (${fails.length})`, "");
   for (const r of fails) {
