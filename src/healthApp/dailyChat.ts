@@ -7,6 +7,7 @@
  * today's routine, targets, where the goal stands, how yesterday went, one thing worth a look,
  * and a short line to start on. An open plan-change card rides along with it.
  */
+import { loadBreaks, planBreakOn, type Break } from "./breaks.js";
 import { logger } from "../logger.js";
 import { localDateKey, resolveTimezone } from "../nutrition/localDate.js";
 import { supabase } from "../tools/clients.js";
@@ -349,7 +350,7 @@ async function loadProfileBits(userProfileId: string, timezone: string): Promise
   };
 }
 
-export type MorningResult = "posted" | "exists" | "too_early" | "not_ready";
+export type MorningResult = "posted" | "exists" | "too_early" | "not_ready" | "paused";
 
 /** The check to ask again: yesterday's checks still unanswered, the gym first. Pure. */
 export function pickCarriedCheck(cards: ChatCard[], yesterday: string, isOpen: (c: CarriedCheck) => boolean): CarriedCheck | null {
@@ -415,6 +416,14 @@ export async function ensureDayPlan(userProfileId: string, timezone: string, now
   if ((existing.data ?? []).length) {
     handled.set(userProfileId, date);
     return "exists";
+  }
+
+  // A whole-plan pause has no day plan (pause spec: everything stops except the weekly weigh-in
+  // and the end message). Opening the app used to post it anyway, through tryDayPlan.
+  const breaks = await loadBreaks(userProfileId, date).catch(() => [] as Break[]);
+  if (planBreakOn(breaks, date)) {
+    handled.set(userProfileId, date);
+    return "paused";
   }
 
   const bits = await loadProfileBits(userProfileId, tz);
