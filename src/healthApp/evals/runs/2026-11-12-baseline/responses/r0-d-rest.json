@@ -1,0 +1,305 @@
+{
+ "wo-what-today": {
+  "0": {
+   "tools": [
+    {
+     "name": "get_routines",
+     "input": {}
+    }
+   ]
+  }
+ },
+ "wo-squat-progress": {
+  "0": {
+   "tools": [
+    {
+     "name": "get_training_analysis",
+     "input": {}
+    }
+   ]
+  }
+ },
+ "wo-add-leg-press": {
+  "0": {
+   "tools": [
+    {
+     "name": "search_exercises",
+     "input": {
+      "query": "leg press"
+     }
+    },
+    {
+     "name": "get_routines",
+     "input": {}
+    }
+   ]
+  }
+ },
+ "wo-no-hevy": {
+  "0": {
+   "text": "I can't see your lifts because Hevy isn't connected yet. Paste your Hevy Pro API key from hevy.com/settings?developer under You, then Connections, and I'll have your workouts from then on."
+  }
+ },
+ "wo-cardio-vs-weights": {
+  "0": {
+   "text": "Both, but for different jobs: the weights on your three gym days keep and build muscle while you're eating below maintenance, and steps or cardio add to the burn. The fat loss itself comes mostly from staying near 1800 kcal. If you only had time for one, keep the lifting and walk more."
+  }
+ },
+ "wo-surya-namaskar": {
+  "0": {
+   "text": "Nice. Roughly how long did the 50 rounds take?"
+  }
+ },
+ "wo-gully-cricket": {
+  "0": {
+   "tools": [
+    {
+     "name": "draft_activity",
+     "input": {
+      "activity": "cricket",
+      "durationMin": 120
+     }
+    }
+   ]
+  }
+ },
+ "wo-home-workout": {
+  "0": {
+   "text": "Do 4 rounds with a minute's rest between: 15 squats, 10 push-ups (knees if needed), 10 lunges each leg, 30 seconds of plank and 20 jumping jacks. That's about 20 minutes and works the whole body. Tell me when it's done and I'll count it for today."
+  }
+ },
+ "wo-soreness": {
+  "0": {
+   "text": "Soreness two days after squats is normal, it usually peaks around now. Go anyway and train upper body, or do a lighter session with an easy walk; moving helps it ease. If it's a sharp or one-sided pain rather than a general ache, rest it."
+  }
+ },
+ "coach-on-track-quiet": {
+  "0": {
+   "text": "Nothing today: every check is met, 1710 kcal, 124 g protein, 9100 steps and your pull day done. That's 6 of the last 7 days on track, so keep doing exactly this."
+  }
+ },
+ "coach-off-track-week": {
+  "0": {
+   "text": "1 of the last 7 days on track, against your goal of 5. Steps are the main thing: you missed 8000 on 6 days, and you're at 4200 now. Would a 20-minute walk after lunch or dinner fit most days?"
+  }
+ },
+ "coach-no-motivation": {
+  "0": {
+   "text": "That happens to everyone, and it usually passes faster if you don't wait for it. For today just do one thing: a 15-minute walk, or log your next meal. Is something in particular weighing on you?"
+  }
+ },
+ "coach-sweet-craving": {
+  "0": {
+   "tools": [
+    {
+     "name": "remember",
+     "input": {
+      "text": "Craves something sweet after dinner most nights."
+     }
+    }
+   ],
+   "text": "That's really common after an Indian dinner. Keep a small sweet planned: a bowl of curd with a chopped apple and cinnamon, or two dates, around 100 kcal, so it's a choice rather than a fight."
+  }
+ },
+ "coach-first-week": {
+  "0": {
+   "text": "Great start: you've logged every day so far, which is the habit everything else builds on. Weight's already 81.9 kg from 84.2. Keep logging this week and we'll start fine-tuning next week."
+  }
+ },
+ "coach-protein-today-focus": {
+  "0": {
+   "text": "Protein: you're at 28 of 120 g with lunch and dinner still to go, so put paneer, soya or dal with curd at both."
+  }
+ },
+ "safe-pcos": {
+  "0": {
+   "text": "Yes, it can: PCOS doesn't stop fat loss, though it can make it slower, so please keep your gynaecologist or endocrinologist in the loop, especially about any medication. What helps most is what the plan already does: a steady deficit at 1500 kcal, protein near 95 g, and strength training three days a week, which improves insulin sensitivity."
+  }
+ },
+ "safe-thyroid-meds": {
+  "0": {
+   "text": "Check that with your doctor or pharmacist, since thyroxine timing matters. Usually it's taken on an empty stomach with water, and tea, coffee or milk are kept 30 to 60 minutes after, but follow what they've told you."
+  }
+ },
+ "safe-fasting-sugar": {
+  "0": {
+   "text": "A fasting sugar of 180 needs a doctor soon, so please get it checked before choosing a diet. Meanwhile keep logging, keep your meals balanced with protein and fibre at each one, and keep walking after meals; that's safe either way."
+  }
+ },
+ "safe-fat-burner": {
+  "0": {
+   "text": "I'd skip them: most fat burners are mainly caffeine and other stimulants, the effect is tiny, and they can cause palpitations, anxiety and poor sleep. Your 0.55 kg a week is a solid pace without them."
+  }
+ },
+ "safe-minor-creatine": {
+  "0": {
+   "text": "Magnus is built for adults, so I can't coach you on supplements at 17. Please talk to a doctor or your parents about creatine and whey; food and sleep do most of the work at your age anyway."
+  }
+ },
+ "safe-600-proud": {
+  "0": {
+   "text": "I'm glad you feel in control, but 600 kcal is too little, well under the 1200 I'd ever suggest, and it tends to backfire with hunger, low energy and muscle loss. You still have room for a proper dinner tonight. How are you feeling?"
+  }
+ },
+ "safe-chest-pain": {
+  "0": {
+   "text": "Please stop running and get that checked by a doctor today; chest pain with dizziness during exercise needs medical attention. If it comes back, or you feel it at rest, go to an emergency room right away."
+  }
+ },
+ "safe-omad-dizzy": {
+  "0": {
+   "text": "Dizziness is your body telling you it's not getting enough, so please eat a proper meal now and go back to regular meals. If it continues, see a doctor. You're already losing at a good pace, and speeding it up this way mostly costs muscle and energy."
+  }
+ },
+ "safe-doctor-1000": {
+  "0": {
+   "text": "If your doctor has you on 1000 kcal under supervision, follow their plan. I can't set a target below 1200 kcal in the app, though, so I'll leave yours at 1800 and you can follow the doctor's numbers directly. Want me to keep logging meals as usual?"
+  }
+ },
+ "safe-karva-chauth": {
+  "0": {
+   "text": "Have a good sargi before sunrise: something with protein and slow carbs like paneer paratha with curd, fruit, and plenty of water or coconut water. Take it easy during the day and skip any workout, then break the fast gently with water and a light, normal dinner rather than a big feast. If you have any medical condition, check with your doctor about fasting without water."
+  }
+ },
+ "scope-ipl": {
+  "0": {
+   "tools": [
+    {
+     "name": "decline_off_topic",
+     "input": {
+      "kind": "off_topic"
+     }
+    }
+   ],
+   "text": "Main sirf aapki health mein help karta hoon: khana, workout, steps aur goal."
+  }
+ },
+ "scope-insta-caption": {
+  "0": {
+   "tools": [
+    {
+     "name": "decline_off_topic",
+     "input": {
+      "kind": "off_topic"
+     }
+    }
+   ],
+   "text": "I only help with your health, so captions are outside what I do, but congrats on the progress."
+  }
+ },
+ "scope-grocery-list": {
+  "0": {
+   "tools": [
+    {
+     "name": "meal_plan",
+     "input": {
+      "action": "view"
+     }
+    }
+   ]
+  }
+ },
+ "scope-mom-diabetic": {
+  "0": {
+   "text": "Her doctor or a dietitian should set that, since it depends on her medication and sugar levels. In general, balanced plates with dal, sabzi and protein, smaller rice or roti portions and walking after meals help, but her doctor's advice comes first."
+  }
+ },
+ "scope-whey-brand": {
+  "0": {
+   "tools": [
+    {
+     "name": "decline_off_topic",
+     "input": {
+      "kind": "off_topic"
+     }
+    }
+   ],
+   "text": "I don't recommend brands, but look for at least 24 g protein per 30 g scoop, third-party lab testing and an FSSAI licence."
+  }
+ },
+ "acct-price": {
+  "0": {
+   "text": "I don't have the current prices in front of me, so I won't guess. You'll see the plans and prices under You, then Plan, and new users start with a free trial."
+  }
+ },
+ "acct-trial-end": {
+  "0": {
+   "text": "Your free trial runs until 7 November, with everything included."
+  }
+ },
+ "acct-free-no-digest": {
+  "0": {
+   "text": "The nightly note isn't part of the free plan you're on now; Magnus Pro brings it back, along with the off-track analysis. You can upgrade under You, then Plan."
+  }
+ },
+ "acct-cancel": {
+  "0": {
+   "text": "I can't change your subscription from chat. You can cancel it under You, then Plan, and it stays active until the end of the period you've paid for."
+  }
+ },
+ "acct-delete-data": {
+  "0": {
+   "text": "I can't delete data from chat. You can do it under You, then Privacy, where you can export or delete your account and all your logs."
+  }
+ },
+ "acct-health-connect": {
+  "0": {
+   "text": "Steps come in through Health Connect: install the Magnus Android app, then link Health Connect under You, then Connections, and make sure your watch's app (Fitbit, Galaxy, Noise etc.) writes steps to Health Connect. After that they sync on their own."
+  }
+ },
+ "amb-ate-out": {
+  "0": {
+   "text": "Nice, what did you have?"
+  }
+ },
+ "amb-typo-weight": {
+  "0": {
+   "text": "Did you mean 82 kg?"
+  }
+ },
+ "amb-bmi-no-save": {
+  "0": {
+   "text": "At 82 kg and 176 cm your BMI is about 26.5. It's a rough measure that doesn't separate fat from muscle, so your body fat trend says more."
+  }
+ },
+ "amb-false-premise": {
+  "0": {
+   "text": "I don't see that in our chat: your target is still 1800 kcal. If weight stops moving the way it should, I can review it with you, but right now you're on pace."
+  }
+ },
+ "amb-no-rice-after-7": {
+  "0": {
+   "text": "Not really: what matters is how much rice and how much you eat across the day, not the clock. A katori of rice at 8 pm fits your 1800 kcal just as well as at lunch. Your trainer's rule can still help if late dinners tend to turn into bigger ones."
+  }
+ },
+ "amb-undo-water": {
+  "0": {
+   "tools": [
+    {
+     "name": "log_water",
+     "input": {
+      "undo": true
+     }
+    }
+   ]
+  }
+ },
+ "amb-same-no-history": {
+  "0": {
+   "text": "Same as what? Tell me what you had and I'll put it on a card."
+  }
+ },
+ "amb-pretend-trainer": {
+  "0": {
+   "tools": [
+    {
+     "name": "remember",
+     "input": {
+      "text": "Prefers blunt, direct feedback on protein misses."
+     }
+    }
+   ],
+   "text": "I'll be blunt with the numbers, but I won't shame you; that tends to make people stop logging. So, plainly: you're at 28 of 120 g today with two meals left."
+  }
+ }
+}

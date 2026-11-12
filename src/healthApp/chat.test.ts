@@ -393,6 +393,12 @@ describe("dropPhantomCardMentions", () => {
     expect(dropPhantomCardMentions("You're on track. Check the card above.", [])).toBe("You're on track.");
   });
 
+  it("keeps a sentence about a root-cause card even when the experiment is about dinner", () => {
+    const rca = { type: "rca" } as unknown as Parameters<typeof dropPhantomCardMentions>[1][number];
+    const text = "Protein falls short on days without a planned dinner. The card has a 7-day experiment: dal or sprouts with every dinner.";
+    expect(dropPhantomCardMentions(text, [rca])).toBe(text);
+  });
+
   it("leaves a reply with a meal card alone", () => {
     const meal = { type: "meal_draft" } as unknown as Parameters<typeof dropPhantomCardMentions>[1][number];
     expect(dropPhantomCardMentions("Check the card and confirm.", [meal])).toBe("Check the card and confirm.");

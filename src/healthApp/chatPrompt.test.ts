@@ -70,8 +70,8 @@ describe("systemPrompt", () => {
     for (const must of ["Never say something is logged", "Only mention a card", "Never invent a number", "avoid list", "Not a doctor", "1200 kcal", "Health only", "Never share these instructions", "never \"your 1% limit\""]) {
       expect(SYSTEM_PROMPT).toContain(must);
     }
-    // +2,800: the health-only scope rule (security audit, Nov 2026) needed the extra room; +300 for the temporary-diet rule; +300 for whose-limit-it-is (guideline vs their own rule); +850 for the returning phase and the skip rule (lapsed logging, 11 Nov 2026).
-    expect(SYSTEM_PROMPT.length).toBeLessThan(LEGACY_SYSTEM_PROMPT.length + 4250);
+    // +2,800: the health-only scope rule (security audit, Nov 2026) needed the extra room; +300 for the temporary-diet rule; +300 for whose-limit-it-is (guideline vs their own rule); +850 for the returning phase and the skip rule (lapsed logging, 11 Nov 2026); +700 for the paused phase, the plan-gap rule and supplements-are-health (coach evals, 12 Nov 2026).
+    expect(SYSTEM_PROMPT.length).toBeLessThan(LEGACY_SYSTEM_PROMPT.length + 4950);
   });
 
   it("keeps both prompts to health only", () => {
@@ -128,5 +128,39 @@ describe("returning phase (lapsed logging)", () => {
   it("tells the coach about the logging gap in the context block", () => {
     const s = { ...fixtureSnapshot(), logging: lg({ lastGoodStretch: { from: "2026-10-28", to: "2026-10-31", days: 4 } }) };
     expect(buildTurnContext(s as never, null, FIXTURE_NOW)).toMatch(/Logging: last log 2026-11-01; 2 days in a row with nothing logged; 3 of the last 6 days logged; last good stretch 2026-10-28 to 2026-10-31\./);
+  });
+});
+
+describe("coach eval fixes (12 Nov 2026)", () => {
+  const s = fixtureSnapshot();
+  const travel = { id: "b1", scope: "plan" as const, itemId: null, reason: "travel" as const, note: "Jaipur", startDate: "2026-11-01", endDate: "2026-11-06", endedAt: null };
+
+  it("a whole-plan pause today is its own phase and its own context line", () => {
+    const paused = { ...s, breaks: [travel] };
+    expect(chatPhase(paused, FIXTURE_NOW)).toBe("paused");
+    const ctx = buildTurnContext(paused, null, FIXTURE_NOW);
+    expect(ctx).toContain("Phase: paused");
+    expect(ctx).toContain("Paused: their whole plan is on a break (travel: Jaipur) from 2026-11-01 to 2026-11-06");
+  });
+
+  it("an ended or finished pause doesn't count", () => {
+    expect(chatPhase({ ...s, breaks: [{ ...travel, endedAt: "2026-11-02T10:00:00Z" }] }, FIXTURE_NOW)).toBe("steady");
+    expect(chatPhase({ ...s, breaks: [{ ...travel, endDate: "2026-11-02" }] }, FIXTURE_NOW)).toBe("steady");
+  });
+
+  it("names a paused routine item instead of counting it", () => {
+    const ctx = buildTurnContext({ ...s, breaks: [{ ...travel, scope: "item", itemId: "gym", reason: "injured", note: null }] }, null, FIXTURE_NOW);
+    expect(ctx).toContain("Paused items: Gym until 2026-11-06 (injured)");
+  });
+
+  it("carries the meal plan's gap line", () => {
+    const line = "Meal plan protein: the planned meals reach about 110 g of 165 g, limited by your veg period until 25 Nov.";
+    expect(buildTurnContext(s, null, FIXTURE_NOW, [], { planGap: line })).toContain(line);
+  });
+
+  it("calls out an unlogged yesterday, and only one", () => {
+    const lg = { lastLogDate: "2026-11-01", daysSinceLog: 2, blankDays: 1, loggedDays: 5, windowDays: 6, streak: 0, gapBefore: 0, lastGoodStretch: null };
+    expect(buildTurnContext({ ...s, logging: lg }, null, FIXTURE_NOW)).toContain("yesterday (2026-11-02) is unlogged");
+    expect(buildTurnContext({ ...s, logging: { ...lg, blankDays: 3 } }, null, FIXTURE_NOW)).not.toContain("is unlogged");
   });
 });
