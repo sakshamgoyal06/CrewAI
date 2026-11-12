@@ -878,6 +878,11 @@ export function dayMealList(list, { title = null, compact = false } = {}) {
     return el("div", { class: "day-meals" }, head, el("p", { class: "none" }, isToday ? "Nothing logged yet today." : future ? "Nothing planned." : "Nothing logged this day."), addPast);
   }
   const planBySlot = new Map(list.rows.filter((r) => r.state !== "extra").map((r) => [r.slot, r]));
+  // Two or more planned meals still open: one tap logs the rest as planned (each keeps its own Remove).
+  const openPlanned = list.rows.filter((r) => (r.state === "todo" || r.state === "missed") && !r.eatOut);
+  const rest = !future && openPlanned.length >= 2
+    ? el("button", { class: "btn small block dm-rest", type: "button", onclick: (ev) => eatRest(ev.currentTarget, list.date) }, isToday ? "Rest of today as planned" : "Rest of this day as planned")
+    : null;
   // Today's Food section shows only what still needs an answer (the full list lives on Meals).
   if (compact && isToday) {
     const open = list.rows.filter((r) => r.state === "todo" || r.state === "missed").slice(0, 2);
@@ -887,6 +892,7 @@ export function dayMealList(list, { title = null, compact = false } = {}) {
       open.length
         ? el("ul", { class: "dm-list" }, ...open.map((r) => dayMealRow(list, r, planBySlot)))
         : el("p", { class: "none" }, list.planned ? "Every planned meal is answered." : "Nothing planned for the rest of today."),
+      rest,
       all);
   }
   const rows = list.rows.map((r) => dayMealRow(list, r, planBySlot));
@@ -895,7 +901,21 @@ export function dayMealList(list, { title = null, compact = false } = {}) {
         el("span", {}, "Eaten"),
         el("span", {}, el("b", {}, `${fmt(list.eaten.kcal)} kcal`), ` · P ${fmt(list.eaten.proteinG)} · C ${fmt(list.eaten.carbsG)} · F ${fmt(list.eaten.fatG)} g`))
     : null;
-  return el("div", { class: "day-meals" }, head, el("ul", { class: "dm-list" }, ...rows), foot, addPast);
+  return el("div", { class: "day-meals" }, head, el("ul", { class: "dm-list" }, ...rows), rest, foot, addPast);
+}
+
+/** "Rest of today as planned": every open planned meal that's due, logged in one tap. */
+async function eatRest(btn, date) {
+  btn.disabled = true;
+  try {
+    const r = await d.api(`/diet/days/${date}/eat-rest`, { method: "POST" });
+    const n = r.logged?.length || 0;
+    const later = r.left?.length ? ` ${r.left.map((s) => SLOT_NAME[s] || s).join(" and ")} is later, so it's still open.` : "";
+    await afterChange(n ? `Logged ${n} meal${n === 1 ? "" : "s"} as planned. Remove any from its row if it's wrong.${later}` : `Nothing due yet.${later}`);
+  } catch (err) {
+    btn.disabled = false;
+    d.toast(err.message);
+  }
 }
 
 function dayMealRow(list, r, planBySlot) {

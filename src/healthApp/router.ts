@@ -78,7 +78,7 @@ import { draftMealFromPhoto } from "./mealCards.js";
 import { barcodeInput, draftMealFromBarcode } from "./barcode.js";
 import { loadWeeklyReview } from "./weeklyReview.js";
 import { editInput, editPick, restrictionsFor, searchMealFoods } from "./dietPlan/edit.js";
-import { eatInput, eatPlanned, skipPlanned, undoPlanned } from "./dietPlan/log.js";
+import { eatInput, eatPlanned, eatRestAsPlanned, skipPlanned, undoPlanned } from "./dietPlan/log.js";
 import { editReceipt, getLoggedMeal, mealReplaceInput, receiptEditInput, replaceLoggedMeal, undoReceipt } from "./logEdits.js";
 import { logSupplements, undoSupplements } from "./dietPlan/supplementLog.js";
 import { confirmDayComplete, rebalanceToday, redoCarry, setMealPlanRole } from "./dietPlan/rhythm.js";
@@ -107,7 +107,7 @@ import {
   razorpayConfig,
   verifyWebhookSignature,
 } from "./billing.js";
-import { getUsualMeals, repeatUsualMeal } from "./frequentMeals.js";
+import { getUsualMeals, repeatUsualMeal, yesterdaysMeal } from "./frequentMeals.js";
 import { photoMealInput } from "./photoMeal.js";
 import { preparePhotoForVision } from "./photoImage.js";
 import { buildHealthSnapshot, loadHealthProfile } from "./snapshot.js";
@@ -472,6 +472,15 @@ export function createHealthAppRouter(): express.Router {
       // Ate more or less than planned: the rest of today follows (before the reply, so the tab shows it).
       if (r.ok && r.status === "partial") await rebalanceToday(ctx).catch((err) => logger.warn({ err: loggableError(err) }, "rebalance failed"));
       return r.ok ? { body: r } : { status: r.error === "already_logged" || r.error === "too_early" ? 409 : 400, body: r };
+    }),
+  );
+  /** "Rest of today as planned": the meals still planned (and due) logged in one tap. */
+  router.post(
+    "/diet/days/:date/eat-rest",
+    route("diet-eat-rest", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const r = await eatRestAsPlanned(ctx, date);
+      return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );
   /** "Took my supplements": logs the day's supplements from the plan setup (idempotent). */
@@ -898,6 +907,15 @@ export function createHealthAppRouter(): express.Router {
   router.get(
     "/meals/usual",
     route("meals-usual", async (ctx) => ({ body: await getUsualMeals(ctx) })),
+  );
+
+  /** "Same as yesterday": yesterday's meal at this slot, to log again; null when there was none. */
+  router.get(
+    "/meals/yesterday",
+    route("meals-yesterday", async (ctx, req) => {
+      const slot = z.enum(["breakfast", "lunch", "dinner", "snack"]).parse(req.query.slot);
+      return { body: { meal: await yesterdaysMeal(ctx, slot) } };
+    }),
   );
 
   /** One tap on a usual meal → a fresh draft card in the chat, to confirm. */

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 
-import { draftFromUsual, rankUsualMeals, repeatUsualMeal, type LoggedSession, type UsualMeal } from "./frequentMeals.js";
+import { draftFromUsual, rankUsualMeals, repeatUsualMeal, slotMealOn, type LoggedSession, type UsualMeal } from "./frequentMeals.js";
 
 const item = (name: string, calories: number, protein_g = 10) => ({ name, calories, protein_g, carbs_g: 20, fat_g: 5 });
 let seq = 0;
@@ -76,9 +76,21 @@ describe("draftFromUsual", () => {
 describe("repeatUsualMeal", () => {
   const ctx = { userProfileId: "p1", timezone: "UTC", now: new Date("2026-11-02T13:00:00Z") };
 
-  it("posts a draft card into chat and never saves the meal", async () => {
+  it("logs the usual meal at once, with the card in its logged state", async () => {
     const record = vi.fn(async () => undefined);
-    const r = await repeatUsualMeal(ctx, "chicken rice bowl", { usual: async () => ({ slot: "lunch", meals: [usual] }), record });
+    const log = vi.fn(async (_c: unknown, draft: { draftId: string }) => ({ type: "meal_draft" as const, draft: { ...(draft as never), autoLogged: true }, saved: { calories: 510 } }));
+    const r = await repeatUsualMeal(ctx, "chicken rice bowl", { usual: async () => ({ slot: "lunch", meals: [usual] }), record, log: log as never });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(r.cards[0]).toMatchObject({ type: "meal_draft", saved: { calories: 510 }, draft: { autoLogged: true } });
+    expect(r.text).toMatch(/^Logged, same as last time/);
+    expect(r.changed).toBe(true);
+  });
+
+  it("falls back to a draft card to confirm when the save fails", async () => {
+    const record = vi.fn(async () => undefined);
+    const r = await repeatUsualMeal(ctx, "chicken rice bowl", { usual: async () => ({ slot: "lunch", meals: [usual] }), record, log: async () => null });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.cards[0]).toMatchObject({ type: "meal_draft", draft: { text: "Chicken rice bowl", slot: "lunch", estimated: true } });
@@ -92,5 +104,19 @@ describe("repeatUsualMeal", () => {
     const r = await repeatUsualMeal(ctx, "nope", { usual: async () => ({ slot: "lunch", meals: [usual] }), record });
     expect(r).toEqual({ ok: false, error: "meal_not_found" });
     expect(record).not.toHaveBeenCalled();
+  });
+});
+
+describe("slotMealOn (Same as yesterday)", () => {
+  it("merges every log at that slot on that day, oldest first", () => {
+    const sessions = [log("Poha", "breakfast", "2026-11-01", [item("Poha", 250)]), log("Chai", "breakfast", "2026-11-01", [item("Chai", 90, 3)]), log("Dal rice", "lunch", "2026-11-01")];
+    const m = slotMealOn(sessions, "2026-11-01", "breakfast")!;
+    expect(m.items.map((i) => i.name)).toEqual(["Poha", "Chai"]);
+    expect(m.totals.calories).toBe(340);
+    expect(m.text).toBe("Poha + Chai");
+  });
+
+  it("is null when nothing was logged at that slot", () => {
+    expect(slotMealOn([log("Dal rice", "lunch", "2026-11-01")], "2026-11-01", "dinner")).toBeNull();
   });
 });

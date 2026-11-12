@@ -1496,3 +1496,10 @@ body.screen-open { overflow: hidden; }
 .checkpoint .bar > i { background: var(--good); }
 .checkpoint .hint { margin: 0; }
 .scale-note { margin-top: 8px; }
+
+.dm-rest { margin-top: 10px; }
+
+/* Daily read from logged days (goalProgress.ts energyPace). */
+.energy-pace { margin: 8px 0 0; font-size: 0.88rem; color: var(--muted); }
+.energy-pace .ep-label { color: var(--text); font-weight: 700; }
+.energy-pace.late .ep-label { color: var(--warn); }

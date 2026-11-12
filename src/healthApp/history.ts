@@ -10,6 +10,7 @@ import { supabase } from "../tools/clients.js";
 import { burnForDay, trainingActivity, typicalTrainingBurn, type Activity, type Burn, type NotCounted, type StepBucket, type TimedWorkout } from "./activities.js";
 import { FALLBACK_WEIGHT_KG, getActivities } from "./activityLog.js";
 import { getActiveGoal, getBodyCheckins, loadBodyBasics } from "./bodyStore.js";
+import { energyPace, type EnergyPace } from "./goalProgress.js";
 import { bmrOf, totalBurnForDay, type TotalBurn } from "./energy.js";
 import { hevyHistoryCached, withinAnalysisWindow } from "./hevyHistory.js";
 import { getWaterByDate, waterTargetMl } from "./water.js";
@@ -116,6 +117,8 @@ export type HealthHistory = {
   /** Daily water goal in ml (from body weight). */
   waterTargetMl: number;
   days: HistoryDay[];
+  /** The daily "lands on" read from logged intake and burn (goalProgress.ts energyPace); null without enough logged days or a weight goal. */
+  energyPace?: EnergyPace | null;
 };
 
 const n = (v: unknown): number => {
@@ -209,7 +212,8 @@ export async function buildHealthHistory(
   ]);
   const basics = await loadBodyBasics(userProfileId).catch(() => ({ sex: null, birthYear: null, heightCm: null }));
   const planned = await loadPlanEntries(userProfileId, from, to).catch(() => null);
-  const planStartDate = (await getActiveGoal(userProfileId).catch(() => null))?.startDate ?? null;
+  const activeGoal = await getActiveGoal(userProfileId).catch(() => null);
+  const planStartDate = activeGoal?.startDate ?? null;
   const actsByDate = new Map<string, Activity[]>();
   for (const a of activities) actsByDate.set(a.localDate, [...(actsByDate.get(a.localDate) ?? []), a]);
   const bucketsByDate = new Map<string, StepBucket[]>();
@@ -347,6 +351,14 @@ export async function buildHealthHistory(
     hevy: !hevy.connected ? "not_connected" : hevy.ok ? "connected" : "unavailable",
     waterTargetMl: waterTargetMl(weightKg),
     days,
+    energyPace: activeGoal?.targets.weight_kg != null
+      ? energyPace({
+          days: days.map((d) => ({ date: d.date, calories: d.calories, burnKcal: d.totalBurn && !d.totalBurn.soFar ? d.totalBurn.kcal : null, full: !d.unlogged && !d.partial && !d.paused })),
+          today: to,
+          latestWeightKg: weightKg,
+          targetWeightKg: activeGoal.targets.weight_kg,
+        })
+      : null,
   };
 }
 

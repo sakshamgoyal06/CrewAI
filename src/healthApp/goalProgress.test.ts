@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeGoalProgress, nextCheckpoint, slopePerDay, weighInDue, type BodyCheckin, type HealthGoal } from "./goalProgress.js";
+import { computeGoalProgress, energyPace, nextCheckpoint, slopePerDay, weighInDue, type BodyCheckin, type HealthGoal } from "./goalProgress.js";
 
 const goal: HealthGoal = {
   id: "g1",
@@ -145,5 +145,31 @@ describe("nextCheckpoint", () => {
   it("is null without a start or a real distance", () => {
     expect(nextCheckpoint({ ...base, start: null, latest: 85, today: "2026-11-05" })).toBeNull();
     expect(nextCheckpoint({ ...base, start: 80, latest: 80, today: "2026-11-05" })).toBeNull();
+  });
+});
+
+describe("energyPace", () => {
+  const day = (date: string, calories: number, burnKcal: number | null, full = true) => ({ date, calories, burnKcal, full });
+
+  it("turns the average deficit of fully logged days into kg a week and a landing date", () => {
+    const p = energyPace({
+      days: [day("2026-11-08", 1800, 2350), day("2026-11-09", 1900, 2450), day("2026-11-10", 1700, 2250), day("2026-11-11", 0, null, false), day("2026-11-12", 600, 900)],
+      today: "2026-11-12",
+      latestWeightKg: 85,
+      targetWeightKg: 80,
+    })!;
+    expect(p.daysUsed).toBe(3);
+    expect(p.kgPerWeek).toBeCloseTo(-0.5, 2);
+    expect(p.landsOn).toBe("2027-01-21");
+  });
+
+  it("gives no date when intake is heading away from the target", () => {
+    const p = energyPace({ days: [day("2026-11-08", 2600, 2300), day("2026-11-09", 2600, 2300), day("2026-11-10", 2600, 2300)], today: "2026-11-12", latestWeightKg: 85, targetWeightKg: 80 })!;
+    expect(p.kgPerWeek).toBeGreaterThan(0);
+    expect(p.landsOn).toBeNull();
+  });
+
+  it("needs at least 3 fully logged past days with a burn", () => {
+    expect(energyPace({ days: [day("2026-11-10", 1800, 2300), day("2026-11-11", 1800, 2300, false)], today: "2026-11-12", latestWeightKg: 85, targetWeightKg: 80 })).toBeNull();
   });
 });

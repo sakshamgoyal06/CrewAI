@@ -80,6 +80,7 @@ async function getLoggedMealSafe(userProfileId: string, sessionId: string) {
 import { eatingOutInput, planEatingOut, type EatingOutCard } from "./eatingOut.js";
 import { billingMode, experienceFor, loadEntitlement } from "./billing.js";
 import { getActiveGoal, saveGoalWhy } from "./bodyStore.js";
+import { isConfidentDraft, logDraftNow, quickLogOn } from "./quickLog.js";
 import { replanForGoal } from "./replan.js";
 import { checkNewGoal, openInterventions, recordManualPlan, respond as respondToIntervention } from "./interventions/engine.js";
 import type { InterventionCard } from "./interventions/types.js";
@@ -827,6 +828,15 @@ export async function runTool(
       const p = mealDraftInput.safeParse(input);
       if (!p.success) return invalid(p.error);
       const draft = await startMealDraft(ctx, p.data);
+      // Database numbers for every item and a known meal: log it now, with Edit and Undo on the card.
+      const logged = quickLogOn() && isConfidentDraft(draft) ? await logDraftNow(ctx, draft) : null;
+      if (logged) {
+        return {
+          result: { shownToUserAsCard: true, loggedAlready: true, totals: draft.totals, items: draft.items, slot: draft.slot, date: draft.date, source: draft.source },
+          card: logged,
+          changed: true,
+        };
+      }
       return {
         result: {
           shownToUserAsCard: true,
@@ -1110,7 +1120,12 @@ export function mealDraftReply(drafts: MealDraft[]): string {
         : one.plan?.role === "instead"
           ? ` for ${slotName}, in place of the planned ${one.plan.insteadOf}`
           : ` for ${slotName}`;
-    parts.push(`That comes to about ${kcal} kcal and ${protein} g protein${where}. Check the card, fix anything that's off, then tap Confirm & log.`);
+    const allLogged = found.every((d) => d.autoLogged);
+    parts.push(
+      allLogged
+        ? `Logged: about ${kcal} kcal and ${protein} g protein${where}. If the portion was different, tap Edit on the card, or Undo.`
+        : `That comes to about ${kcal} kcal and ${protein} g protein${where}. Check the card, fix anything that's off, then tap Confirm & log.`,
+    );
   }
   const blanks = found.flatMap((d) => d.items.filter((i) => i.missing).map((i) => i.name));
   if (blanks.length) parts.push(`I couldn't find numbers for ${blanks.join(", ")}, so fill ${blanks.length === 1 ? "that one" : "those"} in on the card. The rest is counted.`);
