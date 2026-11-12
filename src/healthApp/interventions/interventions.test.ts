@@ -23,7 +23,7 @@ import {
   detectTooFast,
   type DetectInput,
 } from "./detectors.js";
-import { calorieFloor, goalOffersToClose, measure, selectFinding } from "./engine.js";
+import { calorieFloor, defaultOption, goalOffersToClose, isAutoTrial, measure, selectFinding } from "./engine.js";
 import { BANNED, buildOffer, capDate, dateForTarget, impactOf, type OfferContext } from "./options.js";
 import { agreedSnapshot, beforeOf, originalDeadline, withChange, type PlanSnapshot, type PlanVersion } from "./plan.js";
 import type { Finding, Intervention } from "./types.js";
@@ -391,5 +391,34 @@ describe("goal changes", () => {
       row({ id: "gym", status: "offered" }),
     ];
     expect(goalOffersToClose(history).map((h) => h.id)).toEqual(["old-goal"]);
+  });
+});
+
+describe("recommended by default (12 Nov plan, item 7)", () => {
+  const opt = (id: string, over: Record<string, unknown> = {}) => ({ id, label: id, kind: "change" as const, change: {}, impact: { kind: "keeps" as const, date: null, text: "" }, ...over });
+
+  it("starts the first option that keeps the goal date", () => {
+    const i = row({ options: [opt("move_time"), opt("shorter")] });
+    expect(defaultOption(i)?.id).toBe("move_time");
+  });
+
+  it("never picks a date move, a talk, or a new deadline", () => {
+    expect(defaultOption(row({ options: [opt("later", { impact: { kind: "moves", date: "2027-03-01", text: "" } }), opt("talk", { kind: "talk" })] }))).toBeNull();
+    expect(defaultOption(row({ options: [opt("date", { change: { deadline: "2027-03-01" } })] }))).toBeNull();
+    expect(defaultOption(row({ options: [opt("talk", { kind: "talk" }), opt("swap")] }))?.id).toBe("swap");
+  });
+
+  it("waits when sticking to the plan is the advice, or the card first asks what got in the way", () => {
+    expect(defaultOption(row({ options: [opt("x")], recommendation: "Sticking with it is my suggestion." }))).toBeNull();
+    expect(defaultOption(row({ options: [opt("x")], cause: "unknown" }))).toBeNull();
+    expect(defaultOption(row({ options: [opt("x")], status: "trial" }))).toBeNull();
+  });
+
+  it("marks a default trial so the card shows Undo and other ways", () => {
+    const auto = row({ status: "trial", chosenOption: "move_time", facts: { auto: 1 }, options: [opt("move_time"), opt("shorter")], reviewOn: "2026-11-19", startedAt: `${TODAY}T10:00:00Z` });
+    expect(isAutoTrial(auto)).toBe(true);
+    expect(cardFromIntervention(auto)).toMatchObject({ status: "trial", auto: true, chosen: "move_time" });
+    expect(interventionsLine([auto])).toContain("started for them by default");
+    expect(isAutoTrial(row({ status: "trial" }))).toBe(false);
   });
 });

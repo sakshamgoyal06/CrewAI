@@ -23,6 +23,7 @@ export const EXPORT_TABLES = [
   "health_routine_items",
   "health_routine_checks",
   "health_breaks",
+  "health_minimum_days",
   "health_chat_messages",
   "health_coach_memory",
   "health_workout_checks",

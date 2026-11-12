@@ -4,6 +4,7 @@
  */
 import { localDateKey, resolveTimezone } from "../nutrition/localDate.js";
 import { loadBreaks, planBreakOn, type Break } from "./breaks.js";
+import { loadMinimumDays } from "./minimumDayStore.js";
 import {
   fetchHevyWorkoutsPage,
   hevyApiKeyForUser,
@@ -309,7 +310,7 @@ export async function buildHealthSnapshot(
     getActivities(userProfileId, from, to),
     routine?.length ? getRoutineChecks(userProfileId, from, to) : Promise.resolve(new Map()),
   ]);
-  const breaks = await loadBreaks(userProfileId, from).catch(() => []);
+  const [breaks, minimumDays] = await Promise.all([loadBreaks(userProfileId, from).catch(() => []), loadMinimumDays(userProfileId, from).catch(() => new Set<string>())]);
   const planPaused = (date: string) => !!planBreakOn(breaks, date);
   const [mealList, lastLogDate, accounting, goalWhy] = await Promise.all([
     loadDayMeals(userProfileId, to, to).catch(() => undefined),
@@ -369,6 +370,7 @@ export async function buildHealthSnapshot(
         sportLabel: sport ? `${sport.label} · ${sport.durationMin} min` : null,
         routine: dayRoutine,
         paused: planPaused(date),
+        minimum: minimumDays.has(date),
       },
       { ...targets, weightKg: kg, planStartDate: goal?.startDate ?? null },
     );

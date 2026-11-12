@@ -5,6 +5,7 @@
  */
 import { localDateKey } from "../nutrition/localDate.js";
 import { loadBreaks, planBreakOn } from "./breaks.js";
+import { loadMinimumDays } from "./minimumDayStore.js";
 import type { HevyWorkout } from "../pillars/health/workouts/hevy/index.js";
 import { supabase } from "../tools/clients.js";
 import { burnForDay, trainingActivity, typicalTrainingBurn, type Activity, type Burn, type NotCounted, type StepBucket, type TimedWorkout } from "./activities.js";
@@ -74,6 +75,8 @@ export type HistoryDay = {
   partial?: true;
   /** The whole plan was paused that day (breaks.ts). */
   paused?: true;
+  /** A minimum day (minimumDay.ts). */
+  minimum?: true;
   calories: number;
   proteinG: number;
   carbsG: number;
@@ -184,7 +187,7 @@ export async function buildHealthHistory(
   const from = dates[0]!;
   const to = dates[dates.length - 1]!;
 
-  const breaks = await loadBreaks(userProfileId, from).catch(() => []);
+  const [breaks, minimumDays] = await Promise.all([loadBreaks(userProfileId, from).catch(() => []), loadMinimumDays(userProfileId, from).catch(() => new Set<string>())]);
   const planPaused = (date: string) => !!planBreakOn(breaks, date);
   const [mealRes, activityRes, hevy, checkins, workoutChecks, activities, stepRes, routineChecks, water] = await Promise.all([
     supabase
@@ -305,6 +308,7 @@ export async function buildHealthHistory(
         sportLabel: sportCounted,
         routine: dayRoutine,
         paused: planPaused(date),
+        minimum: minimumDays.has(date),
       },
       { ...targets, weightKg: kg, planStartDate },
     );
@@ -318,6 +322,7 @@ export async function buildHealthHistory(
       ...(score.unlogged ? { unlogged: true as const } : {}),
       ...(score.partial ? { partial: true as const } : {}),
       ...(score.paused ? { paused: true as const } : {}),
+      ...(score.minimum ? { minimum: true as const } : {}),
       calories,
       proteinG,
       carbsG: r1(dayMeals.reduce((t, m) => t + m.carbsG, 0)),

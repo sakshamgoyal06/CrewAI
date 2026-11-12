@@ -2,6 +2,8 @@
  * JSON API behind the health PWA, mounted on the Express server under `/api/health`.
  * `/config` is public; every other route needs a bearer (see `accounts.ts`).
  */
+import { setMinimumDay } from "./minimumDayStore.js";
+import { undoGapDefaults } from "./dietPlan/store.js";
 import express from "express";
 import { z } from "zod";
 
@@ -611,11 +613,31 @@ export function createHealthAppRouter(): express.Router {
       return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );
+  /** Undo on the answer Magnus gave the plan's gaps by default (12 Nov plan, item 7). */
+  router.post(
+    "/diet/plan-gaps/undo",
+    route("diet-plan-gaps-undo", async (ctx) => {
+      const r = await undoGapDefaults(ctx);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
   /** "Keep this plan": the plan's other gaps (calories, carbs, fat, fibre) accepted until the food rules change. */
   router.post(
     "/diet/plan-gaps/accept",
     route("diet-plan-gaps-accept", async (ctx) => {
       const r = await acceptPlanGaps(ctx);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+
+  /** Minimum day ("bad day" mode, minimumDay.ts): today or yesterday, on or off. */
+  router.post(
+    "/days/:date/minimum",
+    route("day-minimum", async (ctx, req) => {
+      const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.params.date);
+      const { on } = z.object({ on: z.boolean() }).parse(req.body ?? {});
+      const { targets } = await loadHealthProfile(ctx.userProfileId);
+      const r = await setMinimumDay(ctx.userProfileId, date, on, localDateKey(new Date(), ctx.timezone), targets);
       return r.ok ? { body: r } : { status: 400, body: r };
     }),
   );

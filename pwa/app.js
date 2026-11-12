@@ -145,6 +145,7 @@ function friendlyError(code) {
     no_items: "Add at least one item.",
     hevy_not_connected: "Hevy isn't connected for this account.",
     trial_running: "Something here is already on trial. Let's see how that goes first.",
+    too_many: "Two minimum days a week at most, so it stays a way through a bad day.",
     already_answered: "That card was already answered.",
     item_gone: "That routine item isn't in your routine any more.",
     hevy_unavailable: "Couldn't reach Hevy. Try again in a minute.",
@@ -794,8 +795,40 @@ function renderDay() {
         el("div", { class: "bar" }, el("i", { style: `width:${Math.round(c.progress * 100)}%` })),
       ),
     ),
-    ...(core.length ? [el("li", { class: "checks-note" }, `${core.map((c) => c.label).join(" and ")} decide the day. The rest add to it.`)] : []),
+    ...(core.length && !d.minimum ? [el("li", { class: "checks-note" }, `${core.map((c) => c.label).join(" and ")} decide the day. The rest add to it.`)] : []),
+    ...minimumRow(d),
   );
+}
+
+/**
+ * Minimum day ("bad day" mode, minimumDay.ts): on a rough day, a protein anchor and a steps floor
+ * keep the day. Offered on today and yesterday only; switching back is one tap.
+ */
+function minimumRow(d) {
+  const today = todayKey();
+  const yesterday = dateOf(today);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const open = d.date === today || d.date === yesterday.toISOString().slice(0, 10);
+  if (d.paused || (!d.minimum && !open)) return [];
+  const toggle = async (btn, on) => {
+    btn.disabled = true;
+    try {
+      await api(`/days/${d.date}/minimum`, { method: "POST", body: JSON.stringify({ on }) });
+      toast(on ? "Minimum day: hit the two key checks and the day counts." : "Back to a full day.");
+      await Promise.all([refresh(), loadDays()]);
+    } catch (err) {
+      btn.disabled = false;
+      toast(err.message);
+    }
+  };
+  if (d.minimum) {
+    const back = el("button", { class: "link", type: "button" }, "Back to a full day");
+    back.addEventListener("click", (e) => toggle(e.currentTarget, false));
+    return [el("li", { class: "checks-note minimum-note" }, "Minimum day: these two keep it. Calories aren't judged today. ", open ? back : null)];
+  }
+  const go = el("button", { class: "link", type: "button" }, d.date === today ? "Rough day? Make it a minimum day" : "Yesterday was rough? Make it a minimum day");
+  go.addEventListener("click", (e) => toggle(e.currentTarget, true));
+  return [el("li", { class: "checks-note minimum-offer" }, go)];
 }
 
 function renderFuel(d, t) {
@@ -2012,7 +2045,7 @@ function baseSummary(c) {
     case "workout_check": return { text: join("Workout check", c.status === "missing" ? null : c.status === "skipped" ? "skipped" : "done"), open: c.status === "missing" };
     case "routine_check": return { text: join(c.label, c.status === "missing" ? null : c.status), open: c.status === "missing" };
     case "eating_out": return join(`Eating out · ${c.meal}`, c.reserveKcal != null ? `keep ${fmt(c.reserveKcal)} kcal` : null);
-    case "intervention": return { text: c.title, open: c.status === "offered" };
+    case "intervention": return { text: c.title, open: c.status === "offered" || !!c.auto };
     case "rca": return c.hypothesis;
     case "hevy_proposal": return "Hevy change";
     case "calorie_review": return "Calorie review";
@@ -2886,6 +2919,21 @@ function interventionCard(c) {
       const talkBtn = el("button", { class: "btn", type: "button" }, "Talk it through");
       talkBtn.addEventListener("click", () => (talk ? act("choose", { optionId: talk.id }) : send(`About "${c.title}": can we talk it through?`)));
       parts.push(el("div", { class: "draft-actions" }, keep, talkBtn));
+    } else if (c.status === "trial" && c.auto) {
+      // Started by default (12 Nov plan, item 7): Undo, or the other ways behind one tap.
+      parts.push(el("div", { class: "experiment" },
+        el("p", { class: "section-label" }, `Started for you, until ${fmtDay(c.reviewOn)}`),
+        el("p", {}, c.chosen || ""),
+        el("p", { class: "hint" }, "The smallest fix that keeps your goal date. It's a trial: your agreed plan comes back if it doesn't help.")));
+      const others = c.options.filter((o) => o.kind !== "talk" && o.label !== c.chosen);
+      const talk = c.options.find((o) => o.kind === "talk");
+      const undo = el("button", { class: "btn", type: "button" }, "Undo");
+      undo.addEventListener("click", () => act("cancel"));
+      const more = el("button", { class: "btn", type: "button" }, "Other ways");
+      const list = el("div", { class: "intervention-options", hidden: true }, ...others.map(option),
+        el("button", { class: "link", type: "button", onclick: () => (talk ? act("choose", { optionId: talk.id }) : send(`About "${c.title}": can we talk it through?`)) }, "Talk it through"));
+      more.addEventListener("click", () => { list.hidden = !list.hidden; });
+      parts.push(el("div", { class: "draft-actions" }, undo, more), list);
     } else if (c.status === "trial") {
       parts.push(el("div", { class: "experiment" },
         el("p", { class: "section-label" }, `Trying until ${fmtDay(c.reviewOn)}`),

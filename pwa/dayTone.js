@@ -57,6 +57,7 @@ export function dayTone(day, target, nowMin) {
   const routine = routineOff(day, nowMin);
   if (day.onTrack || (day.score >= GREEN_SCORE && !kcal && !routine)) {
     const all = day.checks.every((c) => c.met);
+    if (day.minimum && day.onTrack) return { tone: "green", label: "Minimum day kept" };
     return { tone: "green", label: all ? "All checks met" : day.onTrack ? "Day kept" : "Going well" };
   }
   const late = nowMin === null || nowMin >= RED_FROM_MIN;

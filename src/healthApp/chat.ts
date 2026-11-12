@@ -71,6 +71,8 @@ import { answerWorkoutCheck, workoutCheckAnswerInput, type WorkoutCheckCard } fr
 import { logWater, waterInput } from "./water.js";
 import { bodyBefore, getLoggedMeal, receipt, stepsBefore, type LogReceiptCard } from "./logEdits.js";
 import { loadHealthProfile } from "./snapshot.js";
+import { setMinimumDay } from "./minimumDayStore.js";
+import { addDays } from "../util/time.js";
 
 /** The meal before it's removed, for the receipt; null when it can't be read. */
 async function getLoggedMealSafe(userProfileId: string, sessionId: string) {
@@ -705,6 +707,16 @@ const toolDefinitions: Anthropic.Tool[] = [
     },
   },
   {
+    name: "set_minimum_day",
+    description:
+      "Turn a minimum day on (or off) for today or yesterday when they're having a rough day (ill, slammed, travelling, low). Half the protein target and a steps floor (5,000) keep the day; calories aren't judged. At most 2 in any 7 days.",
+    input_schema: {
+      type: "object",
+      properties: { on: { type: "boolean" }, day: { type: "string", enum: ["today", "yesterday"] } },
+      required: ["on"],
+    },
+  },
+  {
     name: "forget",
     description: "Drop a remembered line when they say it no longer applies or ask you to forget it. Pass the line's words from the context block.",
     input_schema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] },
@@ -883,6 +895,15 @@ export async function runTool(
       const r = await saveGoalWhy(ctx.userProfileId, (input as { why?: unknown } | null)?.why);
       if (!r.ok) return { result: { ok: false, error: r.error } };
       return { result: r.why ? { ok: true, saved: r.why } : { ok: false, error: "empty" } };
+    }
+    case "set_minimum_day": {
+      const p = z.object({ on: z.boolean(), day: z.enum(["today", "yesterday"]).default("today") }).safeParse(input);
+      if (!p.success) return invalid(p.error);
+      const today = localDateKey(ctx.now ?? new Date(), ctx.timezone);
+      const date = p.data.day === "yesterday" ? addDays(today, -1) : today;
+      const { targets } = await loadHealthProfile(ctx.userProfileId);
+      const r = await setMinimumDay(ctx.userProfileId, date, p.data.on, today, targets);
+      return { result: r, changed: r.ok };
     }
     case "respond_to_intervention": {
       const p = z

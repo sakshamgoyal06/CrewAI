@@ -13,6 +13,7 @@ export function cardFromIntervention(i: Intervention): InterventionCard {
     options: i.options.map((o) => ({ id: o.id, label: o.label, kind: o.kind, ...(o.prompt ? { prompt: o.prompt } : {}), impact: o.impact.text })),
     recommendation: i.recommendation,
     status: i.status,
+    auto: i.status === "trial" && i.facts?.auto === 1,
     chosen: i.chosenOption ? (i.options.find((o) => o.id === i.chosenOption)?.label ?? i.chosenOption) : null,
     reviewOn: i.reviewOn,
     verdict: i.verdict,
@@ -44,6 +45,7 @@ export function interventionsLine(rows: Intervention[]): string | null {
   const parts = open.map((r) => {
     const chosen = r.options.find((o) => o.id === r.chosenOption)?.label;
     if (r.status === "offered") return `open offer "${r.title}" (id ${r.id})`;
+    if (r.status === "trial" && r.facts?.auto === 1) return `started for them by default (suggested change, not yet answered) on ${r.startedAt?.slice(0, 10) ?? "?"}: "${chosen ?? r.title}" for ${r.itemLabel ?? r.area}, check on ${r.reviewOn} (id ${r.id})${r.evidence[0] ? `, because: ${r.evidence[0].replace(/\.$/, "")}` : ""}; Undo and the other options sit under that message in chat`;
     if (r.status === "trial") return `trial since ${r.startedAt?.slice(0, 10) ?? "?"}: "${chosen ?? r.title}" for ${r.itemLabel ?? r.area}, check on ${r.reviewOn} (id ${r.id}); their agreed plan is unchanged until they confirm`;
     return `asking whether to keep "${chosen ?? r.title}" (id ${r.id})${r.verdict ? `: ${r.verdict}` : ""}`;
   });

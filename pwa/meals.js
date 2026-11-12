@@ -117,7 +117,7 @@ function paint() {
   const order = SLOT_ORDER.filter((s) => v.prefs.meals.some((m) => m.slot === s));
   const list = dayMealList(listFor(ms.date), { title: isToday ? "Meals today" : `Meals · ${dayLabel(ms.date)}` })
     || el("ul", { class: "list meal-plan" }, ...order.map((slot) => mealCard(ms.date, slot)).filter(Boolean));
-  host.replaceChildren(...[gapCard(v.proteinGap, v.planGaps || [], v.gapCause), strip, summary, list,
+  host.replaceChildren(...[gapCard(v.proteinGap, v.planGaps || [], v.gapCause, v.prefs), strip, summary, list,
     el("div", { class: "fresh-plan" },
       el("button", { class: "btn block", type: "button", onclick: rebuild }, "Make me a fresh plan"),
       el("p", { class: "hint" }, "New options from your current food settings. Meals you've already eaten stay."))].filter(Boolean));
@@ -128,13 +128,21 @@ function paint() {
  * fibre), flagged together when the plan is built. Protein keeps its three choices; the rest can be
  * kept as they are or fixed by loosening a rule. Answered protein: one quiet line until the rules change.
  */
-function gapCard(g, gaps, cause) {
+function gapCard(g, gaps, cause, prefs) {
   const { el, fmt } = d;
   const others = gaps.filter((x) => x.key !== "proteinG");
   const proteinOpen = g && g.answered?.choice !== "accept";
-  const note = g && g.answered?.choice === "accept"
-    ? el("p", { class: "hint gap-note" }, `Protein target is ${Math.round(g.plannedG / 5) * 5} g while ${g.cause} limits the plan. It goes back to ${g.targetG} g when that ends.`)
+  // Answers Magnus gave by default (12 Nov plan, item 7) carry an Undo that reopens the choice.
+  const autoKept = prefs?.planGapsOk?.auto ? prefs.planGapsOk.keys.map((k) => GAP_LABEL[k]).filter(Boolean) : [];
+  const autoProtein = g && g.answered?.choice === "accept" && g.answered.auto;
+  const undo = autoProtein || autoKept.length
+    ? el("button", { class: "link", type: "button", onclick: (e) => undoGapDefaults(e.currentTarget) }, "Undo, let me choose")
     : null;
+  const lines = [
+    g && g.answered?.choice === "accept" ? `Protein target is ${Math.round(g.plannedG / 5) * 5} g while ${g.cause} limits the plan. It goes back to ${g.targetG} g when that ends.` : null,
+    autoKept.length ? `${autoKept.join(", ")} kept as the plan has ${autoKept.length === 1 ? "it" : "them"}, so the coach won't count ${autoKept.length === 1 ? "it" : "them"} against you.` : null,
+  ].filter(Boolean);
+  const note = lines.length ? el("p", { class: "hint gap-note" }, lines.join(" "), undo ? " " : null, undo) : null;
   if (!proteinOpen && !others.length) return note;
   // One line on the Meals tab; the choices open as their own screen (UI rule: big content = screen).
   const first = proteinOpen ? `Plan reaches ${fmt(g.plannedG)} of ${fmt(g.targetG)} g protein` : `Plan misses ${others[0].label.toLowerCase()}`;
@@ -146,6 +154,22 @@ function gapCard(g, gaps, cause) {
       el("span", { class: "gap-text" }, first, more ? el("small", {}, ` and ${more} more`) : null),
       el("span", { class: "gap-cta" }, "Decide"),
       el("i", { class: "chev-r", "aria-hidden": "true" })));
+}
+
+const GAP_LABEL = { kcal: "Calories", carbsG: "Carbs", fatG: "Fat", fiberG: "Fibre" };
+
+async function undoGapDefaults(btn) {
+  btn.disabled = true;
+  try {
+    await d.api("/diet/plan-gaps/undo", { method: "POST", body: "{}" });
+    d.toast("Undone. Pick how to handle the gaps.");
+    await loadPlan(true);
+    d.refresh?.();
+    paint();
+  } catch (err) {
+    btn.disabled = false;
+    d.toast(err.message);
+  }
 }
 
 /** The plan's gaps and what to do about them, as its own screen. */
