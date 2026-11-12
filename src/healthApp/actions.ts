@@ -13,7 +13,7 @@ import { loggableError } from "../util/loggableError.js";
 import { ACTIVITY_SOURCES, upsertDailyActivity } from "./activityStore.js";
 import { afterMealLogged, previewPlanRole, rebalanceToday, redoCarry } from "./dietPlan/rhythm.js";
 import { unlinkDeletedMeal } from "./dietPlan/log.js";
-import { setActiveGoal, updateDailyTargets, upsertBodyCheckin } from "./bodyStore.js";
+import { saveGoalWhy, setActiveGoal, updateDailyTargets, upsertBodyCheckin } from "./bodyStore.js";
 import { isOwnerProfile } from "./accounts.js";
 import { webGateFor } from "./webLookups.js";
 import {
@@ -58,6 +58,8 @@ export const goalInput = z
     deadline: DATE,
     startDate: DATE.optional(),
     notes: z.string().max(500).optional(),
+    /** Why the goal matters, in their words (saved on the profile, kept across goals). */
+    why: z.string().trim().max(300).optional(),
   })
   .refine(
     (v) =>
@@ -203,6 +205,11 @@ export async function setGoal(
     deadline: input.deadline,
     notes: input.notes ?? null,
   });
+  if (saved.ok && input.why?.trim()) {
+    // Optional and on its own column: a failed save never fails the goal.
+    const why = await saveGoalWhy(ctx.userProfileId, input.why);
+    if (!why.ok) logger.warn({ err: why.error }, "goal why not saved");
+  }
   return saved.ok ? { ok: true, goalId: saved.id } : saved;
 }
 

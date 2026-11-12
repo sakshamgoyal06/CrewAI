@@ -4975,6 +4975,11 @@ const SHEETS = {
         saved.push("Goal");
         replan = res?.replan?.changed ? res.replan : null;
       }
+      // The why saves on its own: changing it must never restart the goal (a new goal resets its start date).
+      if (changed(["why"])) {
+        await api("/goal/why", { method: "POST", body: JSON.stringify({ why: String(fd.get("why") ?? "").trim() }) });
+        if (!saved.length) saved.push("Why");
+      }
       if (changed(targetFields)) {
         replan = null; // typed targets win over the recomputed one
         await api("/targets", { method: "POST", body: JSON.stringify({ calorieTarget: num(fd.get("kcal")), proteinTarget: num(fd.get("prot")), stepTarget: num(fd.get("steps")) }) });
@@ -4993,6 +4998,9 @@ const SHEETS = {
         el("label", {}, "Muscle kg", el("input", { class: "field", name: "tmm", type: "number", step: "0.1", inputmode: "decimal", value: g?.targets.muscle_mass_kg ?? null })),
       ),
       el("label", {}, "Deadline", dateButton),
+      el("label", {}, "Why this goal",
+        el("textarea", { id: "settings-goal-why", class: "field", name: "why", rows: "2", maxlength: "300", placeholder: "My sister's wedding in February. I want to feel good in the photos." }, s?.goalWhy ?? "")),
+      el("p", { class: "hint" }, "In your words. On a hard day, Magnus reminds you of this."),
       el("p", { class: "section-label" }, "Daily targets"),
       el("div", { class: "grid3" },
         el("label", {}, "Calories", el("input", { class: "field", name: "kcal", type: "number", inputmode: "numeric", value: t.calorieTarget ?? null })),
@@ -5003,7 +5011,7 @@ const SHEETS = {
     );
     function snapshotForm() {
       const fd = new FormData(form);
-      return Object.fromEntries([...goalFields, ...targetFields].map((n) => [n, fd.get(n) ?? ""]));
+      return Object.fromEntries([...goalFields, ...targetFields, "why"].map((n) => [n, fd.get(n) ?? ""]));
     }
     function sync() {
       const now = snapshotForm();

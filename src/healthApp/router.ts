@@ -85,7 +85,7 @@ import { confirmDayComplete, rebalanceToday, redoCarry, setMealPlanRole } from "
 import { GAP_CHOICES } from "./dietPlan/proteinGap.js";
 import { acceptPlanGaps, answerProteinGap, FEEDBACK_REASONS, loadDietPrefs, loadPlanView, markOption, mealFeedback, OPTION_ACTIONS, planGapLine, prefsChangeReason, rebuildPlan, saveDietPrefs, swapPick } from "./dietPlan/store.js";
 import { replanForGoal } from "./replan.js";
-import { getActiveGoal } from "./bodyStore.js";
+import { getActiveGoal, saveGoalWhy } from "./bodyStore.js";
 import { PLAN_SLOTS } from "./dietPlan/targets.js";
 import {
   applyRazorpayEvent,
@@ -1072,6 +1072,15 @@ export function createHealthAppRouter(): express.Router {
       void recordManualPlan(ctx.userProfileId, "You set a new goal");
       void checkNewGoal(ctx.userProfileId);
       return fromResult({ ...r, replan });
+    }),
+  );
+
+  router.post(
+    "/goal/why",
+    route("goal_why", async (ctx, req) => {
+      const input = z.object({ why: z.string().trim().max(300) }).parse(req.body);
+      const r = await saveGoalWhy(ctx.userProfileId, input.why);
+      return fromResult(r.ok ? { ok: true as const, why: r.why } : r);
     }),
   );
 

@@ -430,6 +430,7 @@ const toolDefinitions: Anthropic.Tool[] = [
         targetMuscleMassKg: { type: "number" },
         deadline: { type: "string", description: "YYYY-MM-DD" },
         notes: { type: "string" },
+        why: { type: "string", description: "Why this goal matters to them, in their words, when they've said it. Never invented." },
       },
       required: ["deadline"],
     },
