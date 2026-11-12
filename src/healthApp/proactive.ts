@@ -343,6 +343,24 @@ async function maybePauseEnd(userProfileId: string, now: Date, timezone: string,
   }
 }
 
+/** During a whole-plan pause the weigh-in push goes out at most once in 7 days. Pure. */
+export function pauseWeighInAllowed(lastSentAt: Date | null, now: Date): boolean {
+  return !lastSentAt || now.getTime() - lastSentAt.getTime() >= 7 * DAY_MS - 2 * 60 * 60 * 1000;
+}
+
+async function lastPushAt(userProfileId: string, kind: Notification["kind"]): Promise<Date | null> {
+  const { data, error } = await supabase
+    .from("health_notifications")
+    .select("sent_at")
+    .eq("user_profile_id", userProfileId)
+    .eq("kind", kind)
+    .order("sent_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data?.sent_at) return null;
+  return new Date(data.sent_at as string);
+}
+
 /** One pass of everything proactive. Each part fails on its own without stopping the others. */
 export async function proactiveTick(userProfileId: string, now = new Date()): Promise<void> {
   // A paused account gets no pushes, digests or analyses (and costs nothing) until it's re-enabled.
@@ -357,7 +375,11 @@ export async function proactiveTick(userProfileId: string, now = new Date()): Pr
     logger.warn({ err: loggableError(err), part: "pause end" }, "proactive tick part failed");
   }
   if (planBreakOn(breaks, today)) {
-    await runNudges(userProfileId, now, new Set(["weigh_in"])).catch((err) => logger.warn({ err: loggableError(err), part: "nudges" }, "proactive tick part failed"));
+    // Once a week during a pause, not every morning while it's overdue (Saksham, 12 Nov: away from the scale).
+    const last = await lastPushAt(userProfileId, "weigh_in").catch(() => null);
+    if (pauseWeighInAllowed(last, now)) {
+      await runNudges(userProfileId, now, new Set(["weigh_in"])).catch((err) => logger.warn({ err: loggableError(err), part: "nudges" }, "proactive tick part failed"));
+    }
     return;
   }
   // Two weeks without a log: no day plans, checks or reminders any more, just the lapse check-ins.

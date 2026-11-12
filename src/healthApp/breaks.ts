@@ -10,7 +10,7 @@
  * - Billing doesn't change.
  *
  * Every job and score reads them: a paused item is off the routine those days (routine.ts onDate);
- * a paused plan has no reminders except the weekly weigh-in, no day close, no nightly note, and its
+ * a paused plan has no reminders except the weekly weigh-in (at most one push in 7 days), no day close, no nightly note, and its
  * days drop out of the score.
  */
 import { z } from "zod";

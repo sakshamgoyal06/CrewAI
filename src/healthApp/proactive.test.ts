@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../tools/clients.js", () => ({ supabase: {}, anthropic: {} }));
 
-import { dueNudges } from "./proactive.js";
+import { dueNudges, pauseWeighInAllowed } from "./proactive.js";
 import { parsePrefs } from "./push.js";
 import type { HealthSnapshot } from "./snapshot.js";
 
@@ -143,4 +143,11 @@ describe("logging lapses (11 Nov design)", () => {
     expect(dueNudges(snap({ meals: [], logging: logging(4) }), ist("12:40"), prefs)).toEqual([]);
     expect(dueNudges(snap({ meals: [], logging: logging(3) }), ist("12:40"), parsePrefs({ off: ["logging_nudge"] }))).toEqual([]);
   });
+});
+
+describe("weigh-in push during a whole-plan pause", () => {
+  const now = new Date("2026-11-12T03:00:00Z");
+  it("goes out when none was sent before", () => expect(pauseWeighInAllowed(null, now)).toBe(true));
+  it("doesn't repeat the next morning while still overdue", () => expect(pauseWeighInAllowed(new Date("2026-11-11T03:04:00Z"), now)).toBe(false));
+  it("goes out again a week later", () => expect(pauseWeighInAllowed(new Date("2026-11-05T03:10:00Z"), now)).toBe(true));
 });
