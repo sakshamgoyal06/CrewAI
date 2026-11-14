@@ -6,7 +6,7 @@ import { runOnboarding } from "./onboarding.js";
 import { scanView } from "./scan.js";
 import { foodPrefsEditor } from "./foodprefs.js";
 import { fromServer, routineEditor, toPayload } from "./routine.js";
-import { dayMealList, initMeals, loadPlan, mealScreen, mealsTitles, openPlannedMeal, planGapsScreen, renderMeals, setupScreen } from "./meals.js";
+import { dayMealList, groceryScreen, initMeals, loadPlan, mealScreen, mealsTitles, openPlannedMeal, planGapsScreen, renderMeals, setupScreen } from "./meals.js";
 import { mealBuilder, fixedItem } from "./mealbuilder.js";
 import { initPause, loadPauses, openResume, pauseAlt, pauseDone, pauseLength, pauseTitles, pauseWhat, pauseWhy, resumeKeep, resumeStart, resumeWeigh, startPause } from "./pause.js";
 import { dayTone } from "./dayTone.js";
@@ -2589,6 +2589,7 @@ function dayPlanCard(c) {
       : c.dayKind ? el("p", { class: "dp-kind" }, c.dayKind) : null,
     el("div", { class: "dp-targets" }, ...(c.targets || []).map((t) => el("div", {}, el("b", {}, t.value), el("small", {}, t.label)))),
     c.focus ? el("p", { class: "dp-tip" }, el("b", {}, "Worth a look "), c.focus) : null,
+    c.weekend ? el("p", { class: "dp-tip" }, el("b", {}, "Weekend "), c.weekend) : null,
     el("button", { class: "link dp-more", type: "button", onclick: () => { state.dayPlan = c; openSheet("dayPlan"); } }, "Full plan"),
   );
 }
@@ -2615,6 +2616,7 @@ function dayPlanFull(c) {
           : el("span", {}, `${m.title} · ${fmt(m.kcal)} kcal`)))),
       el("button", { class: "link", type: "button", onclick: () => { closeSheet(); afterClose(() => setView("meals")); } }, "Open meals")) : null,
     c.focus ? el("div", { class: "dp-focus" }, el("p", { class: "eyebrow" }, "Worth a look"), el("p", {}, c.focus)) : null,
+    c.weekend ? el("div", { class: "dp-focus" }, el("p", { class: "eyebrow" }, "Weekend"), el("p", {}, c.weekend)) : null,
     el("p", { class: "dp-motto" }, c.motivation),
   );
 }
@@ -4735,6 +4737,7 @@ const SHEETS = {
   dietSetup: setupScreen,
   dietMeal: mealScreen,
   planGaps: planGapsScreen,
+  grocery: groceryScreen,
   activity() {
     const date = state.activityDate || null;
     state.activityDate = null;

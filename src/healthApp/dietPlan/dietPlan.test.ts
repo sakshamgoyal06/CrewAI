@@ -237,6 +237,16 @@ describe("pickDays", () => {
     expect(fri.title).toBe("Eating out, about 1050 kcal");
   });
 
+  it("plans an event told ahead as a bigger allowance named after it, over a weekly eat-out", () => {
+    const withEvent = dietPrefsInput.parse({ ...prefs, eatOut: [{ day: 5, slot: "dinner" }], events: [{ date: "2026-11-06", slot: "dinner", label: "Cousin's wedding" }] });
+    const picks = pickDays({ start: "2026-11-04", budgets, options: { lunch: opts("lunch", 5), dinner: opts("dinner", 5) }, prefs: withEvent });
+    const ev = picks.find((p) => p.date === "2026-11-06" && p.slot === "dinner")!;
+    expect(ev.kind).toBe("eat_out");
+    expect(ev.title).toBe("Cousin's wedding, about 1350 kcal");
+    expect(ev.totals.kcal).toBe(1350);
+    expect(picks.find((p) => p.date === "2026-11-06" && p.slot === "lunch")!.kind).toBe("option");
+  });
+
   it("keeps a planned meal whose option a rebuilt plan no longer offers", () => {
     const picks = pickDays({
       start: "2026-11-04",

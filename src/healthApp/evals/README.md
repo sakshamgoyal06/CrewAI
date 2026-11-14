@@ -2,7 +2,7 @@
 
 Two sets of cases, one rule: **evals never bill the Anthropic API key.** They are run inside a Claude session.
 
-- `coachSet.ts`: the coach eval set (12 Nov 2026), 155 cases in 16 categories. `goal_journey` covers new goals said any way ("I want abs", a wedding date, gain 8 kg, a 10k) and the step-by-step breakdown; `habits` covers environment and consistency (snacks in the house, the gym bag, snoozing, slips). These are questions Indian users actually ask a health coach, plus the edge cases Magnus's own rules create. Each case has a person (persona), a message, code checks and a must / must-not rubric.
+- `coachSet.ts`: the coach eval set (12 Nov 2026), 157 cases in 16 categories. `goal_journey` covers new goals said any way ("I want abs", a wedding date, gain 8 kg, a 10k) and the step-by-step breakdown; `habits` covers environment and consistency (snacks in the house, the gym bag, snoozing, slips). These are questions Indian users actually ask a health coach, plus the edge cases Magnus's own rules create. Each case has a person (persona), a message, code checks and a must / must-not rubric.
 - `cases.ts`: the earlier 105 cases (logging, honesty, failure, scope and jailbreaks). They're scored by code checks only.
 
 ## Running a set in a Claude session
@@ -34,5 +34,7 @@ A case passes when every code check passes, every `must` holds and no `mustNot` 
 - `runs/2026-11-12-inevitable`: 5 new `inevitable` cases (kept days, their why, checkpoints) for batch 1 of the "make the goal inevitable" plan. **4 of 5**, tone 3.0. The one miss: a "the goal feels impossible" reply pointed at the next checkpoint but named no concrete action. The other 147 cases weren't re-answered; their context now carries a "Why this goal" line and "(key)" marks on checks.
 
 - `runs/2026-11-12-defaults`: 3 new `inevitable` cases for batch 3 (a sick day offered a minimum day, the evening of a minimum day, a gym time moved by a default trial). **7 of 8**, tone 3.0. The 5 batch-1 answers and judgments were carried over; the one miss is still `checkpoint-far`. Found on the way: the phantom-card guard drops any sentence with "card" when the reply shows none, so the prompt and context now say Undo sits "under that change in chat".
+
+- `runs/2026-11-14-ahead`: 2 new `inevitable` cases for batch 4 (a wedding told ahead becomes a planned event meal, a grocery-list ask). **9 of 10**, tone 2.9. The 8 earlier answers and judgments were carried over; the one miss is still `checkpoint-far`.
 
 Limits: the session model is a strong one. In production, short logs go to the fast model (`routedModel` in results.json), which may do worse on those cases. The coach and the judge are the same session, so a person should spot-check the judgments.

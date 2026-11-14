@@ -118,6 +118,7 @@ function paint() {
   const list = dayMealList(listFor(ms.date), { title: isToday ? "Meals today" : `Meals · ${dayLabel(ms.date)}` })
     || el("ul", { class: "list meal-plan" }, ...order.map((slot) => mealCard(ms.date, slot)).filter(Boolean));
   host.replaceChildren(...[gapCard(v.proteinGap, v.planGaps || [], v.gapCause, v.prefs), strip, summary, list,
+    el("button", { class: "btn block", type: "button", onclick: () => d.openSheet("grocery") }, "Grocery list for the week"),
     el("div", { class: "fresh-plan" },
       el("button", { class: "btn block", type: "button", onclick: rebuild }, "Make me a fresh plan"),
       el("p", { class: "hint" }, "New options from your current food settings. Meals you've already eaten stay."))].filter(Boolean));
@@ -1090,4 +1091,44 @@ export function listFor(date) {
   return (ms.view?.lists || []).find((x) => x.date === date) || null;
 }
 
-export const mealsTitles = { dietSetup: "Your meals", dietMeal: "", planGaps: "Plan vs your targets" };
+export const mealsTitles = { dietSetup: "Your meals", dietMeal: "", planGaps: "Plan vs your targets", grocery: "Grocery list" };
+
+/**
+ * The next 7 days of the plan as a shopping list (dietPlan/grocery.ts), grouped by aisle, with a
+ * tick per item kept on this phone only and a copy button for sharing with whoever shops.
+ */
+export function groceryScreen() {
+  const { el } = d;
+  const wrap = el("div", { class: "stack grocery" }, el("p", { class: "none" }, "Working out the week…"));
+  const key = "magnus.grocery.ticks";
+  let ticks = {};
+  try { ticks = JSON.parse(localStorage.getItem(key) || "{}"); } catch { ticks = {}; }
+  const save = () => { try { localStorage.setItem(key, JSON.stringify(ticks)); } catch { /* ticks are a convenience */ } };
+  d.api("/diet/grocery").then((g) => {
+    if (!g.groups?.length) {
+      wrap.replaceChildren(el("p", { class: "none" }, "Nothing to buy from the plan this week."));
+      return;
+    }
+    const tag = `${g.from}|${g.to}`;
+    if (ticks.tag !== tag) ticks = { tag };
+    const text = g.groups.map((x) => `${x.group}\n${x.items.map((i) => `- ${i.name}, ${i.amount}`).join("\n")}`).join("\n\n");
+    const copy = el("button", { class: "btn block", type: "button" }, "Copy the list");
+    copy.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(text); d.toast("Copied. Paste it in WhatsApp or a note."); } catch { d.toast("Couldn't copy on this phone."); }
+    });
+    wrap.replaceChildren(
+      el("p", { class: "hint" }, `For ${g.meals} planned meals, ${d.fmtDay ? d.fmtDay(g.from) : g.from} to ${d.fmtDay ? d.fmtDay(g.to) : g.to}. Amounts are raw, as bought; a little extra for waste is wise.`),
+      ...g.groups.map((x) => el("div", { class: "grocery-group" },
+        el("p", { class: "section-label" }, x.group),
+        el("ul", { class: "list grocery-list" }, ...x.items.map((i) => {
+          const id = `${x.group}|${i.name}`;
+          const box = el("input", { type: "checkbox", checked: !!ticks[id] });
+          box.addEventListener("change", () => { ticks[id] = box.checked; save(); });
+          return el("li", {}, el("label", {}, box, el("span", {}, i.name), el("small", {}, ` ${i.amount}`)));
+        })))),
+      g.loose?.length ? el("p", { class: "hint" }, `Also in the plan: ${g.loose.join(", ")}.`) : null,
+      copy,
+    );
+  }).catch((err) => wrap.replaceChildren(el("p", { class: "none" }, err.message)));
+  return wrap;
+}
