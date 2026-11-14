@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../tools/clients.js", () => ({ supabase: {} }));
 
-const { checkBreak, maxDays, pauseEndMessage, pauseOverLine, planBreakOn, alternativeFor } = await import("./breaks.js");
+const { checkBreak, checkExtend, maxDays, pauseEndMessage, pauseOverLine, planBreakOn, alternativeFor } = await import("./breaks.js");
 const { onDate, trainingDayOn, routineDayStatus } = await import("./routine.js");
 const { scoreDay, computeNorthStar } = await import("./northStar.js");
 
@@ -76,5 +76,22 @@ describe("the first plan after a pause", () => {
   it("says nothing on other days", () => {
     expect(pauseOverLine([plan("p", "2026-11-11", "2026-11-17")], "2026-11-17", label)).toBeNull();
     expect(pauseOverLine([plan("p", "2026-11-11", "2026-11-17")], "2026-11-19", label)).toBeNull();
+  });
+});
+
+describe("extending a pause", () => {
+  const p = plan("p", "2026-11-11", "2026-11-17");
+  it("counts the cap from the original start", () => {
+    expect(checkExtend(p, "2026-11-24", "2026-11-14", [p])).toEqual({ ok: true, until: "2026-11-24", days: 14, max: 21 });
+    expect(checkExtend(p, "2026-12-01", "2026-11-14", [p])).toMatchObject({ ok: true, days: 21 });
+    expect(checkExtend(p, "2026-12-02", "2026-11-14", [p])).toEqual({ ok: false, error: "too_long", max: 21 });
+    expect(checkExtend(p, "2026-11-30", "2026-11-14", [p])).toMatchObject({ ok: true, days: 20 });
+  });
+  it("only moves the end later, on a pause that isn't over, without running into another", () => {
+    expect(checkExtend(p, "2026-11-17", "2026-11-14", [p])).toMatchObject({ ok: false, error: "not_later" });
+    expect(checkExtend(p, "2026-11-20", "2026-11-18", [p])).toMatchObject({ ok: false, error: "already_over" });
+    const next = plan("q", "2026-11-20", "2026-11-22");
+    expect(checkExtend(p, "2026-11-21", "2026-11-14", [p, next])).toMatchObject({ ok: false, error: "already_paused" });
+    expect(checkExtend(p, "2026-11-19", "2026-11-14", [p, next])).toMatchObject({ ok: true });
   });
 });

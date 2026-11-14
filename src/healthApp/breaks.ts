@@ -90,6 +90,24 @@ export function checkBreak(input: BreakInput, today: string, existing: Break[]):
   return { ok: true, from, until: input.until };
 }
 
+export type ExtendCheck = { ok: true; until: string; days: number; max: number } | { ok: false; error: "already_over" | "not_later" | "too_long" | "already_paused"; max?: number };
+
+/**
+ * Whether a running or coming pause can run longer (Saksham, 14 Nov). It stays the same pause: the
+ * cap counts from its original first day, and the end message, the restart and the "pause is over"
+ * line all follow the new last day. Pure.
+ */
+export function checkExtend(b: Break, until: string, today: string, existing: Break[]): ExtendCheck {
+  if (b.endDate < today) return { ok: false, error: "already_over" };
+  if (until <= b.endDate) return { ok: false, error: "not_later" };
+  const max = maxDays(b.scope, b.reason);
+  const days = lengthOf(b.startDate, until);
+  if (days > max) return { ok: false, error: "too_long", max };
+  const clash = existing.some((x) => x.id !== b.id && x.scope === b.scope && (b.scope === "plan" || x.itemId === b.itemId) && x.startDate <= until && x.endDate > b.endDate);
+  if (clash) return { ok: false, error: "already_paused" };
+  return { ok: true, until, days, max };
+}
+
 /** What to keep up during the pause, shown with it (never enforced). Pure. */
 export function minimumsFor(scope: Break["scope"], gym: boolean): string[] {
   if (scope === "plan") return ["Weigh in once a week, same morning.", "Protein at least 80% of your target on most days.", "Keep moving: about 5,000 steps a day."];
@@ -175,6 +193,17 @@ export async function endBreakEarly(userProfileId: string, id: string, today: st
   const last = addDays(today, -1);
   const up = await supabase.from("health_breaks").update({ end_date: last, ended_at: now }).eq("user_profile_id", userProfileId).eq("id", id);
   return up.error ? { ok: false, error: up.error.message } : { ok: true, unusedDays: lengthOf(today, b.endDate), scope: b.scope };
+}
+
+/** Runs a pause longer, from the pause screen or the coach. */
+export async function extendBreak(userProfileId: string, id: string, until: string, today: string): Promise<ExtendCheck | { ok: false; error: "not_found" | string }> {
+  const all = await loadBreaks(userProfileId, today);
+  const b = all.find((x) => x.id === id);
+  if (!b) return { ok: false, error: "not_found" };
+  const check = checkExtend(b, until, today, all);
+  if (!check.ok) return check;
+  const { error } = await supabase.from("health_breaks").update({ end_date: until }).eq("user_profile_id", userProfileId).eq("id", id);
+  return error ? { ok: false, error: error.message } : check;
 }
 
 // ---------- the way back ----------

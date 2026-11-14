@@ -11,57 +11,83 @@ const draft = { scope: null, itemId: null, itemLabel: null, reason: null, note: 
 const resume = { id: null, state: null, plan: null };
 let info = { breaks: [], resume: null };
 
-export function initPause(deps) { d = deps; }
+const CACHE_KEY = "magnus-pauses";
+
+/** Paints the banners from the last known pauses at once, so a reload never shows them missing. */
+export function initPause(deps) {
+  d = deps;
+  try { info = JSON.parse(localStorage.getItem(CACHE_KEY) || "null") || info; } catch { /* private mode */ }
+  if (!Array.isArray(info.breaks)) info = { breaks: [], resume: null };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => paintBanner());
+  else paintBanner();
+}
 
 const REASONS = [["sick", "Sick"], ["injured", "Injured"], ["travel", "Travelling or on holiday"], ["busy", "Too busy"], ["rest", "Need a rest"], ["other", "Something else"]];
 const reasonLabel = (r) => (REASONS.find(([k]) => k === r)?.[1] ?? r).toLowerCase();
 const shortDate = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 const addDays = (iso, n) => new Date(Date.parse(`${iso}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
-export const pauseTitles = { pauseWhat: "Pause", pauseWhy: "Why the pause?", pauseAlt: "Before you pause", pauseLength: "How long?", pauseDone: "Paused", resumeStart: "Welcome back", resumeWeigh: "Today's weight", resumeKeep: "Keeping your date" };
+export const pauseTitles = { pauseExtend: "Extend the pause", pauseWhat: "Pause", pauseWhy: "Why the pause?", pauseAlt: "Before you pause", pauseLength: "How long?", pauseDone: "Paused", resumeStart: "Welcome back", resumeWeigh: "Today's weight", resumeKeep: "Keeping your date" };
 
-/** Loads pauses and any restart choice still to make; paints the Today banner; opens Resume once a day. */
+/**
+ * Loads pauses and any restart choice still to make, and paints the banner on every screen. A failed
+ * load keeps what was shown (the banner used to vanish when a refresh's request failed).
+ */
 export async function loadPauses() {
   try {
-    info = await d.api("/breaks");
+    const r = await d.api("/breaks");
+    info = { breaks: r.breaks ?? [], resume: r.resume ?? null };
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(info)); } catch { /* private mode */ }
   } catch {
-    info = { breaks: [], resume: null };
+    /* keep the last known pauses */
   }
   paintBanner();
   return info;
 }
 
-function paintBanner() {
-  const box = document.getElementById("pause-banner");
-  if (!box) return;
-  const { el } = d;
+/** Pauses running today (the whole plan first). */
+function livePauses() {
   const today = d.todayKey();
-  const now = info.breaks.filter((b) => b.startDate <= today);
-  if (info.resume) {
+  return info.breaks.filter((b) => b.startDate <= today && b.endDate >= today).sort((a, b) => (a.scope === b.scope ? 0 : a.scope === "plan" ? -1 : 1));
+}
+
+function paintBanner() {
+  if (!d) return;
+  const { el } = d;
+  const live = livePauses();
+  const b = live[0] ?? null;
+  for (const box of document.querySelectorAll("[data-pause-banner]")) {
+    if (info.resume) {
+      box.hidden = false;
+      box.replaceChildren(el("span", {}, "Your pause is over. Choose how to restart."), el("button", { class: "link", type: "button", onclick: () => openResume(info.resume) }, "Restart"));
+      continue;
+    }
+    if (!b) { box.hidden = true; box.replaceChildren(); continue; }
+    const what = b.scope === "plan" ? "Your plan is" : `${itemName(b.itemId)} is`;
+    const more = live.length > 1 ? ` (+${live.length - 1} more)` : "";
     box.hidden = false;
-    box.replaceChildren(el("span", {}, "Your pause is over. Choose how to restart."), el("button", { class: "link", type: "button", onclick: () => openResume(info.resume) }, "Restart"));
-    return;
+    box.replaceChildren(
+      el("span", {}, `${what} paused till ${shortDate(b.endDate)}.${more}`),
+      el("button", { class: "link", type: "button", onclick: () => d.openSheet("pauseWhat") }, "Extend or end"));
   }
-  if (!now.length) { box.hidden = true; box.replaceChildren(); return; }
-  const b = now[0];
-  const what = b.scope === "plan" ? "Your plan is" : `${itemName(b.itemId)} is`;
-  box.hidden = false;
-  box.replaceChildren(
-    el("span", {}, `${what} paused till ${shortDate(b.endDate)}.`),
-    el("button", { class: "link", type: "button", onclick: (e) => endEarly(e.currentTarget, b) }, "End early"));
+  // The Pause row on You says what's running.
+  const row = document.querySelector('[data-sheet="pauseWhat"] small');
+  if (row) row.textContent = b ? `${b.scope === "plan" ? "Whole plan" : itemName(b.itemId)} paused till ${shortDate(b.endDate)}: extend or end it` : "Take a break from one item or the whole plan";
 }
 
 function itemName(id) {
   return d.snapshot()?.routine?.find((i) => i.id === id)?.label ?? "This item";
 }
 
-async function endEarly(btn, b) {
+async function endEarly(btn, b, fromSheet = false) {
   btn.disabled = true;
   try {
     await d.api(`/breaks/${b.id}/end`, { method: "POST" });
     await loadPauses();
     d.refresh();
+    if (b.startDate > d.todayKey()) { if (fromSheet) d.closeSheet(); d.toast("Pause cancelled."); return; }
     if (b.scope === "plan") openResume(b.id);
+    else if (fromSheet) { d.closeSheet(); d.toast(`${itemName(b.itemId)} is back from today.`); }
     else d.toast(`${itemName(b.itemId)} is back from today.`);
   } catch (err) {
     btn.disabled = false;
@@ -75,15 +101,86 @@ export function startPause(item = null) {
   d.openSheet(item ? "pauseWhy" : "pauseWhat");
 }
 
+const dayCount = (from, until) => Math.round((Date.parse(`${until}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86_400_000) + 1;
+const extendTarget = { b: null };
+
+/** One running or coming pause, with Extend and End (or Cancel before it starts). */
+function pauseCard(b) {
+  const { el } = d;
+  const today = d.todayKey();
+  const started = b.startDate <= today;
+  const name = b.scope === "plan" ? "The whole plan" : itemName(b.itemId);
+  const days = dayCount(b.startDate, b.endDate);
+  const canExtend = b.max ? days < b.max : true;
+  return el("div", { class: "pause-live" },
+    el("p", { class: "pa-head" }, name),
+    el("p", { class: "hint" }, `${started ? "Paused" : "Pausing"} for ${reasonLabel(b.reason)}, ${shortDate(b.startDate)} to ${shortDate(b.endDate)} (${days} day${days === 1 ? "" : "s"}${b.max ? ` of ${b.max} at most` : ""}).`),
+    el("div", { class: "row-actions" },
+      canExtend ? el("button", { class: "btn primary", type: "button", onclick: () => { extendTarget.b = b; d.openSheet("pauseExtend"); } }, "Extend pause") : null,
+      el("button", { class: "btn", type: "button", onclick: (e) => endEarly(e.currentTarget, b, true) }, started ? "End pause" : "Cancel it")),
+    canExtend ? null : el("p", { class: "hint" }, "It's already as long as a pause can be."));
+}
+
 export function pauseWhat() {
   const { el } = d;
   Object.assign(draft, { scope: null, itemId: null, itemLabel: null, reason: null, note: "", preview: null, days: 7 });
   const routine = d.snapshot()?.routine ?? [];
   const pick = (scope, item) => { Object.assign(draft, { scope, itemId: item?.id ?? null, itemLabel: item?.label ?? null }); d.openSheet("pauseWhy"); };
+  const today = d.todayKey();
+  const running = info.breaks.filter((b) => b.endDate >= today).sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const planPaused = running.some((b) => b.scope === "plan");
+  const pausedItems = new Set(running.filter((b) => b.scope === "item").map((b) => b.itemId));
+  // While the whole plan is paused there's nothing else to pause: only extend or end it.
+  if (planPaused) {
+    return el("div", { class: "stack pause-flow" }, ...running.map(pauseCard),
+      el("p", { class: "hint" }, "Extending keeps it one pause: the days count from when it started, and the restart covers all of them."));
+  }
+  const free = routine.filter((i) => !pausedItems.has(i.id));
   return el("div", { class: "stack pause-flow" },
+    ...(running.length ? [el("p", { class: "section-label" }, "Paused now"), ...running.map(pauseCard), el("p", { class: "section-label" }, "Pause something else")] : []),
     el("p", { class: "hint" }, "Pause one part of your routine, or the whole plan for a holiday or illness. A pause always needs a reason."),
     el("button", { class: "menu-row", type: "button", onclick: () => pick("plan", null) }, el("span", {}, el("b", {}, "The whole plan"), el("small", {}, "Up to 21 days, 30 if you're unwell")), el("i", { class: "chev-r" })),
-    ...routine.map((i) => el("button", { class: "menu-row", type: "button", onclick: () => pick("item", i) }, el("span", {}, el("b", {}, i.label), el("small", {}, "Up to 14 days, 30 if you're unwell")), el("i", { class: "chev-r" }))));
+    ...free.map((i) => el("button", { class: "menu-row", type: "button", onclick: () => pick("item", i) }, el("span", {}, el("b", {}, i.label), el("small", {}, "Up to 14 days, 30 if you're unwell")), el("i", { class: "chev-r" }))));
+}
+
+/** A longer pause: the new last day, counted from the original start and capped there. */
+export function pauseExtend() {
+  const { el } = d;
+  const b = extendTarget.b;
+  if (!b) return el("p", { class: "hint" }, "Nothing to extend.");
+  const max = b.max ?? 21;
+  const used = dayCount(b.startDate, b.endDate);
+  const room = Math.max(1, max - used);
+  const out = el("b", {});
+  const range = el("input", { type: "range", min: "1", max: String(room), value: String(Math.min(7, room)), "aria-label": "Extra days" });
+  let until = b.endDate;
+  const show = () => {
+    const extra = Number(range.value);
+    until = addDays(b.endDate, extra);
+    out.textContent = `Till ${shortDate(until)}: ${extra} more day${extra === 1 ? "" : "s"}, ${used + extra} in total`;
+  };
+  range.addEventListener("input", show);
+  show();
+  const go = async (btn) => {
+    btn.disabled = true;
+    try {
+      await d.api(`/breaks/${b.id}/extend`, { method: "POST", body: JSON.stringify({ until }) });
+      await loadPauses();
+      d.refresh();
+      d.closeSheet();
+      d.toast(`Paused till ${shortDate(until)}.`);
+    } catch (err) {
+      btn.disabled = false;
+      d.toast(err.code === "too_long" ? `A pause can be ${max} days at most, counted from ${shortDate(b.startDate)}.` : err.code === "already_paused" ? "Another pause starts in those days. End or change that one first." : err.message);
+    }
+  };
+  return el("div", { class: "stack pause-flow" },
+    el("p", { class: "draft-note" }, `${b.scope === "plan" ? "Your plan" : itemName(b.itemId)} is paused from ${shortDate(b.startDate)} till ${shortDate(b.endDate)}. At most ${max} days in total for ${reasonLabel(b.reason)}.`),
+    el("label", {}, out, range),
+    el("p", { class: "hint" }, b.scope === "plan"
+      ? "It stays one pause from the day it started. The day before it ends you'll get a reminder, then you choose how to restart for all the days paused."
+      : "It stays one pause from the day it started. The day before it ends you'll get a reminder that it's back."),
+    el("button", { class: "btn primary block", type: "button", onclick: (e) => go(e.currentTarget) }, "Extend the pause"));
 }
 
 export function pauseWhy() {
@@ -160,7 +257,7 @@ export function pauseDone() {
   const p = draft.preview;
   return el("div", { class: "stack pause-flow" },
     el("p", { class: "pa-head" }, p?.reply ?? "Paused."),
-    el("p", { class: "hint" }, "You can end it early from the banner on Today."),
+    el("p", { class: "hint" }, "To extend it or end it early, tap the banner at the top of any screen, or You, then Pause."),
     el("button", { class: "btn primary block", type: "button", onclick: () => d.closeSheet() }, "Done"));
 }
 
