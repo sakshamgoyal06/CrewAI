@@ -87,7 +87,7 @@ vi.mock("../onboarding.js", () => ({
   saveFoodAvoid: async (_u: string, xs: string[]) => { food = { ...food, foodAvoid: xs }; },
 }));
 vi.mock("../snapshot.js", () => ({ loadHealthProfile: async () => ({ targets: { calorieTarget: 2200, proteinTarget: 165 } }) }));
-vi.mock("../bodyStore.js", () => ({ getBodyCheckins: async () => [{ weight_kg: 80 }] }));
+vi.mock("../bodyStore.js", () => ({ getBodyCheckins: async () => [{ weight_kg: 80 }], updateDailyTargets: async () => ({ ok: true }) }));
 vi.mock("../frequentMeals.js", () => ({ FREQUENT_WINDOW_DAYS: 30, loadLoggedSessions: async () => [], rankUsualMeals: () => [] }));
 vi.mock("./carry.js", () => ({ applyCarries: async () => false }));
 

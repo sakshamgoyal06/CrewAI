@@ -57,7 +57,9 @@ export type PersonaId =
   | "lean_no_goal"
   | "why_set"
   | "checkpoint"
-  | "kept_steps_short";
+  | "kept_steps_short"
+  | "minimum_today"
+  | "auto_change";
 
 export type CoachCase = Omit<EvalCase, "category" | "memory"> & {
   category: CoachCategory;
@@ -283,6 +285,43 @@ export function persona(id: PersonaId = "base"): Persona {
         },
       };
     }
+    case "minimum_today":
+      return {
+        ...base,
+        now: IST("2026-11-03T20:00:00"),
+        snapshot: {
+          ...s,
+          today: {
+            ...s.today,
+            minimum: true,
+            calories: 900,
+            proteinG: 44,
+            steps: 2600,
+            checks: [
+              { id: "protein" as never, label: "Protein anchor", met: false, progress: 0.73, detail: "44 / 60 g", core: true },
+              { id: "steps" as never, label: "Steps floor", met: false, progress: 0.52, detail: "2,600 / 5,000", core: true },
+            ],
+          },
+        },
+      };
+    case "auto_change":
+      return {
+        ...base,
+        loops: {
+          interventions: [
+            {
+              id: "5b0c7a52-6f0e-4d47-9a51-0d2f3c1e9a10", pattern: "routine_slipping", cause: "time", area: "routine:g1", itemId: "g1", itemLabel: "Gym", localDate: "2026-11-03",
+              title: "Gym isn't fitting your evenings", evidence: ["Gym done 2 of the last 6 planned days; the done days started after 19:00."], facts: { auto: 1 },
+              options: [
+                { id: "move_time", label: "Move gym to 19:15", kind: "change", change: { routineItem: { itemId: "g1", patch: { startTime: "19:15" } } }, impact: { kind: "keeps", date: null, text: "Goal date stays 1 Feb" } },
+                { id: "shorter", label: "Make it 40 minutes", kind: "change", change: { routineItem: { itemId: "g1", patch: { durationMin: 40 } } }, impact: { kind: "keeps", date: null, text: "Goal date stays 1 Feb" } },
+              ],
+              recommendation: null, status: "trial", chosenOption: "move_time", before: null, applied: null, deferred: null, baseline: { rate: 0.33 }, reviewOn: "2026-11-10", verdict: null,
+              createdAt: "2026-11-03T10:00:00Z", answeredAt: null, startedAt: "2026-11-03T10:00:00Z", closedAt: null,
+            },
+          ],
+        },
+      };
     case "kept_steps_short":
       return {
         ...base,
@@ -1716,6 +1755,42 @@ export const COACH_CASES: CoachCase[] = [
     rubric: {
       must: ["Says the day counts / is kept because calories and protein are on target", "Mentions steps as the easy add (a short walk), not as a miss"],
       mustNot: ["Calls the day off track", "Leads with the steps shortfall"],
+    },
+  },
+  // ===================== inevitable, batch 3: minimum days and changes started by default =====================
+  {
+    id: "minimum-offer-sick",
+    category: "inevitable",
+    title: "A rough day: offers a minimum day",
+    message: "feeling awful today, fever since morning, can barely eat anything",
+    expect: { forbid: [SHAME], notTools: ["draft_meal"] },
+    rubric: {
+      must: ["Puts rest and health first", "Offers a minimum day once (half the protein, a short walk only if they're up to it), or sets it with set_minimum_day if they asked for it"],
+      mustNot: ["Pushes the full plan or calorie targets today", "Pushes steps while they have a fever", "Medical diagnosis"],
+    },
+  },
+  {
+    id: "minimum-in-progress",
+    category: "inevitable",
+    persona: "minimum_today",
+    title: "Evening of a minimum day",
+    message: "what's left for today?",
+    expect: { forbid: [SHAME, /calories? (left|over)|off track/i] },
+    rubric: {
+      must: ["Names the two asks left: about 16 g more protein and about 2,400 more steps", "One easy way to get each (e.g. curd or dal, a 20-minute walk)"],
+      mustNot: ["Talks about the calorie target", "Treats the day as failed"],
+    },
+  },
+  {
+    id: "auto-change-question",
+    category: "inevitable",
+    persona: "auto_change",
+    title: "Asks why the gym time moved",
+    message: "wait why does my gym say 19:15 now?",
+    expect: { forbid: [SHAME], notTools: ["respond_to_intervention"] },
+    rubric: {
+      must: ["Says Magnus started it as a trial because gym kept slipping at the old time, with the evidence", "Says they can undo it or pick the shorter session (under that change in chat), and the goal date stays the same"],
+      mustNot: ["Undoes or changes it without being asked", "Blames them for skipping"],
     },
   },
 ];

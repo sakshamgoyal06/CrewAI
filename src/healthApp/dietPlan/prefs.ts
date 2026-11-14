@@ -67,14 +67,16 @@ export const dietPrefsInput = z.object({
     .optional(),
   /** Their answer when the plan couldn't reach the protein target under their rules (proteinGap.ts). */
   proteinGap: z
-    .object({ choice: z.enum(["accept", "supplement"]), plannedG: z.number(), originalTargetG: z.number(), rulesKey: z.string().max(4000), at: z.string() })
+    .object({ choice: z.enum(["accept", "supplement"]), plannedG: z.number(), originalTargetG: z.number(), rulesKey: z.string().max(4000), at: z.string(), auto: z.boolean().optional() })
     .nullable()
     .optional(),
   /** Gaps other than protein they accepted for these rules (proteinGap.ts planGapsOf). */
   planGapsOk: z
-    .object({ keys: z.array(z.enum(["kcal", "proteinG", "carbsG", "fatG", "fiberG"])).max(5), rulesKey: z.string().max(4000), at: z.string() })
+    .object({ keys: z.array(z.enum(["kcal", "proteinG", "carbsG", "fatG", "fiberG"])).max(5), rulesKey: z.string().max(4000), at: z.string(), auto: z.boolean().optional() })
     .nullable()
     .optional(),
+  /** They undid the default answer for these rules (rulesKey): the gap waits for their pick instead. */
+  gapDefaultsUndone: z.string().max(4000).nullable().optional(),
 });
 
 export type DietPrefsInput = z.input<typeof dietPrefsInput>;

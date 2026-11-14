@@ -11,10 +11,11 @@ import { addDays } from "../../util/time.js";
 import type { ActionContext } from "../actions.js";
 import { getBodyCheckins, updateDailyTargets } from "../bodyStore.js";
 import { forgetTimedRuleLines } from "../coachMemory.js";
-import { acceptedTarget, gapCause, gapsLine, openGaps, planGapsOf, plannedAverages, plannedProtein, proteinGapOf, rulesKey, type GapChoice, type GapKey, type NutrientGap, type ProteinGap } from "./proteinGap.js";
+import { acceptedTarget, gapCause, gapDefaults, gapsLine, openGaps, planGapsOf, plannedAverages, plannedProtein, proteinGapOf, rulesKey, type GapChoice, type GapKey, type NutrientGap, type ProteinGap } from "./proteinGap.js";
 import { FREQUENT_WINDOW_DAYS, loadLoggedSessions, rankUsualMeals } from "../frequentMeals.js";
 import { cleanAvoidList, loadFoodPrefs, saveFoodAvoid } from "../onboarding.js";
 import { loadHealthProfile } from "../snapshot.js";
+import { planDefaultsOn } from "../planDefaults.js";
 import { buildPlanDraft, type PlanDraft } from "./build.js";
 import { activeOverride, type DietOverride, type PeriodDiet } from "./dietPeriod.js";
 import { checkOn, isFastingDay, itemsAllowedOn, planRules, type PlanRules } from "./rules.js";
@@ -53,7 +54,7 @@ export async function saveDietPrefs(userProfileId: string, input: DietPrefsInput
   // The setup screen doesn't send these: saving its answers must not wipe a running temporary diet,
   // what they never cook, or the skipped-today list.
   const raw = (input ?? {}) as Record<string, unknown>;
-  const missing = ["dietOverride", "habits", "unavailable", "proteinGap", "planGapsOk"].filter((k) => !(k in raw));
+  const missing = ["dietOverride", "habits", "unavailable", "proteinGap", "planGapsOk", "gapDefaultsUndone"].filter((k) => !(k in raw));
   let prefs = parsed;
   if (missing.length) {
     const old = await loadDietPrefs(userProfileId);
@@ -513,7 +514,7 @@ export type PlanView = {
  * What the Meals tab shows. Builds the plan on first open after setup, and rebuilds it when the
  * profile's calorie or protein target has moved since (onboarding, review, intervention).
  */
-export async function loadPlanView(ctx: ActionContext, now = new Date(), opts: { afterRetarget?: boolean; afterRestore?: boolean } = {}): Promise<PlanView | { ok: false; error: string }> {
+export async function loadPlanView(ctx: ActionContext, now = new Date(), opts: { afterRetarget?: boolean; afterRestore?: boolean; afterDefaults?: boolean } = {}): Promise<PlanView | { ok: false; error: string }> {
   const today = localDateKey(now, ctx.timezone);
   const [prefs, profile] = await Promise.all([loadDietPrefs(ctx.userProfileId), loadHealthProfile(ctx.userProfileId)]);
   const t = profile.targets;
@@ -579,6 +580,19 @@ export async function loadPlanView(ctx: ActionContext, now = new Date(), opts: {
   const t4 = plan.targets as typeof plan.targets & { fiberG?: number };
   const allGaps = planGapsOf(averages, { kcal: t4.calories, proteinG: t4.proteinG, carbsG: t4.carbsG, fatG: t4.fatG, fiberG: t4.fiberG ?? null }, proteinGap);
   const planGaps = openGaps(allGaps, prefs.prefs.planGapsOk, key);
+  // Recommended by default (12 Nov plan, item 7): undecided gaps get the suggested answer, with Undo.
+  const defaults = !opts.afterDefaults && planDefaultsOn() ? gapDefaults({ protein: proteinGap, others: planGaps, key, undone: prefs.prefs.gapDefaultsUndone }) : null;
+  if (defaults) {
+    const at = now.toISOString();
+    const before = prefs.prefs.planGapsOk?.rulesKey === key ? prefs.prefs.planGapsOk.keys : [];
+    await saveDietPrefs(ctx.userProfileId, {
+      ...prefs.prefs,
+      ...(defaults.acceptProtein && proteinGap ? { proteinGap: { choice: "accept" as const, plannedG: proteinGap.plannedG, originalTargetG: proteinGap.targetG, rulesKey: key, at, auto: true } } : {}),
+      ...(defaults.keepKeys.length ? { planGapsOk: { keys: [...new Set([...before, ...defaults.keepKeys])], rulesKey: key, at, auto: true } } : {}),
+    });
+    if (defaults.acceptProtein && proteinGap) await updateDailyTargets(ctx.userProfileId, { proteinTarget: acceptedTarget(proteinGap.plannedG) });
+    return loadPlanView(ctx, now, { ...opts, afterDefaults: true });
+  }
   const kept = allGaps.filter((g) => !planGaps.includes(g)).map((g) => g.label.toLowerCase());
   const line = [gapsLine(planGaps, proteinGap, cause), kept.length ? `They kept ${kept.join(", ")} as the plan has it: don't flag ${kept.length === 1 ? "it" : "those"}.` : null].filter(Boolean).join(" ") || null;
   return { ok: true, setup: true, plan: rest, days, accounts, lists, proteinGap, planGaps, gapCause: cause, gapsLine: line, ...base };
@@ -767,6 +781,27 @@ export async function acceptPlanGaps(ctx: ActionContext, now = new Date()): Prom
   const before = prefs.prefs.planGapsOk?.rulesKey === key ? prefs.prefs.planGapsOk.keys : [];
   await saveDietPrefs(ctx.userProfileId, { ...prefs.prefs, planGapsOk: { keys: [...new Set([...before, ...keys])], rulesKey: key, at: now.toISOString() } });
   return { ok: true, accepted: keys };
+}
+
+/**
+ * Undo on the defaults Magnus applied to the plan's gaps: the protein target goes back, the kept
+ * gaps open again, and the card waits for their pick for these rules.
+ */
+export async function undoGapDefaults(ctx: ActionContext, now = new Date()): Promise<{ ok: true } | { ok: false; error: string }> {
+  const today = localDateKey(now, ctx.timezone);
+  const prefs = await loadDietPrefs(ctx.userProfileId);
+  const rules = await rulesFor(ctx.userProfileId, prefs.prefs, today);
+  const key = rulesKey(rules, prefs.prefs);
+  const p = prefs.prefs;
+  const autoProtein = p.proteinGap?.auto ? p.proteinGap : null;
+  const autoKept = p.planGapsOk?.auto ? p.planGapsOk : null;
+  if (!autoProtein && !autoKept) return { ok: false, error: "nothing_to_undo" };
+  if (autoProtein) {
+    const { targets } = await loadHealthProfile(ctx.userProfileId);
+    if (targets.proteinTarget === acceptedTarget(autoProtein.plannedG)) await updateDailyTargets(ctx.userProfileId, { proteinTarget: autoProtein.originalTargetG });
+  }
+  await saveDietPrefs(ctx.userProfileId, { ...p, ...(autoProtein ? { proteinGap: null } : {}), ...(autoKept ? { planGapsOk: null } : {}), gapDefaultsUndone: key });
+  return { ok: true };
 }
 
 async function restoreProteinTarget(ctx: ActionContext, prefs: DietPrefs, current: number | null): Promise<void> {

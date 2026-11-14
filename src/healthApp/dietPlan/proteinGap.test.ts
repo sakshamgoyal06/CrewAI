@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { acceptedTarget, gapCause, gapLine, plannedProtein, proteinGapOf, rulesKey, type StoredGap } from "./proteinGap.js";
+import { acceptedTarget, gapCause, gapDefaults, gapLine, plannedProtein, proteinGapOf, rulesKey, type StoredGap } from "./proteinGap.js";
 
 const prefs = { dietOverride: { diet: "vegetarian" as const, from: "2026-11-05", until: "2026-11-25" }, fastingDays: [], supplements: [{ name: "Whey protein", servings: 1, slot: null }] };
 const rules = { diet: "vegetarian" as const, avoid: ["Mushroom"] };
@@ -57,5 +57,26 @@ describe("every plan gap", () => {
   it("skips a target the plan doesn't have (older plans have no fibre)", async () => {
     const { planGapsOf } = await import("./proteinGap.js");
     expect(planGapsOf({ kcal: 2000, proteinG: 150, carbsG: 250, fatG: 60, fiberG: 0 }, { kcal: 2000, proteinG: 150, carbsG: 250, fatG: 60, fiberG: null }, null)).toEqual([]);
+  });
+});
+
+describe("gapDefaults (recommended by default)", () => {
+  const protein = { plannedG: 110, targetG: 165, cause: "your veg period until 25 Nov", answered: null };
+  const fibre = { key: "fiberG" as const, label: "Fibre", unit: "g", planned: 20, target: 30, direction: "under" as const };
+
+  it("accepts the plan's protein and keeps the other gaps when nobody has decided", () => {
+    expect(gapDefaults({ protein, others: [fibre], key: "k", undone: null })).toEqual({ acceptProtein: true, keepKeys: ["fiberG"] });
+  });
+  it("leaves an answered protein gap alone", () => {
+    const answered = { ...protein, answered: { choice: "supplement" as const, plannedG: 110, originalTargetG: 165, rulesKey: "k", at: "x" } };
+    expect(gapDefaults({ protein: answered, others: [], key: "k", undone: null })).toBeNull();
+  });
+  it("does nothing once they undid the defaults for these rules, and again when the rules change", () => {
+    expect(gapDefaults({ protein, others: [fibre], key: "k", undone: "k" })).toBeNull();
+    expect(gapDefaults({ protein, others: [fibre], key: "k2", undone: "k" })).not.toBeNull();
+  });
+  it("tells the coach the target was set by default", () => {
+    const g = { ...protein, answered: { choice: "accept" as const, plannedG: 110, originalTargetG: 165, rulesKey: "k", at: "x", auto: true } };
+    expect(gapLine(g)).toContain("by default");
   });
 });

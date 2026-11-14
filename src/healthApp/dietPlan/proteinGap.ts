@@ -26,6 +26,8 @@ export type StoredGap = {
   /** The rules the answer was given under (rulesKey). */
   rulesKey: string;
   at: string;
+  /** Magnus applied it by default (12 Nov plan, item 7); they can undo it. */
+  auto?: boolean;
 };
 
 export type ProteinGap = {
@@ -95,6 +97,7 @@ export function acceptedTarget(plannedG: number): number {
 /** For the coach: what the plan can reach and what was decided, in one line. Pure. */
 export function gapLine(g: ProteinGap): string {
   const base = `Meal plan protein: the planned meals reach about ${g.plannedG} g of ${g.targetG} g, limited by ${g.cause}.`;
+  if (g.answered?.choice === "accept" && g.answered.auto) return `${base} Magnus set ${acceptedTarget(g.plannedG)} g as their target by default until that changes (they can undo it on the Meals tab): don't flag protein below ${g.targetG} g.`;
   if (g.answered?.choice === "accept") return `${base} They accepted ${acceptedTarget(g.plannedG)} g as their target until that changes: don't flag protein below ${g.targetG} g.`;
   if (g.answered?.choice === "supplement") return `${base} They chose to add a protein supplement.`;
   return `${base} Not decided yet: this is the plan's limit, not their failure. Offer the choice on the Meals tab (accept the lower target for now, add a supplement, or loosen a rule).`;
@@ -118,7 +121,7 @@ export type GapKey = keyof typeof GAP_LIMITS;
 export type NutrientGap = { key: GapKey; label: string; unit: string; planned: number; target: number; direction: "under" | "over" };
 
 /** Stored when they accept the plan as it is for the non-protein gaps (prefs.planGapsOk). */
-export type StoredGapsOk = { keys: GapKey[]; rulesKey: string; at: string };
+export type StoredGapsOk = { keys: GapKey[]; rulesKey: string; at: string; auto?: boolean };
 
 type DayTotals = { kcal: number; proteinG: number; carbsG: number; fatG: number; fiberG?: number | null };
 
@@ -168,4 +171,16 @@ export function gapsLine(gaps: NutrientGap[], protein: ProteinGap | null, cause:
     );
   }
   return parts.length ? parts.join(" ") : null;
+}
+
+/**
+ * What Magnus answers by default when the plan opens with gaps nobody has decided on (12 Nov plan,
+ * item 7): the protein target follows the plan for now, and the other gaps are kept as planned.
+ * Nothing when they undid the defaults for these rules. Pure.
+ */
+export function gapDefaults(input: { protein: ProteinGap | null; others: NutrientGap[]; key: string; undone: string | null | undefined }): { acceptProtein: boolean; keepKeys: GapKey[] } | null {
+  if (input.undone === input.key) return null;
+  const acceptProtein = !!input.protein && !input.protein.answered;
+  const keepKeys = input.others.filter((g) => g.key !== "proteinG").map((g) => g.key);
+  return acceptProtein || keepKeys.length ? { acceptProtein, keepKeys } : null;
 }

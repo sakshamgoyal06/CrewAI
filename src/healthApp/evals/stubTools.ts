@@ -106,6 +106,8 @@ export function stubTools(snapshot: HealthSnapshot | null, options: { failing?: 
       case "delete_meal":
       case "delete_activity":
         return { result: { ok: true, ...input }, changed: true };
+      case "set_minimum_day":
+        return { result: { ok: true, date: "today", on: input.on !== false, asks: { proteinG: 80, steps: 5000 } }, changed: true };
       case "set_goal_why":
         return { result: { ok: true, saved: String(input.why ?? "") }, changed: true };
       case "remember":

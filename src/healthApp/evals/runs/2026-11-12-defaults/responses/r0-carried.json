@@ -1,0 +1,63 @@
+{
+ "why-save": {
+  "0": {
+   "text": "",
+   "tools": [
+    {
+     "name": "set_goal_why",
+     "input": {
+      "why": "Sister's wedding in Feb; wants to look good in the photos."
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "That's a great reason, and I've saved it. Your plan already lands you at 74 kg by 31 Jan, just before February, so keep doing what you're doing and the photos are covered. Today that means getting protein up at lunch and dinner.",
+   "tools": []
+  }
+ },
+ "why-use-miss": {
+  "0": {
+   "text": "One messy day happens to everyone and changes almost nothing on the scale. Today, just get back to your plan: a protein-heavy lunch and the evening gym. Every normal day from here is a day closer to feeling good in those wedding photos.",
+   "tools": []
+  }
+ },
+ "why-not-on-log": {
+  "0": {
+   "text": "",
+   "tools": [
+    {
+     "name": "draft_meal",
+     "input": {
+      "text": "2 idli and sambar",
+      "items": [
+       {
+        "food": "idli",
+        "quantity": 2,
+        "unit": "piece"
+       },
+       {
+        "food": "sambar",
+        "quantity": 1,
+        "unit": "bowl"
+       }
+      ],
+      "slot": "breakfast"
+     }
+    }
+   ]
+  }
+ },
+ "checkpoint-far": {
+  "0": {
+   "text": "It does feel far when you look at all 10 kg at once, so don't. You already hit your first checkpoint at 81.8 kg, and the next one is 79.4 kg by 1 Dec, about 2 kg in 4 weeks. Keep the same kind of days you've had this month and that one comes on its own.",
+   "tools": []
+  }
+ },
+ "kept-steps-short": {
+  "0": {
+   "text": "Today counts. Calories at 1,720 and protein at 116 g are both on target, and you trained. Steps are at 3,100, so a 20-minute walk after dinner is the easy win if you feel like it.",
+   "tools": []
+  }
+ }
+}

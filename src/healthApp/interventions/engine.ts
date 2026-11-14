@@ -29,6 +29,7 @@ import { detectAll, detectOverAmbitious, itemHistory, itemHitRate, T, type Detec
 import { BANNED, buildOffer, GOAL_TALK_PROMPT, shortDate, type OfferContext } from "./options.js";
 import { agreedSnapshot, applySnapshot, beforeOf, liveSnapshot, listVersions, originalDeadline, saveVersion, withChange, writeChange } from "./plan.js";
 import { cardFromIntervention } from "./card.js";
+import { planDefaultsOn } from "../planDefaults.js";
 import { getIntervention, insertIntervention, listInterventions, updateIntervention } from "./store.js";
 import {
   OPEN_STATUSES,
@@ -37,6 +38,7 @@ import {
   type Finding,
   type Intervention,
   type InterventionCard,
+  type Option,
   type ReasonChoice,
 } from "./types.js";
 import { DAY_MS, dateOf, localClock, localHourOf } from "../../util/time.js";
@@ -199,7 +201,19 @@ export async function offer(userProfileId: string, f: Finding, input: DetectInpu
     baseline: { rate: baseline },
   });
   if (!row) return null;
-  await postCoachMessage(userProfileId, LEAD[f.pattern] ?? LEAD.default!, [cardFromIntervention(row)]);
+  // The suggested change starts by default, with Undo and the other ways on the card (12 Nov plan, item 7).
+  let shown = row;
+  const pick = row.status === "offered" && planDefaultsOn() ? defaultOption(row) : null;
+  if (pick) {
+    const live = await liveSnapshot(userProfileId);
+    const started = await startTrial(userProfileId, row, pick, input.today, live, { answered: false }).catch((err) => {
+      logger.warn({ err, id: row.id }, "starting the default change failed; left as an offer");
+      return null;
+    });
+    if (started?.ok && started.row) shown = started.row;
+  }
+  const lead = shown !== row ? `${LEAD[f.pattern] === LEAD.safety ? LEAD.safety : "Something I noticed over the last few weeks."} I've started the smallest fix for you: undo it any time, or pick another way.` : LEAD[f.pattern] ?? LEAD.default!;
+  await postCoachMessage(userProfileId, lead, [cardFromIntervention(shown)]);
   if (f.pattern === "safety" || f.pattern === "deadline_drift") {
     const prefs = await getPrefs(userProfileId);
     if (!prefs.off.includes("intervention")) {
@@ -383,6 +397,52 @@ export async function refreshOffers(userProfileId: string, now = new Date()): Pr
   }
 }
 
+// ---------- recommended by default (12 Nov plan, item 7) ----------
+
+
+/**
+ * The change Magnus starts without waiting: the first option that keeps the goal date and sets no
+ * new date. None when the card recommends sticking to the plan (that is already the default), when
+ * it first asks what got in the way, or when every option moves the date (a date move needs a yes). Pure.
+ */
+export function defaultOption(i: Pick<Intervention, "options" | "recommendation" | "pattern" | "cause" | "status">): Option | null {
+  if (i.status !== "offered" || i.recommendation) return null;
+  if (i.pattern === "routine_slipping" && i.cause === "unknown") return null;
+  return i.options.find((o) => o.kind !== "talk" && o.impact.kind !== "moves" && !o.change.deadline) ?? null;
+}
+
+/** A trial Magnus started by default that they haven't answered yet. Pure. */
+export const isAutoTrial = (i: Pick<Intervention, "status" | "facts">): boolean => i.status === "trial" && i.facts?.auto === 1;
+
+/** Starts `o` as a trial: saves what it replaces, writes the change, sets the check date. */
+async function startTrial(
+  userProfileId: string,
+  i: Intervention,
+  o: Option,
+  today: string,
+  live: Awaited<ReturnType<typeof liveSnapshot>>,
+  opts: { answered: boolean },
+): Promise<{ ok: true; row: Intervention | null; reviewOn: string } | { ok: false; error: string }> {
+  const { deadline, ...change } = o.change;
+  const before = beforeOf(live, change);
+  const r = await writeChange(userProfileId, change);
+  if (!r.ok) return { ok: false, error: r.error ?? "apply_failed" };
+  const stamp = new Date().toISOString();
+  const reviewOn = dateOf(dayN(today) + (REVIEW_DAYS[i.pattern] ?? 7));
+  const row = await updateIntervention(userProfileId, i.id, ["offered"], {
+    status: "trial",
+    chosen_option: o.id,
+    ...(opts.answered ? { answered_at: stamp } : { facts: { ...i.facts, auto: 1 } }),
+    started_at: stamp,
+    before,
+    applied: change,
+    deferred: deadline ? { deadline } : null,
+    review_on: reviewOn,
+  });
+  if (!row) await writeChange(userProfileId, before);
+  return { ok: true, row, reviewOn };
+}
+
 // ---------- the person's answers ----------
 
 export type RespondAction = "choose" | "keep" | "reason" | "cancel" | "confirm" | "decline";
@@ -450,10 +510,17 @@ export async function respond(
       return done(row);
     }
     case "choose": {
-      if (i.status !== "offered") return { ok: false, error: "already_answered" };
       const o = i.options.find((x) => x.id === opts.optionId);
+      if (o?.kind === "talk") return { ok: true, card: cardFromIntervention(i), talk: talkPrompt(o) ?? `Let's talk about "${i.title}".` };
+      // "Other ways" on a change Magnus started by default: put the plan back, then start the one they picked.
+      if (isAutoTrial(i) && o && o.id !== i.chosenOption) {
+        if (i.before) await writeChange(ctx.userProfileId, i.before);
+        const reset = await updateIntervention(ctx.userProfileId, id, ["trial"], { status: "offered", chosen_option: null, before: null, applied: null, deferred: null, review_on: null, started_at: null, facts: { ...i.facts, auto: 0 } });
+        if (!reset) return { ok: false, error: "already_answered" };
+        return respond(ctx, id, "choose", opts);
+      }
+      if (i.status !== "offered") return { ok: false, error: "already_answered" };
       if (!o) return { ok: false, error: "unknown_option" };
-      if (o.kind === "talk") return { ok: true, card: cardFromIntervention(i), talk: talkPrompt(o) ?? `Let's talk about "${i.title}".` };
       const open = (await listInterventions(ctx.userProfileId)).filter((h) => h.id !== id && (h.status === "trial" || h.status === "confirm"));
       if (open.some((h) => h.area === i.area)) return { ok: false, error: "trial_running" };
       const live = await liveSnapshot(ctx.userProfileId);
@@ -470,29 +537,16 @@ export async function respond(
         const row = await updateIntervention(ctx.userProfileId, id, ["offered"], { status: "applied", chosen_option: o.id, answered_at: stamp, closed_at: stamp, applied: o.change });
         return done(row, { message: `Your goal date is now ${shortDate(o.change.deadline!, today)}.` });
       }
-      const { deadline, ...now_ } = o.change;
-      const before = beforeOf(live, now_);
-      const r = await writeChange(ctx.userProfileId, now_);
-      if (!r.ok) return { ok: false, error: r.error ?? "apply_failed" };
-      const reviewOn = dateOf(dayN(today) + (REVIEW_DAYS[i.pattern] ?? 7));
-      const row = await updateIntervention(ctx.userProfileId, id, ["offered"], {
-        status: "trial",
-        chosen_option: o.id,
-        answered_at: stamp,
-        started_at: stamp,
-        before,
-        applied: now_,
-        deferred: deadline ? { deadline } : null,
-        review_on: reviewOn,
-      });
-      if (!row) await writeChange(ctx.userProfileId, before);
-      return done(row, { message: `Trying it until ${shortDate(reviewOn, today)}. Your plan stays as it was until we see how it goes; you can cancel any time.` });
+      const started = await startTrial(ctx.userProfileId, i, o, today, live, { answered: true });
+      if (!started.ok) return started;
+      return done(started.row, { message: `Trying it until ${shortDate(started.reviewOn, today)}. Your plan stays as it was until we see how it goes; you can cancel any time.` });
     }
     case "cancel": {
       if (i.status !== "trial" && i.status !== "confirm") return { ok: false, error: "not_running" };
-      const row = await updateIntervention(ctx.userProfileId, id, ["trial", "confirm"], { status: "cancelled", closed_at: stamp, verdict: "Cancelled; back to the agreed plan." });
+      const auto = isAutoTrial(i);
+      const row = await updateIntervention(ctx.userProfileId, id, ["trial", "confirm"], { status: "cancelled", closed_at: stamp, verdict: auto ? "Undone; back to the agreed plan." : "Cancelled; back to the agreed plan." });
       if (row && i.before) await writeChange(ctx.userProfileId, i.before);
-      return done(row, { message: "Cancelled. Everything is back to your plan." });
+      return done(row, { message: auto ? "Undone. Your plan is as it was." : "Cancelled. Everything is back to your plan." });
     }
     case "decline": {
       const row = await updateIntervention(ctx.userProfileId, id, ["confirm"], { status: "ended", closed_at: stamp, answered_at: stamp });

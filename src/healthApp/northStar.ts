@@ -6,6 +6,7 @@
  */
 
 import { macroTargets } from "./dietPlan/targets.js";
+import { minimumAsks } from "./minimumDay.js";
 
 export type DayInputs = {
   /** YYYY-MM-DD in the user's timezone. */
@@ -40,6 +41,8 @@ export type DayInputs = {
   loggedInFull?: boolean;
   /** The whole plan was paused that day (breaks.ts): the day drops out of the score. */
   paused?: boolean;
+  /** They chose a minimum day (minimumDay.ts): a protein anchor and a steps floor keep it. */
+  minimum?: boolean;
 };
 
 export type HealthTargets = {
@@ -86,6 +89,8 @@ export type DayScore = {
   partial?: true;
   /** The whole plan was paused (breaks.ts): no checks, not a miss, not on track. */
   paused?: true;
+  /** A minimum day (minimumDay.ts): only the protein anchor and the steps floor are checked. */
+  minimum?: true;
   /** 0–100, mean progress across applicable checks. */
   score: number;
 };
@@ -231,6 +236,7 @@ function foodChecks(day: DayInputs, targets: HealthTargets, checks: DayCheck[]):
 
 export function scoreDay(day: DayInputs, targets: HealthTargets): DayScore {
   if (day.paused) return { date: day.date, checks: [], onTrack: false, score: 0, paused: true };
+  if (day.minimum && day.date >= KEPT_RULE_FROM) return minimumScore(day, targets);
   const checks: DayCheck[] = [];
 
   const state = day.date >= FOOD_RULE_FROM ? foodLogState(day, targets) : "full";
@@ -286,6 +292,22 @@ export function scoreDay(day: DayInputs, targets: HealthTargets): DayScore {
     }
   }
   return { date: day.date, checks, onTrack, score, ...(unlogged ? { unlogged: true as const } : {}), ...(partial ? { partial: true as const } : {}) };
+}
+
+/**
+ * A minimum day: a protein anchor (half the target, or one meal logged without a protein target)
+ * and a steps floor decide it, and calories aren't judged. Kept counts as kept, labelled minimum.
+ */
+function minimumScore(day: DayInputs, targets: HealthTargets): DayScore {
+  const asks = minimumAsks(targets);
+  const anchor: DayCheck = asks.proteinG
+    ? { id: "protein", label: "Protein anchor", met: day.proteinG >= asks.proteinG, progress: clamp01(day.proteinG / asks.proteinG), detail: `${Math.round(day.proteinG)} / ${asks.proteinG} g`, core: true }
+    : { id: "meals_logged", label: "One meal logged", met: day.mealSessions > 0, progress: day.mealSessions > 0 ? 1 : 0, detail: `${day.mealSessions} logged`, core: true };
+  const steps: DayCheck = { id: "steps", label: "Steps floor", met: day.steps >= asks.steps, progress: clamp01(day.steps / asks.steps), detail: `${day.steps.toLocaleString("en-US")} / ${asks.steps.toLocaleString("en-US")}`, core: true };
+  const checks = [anchor, steps];
+  const score = Math.round(((anchor.progress + steps.progress) / 2) * 100);
+  const unlogged = day.mealSessions === 0 && day.calories <= 0 && !(day.mealsSkipped ?? 0);
+  return { date: day.date, checks, onTrack: anchor.met && steps.met, score, minimum: true, ...(unlogged ? { unlogged: true as const } : {}) };
 }
 
 export type NorthStar = {

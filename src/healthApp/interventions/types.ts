@@ -149,6 +149,8 @@ export type InterventionCard = {
   options: Array<Pick<Option, "id" | "label" | "kind" | "prompt"> & { impact: string }>;
   recommendation: string | null;
   status: InterventionStatus;
+  /** Magnus started the suggested change by default; the card offers Undo and the other ways. */
+  auto?: boolean;
   chosen: string | null;
   reviewOn: string | null;
   verdict: string | null;

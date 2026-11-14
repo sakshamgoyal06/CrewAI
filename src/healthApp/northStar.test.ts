@@ -191,3 +191,31 @@ describe("kept-day rule (from KEPT_RULE_FROM)", () => {
     expect(goalDayNumber("2026-11-19", "2026-11-20")).toBeNull();
   });
 });
+
+describe("minimum day (bad-day mode)", () => {
+  const md = (over: Partial<DayInputs>) => day({ date: "2026-11-14", weekday: 6, minimum: true, ...over });
+
+  it("is kept by half the protein and 5,000 steps, whatever the calories", () => {
+    const s = scoreDay(md({ proteinG: 80, steps: 5200, calories: 3100, mealSessions: 1 }), targets);
+    expect(s.minimum).toBe(true);
+    expect(s.onTrack).toBe(true);
+    expect(s.checks.map((c) => c.label)).toEqual(["Protein anchor", "Steps floor"]);
+    expect(s.checks.every((c) => c.core)).toBe(true);
+  });
+
+  it("isn't kept when either ask is missed", () => {
+    expect(scoreDay(md({ proteinG: 60, steps: 9000 }), targets).onTrack).toBe(false);
+    expect(scoreDay(md({ proteinG: 90, steps: 3000 }), targets).onTrack).toBe(false);
+  });
+
+  it("uses the step target when it's under 5,000, and one meal without a protein target", () => {
+    const s = scoreDay(md({ proteinG: 0, steps: 4100, mealSessions: 1 }), { ...targets, proteinTarget: null, stepTarget: 4000 });
+    expect(s.onTrack).toBe(true);
+    expect(s.checks[0]!.label).toBe("One meal logged");
+  });
+
+  it("doesn't apply before the kept-day rule, and a pause still wins", () => {
+    expect(scoreDay(md({ date: "2026-11-10" }), targets).minimum).toBeUndefined();
+    expect(scoreDay(md({ paused: true }), targets).paused).toBe(true);
+  });
+});
