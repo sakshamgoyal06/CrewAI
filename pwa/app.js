@@ -8,7 +8,7 @@ import { foodPrefsEditor } from "./foodprefs.js";
 import { fromServer, routineEditor, toPayload } from "./routine.js";
 import { dayMealList, groceryScreen, initMeals, loadPlan, mealScreen, mealsTitles, openPlannedMeal, planGapsScreen, renderMeals, setupScreen } from "./meals.js";
 import { mealBuilder, fixedItem } from "./mealbuilder.js";
-import { initPause, loadPauses, openResume, pauseAlt, pauseDone, pauseLength, pauseTitles, pauseWhat, pauseWhy, resumeKeep, resumeStart, resumeWeigh, startPause } from "./pause.js";
+import { initPause, loadPauses, openResume, pauseAlt, pauseDone, pauseExtend, pauseLength, pauseTitles, pauseWhat, pauseWhy, resumeKeep, resumeStart, resumeWeigh, startPause } from "./pause.js";
 import { dayTone } from "./dayTone.js";
 import { bearer, captureRedirect, signedIn, signInWithGoogle, signOut, useToken, authConfig } from "./session.js";
 
@@ -421,11 +421,12 @@ function withCache(path, paint, onError) {
 // ---------- snapshot ----------
 
 async function refresh() {
+  // Pauses load on their own, so a slow or failed /today never leaves the pause banner out.
+  loadPauses().then((p) => { if (p.resume && location.hash === "#resume") openResume(p.resume); });
   try {
     if (state.trainingLoaded) loadDays();
     state.snapshot = await api("/today");
     renderSnapshot(state.snapshot);
-    loadPauses().then((p) => { if (p.resume && location.hash === "#resume") openResume(p.resume); });
     store.set(SNAPSHOT_CACHE_KEY, state.snapshot);
     // Targets may have just been set from the Meals tab's first step.
     if (currentView() === "meals") renderMeals();
@@ -4729,7 +4730,7 @@ const num = (v) => (v === "" || v == null ? undefined : Number(v));
 
 const SHEETS = {
   skip: skipSheet,
-  pauseWhat, pauseWhy, pauseAlt, pauseLength, pauseDone, resumeStart, resumeWeigh, resumeKeep,
+  pauseWhat, pauseWhy, pauseAlt, pauseLength, pauseDone, pauseExtend, resumeStart, resumeWeigh, resumeKeep,
   plans: plansScreen,
   checkout: checkoutScreen,
   payResult: payResultScreen,

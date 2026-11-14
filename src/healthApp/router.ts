@@ -139,7 +139,7 @@ import { loadCalorieReview } from "./calorieTarget.js";
 import { cardFromIntervention, checkNewGoal, recordManualPlan, respond as respondToIntervention, revertToVersion } from "./interventions/engine.js";
 import { listVersions } from "./interventions/plan.js";
 import { listInterventions } from "./interventions/store.js";
-import { activeBreaks, breakInput, endBreakEarly, previewBreak, startBreak, loadBreaks, BREAK_REASONS } from "./breaks.js";
+import { activeBreaks, breakInput, endBreakEarly, extendBreak, maxDays, previewBreak, startBreak, loadBreaks, BREAK_REASONS } from "./breaks.js";
 import { keepDateAccept, keepDatePreview, pendingResume, resumeMoveDate, resumeState } from "./resume.js";
 
 const chatInput = z.object({ text: z.string().trim().min(1).max(2000), turnId: z.string().uuid().optional() });
@@ -553,7 +553,7 @@ export function createHealthAppRouter(): express.Router {
     route("breaks", async (ctx) => {
       const today = localDateKey(new Date(), ctx.timezone);
       const all = await loadBreaks(ctx.userProfileId, today);
-      return { body: { ok: true, breaks: all.filter((b) => b.endDate >= today), resume: pendingResume(all, today)?.id ?? null, reasons: BREAK_REASONS } };
+      return { body: { ok: true, breaks: all.filter((b) => b.endDate >= today).map((b) => ({ ...b, max: maxDays(b.scope, b.reason) })), resume: pendingResume(all, today)?.id ?? null, reasons: BREAK_REASONS } };
     }),
   );
   router.post(
@@ -576,6 +576,15 @@ export function createHealthAppRouter(): express.Router {
     route("breaks-end", async (ctx, req) => {
       const id = z.string().uuid().parse(req.params.id);
       const r = await endBreakEarly(ctx.userProfileId, id, localDateKey(new Date(), ctx.timezone));
+      return r.ok ? { body: { ...r, active: await activeBreaks(ctx) } } : { status: 400, body: r };
+    }),
+  );
+  router.post(
+    "/breaks/:id/extend",
+    route("breaks-extend", async (ctx, req) => {
+      const id = z.string().uuid().parse(req.params.id);
+      const { until } = z.object({ until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.body ?? {});
+      const r = await extendBreak(ctx.userProfileId, id, until, localDateKey(new Date(), ctx.timezone));
       return r.ok ? { body: { ...r, active: await activeBreaks(ctx) } } : { status: 400, body: r };
     }),
   );

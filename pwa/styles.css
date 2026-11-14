@@ -1471,7 +1471,7 @@ body.screen-open { overflow: hidden; }
 /* Pause and resume screens (pause.js). */
 .pause-flow .pa-head { font-size: 17px; line-height: 1.4; }
 .pause-min { margin: 4px 0 8px; padding-left: 18px; display: grid; gap: 6px; font-size: 15px; }
-.pause-flow input[type="range"] { width: 100%; margin-top: 8px; }
+.pause-flow input[type="range"] { width: 100%; margin-top: 8px; accent-color: var(--accent); }
 .pause-banner { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 
 /* Plan gaps: one line on Meals, the choices on their own screen. */
@@ -1509,3 +1509,9 @@ body.screen-open { overflow: hidden; }
 .grocery-list li label { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
 .grocery-list li input:checked + span { text-decoration: line-through; color: var(--muted); }
 .grocery-list small { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* A running pause on the Pause screen: what, when, and Extend / End (14 Nov). */
+.pause-live { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--hair-strong); background: var(--surface); }
+.pause-live .pa-head { margin: 0 0 2px; }
+.pause-live .hint { margin: 0; }
+.pause-live .row-actions { justify-content: flex-start; gap: 8px; flex-wrap: wrap; }
