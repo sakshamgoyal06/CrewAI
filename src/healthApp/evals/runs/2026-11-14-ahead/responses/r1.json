@@ -1,0 +1,20 @@
+{
+ "minimum-offer-sick": {
+  "0": {
+   "text": "Sorry, that sounds rough: today is for rest and fluids, so skip the gym tonight. If you'd like the day to still count, I can make it a minimum day, where about 60 g of protein from easy things like curd, dal or warm milk is enough and calories don't matter. Walk only if you feel up to it, and if the fever is still high tomorrow, please see a doctor. Want me to switch it on?",
+   "tools": []
+  }
+ },
+ "minimum-in-progress": {
+  "0": {
+   "text": "Two things left on today's minimum day: about 16 g more protein, and about 2,400 more steps.\n\nA bowl of curd or a cup of dal covers the protein, and a 20-minute walk after dinner covers the steps. Do both and today counts as kept.",
+   "tools": []
+  }
+ },
+ "auto-change-question": {
+  "0": {
+   "text": "I moved it: gym got done on only 2 of the last 6 planned days, and both started after 7 pm, so 6:30 looked like the problem, not you. 19:15 is a one-week trial and your goal date stays the same. If it doesn't suit you, tap Undo under that change in chat to go back to 6:30, or Other ways for a 40-minute session instead. I'll check on 10 Nov whether it's sticking better.",
+   "tools": []
+  }
+ }
+}

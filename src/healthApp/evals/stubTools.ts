@@ -187,6 +187,16 @@ export function stubTools(snapshot: HealthSnapshot | null, options: { failing?: 
           return { result: { ok: true, action, replaced: ["Dinner: Paneer bhurji → Soya chunk pulao"], violations: 0, days: day.length ? 3 : 0 }, changed: true };
         if (action === "protein_gap") return { result: { ok: true, choice: input.choice }, changed: true };
         if (action === "rebuild") return { result: { ok: true, rebuilt: true }, changed: true };
+        if (action === "event")
+          return {
+            result: {
+              ok: true, date: input.date, slot: input.slot, label: input.label, kcal: 950,
+              tips: ["Get protein in early: curd, eggs, dal or paneer at breakfast and lunch.", "Eat breakfast and lunch as planned, no skipping: arriving starving makes the plate bigger.", "At the event: a protein dish first, one plate, then stop; a short walk after if you can."],
+            },
+            changed: true,
+          };
+        if (action === "grocery")
+          return { result: { ok: true, from: "2026-11-03", to: "2026-11-09", meals: 26, groups: [{ group: "Vegetables", items: ["Onion 1.1 kg", "Tomato 900 g", "Bhindi 500 g"] }, { group: "Dairy and eggs", items: ["Curd 1.8 kg", "Paneer 600 g", "Toned milk 1.4 L"] }, { group: "Dal and pulses", items: ["Toor dal 350 g", "Roasted chana 300 g"] }], shownOn: "Meals tab, Grocery list" } };
         return { result: { ok: true, action }, changed: true };
       }
       default:

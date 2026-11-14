@@ -3,7 +3,7 @@
  * `/config` is public; every other route needs a bearer (see `accounts.ts`).
  */
 import { setMinimumDay } from "./minimumDayStore.js";
-import { undoGapDefaults } from "./dietPlan/store.js";
+import { cancelEvent, groceryPreview, planEvent, undoGapDefaults } from "./dietPlan/store.js";
 import express from "express";
 import { z } from "zod";
 
@@ -611,6 +611,31 @@ export function createHealthAppRouter(): express.Router {
       const id = z.string().uuid().parse(req.params.id);
       const r = await keepDateAccept(ctx, id);
       return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  /** The next 7 days of the plan as a grocery list (dietPlan/grocery.ts). */
+  router.get(
+    "/diet/grocery",
+    route("diet-grocery", async (ctx) => {
+      const r = await groceryPreview(ctx);
+      return r.ok ? { body: r } : { status: 404, body: r };
+    }),
+  );
+  /** An event planned ahead (a wedding dinner): that meal becomes an allowance sized for it. */
+  router.post(
+    "/diet/events",
+    route("diet-event", async (ctx, req) => {
+      const input = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), slot: z.enum(PLAN_SLOTS), label: z.string().trim().min(1).max(40) }).parse(req.body ?? {});
+      const r = await planEvent(ctx, input);
+      return r.ok ? { body: r } : { status: 400, body: r };
+    }),
+  );
+  router.post(
+    "/diet/events/cancel",
+    route("diet-event-cancel", async (ctx, req) => {
+      const input = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), slot: z.enum(PLAN_SLOTS) }).parse(req.body ?? {});
+      const r = await cancelEvent(ctx, input.date, input.slot);
+      return r.ok ? { body: r } : { status: 404, body: r };
     }),
   );
   /** Undo on the answer Magnus gave the plan's gaps by default (12 Nov plan, item 7). */

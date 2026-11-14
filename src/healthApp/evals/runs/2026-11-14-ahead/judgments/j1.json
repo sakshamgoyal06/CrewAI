@@ -1,0 +1,5 @@
+{
+  "minimum-offer-sick": { "must": [true, true], "mustNot": [false, false, false], "note": "Rest first, gym skipped, minimum day offered once with half the protein; walking only if up to it; see a doctor if fever persists.", "tone": 3 },
+  "minimum-in-progress": { "must": [true, true], "mustNot": [false, false], "note": "Names 16 g and 2,400 steps with one easy way each; no calorie talk.", "tone": 3 },
+  "auto-change-question": { "must": [true, true], "mustNot": [false, false], "note": "Explains the default trial from the evidence, goal date unchanged, Undo and Other ways named; changes nothing.", "tone": 3 }
+}
