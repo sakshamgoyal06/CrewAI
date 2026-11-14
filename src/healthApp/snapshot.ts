@@ -3,7 +3,7 @@
  * workouts. Reads the same tables and Hevy client the Telegram bot uses.
  */
 import { localDateKey, resolveTimezone } from "../nutrition/localDate.js";
-import { loadBreaks, planBreakOn, type Break } from "./breaks.js";
+import { loadBreaks, pauseOverLine, planBreakOn, type Break } from "./breaks.js";
 import { loadMinimumDays } from "./minimumDayStore.js";
 import {
   fetchHevyWorkoutsPage,
@@ -50,6 +50,8 @@ export type HealthSnapshot = {
   timezone: string;
   /** Pauses running today or still to come (breaks.ts); optional for older fixtures. */
   breaks?: Break[];
+  /** Pauses whose last day was yesterday: what the first plan after them says (breaks.ts pauseOverLine). */
+  pauseOver?: { text: string; resumeBreakId: string | null } | null;
   today: DayScore & {
     calories: number;
     proteinG: number;
@@ -406,6 +408,7 @@ export async function buildHealthSnapshot(
     workoutChecks: [...workoutChecks.values()].sort((a, b) => b.localDate.localeCompare(a.localDate)),
     recentSkips: recentSkips(routineByDate, [...workoutChecks.values()]),
     breaks: breaks.filter((b) => b.endDate >= to),
+    pauseOver: pauseOverLine(breaks, to, (id) => (routine ?? []).find((i) => i.id === id)?.label ?? null),
     goal: goal ? computeGoalProgress(goal, checkins, to, targets.weighInDay) : null,
     checkins,
     activities,

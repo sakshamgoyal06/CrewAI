@@ -53,6 +53,12 @@ describe("dueNudges", () => {
     expect(n[0]!.dedupeKey).toBe("morning_plan:2026-11-02");
   });
 
+  it("leads the first morning after a pause with it being over", () => {
+    const n = dueNudges({ ...snap(), pauseOver: { text: "Welcome back: your travel pause is over and today counts again.", resumeBreakId: null } }, ist("08:10"), prefs);
+    expect(n[0]!.title).toBe("Welcome back");
+    expect(n[0]!.body).toMatch(/^Welcome back: your travel pause is over/);
+  });
+
   it("reminds about a meal only when that slot is empty", () => {
     expect(dueNudges(snap(), ist("10:45"), prefs)).toEqual([]);
     expect(dueNudges(snap(), ist("14:40"), prefs).map((x) => x.dedupeKey)).toEqual(["meal_reminder:lunch:2026-11-02"]);

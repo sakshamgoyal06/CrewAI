@@ -2583,6 +2583,7 @@ const longDay = (date) => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-G
 function dayPlanCard(c) {
   return el("div", { class: "draft dayplan compact" },
     el("p", { class: "eyebrow" }, `${longDay(c.date)}'s plan`),
+    c.back ? el("p", { class: "dp-tip" }, el("b", {}, "Pause over "), c.back) : null,
     c.plan?.length
       ? el("ul", { class: "dp-plan" }, ...c.plan.map((p) => el("li", {}, el("span", { class: "dp-time" }, p.time || "Any time"), el("span", {}, p.label))))
       : c.dayKind ? el("p", { class: "dp-kind" }, c.dayKind) : null,
@@ -2598,6 +2599,7 @@ function dayPlanFull(c) {
   return el("div", { class: "dayplan full" },
     el("p", { class: "eyebrow" }, c.greeting),
     el("h3", { class: "dp-greet" }, `${longDay(c.date)}'s plan`),
+    c.back ? sec("Pause over", el("p", {}, c.back)) : null,
     sec("Today",
       c.plan?.length
         ? el("ul", { class: "dp-plan" }, ...c.plan.map((p) => el("li", {}, el("span", { class: "dp-time" }, p.time || "Any time"), el("span", {}, p.label))))

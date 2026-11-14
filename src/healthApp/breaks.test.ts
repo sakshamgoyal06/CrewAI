@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../tools/clients.js", () => ({ supabase: {} }));
 
-const { checkBreak, maxDays, pauseEndMessage, planBreakOn, alternativeFor } = await import("./breaks.js");
+const { checkBreak, maxDays, pauseEndMessage, pauseOverLine, planBreakOn, alternativeFor } = await import("./breaks.js");
 const { onDate, trainingDayOn, routineDayStatus } = await import("./routine.js");
 const { scoreDay, computeNorthStar } = await import("./northStar.js");
 
@@ -56,5 +56,25 @@ describe("a paused item or plan", () => {
   it("sends the plan's end message to the resume screen and a short one for an item", () => {
     expect(pauseEndMessage({ id: "p", scope: "plan", reason: "travel" }, null, "2026-11-26")).toMatchObject({ url: "/app/#resume", card: { type: "pause_resume", breakId: "p" } });
     expect(pauseEndMessage({ id: "i", scope: "item", reason: "injured" }, "Gym", "2026-11-26").text).toMatch(/Gym is back.*stop if anything hurts/);
+  });
+});
+
+describe("the first plan after a pause", () => {
+  const label = (id: string) => (id === "gym" ? "Gym" : null);
+  it("welcomes them back the day after a whole-plan pause, with the restart choice while it's open", () => {
+    const r = pauseOverLine([plan("p", "2026-11-11", "2026-11-17")], "2026-11-18", label);
+    expect(r?.text).toMatch(/Welcome back: your travel pause is over.*choose how to restart/);
+    expect(r?.resumeBreakId).toBe("p");
+    const done = pauseOverLine([{ ...plan("p", "2026-11-11", "2026-11-17"), resumedAt: "2026-11-17T19:00:00Z" }], "2026-11-18", label);
+    expect(done?.text).not.toMatch(/choose how to restart/);
+    expect(done?.resumeBreakId).toBeNull();
+  });
+  it("says a paused item is back, and covers a pause they ended early", () => {
+    const gym = { ...plan("g", "2026-11-10", "2026-11-17"), scope: "item" as const, itemId: "gym", reason: "injured" as const, endedAt: "2026-11-18T06:00:00Z" };
+    expect(pauseOverLine([gym], "2026-11-18", label)?.text).toBe("Gym is back on your routine from today: ease in and stop if anything hurts.");
+  });
+  it("says nothing on other days", () => {
+    expect(pauseOverLine([plan("p", "2026-11-11", "2026-11-17")], "2026-11-17", label)).toBeNull();
+    expect(pauseOverLine([plan("p", "2026-11-11", "2026-11-17")], "2026-11-19", label)).toBeNull();
   });
 });

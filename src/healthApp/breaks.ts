@@ -194,6 +194,37 @@ export function pauseEndMessage(b: Pick<Break, "id" | "scope" | "reason">, itemL
   };
 }
 
+const REASON_WORD: Record<BreakReason, string> = { sick: "sick", injured: "injury", travel: "travel", busy: "busy", rest: "rest", other: "" };
+
+/**
+ * The first morning plan after a pause addresses it (Saksham, 14 Nov): pauses whose last day was
+ * yesterday, whether they ran out or were ended early. The whole plan gets a welcome back (and the
+ * restart choice while it's open); a single item is back on the routine. Null when nothing ended. Pure.
+ */
+export function pauseOverLine(breaks: Break[], today: string, labelOf: (itemId: string) => string | null): { text: string; resumeBreakId: string | null } | null {
+  const yesterday = addDays(today, -1);
+  const ended = breaks.filter((b) => b.endDate === yesterday && b.startDate <= yesterday);
+  if (!ended.length) return null;
+  const plan = ended.find((b) => b.scope === "plan") ?? null;
+  const items = ended.filter((b) => b.scope === "item");
+  const parts: string[] = [];
+  let resumeBreakId: string | null = null;
+  if (plan) {
+    const word = REASON_WORD[plan.reason];
+    parts.push(`Welcome back: your ${word ? `${word} ` : ""}pause is over and today counts again. The paused days don't count against you.`);
+    if (!plan.resumedAt) {
+      parts.push("First, choose how to restart: keep your goal date or move it.");
+      resumeBreakId = plan.id;
+    }
+  }
+  if (items.length) {
+    const names = items.map((b) => (b.itemId ? labelOf(b.itemId) : null) ?? "Your paused item");
+    const gentle = items.some((b) => b.reason === "sick" || b.reason === "injured") ? "ease in and stop if anything hurts" : "keep the first week a little lighter";
+    parts.push(`${names.join(" and ")} ${names.length > 1 ? "are" : "is"} back on your routine from today: ${gentle}.`);
+  }
+  return { text: parts.join(" "), resumeBreakId };
+}
+
 // ---------- starting and ending (chat tool and the pause screen) ----------
 
 export type BreakPreview = { max: number; alternative: string | null; minimums: string[]; reply: string; itemLabel: string | null };

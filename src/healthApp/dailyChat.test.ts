@@ -179,6 +179,13 @@ describe("the day's plan", () => {
     expect(text).toContain("Today: Morning walk 7:00 am · Gym 6:30 pm.");
   });
 
+  it("opens the first plan after a pause with it being over", () => {
+    const { card, text } = buildDayPlan({ snapshot: snap(), name: "Saksham", localHour: 6, intervention: null, back: "Welcome back: your travel pause is over." });
+    expect(card.back).toBe("Welcome back: your travel pause is over.");
+    expect(text.split("\n")[1]).toBe("Welcome back: your travel pause is over.");
+    expect(buildDayPlan({ snapshot: snap(), name: null, localHour: 6, intervention: null }).card.back).toBeUndefined();
+  });
+
   it("says nothing extra after an on-track day, even with older misses", () => {
     const s = snap();
     const y = s.northStar.days.at(-2)!;

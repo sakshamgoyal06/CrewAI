@@ -103,7 +103,9 @@ export function dueNudges(s: HealthSnapshot, now: Date, prefs: NotificationPrefs
       // A long gap in logging makes "0/7" true but useless; leave it out until they're back.
       (s.logging?.blankDays ?? 0) >= 4 ? null : `Week so far: ${s.northStar.onTrackDays}/7 on track.`,
     ].filter(Boolean);
-    out.push({ kind: "morning_plan", dedupeKey: `morning_plan:${date}`, title: "Today's plan", body: parts.join(" "), url: "/app/#coach" });
+    // The first morning after a pause leads with it being over (Saksham, 14 Nov).
+    if (s.pauseOver) parts.unshift(s.pauseOver.text);
+    out.push({ kind: "morning_plan", dedupeKey: `morning_plan:${date}`, title: s.pauseOver ? "Welcome back" : "Today's plan", body: parts.join(" "), url: "/app/#coach" });
   }
 
   if (s.goal?.checkinDue && inWindow("08:30")) {
@@ -334,10 +336,11 @@ async function maybePauseEnd(userProfileId: string, now: Date, timezone: string,
     const turnId = stableTurnId(`magnus-break-end:${b.id}`);
     const label = b.itemId ? routine.find((i) => i.id === b.itemId)?.label ?? null : null;
     const msg = pauseEndMessage(b, label, addDays(today, 1));
-    const { error } = await supabase
+    // 23505: already posted. The push doesn't depend on it: it goes out once (dedupe key) on the
+    // first tick outside quiet hours, so a pause that runs out always notifies, whole plan or one item.
+    await supabase
       .from("health_chat_messages")
       .insert({ user_profile_id: userProfileId, role: "assistant", content: msg.text, cards: msg.card ? [msg.card] : [], turn_id: turnId, status: "ok" });
-    if (error) continue; // 23505: already posted
     const prefs = await getPrefs(userProfileId);
     if (!isQuiet(hhmm, prefs)) await sendNotification(userProfileId, { kind: "pause_end", dedupeKey: `pause_end:${b.id}`, title: msg.title, body: msg.text, url: msg.url });
   }

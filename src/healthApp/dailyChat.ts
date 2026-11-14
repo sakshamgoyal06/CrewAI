@@ -45,6 +45,8 @@ export type DayPlanCard = {
   motivation: string;
   /** Today's planned meals, when they use the meal plan. */
   meals?: DayMealLine[];
+  /** The first plan after a pause: the pause is over (breaks.ts pauseOverLine). */
+  back?: string;
 };
 
 export type ChatDay = { date: string; count: number; preview: string };
@@ -284,7 +286,7 @@ function motivationFor(date: string, s: HealthSnapshot): string {
 }
 
 /** The day's plan as a card plus a short text the model reads in history. Pure. */
-export function buildDayPlan(input: { snapshot: HealthSnapshot; name: string | null; localHour: number; intervention: Intervention | null; meals?: DayMealLine[]; planNote?: string | null; carried?: CarriedCheck | null }): { text: string; card: DayPlanCard } {
+export function buildDayPlan(input: { snapshot: HealthSnapshot; name: string | null; localHour: number; intervention: Intervention | null; meals?: DayMealLine[]; planNote?: string | null; carried?: CarriedCheck | null; back?: string | null }): { text: string; card: DayPlanCard } {
   const s = input.snapshot;
   const date = s.today.date;
   const plan = s.today.routine.map((r) => ({ time: r.startTime ? clock(r.startTime) : null, label: r.label }));
@@ -315,6 +317,7 @@ export function buildDayPlan(input: { snapshot: HealthSnapshot; name: string | n
     focus: focusLine(s, input.intervention, input.planNote ?? null, input.carried ?? null),
     motivation: motivationFor(date, s),
     ...(input.meals?.length ? { meals: input.meals } : {}),
+    ...(input.back ? { back: input.back } : {}),
   };
   return { text: dayPlanText(card), card };
 }
@@ -324,6 +327,7 @@ export function dayPlanText(c: DayPlanCard): string {
   const today = c.plan.length ? c.plan.map((p) => (p.time ? `${p.label} ${p.time}` : p.label)).join(" · ") : c.dayKind ?? "";
   return [
     `${c.greeting}. Today's plan for ${dayLabel(c.date)}.`,
+    c.back ?? null,
     today ? `Today: ${today}.` : null,
     `Targets: ${c.targets.map((x) => `${x.value} ${x.label}`).join(" · ")}.`,
     c.meals?.length ? `Meals: ${c.meals.map((m) => `${SLOT_LABEL[m.slot]}${m.time ? ` ${mealClock(m.time)}` : ""} ${m.title} (${Math.round(m.kcal)} kcal)`).join(" · ")}.` : null,
@@ -428,10 +432,8 @@ export async function ensureDayPlan(userProfileId: string, timezone: string, now
   // A whole-plan pause has no day plan (pause spec: everything stops except the weekly weigh-in
   // and the end message). Opening the app used to post it anyway, through tryDayPlan.
   const breaks = await loadBreaks(userProfileId, date).catch(() => [] as Break[]);
-  if (planBreakOn(breaks, date)) {
-    handled.set(userProfileId, date);
-    return "paused";
-  }
+  // Not memoised: ending the pause early today should still let today's plan post.
+  if (planBreakOn(breaks, date)) return "paused";
 
   const bits = await loadProfileBits(userProfileId, tz);
   if (!bits.onboarded || bits.onboardedOn === date) {
@@ -459,10 +461,13 @@ export async function ensureDayPlan(userProfileId: string, timezone: string, now
   // A meal that keeps slipping off the plan is worth a look (only when it does; quiet otherwise).
   const adherence = planView ? await loadAdherence(userProfileId, date).catch(() => null) : null;
   const planNote = adherence?.slipping ? adherenceLine(adherence) : null;
-  // At most one carried-over question: a plan decision first, else yesterday's unanswered check.
-  const carried = open ? null : await carriedCheck(userProfileId, addDays(date, -1), tz).catch(() => null);
-  const { text, card } = buildDayPlan({ snapshot, name: bits.name, localHour: hour, intervention: open, meals, planNote, carried });
-  const cards: ChatCard[] = [card, ...(open ? [cardFromIntervention(open)] : carried ? [carried] : [])];
+  // The first plan after a pause says it's over; an open restart choice is its one extra card.
+  const back = snapshot.pauseOver ?? null;
+  const resumeCard: ChatCard | null = back?.resumeBreakId ? ({ type: "pause_resume", breakId: back.resumeBreakId, from: date } as unknown as ChatCard) : null;
+  // At most one carried-over question: the restart choice, else a plan decision, else yesterday's unanswered check.
+  const carried = resumeCard || open ? null : await carriedCheck(userProfileId, addDays(date, -1), tz).catch(() => null);
+  const { text, card } = buildDayPlan({ snapshot, name: bits.name, localHour: hour, intervention: open, meals, planNote, carried, back: back?.text ?? null });
+  const cards: ChatCard[] = [card, ...(resumeCard ? [resumeCard] : open ? [cardFromIntervention(open)] : carried ? [carried] : [])];
   const { error } = await supabase
     .from("health_chat_messages")
     .insert({ user_profile_id: userProfileId, role: "assistant", content: text, cards, turn_id: turnId, status: "ok" });
