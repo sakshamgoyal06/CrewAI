@@ -21,7 +21,8 @@ import { activeOverride, type DietOverride, type PeriodDiet } from "./dietPeriod
 import { checkOn, isFastingDay, itemsAllowedOn, planRules, type PlanRules } from "./rules.js";
 import type { MealOption } from "./compose.js";
 import { catalog } from "../../meals/catalog/index.js";
-import { pickDays, PLAN_DAYS, type DayPick, type PriorPick } from "./pick.js";
+import { groceryList, type GroceryList } from "./grocery.js";
+import { eventAllowance, pickDays, PLAN_DAYS, type DayPick, type PriorPick } from "./pick.js";
 import { defaultPrefs, dietPrefsInput, type DietPrefs, type DietPrefsInput } from "./prefs.js";
 import { reviewEnabled, reviewPlan } from "./review.js";
 import { supplementChoices, supplementLines, type SupplementLine } from "./supplements.js";
@@ -54,7 +55,7 @@ export async function saveDietPrefs(userProfileId: string, input: DietPrefsInput
   // The setup screen doesn't send these: saving its answers must not wipe a running temporary diet,
   // what they never cook, or the skipped-today list.
   const raw = (input ?? {}) as Record<string, unknown>;
-  const missing = ["dietOverride", "habits", "unavailable", "proteinGap", "planGapsOk", "gapDefaultsUndone"].filter((k) => !(k in raw));
+  const missing = ["dietOverride", "habits", "unavailable", "proteinGap", "planGapsOk", "gapDefaultsUndone", "events"].filter((k) => !(k in raw));
   let prefs = parsed;
   if (missing.length) {
     const old = await loadDietPrefs(userProfileId);
@@ -854,4 +855,85 @@ export async function answerProteinGap(ctx: ActionContext, choice: GapChoice, no
   if (!built.ok) return built;
   const after = await loadPlanView(ctx, now);
   return { ok: true, gap: after.ok && "days" in after ? after.proteinGap ?? null : null, supplement: name };
+}
+
+// ---------- events planned ahead (12 Nov plan, item 8) ----------
+
+/** What makes an event meal go well, said before the day. */
+export const EVENT_TIPS = [
+  "Get protein in early: curd, eggs, dal or paneer at breakfast and lunch.",
+  "Eat breakfast and lunch as planned, no skipping: arriving starving makes the plate bigger.",
+  "At the event: a protein dish first, one plate, then stop; a short walk after if you can.",
+];
+
+export type EventResult =
+  | { ok: true; date: string; slot: PlanSlot; label: string; kcal: number | null; tips: string[] }
+  | { ok: false; error: "bad_date" | "no_setup" | "not_found" };
+
+/** Drops the planned (not eaten) meal at that slot, so the plan picks it again around the event. */
+async function clearPlannedSlot(userProfileId: string, date: string, slot: PlanSlot): Promise<void> {
+  const { error } = await supabase.from("meal_plan_entries").delete().eq("user_profile_id", userProfileId).eq("source", "plan").eq("local_date", date).eq("meal_slot", slot).eq("status", "planned");
+  if (error) logger.warn({ err: loggableError(error) }, "clearing a planned meal for an event failed");
+}
+
+/**
+ * "Wedding on Saturday night": that meal becomes an allowance sized for the event (its budget plus
+ * EVENT_EXTRA_KCAL), planned now so the day is set up for it, with tips for the rest of the day.
+ * The day close spreads anything over across the next days, as for any day.
+ */
+export async function planEvent(ctx: ActionContext, input: { date: string; slot: PlanSlot; label: string }, now = new Date()): Promise<EventResult> {
+  const today = localDateKey(now, ctx.timezone);
+  if (input.date < today || input.date > addDays(today, 60)) return { ok: false, error: "bad_date" };
+  const prefs = await loadDietPrefs(ctx.userProfileId);
+  if (!prefs.saved) return { ok: false, error: "no_setup" };
+  const label = input.label.trim().slice(0, 40) || "Event";
+  const events = [...prefs.prefs.events.filter((e) => e.date >= today && !(e.date === input.date && e.slot === input.slot)), { date: input.date, slot: input.slot, label }]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 20);
+  await saveDietPrefs(ctx.userProfileId, { ...prefs.prefs, events });
+  await clearPlannedSlot(ctx.userProfileId, input.date, input.slot);
+  const plan = await loadActivePlan(ctx.userProfileId);
+  const b = plan?.budgets.find((x) => x.slot === input.slot);
+  return { ok: true, date: input.date, slot: input.slot, label, kcal: b ? eventAllowance(input.date, b, label).totals.kcal : null, tips: EVENT_TIPS };
+}
+
+/** The event is off: the meal is planned as usual again. */
+export async function cancelEvent(ctx: ActionContext, date: string, slot: PlanSlot): Promise<{ ok: true } | { ok: false; error: "not_found" }> {
+  const prefs = await loadDietPrefs(ctx.userProfileId);
+  if (!prefs.prefs.events.some((e) => e.date === date && e.slot === slot)) return { ok: false, error: "not_found" };
+  await saveDietPrefs(ctx.userProfileId, { ...prefs.prefs, events: prefs.prefs.events.filter((e) => !(e.date === date && e.slot === slot)) });
+  await clearPlannedSlot(ctx.userProfileId, date, slot);
+  return { ok: true };
+}
+
+// ---------- weekly grocery list (12 Nov plan, item 9) ----------
+
+export const GROCERY_DAYS = 7;
+
+/**
+ * The next GROCERY_DAYS days of the plan as a grocery list. Days already planned use what's saved
+ * (swaps and edits included); later days are picked the way the plan will pick them, without saving.
+ */
+export async function groceryPreview(ctx: ActionContext, now = new Date()): Promise<({ ok: true } & GroceryList) | { ok: false; error: "no_plan" }> {
+  const today = localDateKey(now, ctx.timezone);
+  const [plan, prefs] = await Promise.all([loadActivePlan(ctx.userProfileId), loadDietPrefs(ctx.userProfileId)]);
+  if (!plan || !prefs.saved) return { ok: false, error: "no_plan" };
+  const to = addDays(today, GROCERY_DAYS - 1);
+  const rows = await loadEntries(ctx.userProfileId, addDays(today, -2), to);
+  const rules = await rulesFor(ctx.userProfileId, prefs.prefs, today);
+  const checks = new Map<string, ReturnType<typeof checkOn>>();
+  const picks = pickDays({
+    start: today, days: GROCERY_DAYS, budgets: plan.budgets, options: plan.options, prefs: prefs.prefs, pinned: prefs.pinned, unavailable: prefs.prefs.unavailable,
+    existing: rows.map((r) => ({ date: r.local_date, slot: r.meal_slot, optionId: (r.metadata?.option_id as string | null) ?? null, title: r.title, totals: r.metadata?.totals as PriorPick["totals"], kind: r.metadata?.kind as PriorPick["kind"] })),
+    allowOn: (date, o) => o.items.every((checks.get(date) ?? checks.set(date, checkOn(rules, date)).get(date)!)),
+    fastingOn: (date) => isFastingDay(rules, date),
+  });
+  const byId = new Map(Object.values(plan.options).flat().map((o) => [o!.id, o!]));
+  const saved = new Map(rows.map((r) => [`${r.local_date}|${r.meal_slot}`, r]));
+  const meals = picks.map((p) => {
+    const r = saved.get(`${p.date}|${p.slot}`);
+    const items = (r?.metadata?.items as MealOption["items"] | undefined) ?? (p.optionId ? byId.get(p.optionId)?.items : undefined) ?? [];
+    return { date: p.date, kind: (r?.metadata?.kind as string | undefined) ?? p.kind, status: r?.status ?? "planned", items };
+  });
+  return { ok: true, ...groceryList(meals) };
 }

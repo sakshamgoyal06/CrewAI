@@ -55,6 +55,7 @@ import {
   morningTurnId,
   MOTIVATION,
   resetDayPlanMemo,
+  weekendLine,
 } from "./dailyChat.js";
 import { historyToMessages } from "./chat.js";
 import { BANNED } from "./interventions/options.js";
@@ -322,5 +323,22 @@ describe("history across the daily split", () => {
       "Logged.\n\n[Wed 4 Nov]\n[Posted by the app on its own, not in reply to the person]\nGood morning. Today's plan…",
       "had oats",
     ]);
+  });
+});
+
+describe("weekendLine (Fridays)", () => {
+  const kcal = (date: string, n: number) => day(date, false, [{ id: "calories", label: "Calories in range", met: false, progress: 0.8, detail: `${n} / 2200 kcal` }]);
+  const friday = (days: ReturnType<typeof day>[]) => snap({ today: { ...snap().today, date: "2026-11-13" }, northStar: { ...snap().northStar, days } });
+
+  it("is only on Fridays", () => {
+    expect(weekendLine(snap())).toBeNull();
+  });
+  it("names last weekend's overs and offers the plan", () => {
+    const line = weekendLine(friday([kcal("2026-11-07", 2900), kcal("2026-11-08", 2700), kcal("2026-11-10", 3000)]))!;
+    expect(line).toMatch(/^Last weekend ran about 600 kcal over on Saturday and Sunday/);
+    expect(line).toMatch(/one meal you want to enjoy/);
+  });
+  it("is one light line when last weekend went fine", () => {
+    expect(weekendLine(friday([kcal("2026-11-07", 2150)]))).toMatch(/^Any meal out or event coming up\?/);
   });
 });

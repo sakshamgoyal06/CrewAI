@@ -1,0 +1,39 @@
+{
+ "event-ahead": {
+  "0": {
+   "text": "",
+   "tools": [
+    {
+     "name": "meal_plan",
+     "input": {
+      "action": "event",
+      "date": "2026-11-07",
+      "slot": "dinner",
+      "label": "Cousin's wedding"
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "Fun, enjoy it! I've set Saturday's dinner up for the wedding, about 950 kcal, so the buffet is planned rather than a slip. Have breakfast and lunch as planned with some protein in each, so you don't arrive starving. At the buffet, start with a protein dish, fill one plate, and take a short walk after if you can.",
+   "tools": []
+  }
+ },
+ "grocery-ask": {
+  "0": {
+   "text": "",
+   "tools": [
+    {
+     "name": "meal_plan",
+     "input": {
+      "action": "grocery"
+     }
+    }
+   ]
+  },
+  "1": {
+   "text": "The big ones for this week: curd 1.8 kg, onion 1.1 kg, tomato 900 g, paneer 600 g, toned milk 1.4 L and bhindi 500 g, plus toor dal 350 g and roasted chana 300 g. The full list, grouped by aisle with tick boxes, is on the Meals tab under Grocery list for the week.",
+   "tools": []
+  }
+ }
+}

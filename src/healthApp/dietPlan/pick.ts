@@ -11,7 +11,7 @@
  * - A meal they usually eat out is planned as a budget ("Eating out, about 700 kcal").
  */
 import type { MealOption, Totals } from "./compose.js";
-import { isEatOut, type DietPrefs } from "./prefs.js";
+import { eventOn, isEatOut, type DietPrefs } from "./prefs.js";
 import type { MealBudget, PlanSlot } from "./targets.js";
 import { dateOf, dayNumber } from "../../util/time.js";
 
@@ -82,6 +82,12 @@ export function pickDays(input: {
         else out.push({ date, slot: b.slot, kind: prior.kind ?? "option", optionId: prior.optionId, title: prior.title ?? "Planned meal", totals: prior.totals ?? { kcal: b.calories, proteinG: b.proteinG, carbsG: b.carbsG, fatG: b.fatG, fiberG: 0 } });
         continue;
       }
+      const ev = eventOn(input.prefs, date, b.slot);
+      if (ev) {
+        out.push(eventAllowance(date, b, ev.label));
+        history.push({ date, slot: b.slot, optionId: null });
+        continue;
+      }
       if (isEatOut(input.prefs, weekday(date), b.slot)) {
         out.push(eatOut(date, b));
         history.push({ date, slot: b.slot, optionId: null });
@@ -134,6 +140,15 @@ function fastAllowance(date: string, b: MealBudget): DayPick {
 
 function pickOf(date: string, slot: PlanSlot, o: MealOption): DayPick {
   return { date, slot, kind: "option", optionId: o.id, title: o.title, totals: o.totals };
+}
+
+/** Extra kcal an event meal gets over the meal's usual budget (a wedding plate is rarely small). */
+export const EVENT_EXTRA_KCAL = 300;
+
+/** An event planned ahead: an allowance sized for it, named after it. Pure. */
+export function eventAllowance(date: string, b: MealBudget, label: string): DayPick {
+  const kcal = Math.round((b.calories + EVENT_EXTRA_KCAL) / 50) * 50;
+  return { ...eatOut(date, b), title: `${label}, about ${kcal} kcal`, totals: { kcal, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 } };
 }
 
 function eatOut(date: string, b: MealBudget): DayPick {

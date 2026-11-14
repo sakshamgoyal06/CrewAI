@@ -1,0 +1,4 @@
+{
+  "event-ahead": { "must": [true, true], "mustNot": [false, false], "note": "Event planned as a 950 kcal dinner, framed as planned not a slip; protein early, no skipping, one plate, walk after.", "tone": 3 },
+  "grocery-ask": { "must": [true, true], "mustNot": [false, false], "note": "Names the biggest items with the tool's amounts and points to the Meals tab list. All 8 items the tool returned are named, which is fine at this length.", "tone": 2 }
+}

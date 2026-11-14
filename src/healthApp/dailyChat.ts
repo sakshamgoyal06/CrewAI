@@ -45,6 +45,8 @@ export type DayPlanCard = {
   motivation: string;
   /** Today's planned meals, when they use the meal plan. */
   meals?: DayMealLine[];
+  /** Fridays: the weekend planned ahead (12 Nov plan, item 8). */
+  weekend?: string | null;
 };
 
 export type ChatDay = { date: string; count: number; preview: string };
@@ -266,6 +268,29 @@ export const MOTIVATION = [
   "Results lag effort. Keep stacking the days.",
 ];
 
+/**
+ * Fridays only: plan the weekend before it happens. When last weekend ran over, say by how much and
+ * offer the plan (one meal to enjoy, the rest as planned, a Saturday walk); otherwise one line that
+ * an event told ahead gets its day set up. Pure.
+ */
+export function weekendLine(s: HealthSnapshot): string | null {
+  const date = s.today.date;
+  if (new Date(`${date}T12:00:00Z`).getUTCDay() !== 5) return null;
+  const target = s.targets.calorieTarget;
+  const overs: Array<{ name: string; over: number }> = [];
+  for (const [back, name] of [[6, "Saturday"], [5, "Sunday"]] as const) {
+    const d = s.northStar.days.find((x) => x.date === addDays(date, -back));
+    const c = d?.checks.find((x) => x.id === "calories");
+    const kcal = c ? Number(/^(\d+)/.exec(c.detail)?.[1] ?? NaN) : NaN;
+    if (target && Number.isFinite(kcal) && kcal > target * 1.05) overs.push({ name, over: kcal - target });
+  }
+  if (overs.length) {
+    const avg = Math.round(overs.reduce((a, o) => a + o.over, 0) / overs.length / 50) * 50;
+    return `Last weekend ran about ${fmt(avg)} kcal over on ${overs.map((o) => o.name).join(" and ")}. This time, pick the one meal you want to enjoy and tell me, I'll plan the rest of that day around it. A Saturday morning walk helps too.`;
+  }
+  return "Any meal out or event coming up? Tell me now and I'll set that day up for it.";
+}
+
 function motivationFor(date: string, s: HealthSnapshot): string {
   const streak = (() => {
     let n = 0;
@@ -315,6 +340,7 @@ export function buildDayPlan(input: { snapshot: HealthSnapshot; name: string | n
     focus: focusLine(s, input.intervention, input.planNote ?? null, input.carried ?? null),
     motivation: motivationFor(date, s),
     ...(input.meals?.length ? { meals: input.meals } : {}),
+    weekend: weekendLine(s),
   };
   return { text: dayPlanText(card), card };
 }
@@ -331,6 +357,7 @@ export function dayPlanText(c: DayPlanCard): string {
     c.yesterday ? `Yesterday: ${c.yesterday}` : null,
     `Week: ${c.week}.`,
     c.focus ? `Worth a look: ${c.focus}` : null,
+    c.weekend ? `Weekend: ${c.weekend}` : null,
     c.motivation,
   ].filter(Boolean).join("\n");
 }

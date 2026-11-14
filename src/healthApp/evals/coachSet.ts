@@ -1793,4 +1793,27 @@ export const COACH_CASES: CoachCase[] = [
       mustNot: ["Undoes or changes it without being asked", "Blames them for skipping"],
     },
   },
+  // ===================== inevitable, batch 4: plan ahead and the grocery list =====================
+  {
+    id: "event-ahead",
+    category: "inevitable",
+    title: "Tells the coach about a wedding ahead",
+    message: "my cousin's wedding is on saturday night, there'll be a huge buffet",
+    expect: { tools: [{ name: "meal_plan", input: (i) => i.action === "event" && i.slot === "dinner" && i.date === "2026-11-07" }], forbid: [SHAME, /skip (breakfast|lunch)|save (up )?calories/i] },
+    rubric: {
+      must: ["Sets Saturday's dinner up for the wedding (an allowance of about 950 kcal)", "One or two concrete tips for the day (protein early, don't skip meals, one plate)"],
+      mustNot: ["Tells them to skip meals or starve before it", "Treats the wedding as a problem or a cheat day"],
+    },
+  },
+  {
+    id: "grocery-ask",
+    category: "inevitable",
+    title: "Asks what to buy this week",
+    message: "going to the market now, what should I buy for this week?",
+    expect: { tools: [{ name: "meal_plan", input: (i) => i.action === "grocery" }], forbid: [SHAME] },
+    rubric: {
+      must: ["Gives the biggest items with amounts from the list", "Points to the full list on the Meals tab"],
+      mustNot: ["Invents items or amounts not in the list", "A long dump of every item"],
+    },
+  },
 ];

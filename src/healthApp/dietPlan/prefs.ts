@@ -75,6 +75,14 @@ export const dietPrefsInput = z.object({
     .object({ keys: z.array(z.enum(["kcal", "proteinG", "carbsG", "fatG", "fiberG"])).max(5), rulesKey: z.string().max(4000), at: z.string(), auto: z.boolean().optional() })
     .nullable()
     .optional(),
+  /**
+   * Events planned ahead (a wedding dinner, a team lunch): that meal becomes an allowance sized for
+   * the event, set before the day so it bends the plan in advance (12 Nov plan, item 8).
+   */
+  events: z
+    .array(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), slot: z.enum(PLAN_SLOTS), label: z.string().trim().min(1).max(40) }))
+    .max(20)
+    .default([]),
   /** They undid the default answer for these rules (rulesKey): the gap waits for their pick instead. */
   gapDefaultsUndone: z.string().max(4000).nullable().optional(),
 });
@@ -105,6 +113,11 @@ export function prepLimit(p: DietPrefs, slot: PlanSlot): number | null {
   if (p.whoCooks === "family" || p.whoCooks === "cook") return cap;
   if (own === null) return cap;
   return cap === null ? own : Math.min(own, cap);
+}
+
+/** The event planned for that meal, if any. Pure. */
+export function eventOn(p: Pick<DietPrefs, "events">, date: string, slot: PlanSlot): { date: string; slot: PlanSlot; label: string } | null {
+  return (p.events ?? []).find((e) => e.date === date && e.slot === slot) ?? null;
 }
 
 export function isEatOut(p: DietPrefs, weekday: number, slot: PlanSlot): boolean {
